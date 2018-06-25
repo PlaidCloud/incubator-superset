@@ -31,6 +31,7 @@ from markdown import markdown
 import numpy as np
 import pandas as pd
 from pandas.tseries.frequencies import to_offset
+from past.builtins import basestring
 import polyline
 import simplejson as json
 from six import string_types, text_type
@@ -222,7 +223,7 @@ class BaseViz(object):
         """Converting metrics to numeric when pandas.read_sql cannot"""
         for col, dtype in df.dtypes.items():
             if dtype.type == np.object_ and col in metrics:
-                df[col] = pd.to_numeric(df[col])
+                df[col] = pd.to_numeric(df[col], errors='coerce')
 
     def query_obj(self):
         """Building a query object"""
@@ -721,14 +722,13 @@ class WordCloudViz(BaseViz):
 
     def query_obj(self):
         d = super(WordCloudViz, self).query_obj()
-
-        d['metrics'] = [self.form_data.get('metric')]
         d['groupby'] = [self.form_data.get('series')]
         return d
 
     def get_data(self, df):
+        fd = self.form_data
         # Ordering the columns
-        df = df[[self.form_data.get('series'), self.form_data.get('metric')]]
+        df = df[[fd.get('series'), self.metric_labels[0]]]
         # Labeling the columns for uniform json schema
         df.columns = ['text', 'size']
         return df.to_dict(orient='records')
@@ -1317,6 +1317,7 @@ class NVD3DualLineViz(NVD3Viz):
             self.form_data.get('metric_2'),
         ]
         for i, m in enumerate(metrics):
+            m = utils.get_metric_name(m)
             ys = series[m]
             if df[m].dtype.kind not in 'biufc':
                 continue
@@ -1597,6 +1598,8 @@ class SankeyViz(BaseViz):
 
     def get_data(self, df):
         df.columns = ['source', 'target', 'value']
+        df['source'] = df['source'].astype(basestring)
+        df['target'] = df['target'].astype(basestring)
         recs = df.to_dict(orient='records')
 
         hierarchy = defaultdict(set)
