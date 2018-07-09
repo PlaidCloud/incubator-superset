@@ -266,6 +266,10 @@ class DatabaseView(SupersetModelView, DeleteMixin, YamlExportMixin):  # noqa
             'Allow SQL Lab to fetch a list of all tables and all views across '
             'all database schemas. For large data warehouse with thousands of '
             'tables, this can be expensive and put strain on the system.'),
+        'cache_timeout': _(
+            'Duration (in seconds) of the caching timeout for this database. '
+            'A timeout of 0 indicates that the cache never expires. '
+            'Note this defaults to the global timeout if undefined.'),
     }
     label_columns = {
         'expose_in_sqllab': _('Expose in SQL Lab'),
@@ -450,7 +454,8 @@ class SliceModelView(SupersetModelView, DeleteMixin):  # noqa
             'want to alter specific parameters.',
         ),
         'cache_timeout': _(
-            'Duration (in seconds) of the caching timeout for this chart.'),
+            'Duration (in seconds) of the caching timeout for this chart. '
+            'Note this defaults to the datasource/table timeout if undefined.'),
     }
     base_filters = [['id', SliceFilter, lambda: []]]
     label_columns = {
@@ -1637,7 +1642,11 @@ class Superset(BaseSupersetView):
             if 'filter_immune_slice_fields' not in md:
                 md['filter_immune_slice_fields'] = {}
             md['expanded_slices'] = data['expanded_slices']
-            md['default_filters'] = data.get('default_filters', '')
+            default_filters_data = json.loads(data.get('default_filters', '{}'))
+            applicable_filters =\
+                {key: v for key, v in default_filters_data.items()
+                 if int(key) in slice_ids}
+            md['default_filters'] = json.dumps(applicable_filters)
             dashboard.json_metadata = json.dumps(md, indent=4)
             return
 
@@ -1681,10 +1690,10 @@ class Superset(BaseSupersetView):
             md['filter_immune_slice_fields'] = {}
         md['expanded_slices'] = data['expanded_slices']
         default_filters_data = json.loads(data.get('default_filters', '{}'))
-        for key in default_filters_data.keys():
-            if int(key) not in slice_ids:
-                del default_filters_data[key]
-        md['default_filters'] = json.dumps(default_filters_data)
+        applicable_filters = \
+            {key: v for key, v in default_filters_data.items()
+             if int(key) in slice_ids}
+        md['default_filters'] = json.dumps(applicable_filters)
         dashboard.json_metadata = json.dumps(md, indent=4)
 
     @api
@@ -2160,6 +2169,8 @@ class Superset(BaseSupersetView):
             else:
                 dashboard_view = 'v1'
                 prompt_v2_conversion = not force_v1
+                if force_v2_edit:
+                    dash_edit_perm = False
 
         # Hack to log the dashboard_id properly, even when getting a slug
         @log_this
@@ -2495,7 +2506,7 @@ class Superset(BaseSupersetView):
     @log_this
     def sql_json(self):
         """Runs arbitrary sql and returns and json"""
-        async = request.form.get('runAsync') == 'true'
+        async_ = request.form.get('runAsync') == 'true'
         sql = request.form.get('sql')
         database_id = request.form.get('database_id')
         schema = request.form.get('schema') or None
@@ -2531,7 +2542,7 @@ class Superset(BaseSupersetView):
             select_as_cta=request.form.get('select_as_cta') == 'true',
             start_time=utils.now_as_float(),
             tab_name=request.form.get('tab'),
-            status=QueryStatus.PENDING if async else QueryStatus.RUNNING,
+            status=QueryStatus.PENDING if async_ else QueryStatus.RUNNING,
             sql_editor_id=request.form.get('sql_editor_id'),
             tmp_table_name=tmp_table_name,
             user_id=int(g.user.get_id()),
@@ -2556,7 +2567,7 @@ class Superset(BaseSupersetView):
                 'Template rendering failed: {}'.format(utils.error_msg_from_exception(e)))
 
         # Async request.
-        if async:
+        if async_:
             logging.info('Running query on a Celery worker')
             # Ignore the celery future object and the request may time out.
             try:

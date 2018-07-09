@@ -11,7 +11,6 @@ import {
 
 const staticCardStyles = {
   position: 'fixed',
-  background: 'rgba(255, 255, 255, 0.7)',
   pointerEvents: 'none',
   top: 0,
   left: 0,
@@ -55,9 +54,7 @@ function AddSliceDragPreview({ dragItem, slices, isDragging, currentOffset }) {
         transform: `translate(${currentOffset.x}px, ${currentOffset.y}px)`,
       }}
       sliceName={slice.slice_name}
-      lastModified={
-        slice.modified ? slice.modified.replace(/<[^>]*>/g, '') : ''
-      }
+      lastModified={slice.modified}
       visType={slice.viz_type}
       datasourceLink={slice.datasource_link}
     />
