@@ -8,6 +8,7 @@ from __future__ import unicode_literals
 
 from datetime import datetime
 import logging
+from importlib import import_module
 from subprocess import Popen
 from sys import stdout
 
@@ -365,3 +366,12 @@ def flower(port, address):
     print(Fore.YELLOW + cmd)
     print(Fore.BLUE + '-=' * 40)
     Popen(cmd, shell=True).wait()
+
+
+# Import any additional CLI modules.
+for module in config.get("CLI_MODULES"):
+    try:
+        cli = import_module(module)
+        app.cli.add_command(cli.group)
+    except ImportError:
+        pass
