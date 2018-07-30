@@ -398,6 +398,10 @@ HIVE_POLL_INTERVAL = 5
 # an XSS security vulnerability
 ENABLE_JAVASCRIPT_CONTROLS = False
 
+# When data sources are displayed, prefix it with the
+# schema name (if specified).
+HIDE_SCHEMA_NAMES = False
+
 # A callable that allows altering the database conneciton URL and params
 # on the fly, at runtime. This allows for things like impersonation or
 # arbitrary logic. For instance you can wire different users to
