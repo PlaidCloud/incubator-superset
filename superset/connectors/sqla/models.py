@@ -35,6 +35,8 @@ from superset.utils import DTTM_ALIAS, QueryStatus
 config = app.config
 
 
+hide_schema_names = app.config.get('HIDE_SCHEMA_NAMES', False)
+
 class AnnotationDatasource(BaseDatasource):
     """ Dummy object so we can query annotations using 'Viz' objects just like
         regular datasources.
@@ -322,7 +324,7 @@ class SqlaTable(Model, BaseDatasource):
 
     @property
     def name(self):
-        if not self.schema:
+        if not self.schema or hide_schema_names:
             return self.table_name
         return '{}.{}'.format(self.schema, self.table_name)
 
