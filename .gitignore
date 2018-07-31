@@ -29,6 +29,7 @@ app.db
 .python-version
 .tox
 dump.rdb
+yarn.lock
 
 # Node.js, webpack artifacts
 *.entry.js
