@@ -284,8 +284,8 @@ class BaseColumn(AuditMixinNullable, ImportMixin):
         'DOUBLE', 'FLOAT', 'INT', 'BIGINT',
         'LONG', 'REAL', 'NUMERIC', 'DECIMAL', 'MONEY',
     )
-    date_types = ('DATE', 'TIME', 'DATETIME')
-    str_types = ('VARCHAR', 'STRING', 'CHAR')
+    date_types = ('DATE', 'TIME', 'DATETIME', 'TIMESTAMP', 'INTERVAL')
+    str_types = ('VARCHAR', 'STRING', 'CHAR', 'TEXT')
 
     @property
     def is_num(self):
