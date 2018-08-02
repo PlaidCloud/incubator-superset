@@ -321,6 +321,7 @@ class DatabaseAsync(DatabaseView):
         'expose_in_sqllab', 'allow_ctas', 'force_ctas_schema',
         'allow_run_async', 'allow_run_sync', 'allow_dml',
         'allow_multi_schema_metadata_fetch', 'allow_csv_upload',
+        'allows_subquery',
     ]
 
 
@@ -1280,8 +1281,8 @@ class Superset(BaseSupersetView):
 
         form_data['datasource'] = str(datasource_id) + '__' + datasource_type
 
-        # On explore, merge extra filters into the form data
-        utils.split_adhoc_filters_into_base_filters(form_data)
+        # On explore, merge legacy and extra filters into the form data
+        utils.convert_legacy_filters_into_adhoc(form_data)
         merge_extra_filters(form_data)
 
         # merge request url params
@@ -1677,7 +1678,7 @@ class Superset(BaseSupersetView):
                 session.merge(slc)
                 session.flush()
 
-        dashboard.position_json = json.dumps(positions, indent=4, sort_keys=True)
+        dashboard.position_json = json.dumps(positions, sort_keys=True)
         md = dashboard.params_dict
         dashboard.css = data.get('css')
         dashboard.dashboard_title = data['dashboard_title']
@@ -1694,7 +1695,7 @@ class Superset(BaseSupersetView):
             {key: v for key, v in default_filters_data.items()
              if int(key) in slice_ids}
         md['default_filters'] = json.dumps(applicable_filters)
-        dashboard.json_metadata = json.dumps(md, indent=4)
+        dashboard.json_metadata = json.dumps(md)
 
     @api
     @has_access_api
@@ -2238,7 +2239,6 @@ class Superset(BaseSupersetView):
         SqlaTable = ConnectorRegistry.sources['table']
         data = json.loads(request.form.get('data'))
         table_name = data.get('datasourceName')
-        template_params = data.get('templateParams')
         table = (
             db.session.query(SqlaTable)
             .filter_by(table_name=table_name)
@@ -2254,43 +2254,24 @@ class Superset(BaseSupersetView):
         table.sql = q.stripped()
         db.session.add(table)
         cols = []
-        dims = []
-        metrics = []
-        for column_name, config in data.get('columns').items():
-            is_dim = config.get('is_dim', False)
+        for config in data.get('columns'):
+            column_name = config.get('name')
             SqlaTable = ConnectorRegistry.sources['table']
             TableColumn = SqlaTable.column_class
             SqlMetric = SqlaTable.metric_class
             col = TableColumn(
                 column_name=column_name,
-                filterable=is_dim,
-                groupby=is_dim,
+                filterable=True,
+                groupby=True,
                 is_dttm=config.get('is_date', False),
                 type=config.get('type', False),
             )
             cols.append(col)
-            if is_dim:
-                dims.append(col)
-            agg = config.get('agg')
-            if agg:
-                if agg == 'count_distinct':
-                    metrics.append(SqlMetric(
-                        metric_name='{agg}__{column_name}'.format(**locals()),
-                        expression='COUNT(DISTINCT {column_name})'
-                        .format(**locals()),
-                    ))
-                else:
-                    metrics.append(SqlMetric(
-                        metric_name='{agg}__{column_name}'.format(**locals()),
-                        expression='{agg}({column_name})'.format(**locals()),
-                    ))
-        if not metrics:
-            metrics.append(SqlMetric(
-                metric_name='count'.format(**locals()),
-                expression='count(*)'.format(**locals()),
-            ))
+
         table.columns = cols
-        table.metrics = metrics
+        table.metrics = [
+            SqlMetric(metric_name='count', expression='count(*)'),
+        ]
         db.session.commit()
         return self.json_response(json.dumps({
             'table_id': table.id,
@@ -2461,9 +2442,8 @@ class Superset(BaseSupersetView):
         rejected_tables = security_manager.rejected_datasources(sql, mydb, schema)
         if rejected_tables:
             return json_error_response(
-                security_manager.get_datasource_access_error_msg('{}'.format(
-                    rejected_tables)),
-                link=security_manager.get_table_error_link(rejected_tables))
+                security_manager.get_table_access_error_msg(rejected_tables),
+                link=security_manager.get_table_access_link(rejected_tables))
         session.commit()
 
         select_as_cta = request.form.get('select_as_cta') == 'true'
