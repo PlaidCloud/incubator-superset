@@ -242,6 +242,7 @@ class TableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  # noqa
         'description': _('Description'),
         'is_sqllab_view': _('SQL Lab View'),
         'template_params': _('Template parameters'),
+        'modified': _('Modified'),
     }
 
     def pre_add(self, table):
@@ -328,7 +329,7 @@ appbuilder.add_link(
     'Tables',
     label=__('Tables'),
     href='/tablemodelview/list/?_flt_1_is_sqllab_view=y',
-    icon='fa-upload',
+    icon='fa-table',
     category='Sources',
     category_label=__('Sources'),
     category_icon='fa-table')

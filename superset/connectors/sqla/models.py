@@ -49,8 +49,10 @@ class AnnotationDatasource(BaseDatasource):
         error_message = None
         qry = db.session.query(Annotation)
         qry = qry.filter(Annotation.layer_id == query_obj['filter'][0]['val'])
-        qry = qry.filter(Annotation.start_dttm >= query_obj['from_dttm'])
-        qry = qry.filter(Annotation.end_dttm <= query_obj['to_dttm'])
+        if query_obj['from_dttm']:
+            qry = qry.filter(Annotation.start_dttm >= query_obj['from_dttm'])
+        if query_obj['to_dttm']:
+            qry = qry.filter(Annotation.end_dttm <= query_obj['to_dttm'])
         status = QueryStatus.SUCCESS
         try:
             df = pd.read_sql_query(qry.statement, db.engine)
@@ -95,6 +97,9 @@ class TableColumn(Model, BaseColumn):
         'filterable', 'expression', 'description', 'python_date_format',
         'database_expression',
     )
+
+    update_from_object_fields = [
+        s for s in export_fields if s not in ('table_id',)]
     export_parent = 'table'
 
     @property
@@ -172,6 +177,7 @@ class TableColumn(Model, BaseColumn):
             return s or "'{}'".format(dttm.strftime('%Y-%m-%d %H:%M:%S.%f'))
 
     def get_metrics(self):
+        # TODO deprecate, this is not needed since MetricsControl
         metrics = []
         M = SqlMetric  # noqa
         quoted = self.column_name
@@ -223,7 +229,9 @@ class SqlMetric(Model, BaseMetric):
 
     export_fields = (
         'metric_name', 'verbose_name', 'metric_type', 'table_id', 'expression',
-        'description', 'is_restricted', 'd3format')
+        'description', 'is_restricted', 'd3format', 'warning_text')
+    update_from_object_fields = list([
+        s for s in export_fields if s not in ('table_id', )])
     export_parent = 'table'
 
     @property
@@ -283,6 +291,8 @@ class SqlaTable(Model, BaseDatasource):
         'table_name', 'main_dttm_col', 'description', 'default_endpoint',
         'database_id', 'offset', 'cache_timeout', 'schema',
         'sql', 'params', 'template_params')
+    update_from_object_fields = [
+        f for f in export_fields if f not in ('table_name', 'database_id')]
     export_parent = 'database'
     export_children = ['metrics', 'columns']
 
@@ -305,6 +315,10 @@ class SqlaTable(Model, BaseDatasource):
     @property
     def description_markeddown(self):
         return utils.markdown(self.description)
+
+    @property
+    def datasource_name(self):
+        return self.table_name
 
     @property
     def link(self):
@@ -365,6 +379,12 @@ class SqlaTable(Model, BaseDatasource):
     def sql_url(self):
         return self.database.sql_url + '?table_name=' + str(self.table_name)
 
+    def external_metadata(self):
+        cols = self.database.get_columns(self.table_name, schema=self.schema)
+        for col in cols:
+            col['type'] = '{}'.format(col['type'])
+        return cols
+
     @property
     def time_column_grains(self):
         return {
@@ -394,6 +414,7 @@ class SqlaTable(Model, BaseDatasource):
                 grains = [(g.duration, g.name) for g in grains]
             d['granularity_sqla'] = utils.choicify(self.dttm_cols)
             d['time_grain_sqla'] = grains
+            d['main_dttm_col'] = self.main_dttm_col
         return d
 
     def values_for_column(self, column_name, limit=10000):

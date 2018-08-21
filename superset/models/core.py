@@ -17,6 +17,7 @@ import textwrap
 from flask import escape, g, Markup, request
 from flask_appbuilder import Model
 from flask_appbuilder.models.decorators import renders
+from flask_appbuilder.security.sqla.models import User
 from future.standard_library import install_aliases
 import numpy
 import pandas as pd
@@ -28,7 +29,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.engine import url
 from sqlalchemy.engine.url import make_url
-from sqlalchemy.orm import relationship, subqueryload
+from sqlalchemy.orm import relationship, sessionmaker, subqueryload
 from sqlalchemy.orm.session import make_transient
 from sqlalchemy.pool import NullPool
 from sqlalchemy.schema import UniqueConstraint
@@ -37,7 +38,10 @@ import sqlparse
 
 from superset import app, db, db_engine_specs, security_manager, utils
 from superset.connectors.connector_registry import ConnectorRegistry
+from superset.legacy import update_time_range
 from superset.models.helpers import AuditMixinNullable, ImportMixin, set_perm
+from superset.models.user_attributes import UserAttribute
+from superset.utils import MediumText
 from superset.viz import viz_types
 install_aliases()
 from urllib import parse  # noqa
@@ -56,6 +60,41 @@ def set_related_perm(mapper, connection, target):  # noqa
         ds = db.session.query(src_class).filter_by(id=int(id_)).first()
         if ds:
             target.perm = ds.perm
+
+
+def copy_dashboard(mapper, connection, target):
+    dashboard_id = config.get('DASHBOARD_TEMPLATE_ID')
+    if dashboard_id is None:
+        return
+
+    Session = sessionmaker(autoflush=False)
+    session = Session(bind=connection)
+    new_user = session.query(User).filter_by(id=target.id).first()
+
+    # copy template dashboard to user
+    template = session.query(Dashboard).filter_by(id=int(dashboard_id)).first()
+    dashboard = Dashboard(
+        dashboard_title=template.dashboard_title,
+        position_json=template.position_json,
+        description=template.description,
+        css=template.css,
+        json_metadata=template.json_metadata,
+        slices=template.slices,
+        owners=[new_user],
+    )
+    session.add(dashboard)
+    session.commit()
+
+    # set dashboard as the welcome dashboard
+    extra_attributes = UserAttribute(
+        user_id=target.id,
+        welcome_dashboard_id=dashboard.id,
+    )
+    session.add(extra_attributes)
+    session.commit()
+
+
+sqla.event.listen(User, 'after_insert', copy_dashboard)
 
 
 class Url(Model, AuditMixinNullable):
@@ -213,8 +252,10 @@ class Slice(Model, AuditMixinNullable, ImportMixin):
             'datasource': '{}__{}'.format(
                 self.datasource_id, self.datasource_type),
         })
+
         if self.cache_timeout:
             form_data['cache_timeout'] = self.cache_timeout
+        update_time_range(form_data)
         return form_data
 
     def get_explore_url(self, base_url='/superset/explore', overrides=None):
@@ -237,7 +278,7 @@ class Slice(Model, AuditMixinNullable, ImportMixin):
 
     @property
     def edit_url(self):
-        return '/slicemodelview/edit/{}'.format(self.id)
+        return '/chart/edit/{}'.format(self.id)
 
     @property
     def slice_link(self):
@@ -324,7 +365,7 @@ class Dashboard(Model, AuditMixinNullable, ImportMixin):
     __tablename__ = 'dashboards'
     id = Column(Integer, primary_key=True)
     dashboard_title = Column(String(500))
-    position_json = Column(Text)
+    position_json = Column(MediumText())
     description = Column(Text)
     css = Column(Text)
     json_metadata = Column(Text)
@@ -643,6 +684,10 @@ class Database(Model, AuditMixinNullable, ImportMixin):
         return self.database_name
 
     @property
+    def url_object(self):
+        return make_url(self.sqlalchemy_uri_decrypted)
+
+    @property
     def backend(self):
         url = make_url(self.sqlalchemy_uri_decrypted)
         return url.get_backend_name()
@@ -749,9 +794,14 @@ class Database(Model, AuditMixinNullable, ImportMixin):
 
                 self.db_engine_spec.execute(cursor, sqls[-1])
 
+                if cursor.description is not None:
+                    columns = [col_desc[0] for col_desc in cursor.description]
+                else:
+                    columns = []
+
                 df = pd.DataFrame.from_records(
                     data=list(cursor.fetchall()),
-                    columns=[col_desc[0] for col_desc in cursor.description],
+                    columns=columns,
                     coerce_float=True,
                 )
 
