@@ -31,7 +31,7 @@ class Plaid(BaseSupersetView):
             bool: True.
         """
         project_ids = []
-        if (project_id):
+        if project_id:
             project_ids.append(project_id)
         appbuilder.sm.sync_datasources(project_ids=project_ids)
         return self.json_response(True)
@@ -53,7 +53,7 @@ class Plaid(BaseSupersetView):
         """
         self.refresh_async(project_id)
         return redirect('/tablemodelview/list')
-    
+
 appbuilder.add_view_no_menu(Plaid)
 appbuilder.add_link(
     'Refresh',
