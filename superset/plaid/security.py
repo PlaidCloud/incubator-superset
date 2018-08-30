@@ -33,7 +33,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
                          verify_ssl=False)
 
 
-    def __init__(self, appbuilder):
+    def sync_role_definitions(self):
         """PlaidSecurityManager contructor.
 
         Establishes a Plaid role (and Public, if configured to do so) after
@@ -42,7 +42,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         Args:
             appbuilder (:obj:`AppBuilder`): F.A.B AppBuilder main object.
         """
-        super().__init__(appbuilder)
+        super().sync_role_definitions()
         self.set_role('Plaid', self.is_plaid_user_pvm)
         if self.appbuilder.app.config.get('PUBLIC_ROLE_LIKE_PLAID', False):
             self.set_role('Public', self.is_plaid_user_pvm)
