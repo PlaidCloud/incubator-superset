@@ -17,7 +17,7 @@ __email__ = "garrett.bates@tartansolutions.com"
 
 log = logging.getLogger(__name__)
 
-def sync_report_datasources(project_ids=[]):
+def sync_report_datasources(project_ids=None):
     '''Synchronize all project datasources that the current user has access to.
 
     The RPC is called via the security manager, using the current active token.
@@ -27,7 +27,11 @@ def sync_report_datasources(project_ids=[]):
     '''
     log.debug('Syncing all report datasources.')
     try:
-        projects = security_manager.rpc.identity.me.projects(project_ids=project_ids)
+        id_filter = []
+        if project_ids is not None:
+            id_filter = project_ids
+
+        projects = security_manager.rpc.identity.me.projects(project_ids=id_filter)
         return {
             project_info['project_id']: sync_report_datasource(project_info)
             for project_info in projects

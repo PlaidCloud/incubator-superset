@@ -163,19 +163,19 @@ class PlaidSecurityManager(SupersetSecurityManager):
         return user
 
 
-    def sync_datasources(self, project_ids=[]):
-        """Pulls all published tables from plaid and creates datasources for 
+    def sync_datasources(self, project_ids=None):
+        """Pulls all published tables from plaid and creates datasources for
         them.
 
         Args:
-            project_id (:obj:`list` of :obj:`str`): UUIDs of plaid projects to 
+            project_id (:obj:`list` of :obj:`str`): UUIDs of plaid projects to
                 sync. Default is empty list (all projects).
 
         Returns:
             None
         """
         # This import throws ImportError if hoisted to top of module.
-        from plaidtools.superset import datasource_helpers as dh
+        from superset.plaid import datasource_helpers as dh
         for proj_id, views in dh.sync_report_datasources(project_ids).items():
             view_perms = [view.get_perm() for view in views]
 
