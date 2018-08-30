@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 DATASOURCE_PREFIX = 'datasource_'
 
 class PlaidSecurityManager(SupersetSecurityManager):
-    """
+    """Custom security manager class for PlaidCloud integration.
     """
     @property
     def rpc(self):
@@ -71,7 +71,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         return self.appbuilder.app.config.get('PLAID_BASE_PERMISSIONS')
 
 
-    def get_oauth_user_info(self, provider, response=None):
+    def get_oauth_user_info(self, provider, resp=None):
         """Retrieves Plaid user info from RPC.
 
         If the specified oauth provider is not 'plaidcloud', the super
@@ -94,7 +94,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
             return user
         else:
             # Just call the base method so defaults continue to work.
-            return super().get_oauth_user_info(provider, response)
+            return super().get_oauth_user_info(provider, resp)
 
 
     def auth_user_oauth(self, userinfo):
@@ -127,7 +127,9 @@ class PlaidSecurityManager(SupersetSecurityManager):
                     role=self.find_role('Plaid')
                 )
             if not user:
-                log.error("Error creating a new OAuth user %s" % userinfo['username'])
+                log.error(
+                    'Error creating a new OAuth user %s', userinfo['username']
+                )
                 return None
         self.update_user_auth_stat(user)
 
@@ -171,7 +173,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
                 role_name=self.get_ds_role_name(proj_id),
                 pvm_check=has_project_access_pvm
             )
-            log.debug("Role {} created.".format(self.get_ds_role_name(proj_id)))
+            log.debug('Role {} created.'.format(self.get_ds_role_name(proj_id)))
             # Add every user that has access to the project to this role.
             self.sync_datasource_perms(proj_id)
 
@@ -184,15 +186,15 @@ class PlaidSecurityManager(SupersetSecurityManager):
             project_id (str): Project ID to sync users with.
         """
         # Get all of the users that belong to the project we sync'd.
-        log.debug("Fetching plaid users for project {}".format(project_id))
+        log.debug('Fetching plaid users for project {}'.format(project_id))
         plaid_users = self.rpc.identity.member.members_by_project(project_id=project_id)
         
         # Get a list of user names so we can bulk-select.
-        usernames = [user["user_name"] for user in plaid_users]
+        usernames = [user['user_name'] for user in plaid_users]
         log.debug(usernames)
         role = self.find_role(self.get_ds_role_name(project_id))
 
-        if (not role): 
+        if not role: 
             return
 
         log.debug(role.name)
