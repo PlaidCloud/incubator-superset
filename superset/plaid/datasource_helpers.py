@@ -17,28 +17,30 @@ __email__ = "garrett.bates@tartansolutions.com"
 
 log = logging.getLogger(__name__)
 
-def sync_report_datasources(project_ids=None):
+def sync_report_datasources(projects=None):
     '''Synchronize all project datasources that the current user has access to.
 
-    The RPC is called via the security manager, using the current active token.
+    Args:
+        projects (List[:obj:`dict`]): Contains a list of project_info dicts:
+            project_info (dict): Several parameters, specified as follows:
+                workspace_name (str): Name of the Plaid workspace.
+                project_name (str): Name of the Plaid project.
+                project_id (str): Unique ID of the plaid project.
+                report_user (str): Name of report user database role.
+                report_password (str): Plaintext password of database role.
 
     Returns:
         dict: A collection of `SqlaTable` data models, indexed by project ID.
     '''
     log.debug('Syncing all report datasources.')
     try:
-        id_filter = []
-        if project_ids is not None:
-            id_filter = project_ids
+        if projects is None:
+            return dict()
 
-        projects = security_manager.rpc.identity.me.projects(project_ids=id_filter)
         return {
             project_info['project_id']: sync_report_datasource(project_info)
             for project_info in projects
         }
-    except AttributeError:
-        log.error('RPC unspecified. Login to fix this. %s', traceback.print_exc())
-        return dict()
     except:
         log.error('Unexpected error: %s', traceback.print_exc())
         raise
@@ -91,6 +93,7 @@ def sync_report_datasource(project_info):
         schema_perm = security_manager.get_schema_perm(database, schema_name)
         security_manager.merge_perm('schema_access', schema_perm)
         views = get_report_views(database, schema_name)
+    engine.dispose()
     return views
 
 def add_report_database(database_name, verbose_name, report_user, report_password):
@@ -105,6 +108,7 @@ def add_report_database(database_name, verbose_name, report_user, report_passwor
     Returns:
         `Database`: SQLA model representing the new/existing database.
     """
+    session = db.session()
     database = find_report_database(database_name)
     if not database:
         if not (report_user and report_password):
@@ -120,12 +124,12 @@ def add_report_database(database_name, verbose_name, report_user, report_passwor
             verbose_name=verbose_name,
             expose_in_sqllab=True
         )
-        db.session.add(database)
-        db.session.commit()
+        session.add(database)
+        session.commit()
     return database
 
 def get_report_database_url(report_user, report_pass):
-    host = security_manager.appbuilder.app.config.get('PLAID_DATABASE_HOST', 'localhost')    
+    host = security_manager.appbuilder.app.config.get('PLAID_DATABASE_HOST', 'localhost')
     return 'postgresql://{0}:{1}@{2}/plaid_data'.format(report_user, report_pass, host)
 
 def find_report_database(database_name):
@@ -134,7 +138,7 @@ def find_report_database(database_name):
     Returns:
         `Database`: SQLA model representing the database.
     """
-    return db.session \
+    return db.session() \
              .query(Database) \
              .filter(Database.database_name == database_name) \
              .first() #noqa
@@ -156,7 +160,7 @@ def get_report_schema_name(project_id):
     # Database is named after project ID, and schema is "report" + project ID.
     return 'report{}'.format(project_id)
 
-def get_report_views(database, schema=None):    
+def get_report_views(database, schema=None):
     """Get a list of report views from a database.
 
     If a view is found in the database that is not yet listed in superset,
@@ -171,9 +175,10 @@ def get_report_views(database, schema=None):
     """
     # Iterate through each view available to the reporting user.
     # We want to add the view to superset if it doesn't exist.
+    session = db.session()
     view_names_in_plaid = database.all_view_names(schema=schema)
     log.debug('Plaid views: %s', view_names_in_plaid)
-    view_objs_in_db = db.session.query(
+    view_objs_in_db = session.query(
         SqlaTable
     ).filter(
         SqlaTable.table_name.in_(view_names_in_plaid),
@@ -190,7 +195,7 @@ def get_report_views(database, schema=None):
             schema=schema,
             database=database,
         )
-        db.session.add(view_obj)
+        session.add(view_obj)
         view_obj.fetch_metadata()
         return view_obj
 

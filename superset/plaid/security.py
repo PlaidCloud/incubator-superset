@@ -147,19 +147,13 @@ class PlaidSecurityManager(SupersetSecurityManager):
             session.merge(user)
             session.commit()
         else:
-            admin_role = self.find_role('Admin')
             session = self.get_session
+            admin_role = self.find_role('Admin')
             user.roles.remove(admin_role)
             session.merge(user)
             session.commit()
 
         self.update_user_auth_stat(user)
-
-        # If the user is an admin in plaidcloud, add them as an admin here.
-        # if ('admin' in userinfo and userinfo.get('admin', False)):
-        #     role = self.find_role('Admin')
-        #     user.roles.append(role)
-        #     self.get_session.commit()
         return user
 
 
@@ -176,7 +170,8 @@ class PlaidSecurityManager(SupersetSecurityManager):
         """
         # This import throws ImportError if hoisted to top of module.
         from superset.plaid import datasource_helpers as dh
-        for proj_id, views in dh.sync_report_datasources(project_ids).items():
+        projects = self.rpc.identity.me.projects(project_ids=project_ids)
+        for proj_id, views in dh.sync_report_datasources(projects).items():
             view_perms = [view.get_perm() for view in views]
 
             # pvm = permission / view menu relation.
@@ -195,7 +190,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
                 role_name=get_ds_role_name(proj_id),
                 pvm_check=has_project_access_pvm
             )
-            log.debug('Role {} created.'.format(get_ds_role_name(proj_id)))
+            log.debug('Role %s created.', get_ds_role_name(proj_id))
             # Add every user that has access to the project to this role.
             self.sync_datasource_perms(proj_id)
 
