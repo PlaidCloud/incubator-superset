@@ -21,21 +21,22 @@ def sync_report_datasources(project_ids=[]):
     '''Synchronize all project datasources that the current user has access to.
 
     The RPC is called via the security manager, using the current active token.
-    
+
     Returns:
         dict: A collection of `SqlaTable` data models, indexed by project ID.
     '''
     log.debug('Syncing all report datasources.')
     try:
+        projects = security_manager.rpc.identity.me.projects(project_ids=project_ids)
         return {
             project_info['project_id']: sync_report_datasource(project_info)
-            for project_info in security_manager.rpc.identity.me.projects(project_ids=project_ids)
+            for project_info in projects
         }
     except AttributeError:
-        log.error('RPC unspecified. Login to fix this. {}'.format(traceback.print_exc()))
+        log.error('RPC unspecified. Login to fix this. %s', traceback.print_exc())
         return dict()
     except:
-        log.error('Unexpected error: {}'.format(traceback.print_exc()))
+        log.error('Unexpected error: %s', traceback.print_exc())
         raise
 
 def sync_report_datasource(project_info):
@@ -67,7 +68,7 @@ def sync_report_datasource(project_info):
     insp = reflection.Inspector.from_engine(engine)
     views = insp.get_view_names(schema_name)
     log.debug([view for view in views])
-    if (len(views) > 0): # The schema is not empty, so add the project as DB.
+    if views: # The schema is not empty, so add the project as DB.
         database = add_report_database(
             database_name=project_info['project_id'],
             verbose_name=get_report_database_name(
@@ -78,7 +79,10 @@ def sync_report_datasource(project_info):
             report_user=project_info['report_user'],
             report_password=project_info['report_password'],
         )
-        if (not database): return [] # Can't really do much if no DB.            
+
+        if not database:
+            return [] # Can't really do much if no DB.
+
         # Add schema perm.
         schema_perm = security_manager.get_schema_perm(database, schema_name)
         security_manager.merge_perm('schema_access', schema_perm)
@@ -98,11 +102,11 @@ def add_report_database(database_name, verbose_name, report_user, report_passwor
         `Database`: SQLA model representing the new/existing database.
     """
     database = find_report_database(database_name)
-    if (not database):
-        if (not (report_user and report_password)):
+    if not database:
+        if not (report_user and report_password):
             log.error(
-                'Error creating a new database for project {}:'
-                'report user and/or password unspecified.'.format(database_name)
+                'Error creating a new database for project %s:'
+                'report user and/or password unspecified.', database_name
             )
             return None
         database = Database(
@@ -126,7 +130,10 @@ def find_report_database(database_name):
     Returns:
         `Database`: SQLA model representing the database.
     """
-    return db.session.query(Database).filter(Database.database_name==database_name).first() #noqa
+    return db.session \
+             .query(Database) \
+             .filter(Database.database_name == database_name) \
+             .first() #noqa
 
 def get_report_database_name(workspace_name, project_name, project_id):
     """Creates a human-readable database name with standard formatting.
@@ -161,7 +168,7 @@ def get_report_views(database, schema=None):
     # Iterate through each view available to the reporting user.
     # We want to add the view to superset if it doesn't exist.
     view_names_in_plaid = database.all_view_names(schema=schema)
-    log.debug("Plaid views: {}".format(view_names_in_plaid))
+    log.debug('Plaid views: %s', view_names_in_plaid)
     view_objs_in_db = db.session.query(
         SqlaTable
     ).filter(
@@ -171,20 +178,20 @@ def get_report_views(database, schema=None):
     ).all()
 
     view_names_in_db = [view.table_name for view in view_objs_in_db]
-    log.debug("Superset views: {}".format(view_names_in_db))
-    
+    log.debug('Superset views: %s', view_names_in_db)
+
     def add_view(view_name, schema, database):
         view_obj = SqlaTable(
-            table_name = view_name,
-            schema = schema,
-            database = database,
+            table_name=view_name,
+            schema=schema,
+            database=database,
         )
         db.session.add(view_obj)
         view_obj.fetch_metadata()
         return view_obj
 
     view_objs_in_db.extend([
-        add_view(view_name, schema, database) 
+        add_view(view_name, schema, database)
         for view_name in view_names_in_plaid if view_name not in view_names_in_db
     ])
 
