@@ -138,7 +138,9 @@ class PlaidSecurityManager(SupersetSecurityManager):
                 )
                 return None
 
-        if userinfo.get('admin'):
+        admin_enabled = self.appbuilder.app.config.get('ADMIN_ENABLED', False)
+
+        if admin_enabled and userinfo.get('admin'):
             session = self.get_session
             admin_role = self.find_role('Admin')
             user.roles.append(admin_role)
