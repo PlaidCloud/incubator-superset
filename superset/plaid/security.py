@@ -131,11 +131,26 @@ class PlaidSecurityManager(SupersetSecurityManager):
                 email=userinfo['email'],
                 role=self.find_role('Plaid')
             )
+
             if not user:
                 log.error(
                     'Error creating a new OAuth user %s', userinfo['username']
                 )
                 return None
+
+        if userinfo.get('admin'):
+            session = self.get_session
+            admin_role = self.find_role('Admin')
+            user.roles.append(admin_role)
+            session.merge(user)
+            session.commit()
+        else:
+            admin_role = self.find_role('Admin')
+            session = self.get_session
+            user.roles.remove(admin_role)
+            session.merge(user)
+            session.commit()
+
         self.update_user_auth_stat(user)
 
         # If the user is an admin in plaidcloud, add them as an admin here.
