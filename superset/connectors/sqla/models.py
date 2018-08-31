@@ -29,7 +29,6 @@ from superset.jinja_context import get_template_processor
 from superset.models.annotations import Annotation
 from superset.models.core import Database
 from superset.models.helpers import QueryResult
-from superset.models.helpers import set_perm
 from superset.utils import DTTM_ALIAS, QueryStatus
 
 config = app.config
@@ -290,7 +289,7 @@ class SqlaTable(Model, BaseDatasource):
     export_fields = (
         'table_name', 'main_dttm_col', 'description', 'default_endpoint',
         'database_id', 'offset', 'cache_timeout', 'schema',
-        'sql', 'params', 'template_params')
+        'sql', 'params', 'template_params', 'filter_select_enabled')
     update_from_object_fields = [
         f for f in export_fields if f not in ('table_name', 'database_id')]
     export_parent = 'database'
@@ -896,5 +895,5 @@ class SqlaTable(Model, BaseDatasource):
         return qry.filter_by(is_sqllab_view=False)
 
 
-sa.event.listen(SqlaTable, 'after_insert', set_perm)
-sa.event.listen(SqlaTable, 'after_update', set_perm)
+sa.event.listen(SqlaTable, 'after_insert', security_manager.set_perm)
+sa.event.listen(SqlaTable, 'after_update', security_manager.set_perm)

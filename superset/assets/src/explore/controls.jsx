@@ -242,6 +242,14 @@ export const controls = {
     renderTrigger: true,
   },
 
+  target_color_picker: {
+    label: t('Target Color'),
+    description: t('Color of the target location'),
+    type: 'ColorPickerControl',
+    default: colorPrimary,
+    renderTrigger: true,
+  },
+
   legend_position: {
     label: t('Legend Position'),
     description: t('Choose the position of the legend'),
@@ -383,14 +391,15 @@ export const controls = {
 
   horizon_color_scale: {
     type: 'SelectControl',
-    label: t('Horizon Color Scale'),
+    renderTrigger: true,
+    label: t('Value Domain'),
     choices: [
       ['series', 'series'],
       ['overall', 'overall'],
       ['change', 'change'],
     ],
     default: 'series',
-    description: t('Defines how the color are attributed.'),
+    description: t('series: Treat each series independently; overall: All series use the same scale; change: Show changes compared to the first data point in each series'),
   },
 
   canvas_image_rendering: {
@@ -533,6 +542,7 @@ export const controls = {
     ...metric,
     label: t('Color Metric'),
     default: null,
+    validators: [],
     description: t('A metric to use for color'),
   },
   select_country: {
@@ -550,11 +560,13 @@ export const controls = {
       'Italy',
       'Portugal',
       'Morocco',
+      'Myanmar',
       'Netherlands',
       'Russia',
       'Singapore',
       'Spain',
       'Thailand',
+      'Timorleste',
       'Uk',
       'Ukraine',
       'Usa',
@@ -722,6 +734,7 @@ export const controls = {
     label: t('Stroke Width'),
     validators: [v.integer],
     default: null,
+    renderTrigger: true,
     choices: formatSelectOptions([1, 2, 3, 4, 5]),
   },
 
@@ -837,6 +850,7 @@ export const controls = {
 
   link_length: {
     type: 'SelectControl',
+    renderTrigger: true,
     freeForm: true,
     label: t('Link Length'),
     default: '200',
@@ -846,6 +860,7 @@ export const controls = {
 
   charge: {
     type: 'SelectControl',
+    renderTrigger: true,
     freeForm: true,
     label: t('Charge'),
     default: '-500',
@@ -895,7 +910,7 @@ export const controls = {
   time_grain_sqla: {
     type: 'SelectControl',
     label: t('Time Grain'),
-    default: control => control.choices && control.choices.length ? control.choices[0][0] : null,
+    default: 'P1D',
     description: t('The time granularity for the visualization. This ' +
     'applies a date transformation to alter ' +
     'your time column and defines a new time granularity. ' +
@@ -1200,6 +1215,7 @@ export const controls = {
 
   series_height: {
     type: 'SelectControl',
+    renderTrigger: true,
     freeForm: true,
     label: t('Series Height'),
     default: '25',
@@ -1292,7 +1308,8 @@ export const controls = {
     type: 'SelectControl',
     label: t('Rotation'),
     choices: formatSelectOptions(['random', 'flat', 'square']),
-    default: 'random',
+    renderTrigger: true,
+    default: 'square',
     description: t('Rotation to apply to words in the cloud'),
   },
 
@@ -1353,6 +1370,7 @@ export const controls = {
     type: 'TextControl',
     isInt: true,
     label: t('Font Size From'),
+    renderTrigger: true,
     default: '20',
     description: t('Font size for the smallest value in the list'),
   },
@@ -1361,6 +1379,7 @@ export const controls = {
     type: 'TextControl',
     isInt: true,
     label: t('Font Size To'),
+    renderTrigger: true,
     default: '150',
     description: t('Font size for the biggest value in the list'),
   },
@@ -1437,6 +1456,7 @@ export const controls = {
     type: 'CheckboxControl',
     label: t('Data Table'),
     default: false,
+    renderTrigger: true,
     description: t('Whether to display the interactive data table'),
   },
 
@@ -1450,10 +1470,10 @@ export const controls = {
 
   table_filter: {
     type: 'CheckboxControl',
-    label: t('Table Filter'),
+    label: t('Emit Filter Events'),
     renderTrigger: true,
     default: false,
-    description: t('Whether to apply filter when table cell is clicked'),
+    description: t('Whether to apply filter when items are clicked'),
   },
 
   align_pn: {
@@ -1486,6 +1506,14 @@ export const controls = {
     renderTrigger: true,
     default: true,
     description: t('Whether to display the legend (toggles)'),
+  },
+
+  send_time_range: {
+    type: 'CheckboxControl',
+    label: t('Propagate'),
+    renderTrigger: true,
+    default: false,
+    description: t('Send range filter events to other charts'),
   },
 
   show_labels: {
@@ -1747,6 +1775,17 @@ export const controls = {
     isFloat: true,
     description: t('Opacity of all clusters, points, and labels. ' +
     'Between 0 and 1.'),
+  },
+
+  opacity: {
+    type: 'SliderControl',
+    label: t('Opacity'),
+    default: 80,
+    step: 1,
+    min: 0,
+    max: 100,
+    renderTrigger: true,
+    description: t('Opacity, expects values between 0 and 100'),
   },
 
   viewport: {
@@ -2093,6 +2132,7 @@ export const controls = {
     choices: [
       ['polyline', 'Polyline'],
       ['json', 'JSON'],
+      ['geohash', 'geohash (square)'],
     ],
   },
 
@@ -2214,7 +2254,7 @@ export const controls = {
     label: t('Filled'),
     renderTrigger: true,
     description: t('Whether to fill the objects'),
-    default: false,
+    default: true,
   },
 
   normalized: {

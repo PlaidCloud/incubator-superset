@@ -83,7 +83,7 @@ const vizMap = {
   [VIZ_TYPES.heatmap]: () => loadVis(import(/* webpackChunkName: "heatmap" */ './heatmap.js')),
   [VIZ_TYPES.histogram]: () =>
     loadVis(import(/* webpackChunkName: "histogram" */ './histogram.js')),
-  [VIZ_TYPES.horizon]: () => loadVis(import(/* webpackChunkName: "horizon" */ './horizon.js')),
+  [VIZ_TYPES.horizon]: () => loadVis(import(/* webpackChunkName: "horizon" */ './HorizonChart.jsx')),
   [VIZ_TYPES.iframe]: () => loadVis(import(/* webpackChunkName: "iframe" */ './iframe.js')),
   [VIZ_TYPES.line]: loadNvd3,
   [VIZ_TYPES.line_multi]: () =>
@@ -106,7 +106,7 @@ const vizMap = {
   [VIZ_TYPES.country_map]: () =>
     loadVis(import(/* webpackChunkName: "country_map" */ './country_map.js')),
   [VIZ_TYPES.word_cloud]: () =>
-    loadVis(import(/* webpackChunkName: "word_cloud" */ './word_cloud.js')),
+    loadVis(import(/* webpackChunkName: "word_cloud" */ './wordcloud/WordCloud.js')),
   [VIZ_TYPES.world_map]: () =>
     loadVis(import(/* webpackChunkName: "world_map" */ './world_map.js')),
   [VIZ_TYPES.dual_line]: loadNvd3,

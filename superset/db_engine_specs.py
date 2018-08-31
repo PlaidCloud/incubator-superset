@@ -370,7 +370,7 @@ class BaseEngineSpec(object):
         return {}
 
     @classmethod
-    def execute(cls, cursor, query, async=False):
+    def execute(cls, cursor, query, **kwargs):
         if cls.arraysize:
             cursor.arraysize = cls.arraysize
         cursor.execute(query)
@@ -425,6 +425,10 @@ class BaseEngineSpec(object):
                     rename_cols[col] = orig_col
 
         return df.rename(index=str, columns=rename_cols)
+
+    @staticmethod
+    def mutate_expression_label(label):
+        return label
 
 
 class PostgresBaseEngineSpec(BaseEngineSpec):
@@ -1272,8 +1276,9 @@ class HiveEngineSpec(PrestoEngineSpec):
         return configuration
 
     @staticmethod
-    def execute(cursor, query, async=False):
-        cursor.execute(query, async=async)
+    def execute(cursor, query, async_=False):
+        kwargs = {'async': async_}
+        cursor.execute(query, **kwargs)
 
 
 class MssqlEngineSpec(BaseEngineSpec):
@@ -1413,6 +1418,18 @@ class BQEngineSpec(BaseEngineSpec):
         if len(data) != 0 and type(data[0]).__name__ == 'Row':
             data = [r.values() for r in data]
         return data
+
+    @staticmethod
+    def mutate_expression_label(label):
+        mutated_label = re.sub('[^\w]+', '_', label)
+        if not re.match('^[a-zA-Z_]+.*', mutated_label):
+            raise SupersetTemplateException('BigQuery field_name used is invalid {}, '
+                                            'should start with a letter or '
+                                            'underscore'.format(mutated_label))
+        if len(mutated_label) > 128:
+            raise SupersetTemplateException('BigQuery field_name {}, should be atmost '
+                                            '128 characters'.format(mutated_label))
+        return mutated_label
 
     @classmethod
     def _get_fields(cls, cols):

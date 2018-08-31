@@ -10,7 +10,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 import copy
 from datetime import datetime, timedelta
 import hashlib
@@ -100,7 +100,7 @@ class BaseViz(object):
         self.process_metrics()
 
     def process_metrics(self):
-        self.metric_dict = {}
+        self.metric_dict = OrderedDict()
         fd = self.form_data
         for mkey in METRIC_KEYS:
             val = fd.get(mkey)
@@ -108,7 +108,10 @@ class BaseViz(object):
                 if not isinstance(val, list):
                     val = [val]
                 for o in val:
-                    self.metric_dict[self.get_metric_label(o)] = o
+                    label = self.get_metric_label(o)
+                    if isinstance(o, dict):
+                        o['label'] = label
+                    self.metric_dict[label] = o
 
         # Cast to list needed to return serializable object in py3
         self.all_metrics = list(self.metric_dict.values())
@@ -117,8 +120,14 @@ class BaseViz(object):
     def get_metric_label(self, metric):
         if isinstance(metric, string_types):
             return metric
+
         if isinstance(metric, dict):
-            return metric.get('label')
+            metric = metric.get('label')
+
+        if self.datasource.type == 'table':
+            db_engine_spec = self.datasource.database.db_engine_spec
+            metric = db_engine_spec.mutate_expression_label(metric)
+        return metric
 
     @staticmethod
     def handle_js_int_overflow(data):
@@ -464,7 +473,7 @@ class BaseViz(object):
         return df.to_csv(index=include_index, **config.get('CSV_EXPORT'))
 
     def get_data(self, df):
-        return []
+        return self.get_df().to_dict(orient='records')
 
     @property
     def json_data(self):
@@ -720,14 +729,6 @@ class WordCloudViz(BaseViz):
         d = super(WordCloudViz, self).query_obj()
         d['groupby'] = [self.form_data.get('series')]
         return d
-
-    def get_data(self, df):
-        fd = self.form_data
-        # Ordering the columns
-        df = df[[fd.get('series'), self.metric_labels[0]]]
-        # Labeling the columns for uniform json schema
-        df.columns = ['text', 'size']
-        return df.to_dict(orient='records')
 
 
 class TreemapViz(BaseViz):
@@ -1727,8 +1728,6 @@ class WorldMapViz(BaseViz):
 
     def query_obj(self):
         qry = super(WorldMapViz, self).query_obj()
-        qry['metrics'] = [
-            self.form_data['metric'], self.form_data['secondary_metric']]
         qry['groupby'] = [self.form_data['entity']]
         return qry
 
@@ -1738,6 +1737,7 @@ class WorldMapViz(BaseViz):
         cols = [fd.get('entity')]
         metric = self.get_metric_label(fd.get('metric'))
         secondary_metric = self.get_metric_label(fd.get('secondary_metric'))
+        columns = ['country', 'm1', 'm2']
         if metric == secondary_metric:
             ndf = df[cols]
             # df[metric] will be a DataFrame
@@ -1745,10 +1745,14 @@ class WorldMapViz(BaseViz):
             ndf['m1'] = df[metric].iloc[:, 0]
             ndf['m2'] = ndf['m1']
         else:
-            cols += [metric, secondary_metric]
+            if secondary_metric:
+                cols += [metric, secondary_metric]
+            else:
+                cols += [metric]
+                columns = ['country', 'm1']
             ndf = df[cols]
         df = ndf
-        df.columns = ['country', 'm1', 'm2']
+        df.columns = columns
         d = df.to_dict(orient='records')
         for row in d:
             country = None
@@ -1846,10 +1850,6 @@ class ParallelCoordinatesViz(BaseViz):
     def query_obj(self):
         d = super(ParallelCoordinatesViz, self).query_obj()
         fd = self.form_data
-        d['metrics'] = copy.copy(fd.get('metrics'))
-        second = fd.get('secondary_metric')
-        if second not in d['metrics']:
-            d['metrics'] += [second]
         d['groupby'] = [fd.get('series')]
         return d
 
@@ -2098,10 +2098,24 @@ class BaseDeckGLViz(BaseViz):
                 _('Invalid spatial point encountered: %s' % s))
         return (p.latitude, p.longitude)
 
+    @staticmethod
+    def reverse_geohash_decode(geohash_code):
+        lat, lng = geohash.decode(geohash_code)
+        return (lng, lat)
+
+    @staticmethod
+    def reverse_latlong(df, key):
+        df[key] = [
+            tuple(reversed(o))
+            for o in df[key]
+            if isinstance(o, (list, tuple))
+        ]
+
     def process_spatial_data_obj(self, key, df):
         spatial = self.form_data.get(key)
         if spatial is None:
             raise ValueError(_('Bad spatial key'))
+
         if spatial.get('type') == 'latlong':
             df[key] = list(zip(
                 pd.to_numeric(df[spatial.get('lonCol')], errors='coerce'),
@@ -2110,18 +2124,13 @@ class BaseDeckGLViz(BaseViz):
         elif spatial.get('type') == 'delimited':
             lon_lat_col = spatial.get('lonlatCol')
             df[key] = df[lon_lat_col].apply(self.parse_coordinates)
-
-            if spatial.get('reverseCheckbox'):
-                df[key] = [
-                    tuple(reversed(o)) if isinstance(o, (list, tuple)) else (0, 0)
-                    for o in df[key]
-                ]
             del df[lon_lat_col]
         elif spatial.get('type') == 'geohash':
-            latlong = df[spatial.get('geohashCol')].map(geohash.decode)
-            df[key] = list(zip(latlong.apply(lambda x: x[0]),
-                               latlong.apply(lambda x: x[1])))
+            df[key] = df[spatial.get('geohashCol')].map(self.reverse_geohash_decode)
             del df[spatial.get('geohashCol')]
+
+        if spatial.get('reverseCheckbox'):
+            self.reverse_latlong(df, key)
 
         if df.get(key) is None:
             raise NullValueException(_('Encountered invalid NULL spatial entry, \
@@ -2149,7 +2158,7 @@ class BaseDeckGLViz(BaseViz):
         fd = self.form_data
 
         # add NULL filters
-        if fd.get('filter_nulls'):
+        if fd.get('filter_nulls', True):
             self.add_null_filters()
 
         d = super(BaseDeckGLViz, self).query_obj()
@@ -2196,6 +2205,7 @@ class BaseDeckGLViz(BaseViz):
         return {
             'features': features,
             'mapboxApiKey': config.get('MAPBOX_API_KEY'),
+            'metricLabels': self.metric_labels,
         }
 
     def get_properties(self, d):
@@ -2292,6 +2302,17 @@ class DeckGrid(BaseDeckGLViz):
         return super(DeckGrid, self).get_data(df)
 
 
+def geohash_to_json(geohash_code):
+    p = geohash.bbox(geohash_code)
+    return [
+        [p.get('w'), p.get('n')],
+        [p.get('e'), p.get('n')],
+        [p.get('e'), p.get('s')],
+        [p.get('w'), p.get('s')],
+        [p.get('w'), p.get('n')],
+    ]
+
+
 class DeckPathViz(BaseDeckGLViz):
 
     """deck.gl's PathLayer"""
@@ -2302,26 +2323,32 @@ class DeckPathViz(BaseDeckGLViz):
     deser_map = {
         'json': json.loads,
         'polyline': polyline.decode,
+        'geohash': geohash_to_json,
     }
 
     def query_obj(self):
         d = super(DeckPathViz, self).query_obj()
         line_col = self.form_data.get('line_column')
         if d['metrics']:
+            self.has_metrics = True
             d['groupby'].append(line_col)
         else:
+            self.has_metrics = False
             d['columns'].append(line_col)
         return d
 
     def get_properties(self, d):
         fd = self.form_data
-        deser = self.deser_map[fd.get('line_type')]
-        path = deser(d[fd.get('line_column')])
+        line_type = fd.get('line_type')
+        deser = self.deser_map[line_type]
+        line_column = fd.get('line_column')
+        path = deser(d[line_column])
         if fd.get('reverse_long_lat'):
-            path = (path[1], path[0])
-        return {
-            self.deck_viz_key: path,
-        }
+            path = [(o[1], o[0]) for o in path]
+        d[self.deck_viz_key] = path
+        if line_type != 'geohash':
+            del d[line_column]
+        return d
 
 
 class DeckPolygon(DeckPathViz):
@@ -2378,19 +2405,28 @@ class DeckArc(BaseDeckGLViz):
     viz_type = 'deck_arc'
     verbose_name = _('Deck.gl - Arc')
     spatial_control_keys = ['start_spatial', 'end_spatial']
+    is_timeseries = True
+
+    def query_obj(self):
+        fd = self.form_data
+        self.is_timeseries = bool(
+            fd.get('time_grain_sqla') or fd.get('granularity'))
+        return super(DeckArc, self).query_obj()
 
     def get_properties(self, d):
+        dim = self.form_data.get('dimension')
         return {
             'sourcePosition': d.get('start_spatial'),
             'targetPosition': d.get('end_spatial'),
+            'cat_color': d.get(dim) if dim else None,
+            DTTM_ALIAS: d.get(DTTM_ALIAS),
         }
 
     def get_data(self, df):
         d = super(DeckArc, self).get_data(df)
-        arcs = d['features']
 
         return {
-            'arcs': arcs,
+            'features': d['features'],
             'mapboxApiKey': config.get('MAPBOX_API_KEY'),
         }
 
