@@ -1,20 +1,15 @@
-# -*- coding: utf-8 -*-
 """Unit tests for Sql Lab"""
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 from datetime import datetime, timedelta
 import json
 import unittest
 
 from flask_appbuilder.security.sqla import models as ab_models
 
-from superset import db, security_manager, utils
+from superset import db, security_manager
 from superset.dataframe import SupersetDataFrame
 from superset.db_engine_specs import BaseEngineSpec
 from superset.models.sql_lab import Query
+from superset.utils.core import datetime_to_epoch, get_main_database
 from .base_tests import SupersetTestCase
 
 
@@ -62,7 +57,7 @@ class SqlLabTests(SupersetTestCase):
         self.assertLess(0, len(data['data']))
 
     def test_sql_json_has_access(self):
-        main_db = self.get_main_database(db.session)
+        main_db = get_main_database(db.session)
         security_manager.add_permission_view_menu('database_access', main_db.perm)
         db.session.commit()
         main_db_permission_view = (
@@ -120,7 +115,7 @@ class SqlLabTests(SupersetTestCase):
 
         data = self.get_json_resp(
             '/superset/queries/{}'.format(
-                int(utils.datetime_to_epoch(now)) - 1000))
+                int(datetime_to_epoch(now)) - 1000))
         self.assertEquals(1, len(data))
 
         self.logout()
@@ -264,6 +259,29 @@ class SqlLabTests(SupersetTestCase):
         data = {'data': json.dumps(payload)}
         resp = self.get_json_resp('/superset/sqllab_viz/', data=data)
         self.assertIn('table_id', resp)
+
+    def test_sql_limit(self):
+        self.login('admin')
+        test_limit = 1
+        data = self.run_sql(
+            'SELECT * FROM ab_user',
+            client_id='sql_limit_1')
+        self.assertGreater(len(data['data']), test_limit)
+        data = self.run_sql(
+            'SELECT * FROM ab_user',
+            client_id='sql_limit_2',
+            query_limit=test_limit)
+        self.assertEquals(len(data['data']), test_limit)
+        data = self.run_sql(
+            'SELECT * FROM ab_user LIMIT {}'.format(test_limit),
+            client_id='sql_limit_3',
+            query_limit=test_limit + 1)
+        self.assertEquals(len(data['data']), test_limit)
+        data = self.run_sql(
+            'SELECT * FROM ab_user LIMIT {}'.format(test_limit + 1),
+            client_id='sql_limit_4',
+            query_limit=test_limit)
+        self.assertEquals(len(data['data']), test_limit)
 
 
 if __name__ == '__main__':

@@ -1,10 +1,4 @@
-# -*- coding: utf-8 -*-
 # pylint: disable=C,R,W
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import json
 
 from flask import request
@@ -41,6 +35,7 @@ class Datasource(BaseSupersetView):
         return self.json_response(data)
 
     @expose('/external_metadata/<datasource_type>/<datasource_id>/')
+    @has_access_api
     def external_metadata(self, datasource_type=None, datasource_id=None):
         """Gets column info from the source system"""
         orm_datasource = ConnectorRegistry.get_datasource(

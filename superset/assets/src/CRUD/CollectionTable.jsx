@@ -1,7 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import shortid from 'shortid';
-
+import { t } from '@superset-ui/translation';
 import Button from '../components/Button';
 import Fieldset from './Fieldset';
 import { recurseReactClone } from './utils';
@@ -210,7 +210,7 @@ export default class CRUDCollection extends React.PureComponent {
         <div>
           {this.props.allowAddItem &&
             <Button bsStyle="primary" onClick={this.onAddItem}>
-              <i className="fa fa-plus" /> Add Item
+              <i className="fa fa-plus" /> {t('Add Item')}
             </Button>}
           {this.props.extraButtons}
         </div>

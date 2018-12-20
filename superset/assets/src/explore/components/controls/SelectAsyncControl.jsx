@@ -1,10 +1,9 @@
-/* eslint no-undef: 2 */
 import React from 'react';
 import PropTypes from 'prop-types';
+import { t } from '@superset-ui/translation';
+
 import Select from '../../../components/AsyncSelect';
 import ControlHeader from '../ControlHeader';
-import { t } from '../../../locales';
-
 import withToasts from '../../../messageToasts/enhancers/withToasts';
 
 const propTypes = {

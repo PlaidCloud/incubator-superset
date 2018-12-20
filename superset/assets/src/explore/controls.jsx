@@ -35,21 +35,27 @@
  *
  * Note that the keys defined in controls in this file that are not listed above represent
  * props specific for the React component defined as `type`. Also note that this module work
- * in tandem with `visTypes.js` that defines how controls are composed into sections for
+ * in tandem with `controlPanels/index.js` that defines how controls are composed into sections for
  * each and every visualization type.
  */
 import React from 'react';
+import { t } from '@superset-ui/translation';
+import { getCategoricalSchemeRegistry, getSequentialSchemeRegistry } from '@superset-ui/color';
+
 import {
   formatSelectOptionsForRange,
   formatSelectOptions,
   mainMetric,
 } from '../modules/utils';
 import * as v from './validators';
-import { colorPrimary, ALL_COLOR_SCHEMES, spectrums } from '../modules/colors';
 import { defaultViewport } from '../modules/geo';
 import ColumnOption from '../components/ColumnOption';
 import OptionDescription from '../components/OptionDescription';
-import { t } from '../locales';
+
+const categoricalSchemeRegistry = getCategoricalSchemeRegistry();
+const sequentialSchemeRegistry = getSequentialSchemeRegistry();
+
+const PRIMARY_COLOR = { r: 0, g: 122, b: 135, a: 1 };
 
 const D3_FORMAT_DOCS = 'D3 format syntax: https://github.com/d3/d3-format';
 
@@ -218,7 +224,7 @@ export const controls = {
     label: t('Y Axis Bounds'),
     renderTrigger: true,
     default: [null, null],
-    description: t('Bounds for the Y axis. When left empty, the bounds are ' +
+    description: t('Bounds for the Y-axis. When left empty, the bounds are ' +
     'dynamically defined based on the min/max of the data. Note that ' +
     "this feature will only expand the axis range. It won't " +
     "narrow the data's extent."),
@@ -238,7 +244,7 @@ export const controls = {
     label: t('Fixed Color'),
     description: t('Use this to define a static color for all circles'),
     type: 'ColorPickerControl',
-    default: colorPrimary,
+    default: PRIMARY_COLOR,
     renderTrigger: true,
   },
 
@@ -246,7 +252,7 @@ export const controls = {
     label: t('Target Color'),
     description: t('Color of the target location'),
     type: 'ColorPickerControl',
-    default: colorPrimary,
+    default: PRIMARY_COLOR,
     renderTrigger: true,
   },
 
@@ -257,6 +263,7 @@ export const controls = {
     clearable: false,
     default: 'tr',
     choices: [
+      [null, 'None'],
       ['tl', 'Top left'],
       ['tr', 'Top right'],
       ['bl', 'Bottom left'],
@@ -269,7 +276,7 @@ export const controls = {
     label: t('Fill Color'),
     description: t(' Set the opacity to 0 if you do not want to override the color specified in the GeoJSON'),
     type: 'ColorPickerControl',
-    default: colorPrimary,
+    default: PRIMARY_COLOR,
     renderTrigger: true,
   },
 
@@ -277,7 +284,7 @@ export const controls = {
     label: t('Stroke Color'),
     description: t(' Set the opacity to 0 if you do not want to override the color specified in the GeoJSON'),
     type: 'ColorPickerControl',
-    default: colorPrimary,
+    default: PRIMARY_COLOR,
     renderTrigger: true,
   },
 
@@ -320,58 +327,14 @@ export const controls = {
   linear_color_scheme: {
     type: 'ColorSchemeControl',
     label: t('Linear Color Scheme'),
-    choices: [
-      ['fire', 'fire'],
-      ['white_black', 'white/black'],
-      ['black_white', 'black/white'],
-      ['dark_blue', 'light/dark blue'],
-      ['pink_grey', 'pink/white/grey'],
-      ['greens', 'greens'],
-      ['purples', 'purples'],
-      ['oranges', 'oranges'],
-      ['blue_white_yellow', 'blue/white/yellow'],
-      ['red_yellow_blue', 'red/yellowish/blue'],
-      ['brown_white_green', 'brown/white/green'],
-      ['purple_white_green', 'purple/white/green'],
-      ['schemeBrBG', 'brown/green'],
-      ['schemePRGn', 'purple/green'],
-      ['schemePiYG', 'pink/green'],
-      ['schemePuOr', 'purple/orange'],
-      ['schemeRdBu', 'red/blue'],
-      ['schemeRdGy', 'red/gray/black'],
-      ['schemeRdYlBu', 'red/yellow/blue'],
-      ['schemeRdYlGn', 'red/yellow/green'],
-      ['schemeSpectral', 'rainbow'],
-      ['schemeBlues', 'd3/blues'],
-      ['schemeGreens', 'd3/greens'],
-      ['schemeGrays', 'd3/grays'],
-      ['schemeOranges', 'd3/oranges'],
-      ['schemePurples', 'd3/purples'],
-      ['schemeReds', 'd3/reds'],
-      ['schemeViridis', 'd3/purple/blue/green/yellow'],
-      ['schemeInferno', 'd3/purple/red/orange/yellow'],
-      ['schemeMagma', 'd3/purple/pink/peach'],
-      ['schemeWarm', 'd3/warm/purple/pink/yellow/green'],
-      ['schemeCool', 'd3/cool/blue/green'],
-      ['schemeCubehelixDefault', 'd3/black/green/brown/pink/blue'],
-      ['schemeBuGn', 'd3/blue/green'],
-      ['schemeBuPu', 'd3/blue/purple'],
-      ['schemeGnBu', 'd3/green/blue'],
-      ['schemeOrRd', 'd3/orange/red'],
-      ['schemePuBuGn', 'd3/purple/blue/green'],
-      ['schemePuBu', 'd3/purple/blue'],
-      ['schemePuRd', 'd3/purple/red'],
-      ['schemeRdPu', 'd3/red/purple'],
-      ['schemeYlGnBu', 'd3/yellow/green/blue'],
-      ['schemeYlGn', 'd3/yellow/green'],
-      ['schemeYlOrBr', 'd3/yellow/brown'],
-      ['schemeYlOrRd', 'd3/yellow/orange/red'],
-    ],
+    choices: () => sequentialSchemeRegistry
+      .values()
+      .map(value => [value.name, value.label]),
     default: 'blue_white_yellow',
     clearable: false,
     description: '',
     renderTrigger: true,
-    schemes: spectrums,
+    schemes: () => sequentialSchemeRegistry.getMap(),
     isLinear: true,
   },
 
@@ -523,8 +486,8 @@ export const controls = {
     label: t('Reduce X ticks'),
     renderTrigger: true,
     default: false,
-    description: t('Reduces the number of X axis ticks to be rendered. ' +
-    'If true, the x axis wont overflow and labels may be ' +
+    description: t('Reduces the number of X-axis ticks to be rendered. ' +
+    'If true, the x-axis will not overflow and labels may be ' +
     'missing. If false, a minimum width will be applied ' +
     'to columns and the width may overflow into an ' +
     'horizontal scroll.'),
@@ -556,12 +519,12 @@ export const controls = {
       'Egypt',
       'France',
       'Germany',
-      'India',
       'Italy',
-      'Portugal',
+      'Japan',
       'Morocco',
       'Myanmar',
       'Netherlands',
+      'Portugal',
       'Russia',
       'Singapore',
       'Spain',
@@ -572,7 +535,7 @@ export const controls = {
       'Usa',
       'Zambia',
     ].map(s => [s, s]),
-    description: t('The name of country that Superset should display'),
+    description: t('The name of the country that Superset should display'),
   },
   country_fieldtype: {
     type: 'SelectControl',
@@ -709,16 +672,6 @@ export const controls = {
     }),
   },
 
-  polygon: {
-    type: 'SelectControl',
-    label: t('Polygon Column'),
-    validators: [v.nonEmpty],
-    description: t('Select the polygon column. Each row should contain JSON.array(N) of [longitude, latitude] points'),
-    mapStateToProps: state => ({
-      choices: (state.datasource) ? state.datasource.all_cols : [],
-    }),
-  },
-
   point_radius_scale: {
     type: 'SelectControl',
     freeForm: true,
@@ -789,7 +742,7 @@ export const controls = {
     default: 'auto',
     clearable: false,
     renderTrigger: true,
-    description: t('The way the ticks are laid out on the X axis'),
+    description: t('The way the ticks are laid out on the X-axis'),
   },
 
   left_margin: {
@@ -1078,7 +1031,7 @@ export const controls = {
     isInt: true,
     validators: [v.integer],
     renderTrigger: true,
-    default: 0,
+    default: 2,
     label: t('Cell Padding'),
     description: t('The distance between cells, in pixels'),
   },
@@ -1309,7 +1262,7 @@ export const controls = {
     label: t('Rotation'),
     choices: formatSelectOptions(['random', 'flat', 'square']),
     renderTrigger: true,
-    default: 'square',
+    default: 'flat',
     description: t('Rotation to apply to words in the cloud'),
   },
 
@@ -1357,13 +1310,35 @@ export const controls = {
       'mean',
       'min',
       'max',
-      'median',
       'stdev',
       'var',
     ]),
     default: 'sum',
     description: t('Aggregate function to apply when pivoting and ' +
     'computing the total rows and columns'),
+  },
+
+  js_agg_function: {
+    type: 'SelectControl',
+    label: t('Dynamic Aggregation Function'),
+    description: t('The function to use when aggregating points into groups'),
+    default: 'sum',
+    clearable: false,
+    renderTrigger: true,
+    choices: formatSelectOptions([
+      'sum',
+      'min',
+      'max',
+      'mean',
+      'median',
+      'count',
+      'variance',
+      'deviation',
+      'p1',
+      'p5',
+      'p95',
+      'p99',
+    ]),
   },
 
   size_from: {
@@ -1516,6 +1491,35 @@ export const controls = {
     description: t('Send range filter events to other charts'),
   },
 
+  toggle_polygons: {
+    type: 'CheckboxControl',
+    label: t('Multiple filtering'),
+    renderTrigger: true,
+    default: true,
+    description: t('Allow sending multiple polygons as a filter event'),
+  },
+
+  num_buckets: {
+    type: 'SelectControl',
+    multi: false,
+    freeForm: true,
+    label: t('Number of buckets to group data'),
+    default: 5,
+    choices: formatSelectOptions([2, 3, 5, 10]),
+    description: t('How many buckets should the data be grouped in.'),
+    renderTrigger: true,
+  },
+
+  break_points: {
+    type: 'SelectControl',
+    multi: true,
+    freeForm: true,
+    label: t('Bucket break points'),
+    choices: formatSelectOptions([]),
+    description: t('List of n+1 values for bucketing metric into n buckets.'),
+    renderTrigger: true,
+  },
+
   show_labels: {
     type: 'CheckboxControl',
     label: t('Show Labels'),
@@ -1563,7 +1567,7 @@ export const controls = {
     label: t('X bounds'),
     renderTrigger: true,
     default: false,
-    description: t('Whether to display the min and max values of the X axis'),
+    description: t('Whether to display the min and max values of the X-axis'),
   },
 
   y_axis_showminmax: {
@@ -1571,7 +1575,7 @@ export const controls = {
     label: t('Y bounds'),
     renderTrigger: true,
     default: false,
-    description: t('Whether to display the min and max values of the Y axis'),
+    description: t('Whether to display the min and max values of the Y-axis'),
   },
 
   rich_tooltip: {
@@ -1588,7 +1592,7 @@ export const controls = {
     label: t('Y Log Scale'),
     default: false,
     renderTrigger: true,
-    description: t('Use a log scale for the Y axis'),
+    description: t('Use a log scale for the Y-axis'),
   },
 
   x_log_scale: {
@@ -1596,7 +1600,7 @@ export const controls = {
     label: t('X Log Scale'),
     default: false,
     renderTrigger: true,
-    description: t('Use a log scale for the X axis'),
+    description: t('Use a log scale for the X-axis'),
   },
 
   log_scale: {
@@ -1802,28 +1806,37 @@ export const controls = {
   viewport_zoom: {
     type: 'TextControl',
     label: t('Zoom'),
+    renderTrigger: true,
     isFloat: true,
     default: 11,
     description: t('Zoom level of the map'),
     places: 8,
+    // Viewport zoom shouldn't prompt user to re-run query
+    dontRefreshOnChange: true,
   },
 
   viewport_latitude: {
     type: 'TextControl',
     label: t('Default latitude'),
+    renderTrigger: true,
     default: 37.772123,
     isFloat: true,
     description: t('Latitude of default viewport'),
     places: 8,
+    // Viewport latitude changes shouldn't prompt user to re-run query
+    dontRefreshOnChange: true,
   },
 
   viewport_longitude: {
     type: 'TextControl',
     label: t('Default longitude'),
+    renderTrigger: true,
     default: -122.405293,
     isFloat: true,
     description: t('Longitude of default viewport'),
     places: 8,
+    // Viewport longitude changes shouldn't prompt user to re-run query
+    dontRefreshOnChange: true,
   },
 
   render_while_dragging: {
@@ -1852,7 +1865,7 @@ export const controls = {
   color: {
     type: 'ColorPickerControl',
     label: t('Color'),
-    default: colorPrimary,
+    default: PRIMARY_COLOR,
     description: t('Pick a color'),
   },
 
@@ -1920,6 +1933,10 @@ export const controls = {
     provideFormDataToProps: true,
   },
 
+  filters: {
+    type: 'FilterPanel',
+  },
+
   slice_id: {
     type: 'HiddenControl',
     label: t('Chart ID'),
@@ -1964,9 +1981,9 @@ export const controls = {
     label: t('Color Scheme'),
     default: 'bnbColors',
     renderTrigger: true,
-    choices: Object.keys(ALL_COLOR_SCHEMES).map(s => ([s, s])),
+    choices: () => categoricalSchemeRegistry.keys().map(s => ([s, s])),
     description: t('The color scheme for rendering chart'),
-    schemes: ALL_COLOR_SCHEMES,
+    schemes: () => categoricalSchemeRegistry.getMap(),
   },
 
   significance_level: {

@@ -1,11 +1,5 @@
-# -*- coding: utf-8 -*-
 # pylint: disable=C,R,W
 """a collection of model-related helper classes and functions"""
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 from datetime import datetime
 import json
 import logging
@@ -21,7 +15,7 @@ from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm.exc import MultipleResultsFound
 import yaml
 
-from superset.utils import QueryStatus
+from superset.utils.core import QueryStatus
 
 
 def json_to_dict(json_str):
@@ -276,23 +270,12 @@ class AuditMixinNullable(AuditMixin):
 
     @renders('changed_on')
     def changed_on_(self):
-        return Markup(
-            '<span class="no-wrap">{}</span>'.format(self.changed_on))
+        return Markup(f'<span class="no-wrap">{self.changed_on}</span>')
 
-    @renders('modified')
+    @renders('changed_on')
     def modified(self):
-        return humanize.naturaltime(datetime.now() - self.changed_on)
-
-    @property
-    def icons(self):
-        return """
-        <a
-                href="{self.datasource_edit_url}"
-                data-toggle="tooltip"
-                title="{self.datasource}">
-            <i class="fa fa-database"></i>
-        </a>
-        """.format(**locals())
+        time_str = humanize.naturaltime(datetime.now() - self.changed_on)
+        return Markup(f'<span class="no-wrap">{time_str}</span>')
 
 
 class QueryResult(object):
