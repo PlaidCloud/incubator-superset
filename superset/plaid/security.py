@@ -146,12 +146,12 @@ class PlaidSecurityManager(SupersetSecurityManager):
             user.roles.append(admin_role)
             session.merge(user)
             session.commit()
-        else:
-            admin_role = self.find_role('Admin')
-            session = self.get_session
-            user.roles.remove(admin_role)
-            session.merge(user)
-            session.commit()
+        #else:
+        #    admin_role = self.find_role('Admin')
+        #    session = self.get_session
+        #    user.roles.remove(admin_role)
+        #    session.merge(user)
+        #    session.commit()
 
         self.update_user_auth_stat(user)
 
@@ -175,7 +175,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
             None
         """
         # This import throws ImportError if hoisted to top of module.
-        from plaidtools.superset import datasource_helpers as dh
+        from superset.plaid import datasource_helpers as dh
         for proj_id, views in dh.sync_report_datasources(project_ids).items():
             view_perms = [view.get_perm() for view in views]
 
