@@ -1,3 +1,19 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
 # pylint: disable=C,R,W
 from datetime import datetime, timedelta
 import inspect
@@ -23,7 +39,6 @@ import sqlalchemy as sqla
 from sqlalchemy import and_, create_engine, func, MetaData, or_, update
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import IntegrityError
-from unidecode import unidecode
 from werkzeug.routing import BaseConverter
 from werkzeug.utils import secure_filename
 
@@ -39,9 +54,10 @@ from superset.legacy import cast_form_data, update_time_range
 import superset.models.core as models
 from superset.models.sql_lab import Query
 from superset.models.user_attributes import UserAttribute
-from superset.sql_parse import SupersetQuery
+from superset.sql_parse import ParsedQuery
 from superset.utils import core as utils
 from superset.utils import dashboard_import_export
+from superset.utils.dates import now_as_float
 from .base import (
     api, BaseSupersetView,
     check_ownership,
@@ -60,7 +76,7 @@ QueryStatus = utils.QueryStatus
 
 ALL_DATASOURCE_ACCESS_ERR = __(
     'This endpoint requires the `all_datasource_access` permission')
-DATASOURCE_MISSING_ERR = __('The datasource seems to have been deleted')
+DATASOURCE_MISSING_ERR = __('The data source seems to have been deleted')
 ACCESS_REQUEST_MISSING_ERR = __(
     'The access requests seem to have been deleted')
 USER_MISSING_ERR = __('The user seems to have been deleted')
@@ -311,7 +327,7 @@ class DatabaseAsync(DatabaseView):
         'expose_in_sqllab', 'allow_ctas', 'force_ctas_schema',
         'allow_run_async', 'allow_dml',
         'allow_multi_schema_metadata_fetch', 'allow_csv_upload',
-        'allows_subquery',
+        'allows_subquery', 'backend',
     ]
 
 
@@ -567,7 +583,7 @@ class DashboardModelView(SupersetModelView, DeleteMixin):  # noqa
             'the widgets size and positions by using drag & drop in '
             'the dashboard view'),
         'css': _(
-            'The css for individual dashboards can be altered here, or '
+            'The CSS for individual dashboards can be altered here, or '
             'in the dashboard view where changes are immediately '
             'visible'),
         'slug': _('To get a readable URL for your dashboard'),
@@ -760,8 +776,13 @@ class R(BaseSupersetView):
     @expose('/<url_id>')
     def index(self, url_id):
         url = db.session.query(models.Url).filter_by(id=url_id).first()
-        if url:
-            return redirect('/' + url.url)
+        if url and url.url:
+            explore_url = '//superset/explore/?'
+            if url.url.startswith(explore_url):
+                explore_url += f'r={url_id}'
+                return redirect(explore_url[1:])
+            else:
+                return redirect(url.url[1:])
         else:
             flash('URL to nowhere...', 'danger')
             return redirect('/')
@@ -2279,7 +2300,7 @@ class Superset(BaseSupersetView):
         table.schema = data.get('schema')
         table.template_params = data.get('templateParams')
         table.is_sqllab_view = True
-        q = SupersetQuery(data.get('sql'))
+        q = ParsedQuery(data.get('sql'))
         table.sql = q.stripped()
         db.session.add(table)
         cols = []
@@ -2425,11 +2446,11 @@ class Superset(BaseSupersetView):
         if not results_backend:
             return json_error_response("Results backend isn't configured")
 
-        read_from_results_backend_start = utils.now_as_float()
+        read_from_results_backend_start = now_as_float()
         blob = results_backend.get(key)
         stats_logger.timing(
             'sqllab.query.results_backend_read',
-            utils.now_as_float() - read_from_results_backend_start,
+            now_as_float() - read_from_results_backend_start,
         )
         if not blob:
             return json_error_response(
@@ -2523,7 +2544,7 @@ class Superset(BaseSupersetView):
             sql=sql,
             schema=schema,
             select_as_cta=request.form.get('select_as_cta') == 'true',
-            start_time=utils.now_as_float(),
+            start_time=now_as_float(),
             tab_name=request.form.get('tab'),
             status=QueryStatus.PENDING if async_ else QueryStatus.RUNNING,
             sql_editor_id=request.form.get('sql_editor_id'),
@@ -2560,7 +2581,7 @@ class Superset(BaseSupersetView):
                     return_results=False,
                     store_results=not query.select_as_cta,
                     user_name=g.user.username if g.user else None,
-                    start_time=utils.now_as_float())
+                    start_time=now_as_float())
             except Exception as e:
                 logging.exception(e)
                 msg = _(
@@ -2643,8 +2664,7 @@ class Superset(BaseSupersetView):
             # TODO(bkyryliuk): add compression=gzip for big files.
             csv = df.to_csv(index=False, **config.get('CSV_EXPORT'))
         response = Response(csv, mimetype='text/csv')
-        response.headers['Content-Disposition'] = (
-            'attachment; filename={}.csv'.format(unidecode(query.name)))
+        response.headers['Content-Disposition'] = f'attachment; filename={query.name}.csv'
         logging.info('Ready to return response')
         return response
 

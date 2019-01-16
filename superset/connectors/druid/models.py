@@ -1,3 +1,19 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
 # pylint: disable=C,R,W
 # pylint: disable=invalid-unary-operand-type
 from collections import OrderedDict
@@ -26,7 +42,7 @@ from pydruid.utils.postaggregator import (
 import requests
 import sqlalchemy as sa
 from sqlalchemy import (
-    Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint,
+    Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text, UniqueConstraint,
 )
 from sqlalchemy.orm import backref, relationship
 
@@ -43,6 +59,7 @@ from superset.utils.core import (
 
 DRUID_TZ = conf.get('DRUID_TZ')
 POST_AGG_TYPE = 'postagg'
+metadata = Model.metadata  # pylint: disable=no-member
 
 
 # Function wrapper because bound methods cannot
@@ -446,6 +463,14 @@ class DruidMetric(Model, BaseMetric):
         return import_datasource.import_simple_obj(db.session, i_metric, lookup_obj)
 
 
+druiddatasource_user = Table(
+    'druiddatasource_user', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('user_id', Integer, ForeignKey('ab_user.id')),
+    Column('datasource_id', Integer, ForeignKey('datasources.id')),
+)
+
+
 class DruidDatasource(Model, BaseDatasource):
 
     """ORM object referencing Druid datasources (tables)"""
@@ -458,6 +483,7 @@ class DruidDatasource(Model, BaseDatasource):
     cluster_class = DruidCluster
     metric_class = DruidMetric
     column_class = DruidColumn
+    owner_class = security_manager.user_model
 
     baselink = 'druiddatasourcemodelview'
 
@@ -470,11 +496,8 @@ class DruidDatasource(Model, BaseDatasource):
         String(250), ForeignKey('clusters.cluster_name'))
     cluster = relationship(
         'DruidCluster', backref='datasources', foreign_keys=[cluster_name])
-    user_id = Column(Integer, ForeignKey('ab_user.id'))
-    owner = relationship(
-        security_manager.user_model,
-        backref=backref('datasources', cascade='all, delete-orphan'),
-        foreign_keys=[user_id])
+    owners = relationship(owner_class, secondary=druiddatasource_user,
+                          backref='druiddatasources')
     UniqueConstraint('cluster_name', 'datasource_name')
 
     export_fields = (
@@ -657,7 +680,7 @@ class DruidDatasource(Model, BaseDatasource):
             datasource = cls(
                 datasource_name=druid_config['name'],
                 cluster=cluster,
-                owner=user,
+                owners=[user],
                 changed_by_fk=user.id,
                 created_by_fk=user.id,
             )
