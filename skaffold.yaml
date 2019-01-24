@@ -1,0 +1,36 @@
+apiVersion: skaffold/v1beta2
+kind: Config
+build:
+  artifacts:
+  - image: plaidcloud/superset:k8s
+    #context: ../examples/getting-started
+    # Skaffold can sync local files with remote pods (alpha) instead
+    # of rebuilding the whole artifact's image. This is a mapping
+    # of local files to sync to remote folders.
+    # sync:
+    #   '*.py': .
+
+    # Each artifact is of a given type among: `docker` (beta), `bazel` (beta), `jibMaven` (alpha) and `jibGradle` (alpha).
+    # If not specified, it defaults to `docker: {}`.
+    # docker:
+      # Dockerfile's location relative to workspace. Defaults to "Dockerfile"
+      # dockerfile: contrib/docker/Dockerfile
+      # Key/value arguements passed to the docker build.
+      # buildArgs:
+      #   key1: "value1"
+      #   key2: "value2"
+      # Images to consider as cache sources
+      # cacheFrom:
+      # - image1
+      # - image2
+      # Dockerfile target name to build.
+      #target: install
+  tagPolicy:
+    envTemplate:
+      template: "plaidcloud/superset:k8s"
+      
+
+deploy:
+  kubectl:
+    manifests:
+    -  kubernetes/*.yaml
