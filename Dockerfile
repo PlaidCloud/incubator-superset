@@ -118,7 +118,8 @@ WORKDIR /home/superset
 
 RUN pip install superset-0.999.0.dev0.tar.gz
 
-COPY plaidtools /
+COPY plaidtools /plaidtools/
+# COPY superset_config.py /etc/superset/
 
 # Deploy application
 EXPOSE 8088
