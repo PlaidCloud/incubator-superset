@@ -15,9 +15,12 @@
 **/*.sqllite
 **/*.swp
 
+kubernetes/
 tests/
 docs/
 install/
 superset/assets/node_modules/
 superset/assets/cypress/
 superset/assets/coverage/
+skaffold.yaml
+Dockerfile

@@ -1,0 +1,20 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: superset
+  labels:
+    app: plaid
+    plaid: superset
+spec:
+  tls:
+  - hosts:
+    - visualize.plaidcloud.local
+    secretName: ingress-cert
+  rules:
+  - host: visualize.plaidcloud.local
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: superset
+          servicePort: 8088
