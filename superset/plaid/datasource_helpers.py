@@ -27,7 +27,7 @@ def sync_report_datasources(project_ids=[]):
     '''
     log.debug('Syncing all report datasources.')
     try:
-        projects = security_manager.rpc.identity.me.projects(project_ids=project_ids)
+        projects = security_manager.rpc.analyze.project.projects(id_filter=project_ids)
         return {
             project_info['project_id']: sync_report_datasource(project_info)
             for project_info in projects
