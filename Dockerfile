@@ -52,7 +52,7 @@ RUN cd /home/superset \
  && ln -s ../assets /home/superset/superset/static/assets \
  && python setup.py sdist
 
-FROM python:3.6 AS install
+FROM python:3.6
 
 # Configure environment
 ENV GUNICORN_BIND=0.0.0.0:8088 \
