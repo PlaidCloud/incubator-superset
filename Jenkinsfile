@@ -25,11 +25,11 @@ podTemplate(label: 'io',
             // Checkout source before doing anything else
             scm_map = checkout([
                 $class: 'GitSCM',
-                credentialsId: 'plaid-machine-user',
                 branches: scm.branches,
-                doGenerateSubmoduleConfigurations: true,
-                extensions: scm.extensions + [[$class: 'SubmoduleOption', parentCredentials: true]],
-                userRemoteConfigs: scm.userRemoteConfigs
+                doGenerateSubmoduleConfigurations: false,
+                extensions: [[$class: 'SubmoduleOption', disableSubmodules: false, parentCredentials: true, recursiveSubmodules: false, reference: '', trackingSubmodules: false]],
+                submoduleCfg: [],
+                userRemoteConfigs: scm.userRemoteConfigs //[[credentialsId: 'plaid-machine-user', url: 'https://github.com/PlaidCloud/incubator-superset/']]
             ])
 
             // Params are always strings. Convert to the type we want.
