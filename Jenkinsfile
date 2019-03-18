@@ -13,7 +13,7 @@ podTemplate(label: 'io',
   node(label: 'io') {
     properties([
       parameters([
-        booleanParam(name: 'no_cache', defaultValue: false, description: 'Adds --no-cache flag to docker build command(s).')
+        booleanParam(name: 'no_cache', defaultValue: false, description: 'Adds --no-cache flag to docker build command(s).'),
         booleanParam(name: 'deploy_to_kubernetes', defaultValue: false, description: 'Force Jenkins to run the "Deploy to Kubernetes" stage')
       ])
     ])
