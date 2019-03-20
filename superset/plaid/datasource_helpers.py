@@ -46,7 +46,7 @@ def sync_report_datasources(project_ids=[]):
         log.error('Unexpected error: %s', traceback.print_exc())
         raise
 
-def sync_report_datasource(project_id, project_name, workspace_name):
+def sync_report_datasource(project):
     """Synchronizes a single plaid project with superset.
 
     Args:
@@ -62,31 +62,29 @@ def sync_report_datasource(project_id, project_name, workspace_name):
         two database connections per project, which can get expensive if there
         are many projects.
     """
-    log.debug('project_id: %s', project_id)
-    log.debug('project_name: %s', project_name)
-    log.debug('workspace_name: %s', workspace_name)
+    log.debug('project_id: %s', project['id'])
+    log.debug('project_name: %s', project['name'])
+    log.debug('workspace_name: %s', project['workspace_name'])
 
-    r_info = security_manager.rpc.analyze.project.projects(
-        id_filter=[project_id])
     database_url = get_report_database_url(
-        report_user=r_info['user'],
-        report_pass=r_info['pass'],
+        report_user=project['report_database_user'],
+        report_pass=project['report_database_password'],
     )
-    schema_name = get_report_schema_name(project_id)
+    schema_name = get_report_schema_name(project['id'])
     engine = create_engine(database_url)
     insp = reflection.Inspector.from_engine(engine)
     views = insp.get_view_names(schema_name)
     log.debug([view for view in views])
     if views: # The schema is not empty, so add the project as DB.
         database = add_report_database(
-            database_name=project_id,
+            database_name=project['id'],
             verbose_name=get_report_database_name(
-                workspace_name,
-                project_name,
-                project_id,
+                project['workspace_name'],
+                project['name'],
+                project['id'],
             ),
-            report_user=r_info['user'],
-            report_password=r_info['pass'],
+            report_user=project['report_database_user'],
+            report_password=project['report_database_password'],
         )
 
         if not database:
