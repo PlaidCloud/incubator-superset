@@ -32,12 +32,8 @@ def sync_report_datasources(project_ids=[]):
             all_workspaces=True, id_filter=project_ids)
         log.debug(projects)
         return {
-            p_info['id']: sync_report_datasource(
-                p_info['id'],
-                p_info['name'],
-                p_info['workspace_name'],
-            )
-            for p_info in projects
+            project['id']: sync_report_datasource(project)
+            for project in projects
         }
     except AttributeError:
         log.error('RPC unspecified. Login to fix this. %s', traceback.print_exc())
