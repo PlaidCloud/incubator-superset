@@ -72,7 +72,7 @@ podTemplate(label: 'io',
 
               stage("Deploy to Kubernetes") {
                 container('kubectl') {
-                  sh "kubectl -n plaid set image deployment/superset plaid=plaidcloud/superset:${image_label} --record"
+                  sh "kubectl -n plaid set image deployment/superset superset=plaidcloud/superset:${image_label} --record"
                 }
               }
             }
