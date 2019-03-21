@@ -16,6 +16,7 @@ __maintainer__ = "Garrett Bates"
 __email__ = "garrett.bates@tartansolutions.com"
 
 log = logging.getLogger(__name__)
+log.setLevel("DEBUG")
 
 def sync_report_datasources(project_ids=[]):
     '''Synchronize all project datasources that the current user has access to.
@@ -27,10 +28,12 @@ def sync_report_datasources(project_ids=[]):
     '''
     log.debug('Syncing all report datasources.')
     try:
-        projects = security_manager.rpc.identity.me.projects(project_ids=project_ids)
+        projects = security_manager.rpc.analyze.project.projects(
+            all_workspaces=True, id_filter=project_ids)
+        log.debug(projects)
         return {
-            project_info['project_id']: sync_report_datasource(project_info)
-            for project_info in projects
+            project['id']: sync_report_datasource(project)
+            for project in projects
         }
     except AttributeError:
         log.error('RPC unspecified. Login to fix this. %s', traceback.print_exc())
@@ -39,16 +42,13 @@ def sync_report_datasources(project_ids=[]):
         log.error('Unexpected error: %s', traceback.print_exc())
         raise
 
-def sync_report_datasource(project_info):
+def sync_report_datasource(project):
     """Synchronizes a single plaid project with superset.
 
     Args:
-        project_info (dict): Several parameters, specified as follows:
-            workspace_name (str): Name of the Plaid workspace.
-            project_name (str): Name of the Plaid project.
-            project_id (str): Unique ID of the plaid project.
-            report_user (str): Name of report user database role.
-            report_password (str): Plaintext password of database role.
+        workspace_name (str): Name of the Plaid workspace.
+        project_name (str): Name of the Plaid project.
+        project_id (str): Unique ID of the plaid project.
 
     Returns:
         list: Collection of `SqlaTable` objects representing report views.
@@ -58,26 +58,29 @@ def sync_report_datasource(project_info):
         two database connections per project, which can get expensive if there
         are many projects.
     """
-    log.debug(project_info)
+    log.debug('project_id: %s', project['id'])
+    log.debug('project_name: %s', project['name'])
+    log.debug('workspace_name: %s', project['workspace_name'])
+
     database_url = get_report_database_url(
-        report_user=project_info['report_user'],
-        report_pass=project_info['report_password'],
+        report_user=project['report_database_user'],
+        report_pass=project['report_database_password'],
     )
-    schema_name = get_report_schema_name(project_info['project_id'])
+    schema_name = get_report_schema_name(project['id'])
     engine = create_engine(database_url)
     insp = reflection.Inspector.from_engine(engine)
     views = insp.get_view_names(schema_name)
     log.debug([view for view in views])
     if views: # The schema is not empty, so add the project as DB.
         database = add_report_database(
-            database_name=project_info['project_id'],
+            database_name=project['id'],
             verbose_name=get_report_database_name(
-                project_info['workspace_name'],
-                project_info['project_name'],
-                project_info['project_id'],
+                project['workspace_name'],
+                project['name'],
+                project['id'],
             ),
-            report_user=project_info['report_user'],
-            report_password=project_info['report_password'],
+            report_user=project['report_database_user'],
+            report_password=project['report_database_password'],
         )
 
         if not database:
@@ -167,7 +170,7 @@ def get_report_views(database, schema=None):
     """
     # Iterate through each view available to the reporting user.
     # We want to add the view to superset if it doesn't exist.
-    view_names_in_plaid = database.all_view_names(schema=schema)
+    view_names_in_plaid = database.all_view_names_in_schema(schema)
     log.debug('Plaid views: %s', view_names_in_plaid)
     view_objs_in_db = db.session.query(
         SqlaTable

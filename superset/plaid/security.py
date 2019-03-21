@@ -29,7 +29,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
     @property
     def rpc(self):
         return SimpleRPC(self.oauth_tokengetter()[0],
-                         self.oauth_remotes['plaidcloud'].base_url,
+                         'http://plaid.plaid/json-rpc/',
                          verify_ssl=False)
 
 
@@ -209,7 +209,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         """
         # Get all of the users that belong to the project we sync'd.
         log.debug('Fetching plaid users for project %s', project_id)
-        plaid_users = self.rpc.identity.member.members_by_project(project_id=project_id)
+        plaid_users = self.rpc.analyze.project.members(project_id=project_id)
 
         # Get a list of user names so we can bulk-select.
         usernames = [user['user_name'] for user in plaid_users]
