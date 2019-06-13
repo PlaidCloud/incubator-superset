@@ -66,7 +66,7 @@ podTemplate(label: 'io',
             // }
 
 
-            if (CHANGE_BRANCH == 'master' || params.deploy_to_kubernetes) {
+            if (CHANGE_BRANCH == 'develop' || params.deploy_to_kubernetes) {
               stage('Build Image') {
                 image = docker.build("${image_name}:latest", "--pull ${docker_args} .")
               }
