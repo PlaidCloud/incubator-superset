@@ -29,7 +29,9 @@ class PlaidSecurityManager(SupersetSecurityManager):
     @property
     def rpc(self):
         return SimpleRPC(self.oauth_tokengetter()[0],
-                         'http://plaid.plaid/json-rpc/',
+                         '{}://{}/json-rpc/'.format(
+                            self.appbuilder.app.config.get('SCHEME'),
+                            self.appbuilder.app.config.get('PLAID_HOST')),
                          verify_ssl=False)
 
 
