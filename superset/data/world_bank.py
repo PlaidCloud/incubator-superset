@@ -16,7 +16,6 @@
 # under the License.
 """Loads datasets, dashboards and slices in a new superset instance"""
 # pylint: disable=C,R,W
-import gzip
 import json
 import os
 import textwrap
@@ -25,11 +24,13 @@ import pandas as pd
 from sqlalchemy import DateTime, String
 
 from superset import db
+from superset.connectors.sqla.models import SqlMetric
 from superset.utils import core as utils
 from .helpers import (
     config,
     Dash,
     DATA_FOLDER,
+    get_example_data,
     get_slice_json,
     merge_slice,
     misc_dash_slices,
@@ -42,8 +43,8 @@ from .helpers import (
 def load_world_bank_health_n_pop():
     """Loads the world bank health dataset, slices and a dashboard"""
     tbl_name = 'wb_health_population'
-    with gzip.open(os.path.join(DATA_FOLDER, 'countries.json.gz')) as f:
-        pdf = pd.read_json(f)
+    data = get_example_data('countries.json.gz')
+    pdf = pd.read_json(data)
     pdf.columns = [col.replace('.', '_') for col in pdf.columns]
     pdf.year = pd.to_datetime(pdf.year)
     pdf.to_sql(
@@ -67,6 +68,18 @@ def load_world_bank_health_n_pop():
     tbl.main_dttm_col = 'year'
     tbl.database = utils.get_or_create_main_db()
     tbl.filter_select_enabled = True
+
+    metrics = [
+        'sum__SP_POP_TOTL', 'sum__SH_DYN_AIDS', 'sum__SH_DYN_AIDS',
+        'sum__SP_RUR_TOTL_ZS', 'sum__SP_DYN_LE00_IN', 'sum__SP_RUR_TOTL'
+    ]
+    for m in metrics:
+        if not any(col.metric_name == m for col in tbl.metrics):
+            tbl.metrics.append(SqlMetric(
+                metric_name=m,
+                expression=f'{m[:3]}({m[5:]})',
+            ))
+
     db.session.merge(tbl)
     db.session.commit()
     tbl.fetch_metadata()
@@ -221,6 +234,7 @@ def load_world_bank_health_n_pop():
                 since='1960-01-01',
                 until='now',
                 whisker_options='Min/max (no outliers)',
+                x_ticks_layout='staggered',
                 viz_type='box_plot',
                 groupby=['region'])),
         Slice(

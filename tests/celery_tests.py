@@ -20,8 +20,6 @@ import subprocess
 import time
 import unittest
 
-from past.builtins import basestring
-
 from superset import app, db
 from superset.models.helpers import QueryStatus
 from superset.models.sql_lab import Query
@@ -129,7 +127,7 @@ class CeleryTestCase(SupersetTestCase):
             ),
         )
         self.logout()
-        return json.loads(resp.data.decode('utf-8'))
+        return json.loads(resp.data)
 
     def test_run_sync_query_dont_exist(self):
         main_db = get_main_database(db.session)
@@ -147,12 +145,12 @@ class CeleryTestCase(SupersetTestCase):
         perm_name = 'can_sql_json'
         sql_where = (
             "SELECT name FROM ab_permission WHERE name='{}'".format(perm_name))
-        result2 = self.run_sql(
+        result = self.run_sql(
             db_id, sql_where, '2', tmp_table=tmp_table_name, cta='true')
-        self.assertEqual(QueryStatus.SUCCESS, result2['query']['state'])
-        self.assertEqual([], result2['data'])
-        self.assertEqual([], result2['columns'])
-        query2 = self.get_query_by_id(result2['query']['serverId'])
+        self.assertEqual(QueryStatus.SUCCESS, result['query']['state'])
+        self.assertEqual([], result['data'])
+        self.assertEqual([], result['columns'])
+        query2 = self.get_query_by_id(result['query']['serverId'])
 
         # Check the data in the tmp table.
         if backend != 'postgresql':
@@ -203,10 +201,10 @@ class CeleryTestCase(SupersetTestCase):
         self.assertEqual(
             'CREATE TABLE tmp_async_1 AS \n'
             'SELECT name FROM ab_role '
-            "WHERE name='Admin' LIMIT 666", query.executed_sql)
+            "WHERE name='Admin'\n"
+            'LIMIT 666', query.executed_sql)
         self.assertEqual(sql_where, query.sql)
         self.assertEqual(0, query.rows)
-        self.assertEqual(False, query.limit_used)
         self.assertEqual(True, query.select_as_cta)
         self.assertEqual(True, query.select_as_cta_used)
 
@@ -239,7 +237,7 @@ class CeleryTestCase(SupersetTestCase):
     @staticmethod
     def de_unicode_dict(d):
         def str_if_basestring(o):
-            if isinstance(o, basestring):
+            if isinstance(o, str):
                 return str(o)
             return o
         return {str_if_basestring(k): str_if_basestring(d[k]) for k in d}

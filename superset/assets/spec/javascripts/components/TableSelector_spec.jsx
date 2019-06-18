@@ -1,3 +1,21 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 import React from 'react';
 import configureStore from 'redux-mock-store';
 import { shallow } from 'enzyme';
@@ -67,6 +85,7 @@ describe('TableSelector', () => {
         .getTableNamesBySubStr('')
         .then((data) => {
           expect(data).toEqual({ options: [] });
+          return Promise.resolve();
         }));
 
     it('should handle table name', () => {
@@ -86,6 +105,23 @@ describe('TableSelector', () => {
         .then((data) => {
           expect(fetchMock.calls(GET_TABLE_NAMES_GLOB)).toHaveLength(1);
           expect(data).toEqual(mockTableOptions);
+          return Promise.resolve();
+        });
+    });
+
+    it('should escape schema and table names', () => {
+      const GET_TABLE_GLOB = 'glob:*/superset/tables/1/*/*';
+      const mockTableOptions = { options: [table] };
+      wrapper.setProps({ schema: 'slashed/schema' });
+      fetchMock.get(GET_TABLE_GLOB, mockTableOptions, { overwriteRoutes: true });
+
+      return wrapper
+        .instance()
+        .getTableNamesBySubStr('slashed/table')
+        .then(() => {
+          expect(fetchMock.lastUrl(GET_TABLE_GLOB))
+            .toContain('/slashed%252Fschema/slashed%252Ftable');
+          return Promise.resolve();
         });
     });
   });
@@ -107,6 +143,7 @@ describe('TableSelector', () => {
         .fetchTables(true, 'birth_names')
         .then(() => {
           expect(wrapper.state().tableOptions).toHaveLength(3);
+          return Promise.resolve();
         });
     });
 
@@ -120,6 +157,7 @@ describe('TableSelector', () => {
           expect(wrapper.state().tableOptions).toEqual([]);
           expect(wrapper.state().tableOptions).toHaveLength(0);
           expect(mockedProps.handleError.callCount).toBe(1);
+          return Promise.resolve();
         });
     });
   });
@@ -170,19 +208,20 @@ describe('TableSelector', () => {
 
     it('test 1', () => {
       wrapper.instance().changeTable({
-        value: 'birth_names',
+        value: { schema: 'main', table: 'birth_names' },
         label: 'birth_names',
       });
       expect(wrapper.state().tableName).toBe('birth_names');
     });
 
-    it('test 2', () => {
+    it('should call onTableChange with schema from table object', () => {
+      wrapper.setProps({ schema: null });
       wrapper.instance().changeTable({
-        value: 'main.my_table',
-        label: 'my_table',
+        value: { schema: 'other_schema', table: 'my_table' },
+        label: 'other_schema.my_table',
       });
       expect(mockedProps.onTableChange.getCall(0).args[0]).toBe('my_table');
-      expect(mockedProps.onTableChange.getCall(0).args[1]).toBe('main');
+      expect(mockedProps.onTableChange.getCall(0).args[1]).toBe('other_schema');
     });
   });
 

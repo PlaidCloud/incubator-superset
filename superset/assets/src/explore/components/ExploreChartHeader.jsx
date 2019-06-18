@@ -50,8 +50,8 @@ const propTypes = {
 };
 
 class ExploreChartHeader extends React.PureComponent {
-  runQuery() {
-    this.props.actions.runQuery(this.props.form_data, true,
+  postChartFormData() {
+    this.props.actions.postChartFormData(this.props.form_data, true,
       this.props.timeout, this.props.chart.id);
   }
 
@@ -65,6 +65,7 @@ class ExploreChartHeader extends React.PureComponent {
       .then((json) => {
         const { data } = json;
         if (isNewSlice) {
+          this.props.actions.updateChartId(data.slice.slice_id, 0);
           this.props.actions.createNewSlice(
             data.can_add, data.can_download, data.can_overwrite,
             data.slice, data.form_data);
@@ -93,7 +94,7 @@ class ExploreChartHeader extends React.PureComponent {
       chartUpdateStartTime,
       latestQueryFormData,
       queryResponse } = this.props.chart;
-    const chartSucceeded = ['success', 'rendered'].indexOf(this.props.chart.chartStatus) > 0;
+      const chartFinished = ['failed', 'rendered', 'success'].includes(this.props.chart.chartStatus);
     return (
       <div
         id="slice-header"
@@ -134,14 +135,14 @@ class ExploreChartHeader extends React.PureComponent {
           />
         }
         <div className="pull-right">
-          {chartSucceeded && queryResponse &&
+          {chartFinished && queryResponse &&
             <RowCountLabel
               rowcount={queryResponse.rowcount}
               limit={formData.row_limit}
             />}
-          {chartSucceeded && queryResponse && queryResponse.is_cached &&
+          {chartFinished && queryResponse && queryResponse.is_cached &&
             <CachedLabel
-              onClick={this.runQuery.bind(this)}
+              onClick={this.postChartFormData.bind(this)}
               cachedTimestamp={queryResponse.cached_dttm}
             />}
           <Timer

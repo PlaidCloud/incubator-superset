@@ -21,10 +21,12 @@ import logging
 
 from flask import flash, Markup, redirect
 from flask_appbuilder import CompactCRUDMixin, expose
+from flask_appbuilder.fieldwidgets import Select2Widget
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.security.decorators import has_access
 from flask_babel import gettext as __
 from flask_babel import lazy_gettext as _
+from wtforms.ext.sqlalchemy.fields import QuerySelectField
 
 from superset import appbuilder, db, security_manager
 from superset.connectors.base.views import DatasourceModelView
@@ -41,7 +43,7 @@ from . import models
 class DruidColumnInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
     datamodel = SQLAInterface(models.DruidColumn)
 
-    list_title = _('List Druid Column')
+    list_title = _('Columns')
     show_title = _('Show Druid Column')
     add_title = _('Add Druid Column')
     edit_title = _('Edit Druid Column')
@@ -50,11 +52,9 @@ class DruidColumnInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
 
     edit_columns = [
         'column_name', 'verbose_name', 'description', 'dimension_spec_json', 'datasource',
-        'groupby', 'filterable', 'count_distinct', 'sum', 'min', 'max']
+        'groupby', 'filterable']
     add_columns = edit_columns
-    list_columns = [
-        'column_name', 'verbose_name', 'type', 'groupby', 'filterable', 'count_distinct',
-        'sum', 'min', 'max']
+    list_columns = ['column_name', 'verbose_name', 'type', 'groupby', 'filterable']
     can_delete = False
     page_size = 500
     label_columns = {
@@ -63,12 +63,6 @@ class DruidColumnInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
         'datasource': _('Datasource'),
         'groupby': _('Groupable'),
         'filterable': _('Filterable'),
-        'count_distinct': _('Count Distinct'),
-        'sum': _('Sum'),
-        'min': _('Min'),
-        'max': _('Max'),
-        'verbose_name': _('Verbose Name'),
-        'description': _('Description'),
     }
     description_columns = {
         'filterable': _(
@@ -83,6 +77,17 @@ class DruidColumnInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
             'above.',
             True),
     }
+
+    add_form_extra_fields = {
+        'datasource': QuerySelectField(
+            'Datasource',
+            query_factory=lambda: db.session().query(models.DruidDatasource),
+            allow_blank=True,
+            widget=Select2Widget(extra_classes='readonly'),
+        ),
+    }
+
+    edit_form_extra_fields = add_form_extra_fields
 
     def pre_update(self, col):
         # If a dimension spec JSON is given, ensure that it is
@@ -117,7 +122,7 @@ appbuilder.add_view_no_menu(DruidColumnInlineView)
 class DruidMetricInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
     datamodel = SQLAInterface(models.DruidMetric)
 
-    list_title = _('List Druid Metric')
+    list_title = _('Metrics')
     show_title = _('Show Druid Metric')
     add_title = _('Add Druid Metric')
     edit_title = _('Edit Druid Metric')
@@ -153,13 +158,24 @@ class DruidMetricInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
         'is_restricted': _('Is Restricted'),
     }
 
+    add_form_extra_fields = {
+        'datasource': QuerySelectField(
+            'Datasource',
+            query_factory=lambda: db.session().query(models.DruidDatasource),
+            allow_blank=True,
+            widget=Select2Widget(extra_classes='readonly'),
+        ),
+    }
+
+    edit_form_extra_fields = add_form_extra_fields
+
     def post_add(self, metric):
         if metric.is_restricted:
-            security_manager.merge_perm('metric_access', metric.get_perm())
+            security_manager.add_permission_view_menu('metric_access', metric.get_perm())
 
     def post_update(self, metric):
         if metric.is_restricted:
-            security_manager.merge_perm('metric_access', metric.get_perm())
+            security_manager.add_permission_view_menu('metric_access', metric.get_perm())
 
 
 appbuilder.add_view_no_menu(DruidMetricInlineView)
@@ -168,14 +184,15 @@ appbuilder.add_view_no_menu(DruidMetricInlineView)
 class DruidClusterModelView(SupersetModelView, DeleteMixin, YamlExportMixin):  # noqa
     datamodel = SQLAInterface(models.DruidCluster)
 
-    list_title = _('List Druid Cluster')
+    list_title = _('Druid Clusters')
     show_title = _('Show Druid Cluster')
     add_title = _('Add Druid Cluster')
     edit_title = _('Edit Druid Cluster')
 
     add_columns = [
         'verbose_name', 'broker_host', 'broker_port',
-        'broker_endpoint', 'cache_timeout', 'cluster_name',
+        'broker_user', 'broker_pass', 'broker_endpoint',
+        'cache_timeout', 'cluster_name',
     ]
     edit_columns = add_columns
     list_columns = ['cluster_name', 'metadata_last_refreshed']
@@ -184,6 +201,8 @@ class DruidClusterModelView(SupersetModelView, DeleteMixin, YamlExportMixin):  #
         'cluster_name': _('Cluster'),
         'broker_host': _('Broker Host'),
         'broker_port': _('Broker Port'),
+        'broker_user': _('Broker Username'),
+        'broker_pass': _('Broker Password'),
         'broker_endpoint': _('Broker Endpoint'),
         'verbose_name': _('Verbose Name'),
         'cache_timeout': _('Cache Timeout'),
@@ -194,10 +213,28 @@ class DruidClusterModelView(SupersetModelView, DeleteMixin, YamlExportMixin):  #
             'Duration (in seconds) of the caching timeout for this cluster. '
             'A timeout of 0 indicates that the cache never expires. '
             'Note this defaults to the global timeout if undefined.'),
+        'broker_user': _(
+            'Druid supports basic authentication. See '
+            '[auth](http://druid.io/docs/latest/design/auth.html) and '
+            'druid-basic-security extension',
+        ),
+        'broker_pass': _(
+            'Druid supports basic authentication. See '
+            '[auth](http://druid.io/docs/latest/design/auth.html) and '
+            'druid-basic-security extension',
+        ),
+    }
+
+    edit_form_extra_fields = {
+        'cluster_name': QuerySelectField(
+            'Cluster',
+            query_factory=lambda: db.session().query(models.DruidCluster),
+            widget=Select2Widget(extra_classes='readonly'),
+        ),
     }
 
     def pre_add(self, cluster):
-        security_manager.merge_perm('database_access', cluster.perm)
+        security_manager.add_permission_view_menu('database_access', cluster.perm)
 
     def pre_update(self, cluster):
         self.pre_add(cluster)
@@ -220,7 +257,7 @@ appbuilder.add_view(
 class DruidDatasourceModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  # noqa
     datamodel = SQLAInterface(models.DruidDatasource)
 
-    list_title = _('List Druid Datasource')
+    list_title = _('Druid Datasources')
     show_title = _('Show Druid Datasource')
     add_title = _('Add Druid Datasource')
     edit_title = _('Edit Druid Datasource')
@@ -306,9 +343,15 @@ class DruidDatasourceModelView(DatasourceModelView, DeleteMixin, YamlExportMixin
 
     def post_add(self, datasource):
         datasource.refresh_metrics()
-        security_manager.merge_perm('datasource_access', datasource.get_perm())
+        security_manager.add_permission_view_menu(
+            'datasource_access',
+            datasource.get_perm(),
+        )
         if datasource.schema:
-            security_manager.merge_perm('schema_access', datasource.schema_perm)
+            security_manager.add_permission_view_menu(
+                'schema_access',
+                datasource.schema_perm,
+            )
 
     def post_update(self, datasource):
         self.post_add(datasource)
@@ -337,20 +380,23 @@ class Druid(BaseSupersetView):
         DruidCluster = ConnectorRegistry.sources['druid'].cluster_class
         for cluster in session.query(DruidCluster).all():
             cluster_name = cluster.cluster_name
+            valid_cluster = True
             try:
                 cluster.refresh_datasources(refreshAll=refreshAll)
             except Exception as e:
+                valid_cluster = False
                 flash(
                     "Error while processing cluster '{}'\n{}".format(
                         cluster_name, utils.error_msg_from_exception(e)),
                     'danger')
                 logging.exception(e)
-                return redirect('/druidclustermodelview/list/')
-            cluster.metadata_last_refreshed = datetime.now()
-            flash(
-                _('Refreshed metadata from cluster [{}]').format(
-                    cluster.cluster_name),
-                'info')
+                pass
+            if valid_cluster:
+                cluster.metadata_last_refreshed = datetime.now()
+                flash(
+                    _('Refreshed metadata from cluster [{}]').format(
+                        cluster.cluster_name),
+                    'info')
         session.commit()
         return redirect('/druiddatasourcemodelview/list/')
 

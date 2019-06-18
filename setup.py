@@ -58,7 +58,7 @@ with open(os.path.join(PACKAGE_DIR, 'version_info.json'), 'w') as version_file:
 
 
 setup(
-    name='superset',
+    name='apache-superset',
     description=(
         'A modern, enterprise-ready business intelligence web application'),
     long_description=long_description,
@@ -71,56 +71,56 @@ setup(
     install_requires=[
         'bleach>=3.0.2, <4.0.0',
         'celery>=4.2.0, <5.0.0',
-        'click>=6.0, <7.0.0',  # click >=7 forces "-" instead of "_"
+        'click>=6.0, <7.0.0',  # `click`>=7 forces "-" instead of "_"
         'colorama',
         'contextlib2',
-        'croniter>=0.3.26',
+        'croniter>=0.3.28',
         'cryptography>=2.4.2',
         'flask>=1.0.0, <2.0.0',
-        'flask-appbuilder>=1.12.1, <2.0.0',
+        'flask-appbuilder>=2.1.4, <2.3.0',
         'flask-caching',
         'flask-compress',
+        'flask-talisman',
         'flask-migrate',
         'flask-wtf',
-        'flower',  # deprecated
         'geopy',
-        'gsheetsdb>=0.1.9',
         'gunicorn',  # deprecated
         'humanize',
         'idna',
         'isodate',
         'markdown>=3.0',
-        'pandas>=0.18.0',
+        'pandas>=0.18.0, <0.24.0',  # `pandas`>=0.24.0 changes datetimelike API
         'parsedatetime',
         'pathlib2',
         'polyline',
-        'pydruid>=0.4.3',
-        'pyhive>=0.4.0',
+        'pydruid>=0.5.2',
         'python-dateutil',
+        'python-dotenv',
         'python-geohash',
-        'pyyaml>=3.13',
-        'requests>=2.20.0',
+        'pyyaml>=5.1',
+        'requests>=2.22.0',
         'retry>=0.9.2',
         'selenium>=3.141.0',
         'simplejson>=3.15.0',
-        'sqlalchemy',
-        'sqlalchemy-utils',
+        'sqlalchemy>=1.3.1,<2.0',
+        'sqlalchemy-utils>=0.33.2',
         'sqlparse',
-        'tableschema',
-        'thrift>=0.9.3',
-        'thrift-sasl>=0.2.1',
-        'unicodecsv',
+        'wtforms-json',
     ],
     extras_require={
         'cors': ['flask-cors>=2.0.0'],
-        'console_log': ['console_log==0.2.10'],
+        'hive': [
+            'pyhive[hive]>=0.6.1',
+            'tableschema',
+        ],
+        'presto': ['pyhive[presto]>=0.4.0'],
+        'gsheets': ['gsheetsdb>=0.1.9'],
     },
-    author='Apache Superset Dev',
+    author='Apache Software Foundation',
     author_email='dev@superset.incubator.apache.org',
-    url='https://github.com/apache/incubator-superset',
+    url='https://superset.apache.org/',
     download_url=(
-        'https://github.com'
-        '/apache/incubator-superset/tarball/' + version_string
+        'https://dist.apache.org/repos/dist/release/superset/' + version_string
     ),
     classifiers=[
         'Programming Language :: Python :: 3.6',

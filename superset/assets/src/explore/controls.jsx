@@ -79,6 +79,7 @@ const D3_FORMAT_DOCS = 'D3 format syntax: https://github.com/d3/d3-format';
 
 // input choices & options
 const D3_FORMAT_OPTIONS = [
+  ['SMART_NUMBER', 'Adaptative formating'],
   ['.1s', '.1s (12345.432 => 10k)'],
   ['.3s', '.3s (12345.432 => 12.3k)'],
   [',.1%', ',.1% (12345.432 => 1,234,543.2%)'],
@@ -120,6 +121,7 @@ const sortAxisChoices = [
 const groupByControl = {
   type: 'SelectControl',
   multi: true,
+  freeForm: true,
   label: t('Group by'),
   default: [],
   includeTime: false,
@@ -127,10 +129,12 @@ const groupByControl = {
   optionRenderer: c => <ColumnOption column={c} showType />,
   valueRenderer: c => <ColumnOption column={c} />,
   valueKey: 'column_name',
+  allowAll: true,
   filterOption: (opt, text) => (
-    (opt.column_name && opt.column_name.toLowerCase().indexOf(text) >= 0) ||
-    (opt.verbose_name && opt.verbose_name.toLowerCase().indexOf(text) >= 0)
+    (opt.column_name && opt.column_name.toLowerCase().indexOf(text.toLowerCase()) >= 0) ||
+    (opt.verbose_name && opt.verbose_name.toLowerCase().indexOf(text.toLowerCase()) >= 0)
   ),
+  promptTextCreator: label => label,
   mapStateToProps: (state, control) => {
     const newState = {};
     if (state.datasource) {
@@ -141,6 +145,7 @@ const groupByControl = {
     }
     return newState;
   },
+  commaChoosesOption: false,
 };
 
 const metrics = {
@@ -542,6 +547,7 @@ export const controls = {
     choices: [
       'Belgium',
       'Brazil',
+      'Bulgaria',
       'China',
       'Egypt',
       'France',
@@ -625,9 +631,12 @@ export const controls = {
     optionRenderer: c => <ColumnOption column={c} showType />,
     valueRenderer: c => <ColumnOption column={c} />,
     valueKey: 'column_name',
+    allowAll: true,
     mapStateToProps: state => ({
       options: (state.datasource) ? state.datasource.columns : [],
     }),
+    commaChoosesOption: false,
+    freeForm: true,
   },
 
   spatial: {
@@ -981,7 +990,7 @@ export const controls = {
     freeForm: true,
     label: t('Number format'),
     renderTrigger: true,
-    default: '.3s',
+    default: 'SMART_NUMBER',
     choices: D3_FORMAT_OPTIONS,
     description: D3_FORMAT_DOCS,
   },
@@ -1224,7 +1233,7 @@ export const controls = {
     freeForm: true,
     label: t('X Axis Format'),
     renderTrigger: true,
-    default: '.3s',
+    default: 'SMART_NUMBER',
     choices: D3_FORMAT_OPTIONS,
     description: D3_FORMAT_DOCS,
   },
@@ -1244,7 +1253,7 @@ export const controls = {
     freeForm: true,
     label: t('Y Axis Format'),
     renderTrigger: true,
-    default: '.3s',
+    default: 'SMART_NUMBER',
     choices: D3_FORMAT_OPTIONS,
     description: D3_FORMAT_DOCS,
     mapStateToProps: (state) => {
@@ -1265,7 +1274,7 @@ export const controls = {
     type: 'SelectControl',
     freeForm: true,
     label: t('Right Axis Format'),
-    default: '.3s',
+    default: 'SMART_NUMBER',
     choices: D3_FORMAT_OPTIONS,
     description: D3_FORMAT_DOCS,
   },
@@ -1292,10 +1301,11 @@ export const controls = {
 
   rotation: {
     type: 'SelectControl',
-    label: t('Rotation'),
+    label: t('Word Rotation'),
     choices: formatSelectOptions(['random', 'flat', 'square']),
     renderTrigger: true,
-    default: 'flat',
+    default: 'square',
+    clearable: false,
     description: t('Rotation to apply to words in the cloud'),
   },
 
@@ -1343,7 +1353,7 @@ export const controls = {
       'mean',
       'min',
       'max',
-      'stdev',
+      'std',
       'var',
     ]),
     default: 'sum',
@@ -1377,7 +1387,7 @@ export const controls = {
   size_from: {
     type: 'TextControl',
     isInt: true,
-    label: t('Font Size From'),
+    label: t('Minimum Font Size'),
     renderTrigger: true,
     default: '20',
     description: t('Font size for the smallest value in the list'),
@@ -1386,10 +1396,72 @@ export const controls = {
   size_to: {
     type: 'TextControl',
     isInt: true,
-    label: t('Font Size To'),
+    label: t('Maximum Font Size'),
     renderTrigger: true,
     default: '150',
     description: t('Font size for the biggest value in the list'),
+  },
+
+  header_font_size: {
+    type: 'SelectControl',
+    label: t('Header Font Size'),
+    renderTrigger: true,
+    clearable: false,
+    default: 0.3,
+    // Values represent the percentage of space a header should take
+    options: [
+      {
+        label: t('Tiny'),
+        value: 0.125,
+      },
+      {
+        label: t('Small'),
+        value: 0.2,
+      },
+      {
+        label: t('Normal'),
+        value: 0.3,
+      },
+      {
+        label: t('Large'),
+        value: 0.4,
+      },
+      {
+        label: t('Huge'),
+        value: 0.5,
+      },
+    ],
+  },
+
+  subheader_font_size: {
+    type: 'SelectControl',
+    label: t('Subheader Font Size'),
+    renderTrigger: true,
+    clearable: false,
+    default: 0.125,
+    // Values represent the percentage of space a subheader should take
+    options: [
+      {
+        label: t('Tiny'),
+        value: 0.125,
+      },
+      {
+        label: t('Small'),
+        value: 0.2,
+      },
+      {
+        label: t('Normal'),
+        value: 0.3,
+      },
+      {
+        label: t('Large'),
+        value: 0.4,
+      },
+      {
+        label: t('Huge'),
+        value: 0.5,
+      },
+    ],
   },
 
   instant_filtering: {
@@ -1777,7 +1849,7 @@ export const controls = {
     'Either a numerical column or `Auto`, which scales the point based ' +
     'on the largest cluster'),
     mapStateToProps: state => ({
-      choices: columnChoices(state.datasource),
+      choices: formatSelectOptions(['Auto']).concat(columnChoices(state.datasource)),
     }),
   },
 
@@ -1959,7 +2031,7 @@ export const controls = {
     default: null,
     description: '',
     mapStateToProps: state => ({
-      columns: state.datasource ? state.datasource.columns : [],
+      columns: state.datasource ? state.datasource.columns.filter(c => c.filterable) : [],
       savedMetrics: state.datasource ? state.datasource.metrics : [],
       datasource: state.datasource,
     }),
@@ -2017,6 +2089,17 @@ export const controls = {
     choices: () => categoricalSchemeRegistry.keys().map(s => ([s, s])),
     description: t('The color scheme for rendering chart'),
     schemes: () => categoricalSchemeRegistry.getMap(),
+  },
+
+  label_colors: {
+    type: 'ColorMapControl',
+    label: t('Color Map'),
+    default: {},
+    renderTrigger: true,
+    mapStateToProps: state => ({
+      colorNamespace: state.form_data.color_namespace,
+      colorScheme: state.form_data.color_scheme,
+    }),
   },
 
   significance_level: {
@@ -2311,7 +2394,7 @@ export const controls = {
     type: 'CollectionControl',
     label: 'Filters',
     description: t('Filter configuration for the filter box'),
-    validators: [v.nonEmpty],
+    validators: [],
     controlName: 'FilterBoxItemControl',
     mapStateToProps: ({ datasource }) => ({ datasource }),
   },

@@ -14,21 +14,19 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import gzip
 import json
-import os
 import textwrap
 
 import pandas as pd
 from sqlalchemy import DateTime, String
 
 from superset import db, security_manager
-from superset.connectors.sqla.models import TableColumn
+from superset.connectors.sqla.models import SqlMetric, TableColumn
 from superset.utils.core import get_or_create_main_db
 from .helpers import (
     config,
     Dash,
-    DATA_FOLDER,
+    get_example_data,
     get_slice_json,
     merge_slice,
     Slice,
@@ -39,8 +37,8 @@ from .helpers import (
 
 def load_birth_names():
     """Loading birth name dataset from a zip file in the repo"""
-    with gzip.open(os.path.join(DATA_FOLDER, 'birth_names.json.gz')) as f:
-        pdf = pd.read_json(f)
+    data = get_example_data('birth_names.json.gz')
+    pdf = pd.read_json(data)
     pdf.ds = pd.to_datetime(pdf.ds, unit='ms')
     pdf.to_sql(
         'birth_names',
@@ -69,6 +67,12 @@ def load_birth_names():
         obj.columns.append(TableColumn(
             column_name='num_california',
             expression="CASE WHEN state = 'CA' THEN num ELSE 0 END",
+        ))
+
+    if not any(col.metric_name == 'sum__num' for col in obj.metrics):
+        obj.metrics.append(SqlMetric(
+            metric_name='sum__num',
+            expression='SUM(num)',
         ))
 
     db.session.merge(obj)

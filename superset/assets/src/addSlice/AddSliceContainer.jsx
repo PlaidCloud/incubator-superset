@@ -21,7 +21,8 @@ import PropTypes from 'prop-types';
 import { Button, Panel } from 'react-bootstrap';
 import Select from 'react-virtualized-select';
 import { t } from '@superset-ui/translation';
-import { getChartMetadataRegistry } from '@superset-ui/chart';
+
+import VizTypeControl from '../explore/components/controls/VizTypeControl';
 
 const propTypes = {
   datasources: PropTypes.arrayOf(PropTypes.shape({
@@ -65,8 +66,8 @@ export default class AddSliceContainer extends React.PureComponent {
     });
   }
 
-  changeVisType(e) {
-    this.setState({ visType: e.value });
+  changeVisType(visType) {
+    this.setState({ visType });
   }
 
   isBtnDisabled() {
@@ -74,12 +75,6 @@ export default class AddSliceContainer extends React.PureComponent {
   }
 
   render() {
-    const types = getChartMetadataRegistry().entries()
-      .map(({ key, value }) => ({
-        value: key,
-        label: value.name,
-      }));
-
     return (
       <div className="container">
         <Panel header={<h3>{t('Create a new chart')}</h3>}>
@@ -102,23 +97,20 @@ export default class AddSliceContainer extends React.PureComponent {
                 'If the datasource your are looking for is not ' +
                 'available in the list, ' +
                 'follow the instructions on the how to add it on the ')}
-              <a href="http://superset.apache.org/tutorial.html">{t('Superset tutorial')}</a>
+              <a href="https://superset.apache.org/tutorial.html">{t('Superset tutorial')}</a>
             </p>
           </div>
           <br />
           <div>
             <p>{t('Choose a visualization type')}</p>
-            <Select
-              clearable={false}
+            <VizTypeControl
               name="select-vis-type"
-              style={styleSelectWidth}
               onChange={this.changeVisType}
-              options={types}
-              placeholder={t('Choose a visualization type')}
               value={this.state.visType}
             />
           </div>
           <br />
+          <hr />
           <Button
             bsStyle="primary"
             disabled={this.isBtnDisabled()}

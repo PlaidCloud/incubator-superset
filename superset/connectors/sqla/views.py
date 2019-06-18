@@ -16,14 +16,17 @@
 # under the License.
 # pylint: disable=C,R,W
 """Views used by the SqlAlchemy connector"""
+import logging
+
 from flask import flash, Markup, redirect
 from flask_appbuilder import CompactCRUDMixin, expose
 from flask_appbuilder.actions import action
+from flask_appbuilder.fieldwidgets import Select2Widget
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.security.decorators import has_access
 from flask_babel import gettext as __
 from flask_babel import lazy_gettext as _
-from past.builtins import basestring
+from wtforms.ext.sqlalchemy.fields import QuerySelectField
 
 from superset import appbuilder, db, security_manager
 from superset.connectors.base.views import DatasourceModelView
@@ -34,11 +37,13 @@ from superset.views.base import (
 )
 from . import models
 
+logger = logging.getLogger(__name__)
+
 
 class TableColumnInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
     datamodel = SQLAInterface(models.TableColumn)
 
-    list_title = _('List Columns')
+    list_title = _('Columns')
     show_title = _('Show Column')
     add_title = _('Add Column')
     edit_title = _('Edit Column')
@@ -104,6 +109,17 @@ class TableColumnInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
         'type': _('Type'),
     }
 
+    add_form_extra_fields = {
+        'table': QuerySelectField(
+            'Table',
+            query_factory=lambda: db.session().query(models.SqlaTable),
+            allow_blank=True,
+            widget=Select2Widget(extra_classes='readonly'),
+        ),
+    }
+
+    edit_form_extra_fields = add_form_extra_fields
+
 
 appbuilder.add_view_no_menu(TableColumnInlineView)
 
@@ -111,7 +127,7 @@ appbuilder.add_view_no_menu(TableColumnInlineView)
 class SqlMetricInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
     datamodel = SQLAInterface(models.SqlMetric)
 
-    list_title = _('List Metrics')
+    list_title = _('Metrics')
     show_title = _('Show Metric')
     add_title = _('Add Metric')
     edit_title = _('Edit Metric')
@@ -150,13 +166,24 @@ class SqlMetricInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
         'warning_text': _('Warning Message'),
     }
 
+    add_form_extra_fields = {
+        'table': QuerySelectField(
+            'Table',
+            query_factory=lambda: db.session().query(models.SqlaTable),
+            allow_blank=True,
+            widget=Select2Widget(extra_classes='readonly'),
+        ),
+    }
+
+    edit_form_extra_fields = add_form_extra_fields
+
     def post_add(self, metric):
         if metric.is_restricted:
-            security_manager.merge_perm('metric_access', metric.get_perm())
+            security_manager.add_permission_view_menu('metric_access', metric.get_perm())
 
     def post_update(self, metric):
         if metric.is_restricted:
-            security_manager.merge_perm('metric_access', metric.get_perm())
+            security_manager.add_permission_view_menu('metric_access', metric.get_perm())
 
 
 appbuilder.add_view_no_menu(SqlMetricInlineView)
@@ -165,7 +192,7 @@ appbuilder.add_view_no_menu(SqlMetricInlineView)
 class TableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  # noqa
     datamodel = SQLAInterface(models.SqlaTable)
 
-    list_title = _('List Tables')
+    list_title = _('Tables')
     show_title = _('Show Table')
     add_title = _('Import a table definition')
     edit_title = _('Edit Table')
@@ -257,6 +284,14 @@ class TableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  # noqa
         'modified': _('Modified'),
     }
 
+    edit_form_extra_fields = {
+        'database': QuerySelectField(
+            'Database',
+            query_factory=lambda: db.session().query(models.Database),
+            widget=Select2Widget(extra_classes='readonly'),
+        ),
+    }
+
     def pre_add(self, table):
         with db.session.no_autoflush:
             table_query = db.session.query(models.SqlaTable).filter(
@@ -270,18 +305,19 @@ class TableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  # noqa
         # Fail before adding if the table can't be found
         try:
             table.get_sqla_table_object()
-        except Exception:
+        except Exception as e:
+            logger.exception(f'Got an error in pre_add for {table.name}')
             raise Exception(_(
                 'Table [{}] could not be found, '
                 'please double check your '
                 'database connection, schema, and '
-                'table name').format(table.name))
+                'table name, error: {}').format(table.name, str(e)))
 
     def post_add(self, table, flash_message=True):
         table.fetch_metadata()
-        security_manager.merge_perm('datasource_access', table.get_perm())
+        security_manager.add_permission_view_menu('datasource_access', table.get_perm())
         if table.schema:
-            security_manager.merge_perm('schema_access', table.schema_perm)
+            security_manager.add_permission_view_menu('schema_access', table.schema_perm)
 
         if flash_message:
             flash(_(
@@ -301,7 +337,7 @@ class TableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  # noqa
     def edit(self, pk):
         """Simple hack to redirect to explore view after saving"""
         resp = super(TableModelView, self).edit(pk)
-        if isinstance(resp, basestring):
+        if isinstance(resp, str):
             return resp
         return redirect('/superset/explore/table/{}/'.format(pk))
 

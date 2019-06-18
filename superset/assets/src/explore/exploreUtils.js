@@ -19,6 +19,7 @@
 /* eslint camelcase: 0 */
 import URI from 'urijs';
 import { availableDomains } from '../utils/hostNamesConfig';
+import { safeStringify } from '../utils/safeStringify';
 
 const MAX_URL_LENGTH = 8000;
 
@@ -46,7 +47,7 @@ export function getAnnotationJsonUrl(slice_id, form_data, isNative) {
   const endpoint = isNative ? 'annotation_json' : 'slice_json';
   return uri.pathname(`/superset/${endpoint}/${slice_id}`)
     .search({
-      form_data: JSON.stringify(form_data,
+      form_data: safeStringify(form_data,
         (key, value) => value === null ? undefined : value),
     }).toString();
 }
@@ -71,7 +72,7 @@ export function getExploreLongUrl(formData, endpointType, allowOverflow = true, 
   Object.keys(extraSearch).forEach((key) => {
     search[key] = extraSearch[key];
   });
-  search.form_data = JSON.stringify(formData);
+  search.form_data = safeStringify(formData);
   if (endpointType === 'standalone') {
     search.standalone = 'true';
   }
@@ -94,6 +95,7 @@ export function getExploreUrlAndPayload({
   curUrl = null,
   requestParams = {},
   allowDomainSharding = false,
+  method = 'POST',
 }) {
   if (!formData.datasource) {
     return null;
@@ -117,8 +119,19 @@ export function getExploreUrlAndPayload({
 
   // Building the querystring (search) part of the URI
   const search = uri.search(true);
-  if (formData.slice_id) {
-    search.form_data = JSON.stringify({ slice_id: formData.slice_id });
+  const { slice_id, extra_filters, adhoc_filters, viz_type } = formData;
+  if (slice_id) {
+    const form_data = { slice_id };
+    if (method === 'GET') {
+      form_data.viz_type = viz_type;
+      if (extra_filters && extra_filters.length) {
+        form_data.extra_filters = extra_filters;
+      }
+      if (adhoc_filters && adhoc_filters.length) {
+        form_data.adhoc_filters = adhoc_filters;
+      }
+    }
+    search.form_data = safeStringify(form_data);
   }
   if (force) {
     search.force = 'true';
@@ -174,7 +187,7 @@ export function exportChart(formData, endpointType) {
   const data = document.createElement('input');
   data.type = 'hidden';
   data.name = 'form_data';
-  data.value = JSON.stringify(payload);
+  data.value = safeStringify(payload);
   exploreForm.appendChild(data);
 
   document.body.appendChild(exploreForm);

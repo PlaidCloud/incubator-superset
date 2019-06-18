@@ -29,6 +29,7 @@ from sqlalchemy.orm import backref, relationship
 
 from superset import security_manager
 from superset.models.helpers import AuditMixinNullable, ExtraJSONMixin
+from superset.models.tags import QueryUpdater
 from superset.utils.core import QueryStatus, user_label
 
 
@@ -58,7 +59,6 @@ class Query(Model, ExtraJSONMixin):
     executed_sql = Column(Text)
     # Could be configured in the superset config.
     limit = Column(Integer)
-    limit_used = Column(Boolean, default=False)
     select_as_cta = Column(Boolean)
     select_as_cta_used = Column(Boolean, default=False)
 
@@ -93,10 +93,6 @@ class Query(Model, ExtraJSONMixin):
         sqla.Index('ti_user_id_changed_on', user_id, changed_on),
     )
 
-    @property
-    def limit_reached(self):
-        return self.rows == self.limit if self.limit_used else False
-
     def to_dict(self):
         return {
             'changedOn': self.changed_on,
@@ -121,7 +117,6 @@ class Query(Model, ExtraJSONMixin):
             'tempTable': self.tmp_table_name,
             'userId': self.user_id,
             'user': user_label(self.user),
-            'limit_reached': self.limit_reached,
             'resultsKey': self.results_key,
             'trackingUrl': self.tracking_url,
             'extra': self.extra,
@@ -137,8 +132,16 @@ class Query(Model, ExtraJSONMixin):
         tab = re.sub(r'\W+', '', tab)
         return f'sqllab_{tab}_{ts}'
 
+    @property
+    def database_name(self):
+        return self.database.name
 
-class SavedQuery(Model, AuditMixinNullable):
+    @property
+    def username(self):
+        return self.user.username
+
+
+class SavedQuery(Model, AuditMixinNullable, ExtraJSONMixin):
     """ORM model for SQL query"""
 
     __tablename__ = 'saved_query'
@@ -165,3 +168,20 @@ class SavedQuery(Model, AuditMixinNullable):
                 <i class="fa fa-link"></i>
             </a>
         """)
+
+    @property
+    def user_email(self):
+        return self.user.email
+
+    @property
+    def sqlalchemy_uri(self):
+        return self.database.sqlalchemy_uri
+
+    def url(self):
+        return '/superset/sqllab?savedQueryId={0}'.format(self.id)
+
+
+# events for updating tags
+sqla.event.listen(SavedQuery, 'after_insert', QueryUpdater.after_insert)
+sqla.event.listen(SavedQuery, 'after_update', QueryUpdater.after_update)
+sqla.event.listen(SavedQuery, 'after_delete', QueryUpdater.after_delete)

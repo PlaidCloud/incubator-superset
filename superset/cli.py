@@ -25,11 +25,10 @@ from sys import stdout
 import click
 from colorama import Fore, Style
 from pathlib2 import Path
-import werkzeug.serving
 import yaml
 
 from superset import (
-    app, data, db, security_manager,
+    app, appbuilder, data, db, security_manager,
 )
 from superset.utils import (
     core as utils, dashboard_import_export, dict_import_export)
@@ -51,98 +50,8 @@ def make_shell_context():
 def init():
     """Inits the Superset application"""
     utils.get_or_create_main_db()
+    appbuilder.add_permissions(update_perms=True)
     security_manager.sync_role_definitions()
-
-
-def debug_run(app, port, use_reloader):
-    click.secho(
-        '[DEPRECATED] As of Flask >=1.0.0, this command is no longer '
-        'supported, please use `flask run` instead, as documented in our '
-        'CONTRIBUTING.md',
-        fg='red',
-    )
-    click.secho('[example]', fg='yellow')
-    click.secho(
-        'flask run -p 8080 --with-threads --reload --debugger',
-        fg='green',
-    )
-
-
-def console_log_run(app, port, use_reloader):
-    from console_log import ConsoleLog
-    from gevent import pywsgi
-    from geventwebsocket.handler import WebSocketHandler
-
-    app.wsgi_app = ConsoleLog(app.wsgi_app, app.logger)
-
-    def run():
-        server = pywsgi.WSGIServer(
-            ('0.0.0.0', int(port)),
-            app,
-            handler_class=WebSocketHandler)
-        server.serve_forever()
-
-    if use_reloader:
-        from gevent import monkey
-        monkey.patch_all()
-        run = werkzeug.serving.run_with_reloader(run)
-
-    run()
-
-
-@app.cli.command()
-@click.option('--debug', '-d', is_flag=True, help='Start the web server in debug mode')
-@click.option('--console-log', is_flag=True,
-              help='Create logger that logs to the browser console (implies -d)')
-@click.option('--no-reload', '-n', 'use_reloader', flag_value=False,
-              default=config.get('FLASK_USE_RELOAD'),
-              help='Don\'t use the reloader in debug mode')
-@click.option('--address', '-a', default=config.get('SUPERSET_WEBSERVER_ADDRESS'),
-              help='Specify the address to which to bind the web server')
-@click.option('--port', '-p', default=config.get('SUPERSET_WEBSERVER_PORT'),
-              help='Specify the port on which to run the web server')
-@click.option('--workers', '-w', default=config.get('SUPERSET_WORKERS', 2),
-              help='Number of gunicorn web server workers to fire up [DEPRECATED]')
-@click.option('--timeout', '-t', default=config.get('SUPERSET_WEBSERVER_TIMEOUT'),
-              help='Specify the timeout (seconds) for the '
-                   'gunicorn web server [DEPRECATED]')
-@click.option('--socket', '-s', default=config.get('SUPERSET_WEBSERVER_SOCKET'),
-              help='Path to a UNIX socket as an alternative to address:port, e.g. '
-                   '/var/run/superset.sock. '
-                   'Will override the address and port values. [DEPRECATED]')
-def runserver(debug, console_log, use_reloader, address, port, timeout, workers, socket):
-    """Starts a Superset web server."""
-    debug = debug or config.get('DEBUG') or console_log
-    if debug:
-        print(Fore.BLUE + '-=' * 20)
-        print(
-            Fore.YELLOW + 'Starting Superset server in ' +
-            Fore.RED + 'DEBUG' +
-            Fore.YELLOW + ' mode')
-        print(Fore.BLUE + '-=' * 20)
-        print(Style.RESET_ALL)
-        if console_log:
-            console_log_run(app, port, use_reloader)
-        else:
-            debug_run(app, port, use_reloader)
-    else:
-        logging.info(
-            "The Gunicorn 'superset runserver' command is deprecated. Please "
-            "use the 'gunicorn' command instead.")
-        addr_str = f' unix:{socket} ' if socket else f' {address}:{port} '
-        cmd = (
-            'gunicorn '
-            f'-w {workers} '
-            f'--timeout {timeout} '
-            f'-b {addr_str} '
-            '--limit-request-line 0 '
-            '--limit-request-field_size 0 '
-            'superset:app'
-        )
-        print(Fore.GREEN + 'Starting server with command: ')
-        print(Fore.YELLOW + cmd)
-        print(Style.RESET_ALL)
-        Popen(cmd, shell=True).wait()
 
 
 @app.cli.command()
@@ -209,6 +118,9 @@ def load_examples_run(load_test_data):
         print('Loading DECK.gl demo')
         data.load_deck_dash()
 
+    print('Loading [Tabbed dashboard]')
+    data.load_tabbed_dashboard()
+
 
 @app.cli.command()
 @click.option('--load-test-data', '-t', is_flag=True, help='Load additional test data')
@@ -221,7 +133,7 @@ def load_examples(load_test_data):
 @click.option('--datasource', '-d', help='Specify which datasource name to load, if '
                                          'omitted, all datasources will be refreshed')
 @click.option('--merge', '-m', is_flag=True, default=False,
-              help='Specify using \'merge\' property during operation. '
+              help="Specify using 'merge' property during operation. "
                    'Default value is False.')
 def refresh_druid(datasource, merge):
     """Refresh druid datasources"""
@@ -249,9 +161,9 @@ def refresh_druid(datasource, merge):
     help='Path to a single JSON file or path containing multiple JSON files'
          'files to import (*.json)')
 @click.option(
-    '--recursive', '-r',
+    '--recursive', '-r', is_flag=True, default=False,
     help='recursively search the path for json files')
-def import_dashboards(path, recursive=False):
+def import_dashboards(path, recursive):
     """Import dashboards from JSON"""
     p = Path(path)
     files = []
@@ -277,7 +189,7 @@ def import_dashboards(path, recursive=False):
     '--dashboard-file', '-f', default=None,
     help='Specify the the file to export to')
 @click.option(
-    '--print_stdout', '-p',
+    '--print_stdout', '-p', is_flag=True, default=False,
     help='Print JSON to stdout')
 def export_dashboards(print_stdout, dashboard_file):
     """Export dashboards to JSON"""
@@ -301,9 +213,9 @@ def export_dashboards(print_stdout, dashboard_file):
          'e.g. "metrics,columns" deletes metrics and columns in the DB '
          'that are not specified in the YAML file')
 @click.option(
-    '--recursive', '-r',
+    '--recursive', '-r', is_flag=True, default=False,
     help='recursively search the path for yaml files')
-def import_datasources(path, sync, recursive=False):
+def import_datasources(path, sync, recursive):
     """Import datasources from YAML"""
     sync_array = sync.split(',')
     p = Path(path)
@@ -334,13 +246,13 @@ def import_datasources(path, sync, recursive=False):
     '--datasource-file', '-f', default=None,
     help='Specify the the file to export to')
 @click.option(
-    '--print_stdout', '-p',
+    '--print_stdout', '-p', is_flag=True, default=False,
     help='Print YAML to stdout')
 @click.option(
-    '--back-references', '-b',
+    '--back-references', '-b', is_flag=True, default=False,
     help='Include parent back references')
 @click.option(
-    '--include-defaults', '-d',
+    '--include-defaults', '-d', is_flag=True, default=False,
     help='Include fields containing defaults')
 def export_datasources(print_stdout, datasource_file,
                        back_references, include_defaults):
@@ -360,7 +272,7 @@ def export_datasources(print_stdout, datasource_file,
 
 @app.cli.command()
 @click.option(
-    '--back-references', '-b',
+    '--back-references', '-b', is_flag=True, default=False,
     help='Include parent back references')
 def export_datasource_schema(back_references):
     """Export datasource YAML schema to stdout"""
@@ -377,9 +289,9 @@ def update_datasources_cache():
         if database.allow_multi_schema_metadata_fetch:
             print('Fetching {} datasources ...'.format(database.name))
             try:
-                database.all_table_names_in_database(
+                database.get_all_table_names_in_database(
                     force=True, cache=True, cache_timeout=24 * 60 * 60)
-                database.all_view_names_in_database(
+                database.get_all_view_names_in_database(
                     force=True, cache=True, cache_timeout=24 * 60 * 60)
             except Exception as e:
                 print('{}'.format(str(e)))
@@ -460,7 +372,7 @@ def load_test_users_run():
             security_manager.add_permission_role(gamma_sqllab_role, perm)
         utils.get_or_create_main_db()
         db_perm = utils.get_main_database(security_manager.get_session).perm
-        security_manager.merge_perm('database_access', db_perm)
+        security_manager.add_permission_view_menu('database_access', db_perm)
         db_pvm = security_manager.find_permission_view_menu(
             view_menu_name=db_perm, permission_name='database_access')
         gamma_sqllab_role.permissions.append(db_pvm)

@@ -26,16 +26,16 @@ import random
 import re
 import string
 import unittest
+from unittest import mock
 
-import mock
 import pandas as pd
 import psycopg2
 import sqlalchemy as sqla
 
 from superset import dataframe, db, jinja_context, security_manager, sql_lab
 from superset.connectors.sqla.models import SqlaTable
-from superset.db_engine_specs import BaseEngineSpec
-from superset.db_engine_specs import MssqlEngineSpec
+from superset.db_engine_specs.base import BaseEngineSpec
+from superset.db_engine_specs.mssql import MssqlEngineSpec
 from superset.models import core as models
 from superset.models.sql_lab import Query
 from superset.utils import core as utils
@@ -189,7 +189,6 @@ class CoreTests(SupersetTestCase):
             assert_func('ResetPasswordView', view_menus)
             assert_func('RoleModelView', view_menus)
             assert_func('Security', view_menus)
-            assert_func('UserDBModelView', view_menus)
             assert_func('SQL Lab',
                         view_menus)
 
@@ -462,8 +461,8 @@ class CoreTests(SupersetTestCase):
 
     def test_gamma(self):
         self.login(username='gamma')
-        assert 'List Charts' in self.get_resp('/chart/list/')
-        assert 'List Dashboard' in self.get_resp('/dashboard/list/')
+        assert 'Charts' in self.get_resp('/chart/list/')
+        assert 'Dashboards' in self.get_resp('/dashboard/list/')
 
     def test_csv_endpoint(self):
         self.login('admin')
@@ -549,7 +548,7 @@ class CoreTests(SupersetTestCase):
     def test_fetch_datasource_metadata(self):
         self.login(username='admin')
         url = (
-            '/superset/fetch_datasource_metadata?' +
+            '/superset/fetch_datasource_metadata?'
             'datasourceKey=1__table'
         )
         resp = self.get_json_resp(url)
@@ -622,16 +621,6 @@ class CoreTests(SupersetTestCase):
         assert 'language' in resp
         self.logout()
 
-    def test_viz_get_fillna_for_columns(self):
-        slc = self.get_slice('Girls', db.session)
-        q = slc.viz.query_obj()
-        results = slc.viz.datasource.query(q)
-        fillna_columns = slc.viz.get_fillna_for_columns(results.df.columns)
-        self.assertDictEqual(
-            fillna_columns,
-            {'name': ' NULL', 'sum__num': 0},
-        )
-
     def test_import_csv(self):
         self.login(username='admin')
         filename = 'testCSV.csv'
@@ -646,15 +635,14 @@ class CoreTests(SupersetTestCase):
         main_db_uri = (
             db.session.query(models.Database)
             .filter_by(database_name='main')
-            .all()
+            .one()
         )
-
         test_file = open(filename, 'rb')
         form_data = {
             'csv_file': test_file,
             'sep': ',',
             'name': table_name,
-            'con': main_db_uri[0].id,
+            'con': main_db_uri.id,
             'if_exists': 'append',
             'index_label': 'test_label',
             'mangle_dupe_cols': False,
@@ -757,7 +745,6 @@ class CoreTests(SupersetTestCase):
             {'form_data': json.dumps(form_data)},
         )
         self.assertEqual(data['status'], utils.QueryStatus.FAILED)
-        assert 'KeyError' in data['stacktrace']
 
     def test_slice_payload_viz_markdown(self):
         self.login(username='admin')

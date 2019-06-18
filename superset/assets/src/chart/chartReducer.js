@@ -47,7 +47,7 @@ export default function chartReducer(charts = {}, action) {
       return { ...state,
         chartStatus: 'success',
         queryResponse: action.queryResponse,
-        chartUpdateEndTime: now(),
+        chartAlert: null,
       };
     },
     [actions.CHART_UPDATE_STARTED](state) {
@@ -71,6 +71,7 @@ export default function chartReducer(charts = {}, action) {
     [actions.CHART_RENDERING_SUCCEEDED](state) {
       return { ...state,
         chartStatus: 'rendered',
+        chartUpdateEndTime: now(),
       };
     },
     [actions.CHART_RENDERING_FAILED](state) {
@@ -167,6 +168,14 @@ export default function chartReducer(charts = {}, action) {
   /* eslint-disable no-param-reassign */
   if (action.type === actions.REMOVE_CHART) {
     delete charts[action.key];
+    return charts;
+  } else if (action.type === actions.UPDATE_CHART_ID) {
+    const { newId, key } = action;
+    charts[newId] = {
+      ...charts[key],
+      id: newId,
+    };
+    delete charts[key];
     return charts;
   }
 

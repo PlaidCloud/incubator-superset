@@ -43,8 +43,7 @@ import withToasts from '../messageToasts/enhancers/withToasts';
 import './main.css';
 
 const checkboxGenerator = (d, onChange) => <CheckboxControl value={d} onChange={onChange} />;
-const styleMonospace = { fontFamily: 'monospace' };
-const DATA_TYPES = ['STRING', 'NUMBER', 'DATETIME'];
+const DATA_TYPES = ['STRING', 'NUMERIC', 'DATETIME'];
 
 function CollectionTabTitle({ title, collection }) {
   return (
@@ -84,11 +83,16 @@ function ColumnCollectionTable({
               label={t('Label')}
               control={<TextControl />}
             />
+            <Field
+              fieldKey="description"
+              label={t('Description')}
+              control={<TextControl />}
+            />
             {allowEditDataType &&
               <Field
                 fieldKey="type"
                 label={t('Data Type')}
-                control={<SelectControl choices={DATA_TYPES} name="type" />}
+                control={<SelectControl choices={DATA_TYPES} name="type" freeForm />}
               />}
             <Field
               fieldKey="python_date_format"
@@ -449,6 +453,14 @@ export class DatasourceEditor extends React.PureComponent {
           label={t('Hours offset')}
           control={<TextControl />}
         />
+        { this.state.isSqla &&
+          <Field
+            fieldKey="template_params"
+            label={t('Template parameters')}
+            descr={t('A set of parameters that become available in the query using Jinja templating syntax')}
+            control={<TextControl />}
+          />
+        }
       </Fieldset>);
   }
 
@@ -504,6 +516,11 @@ export class DatasourceEditor extends React.PureComponent {
           <FormContainer>
             <Fieldset>
               <Field
+                fieldKey="verbose_name"
+                label={t('Label')}
+                control={<TextControl />}
+              />
+              <Field
                 fieldKey="description"
                 label={t('Description')}
                 control={<TextControl />}
@@ -540,7 +557,8 @@ export class DatasourceEditor extends React.PureComponent {
               canEdit
               title={v}
               onSaveTitle={onChange}
-              style={styleMonospace}
+              extraClasses={['datasource-sql-expression']}
+              multiLine
             />),
           description: (v, onChange, label) => (
             <StackedField
