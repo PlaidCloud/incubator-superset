@@ -116,10 +116,12 @@ rm requirements.txt
 COPY --from=build-distribution /home/superset/dist/apache-superset-0.999.0.dev0.tar.gz /home/superset
 WORKDIR /home/superset
 
+# COPY superset_config.py /etc/superset/
+COPY plaidtools /plaidtools/
+
+RUN pip install -r /plaidtools/requirements.pre.txt -r /plaidtools/requirements.txt
 RUN pip install apache-superset-0.999.0.dev0.tar.gz
 
-COPY plaidtools /plaidtools/
-# COPY superset_config.py /etc/superset/
 
 # Deploy application
 EXPOSE 8088
