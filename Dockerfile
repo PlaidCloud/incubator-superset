@@ -113,10 +113,10 @@ sqlalchemy-redshift==0.7.1 && \
 rm requirements.txt
 
 # Configure Filesystem
-COPY --from=build-distribution /home/superset/dist/superset-0.999.0.dev0.tar.gz /home/superset
+COPY --from=build-distribution /home/superset/dist/apache-superset-0.999.0.dev0.tar.gz /home/superset
 WORKDIR /home/superset
 
-RUN pip install superset-0.999.0.dev0.tar.gz
+RUN pip install apache-superset-0.999.0.dev0.tar.gz
 
 COPY plaidtools /plaidtools/
 # COPY superset_config.py /etc/superset/
