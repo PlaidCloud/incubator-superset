@@ -89,16 +89,21 @@ class PlaidSecurityManager(SupersetSecurityManager):
             response: Not used. Consult super implementation for relevance.
         """
         if provider == 'plaidcloud':
-            me = self.rpc.identity.me.info()
-            user = {
-                'first_name': me.get('first_name'),
-                'last_name': me.get('last_name'),
-                'username': me.get('username'),
-                'email': me.get('email'),
-                'active': me.get('is_active'),
-                'admin': me.get('is_admin'),
-            }
-            return user
+            try:
+                logging.debug("Oauth2 provider: %s.", provider)
+                me = self.rpc.identity.me.info()
+                user = {
+                    'first_name': me.get('first_name'),
+                    'last_name': me.get('last_name'),
+                    'username': me.get('username'),
+                    'email': me.get('email'),
+                    'active': me.get('is_active'),
+                    'admin': me.get('is_admin'),
+                }
+                return user
+            except: # pylint: disable=bare-except
+                import traceback
+                logging.exception(traceback.format_exc())
 
         # Just call the base method so defaults continue to work.
         return super().get_oauth_user_info(provider, resp)
