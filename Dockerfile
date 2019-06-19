@@ -119,7 +119,7 @@ WORKDIR /home/superset
 # COPY superset_config.py /etc/superset/
 COPY plaidtools /plaidtools/
 
-RUN pip install -r /plaidtools/requirements.pre.txt -r /plaidtools/requirements.txt
+RUN pip install -r /plaidtools/requirements.txt
 RUN pip install apache-superset-0.999.0.dev0.tar.gz
 
 
