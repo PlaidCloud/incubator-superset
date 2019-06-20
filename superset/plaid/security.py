@@ -92,6 +92,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
             try:
                 logging.debug("Oauth2 provider: %s.", provider)
                 me = self.rpc.identity.me.info()
+                logging.debug("user info: %s", repr(me))
                 user = {
                     'first_name': me.get('first_name'),
                     'last_name': me.get('last_name'),
