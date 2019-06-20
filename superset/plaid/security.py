@@ -78,7 +78,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         return self.appbuilder.app.config.get('PLAID_BASE_PERMISSIONS')
 
 
-    def get_oauth_user_info(self, provider, resp=None):
+    def oauth_user_info(self, provider, resp=None):
         """Retrieves Plaid user info from RPC.
 
         If the specified oauth provider is not 'plaidcloud', the super
@@ -92,7 +92,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
             try:
                 logging.debug("Oauth2 provider: %s.", provider)
                 me = self.rpc.identity.me.info()
-                logging.debug("user info: %s", repr(me))
+                logging.debug("user info from RPC: %s", repr(me))
                 user = {
                     'first_name': me.get('first_name'),
                     'last_name': me.get('last_name'),
@@ -101,13 +101,14 @@ class PlaidSecurityManager(SupersetSecurityManager):
                     'active': me.get('is_active'),
                     'admin': me.get('is_admin'),
                 }
+                logging.debug("user info being returned: %s", repr(user))
                 return user
             except: # pylint: disable=bare-except
                 import traceback
                 logging.exception(traceback.format_exc())
 
         # Just call the base method so defaults continue to work.
-        return super().get_oauth_user_info(provider, resp)
+        return super().oauth_user_info(provider, resp)
 
 
     def auth_user_oauth(self, userinfo):
