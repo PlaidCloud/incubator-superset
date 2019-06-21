@@ -91,13 +91,10 @@ apt-get clean && \
 rm -r /var/lib/apt/lists/* && \
 pip install -r requirements.txt && \
 pip install --no-cache-dir \
-Werkzeug==0.12.1 \
-requests-oauthlib==1.1.0 \
-oauthlib==2.1.0 \
+flask_oauthlib==0.9.3 \
 flask-cors==3.0.3 \
 flask-mail==0.9.1 \
 flask-oauth==0.12 \
-flask_oauthlib==0.9.3 \
 gevent==1.2.2 \
 impyla==0.14.0 \
 infi.clickhouse-orm==1.0.2 \
@@ -109,7 +106,8 @@ pyldap==2.4.28 \
 pymssql==2.1.3 \
 redis==2.10.5 \
 sqlalchemy-clickhouse==0.1.5.post0 \
-sqlalchemy-redshift==0.7.1 && \
+sqlalchemy-redshift==0.7.1 \
+Werkzeug==0.14.1 && \
 rm requirements.txt
 
 # Configure Filesystem
