@@ -91,7 +91,7 @@ apt-get clean && \
 rm -r /var/lib/apt/lists/* && \
 pip install -r requirements.txt && \
 pip install --no-cache-dir \
-flask_oauthlib==0.9.3 \
+flask_oauthlib==0.9.5 \
 flask-cors==3.0.3 \
 flask-mail==0.9.1 \
 flask-oauth==0.12 \
@@ -99,7 +99,6 @@ gevent==1.2.2 \
 impyla==0.14.0 \
 infi.clickhouse-orm==1.0.2 \
 mysqlclient==1.3.7 \
-"oauthlib<3.0.0" \
 psycopg2==2.6.1 \
 pyathena==1.2.5 \
 pyhive==0.5.1 \
