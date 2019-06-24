@@ -112,12 +112,13 @@ rm requirements.txt
 
 # Configure Filesystem
 COPY --from=build-distribution /home/superset/dist/apache-superset-0.999.0.dev0.tar.gz /home/superset
-WORKDIR /home/superset
 
 # COPY superset_config.py /etc/superset/
 COPY plaidtools /plaidtools/
 
-RUN cd /plaidtools && python setup.py install
+WORKDIR /plaidtools
+RUN python setup.py install
+WORKDIR /home/superset
 RUN pip install apache-superset-0.999.0.dev0.tar.gz
 
 
