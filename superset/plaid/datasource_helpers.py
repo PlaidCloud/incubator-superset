@@ -32,7 +32,7 @@ def sync_report_datasources(project_ids=[]):
             project_ids=project_ids)
         log.debug(projects)
         return {
-            project['id']: sync_report_datasource(project)
+            project['project_id']: sync_report_datasource(project)
             for project in projects
         }
     except AttributeError:
@@ -58,29 +58,29 @@ def sync_report_datasource(project):
         two database connections per project, which can get expensive if there
         are many projects.
     """
-    log.debug('project_id: %s', project['id'])
-    log.debug('project_name: %s', project['name'])
+    log.debug('project_id: %s', project['project_id'])
+    log.debug('project_name: %s', project['project_name'])
     log.debug('workspace_name: %s', project['workspace_name'])
 
     database_url = get_report_database_url(
-        report_user=project['report_database_user'],
-        report_pass=project['report_database_password'],
+        report_user=project['report_user'],
+        report_pass=project['report_password'],
     )
-    schema_name = get_report_schema_name(project['id'])
+    schema_name = get_report_schema_name(project['project_id'])
     engine = create_engine(database_url)
     insp = reflection.Inspector.from_engine(engine)
     views = insp.get_view_names(schema_name)
     log.debug([view for view in views])
     if views: # The schema is not empty, so add the project as DB.
         database = add_report_database(
-            database_name=project['id'],
+            database_name=project['project_id'],
             verbose_name=get_report_database_name(
                 project['workspace_name'],
-                project['name'],
-                project['id'],
+                project['project_name'],
+                project['project_id'],
             ),
-            report_user=project['report_database_user'],
-            report_password=project['report_database_password'],
+            report_user=project['report_user'],
+            report_password=project['report_password'],
         )
 
         if not database:
