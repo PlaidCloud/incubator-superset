@@ -170,7 +170,7 @@ def get_report_views(database, schema=None):
     """
     # Iterate through each view available to the reporting user.
     # We want to add the view to superset if it doesn't exist.
-    view_names_in_plaid = database.all_view_names_in_schema(schema)
+    view_names_in_plaid = database.get_all_view_names_in_schema(schema)
     log.debug('Plaid views: %s', view_names_in_plaid)
     view_objs_in_db = db.session.query(
         SqlaTable
