@@ -155,7 +155,7 @@ def get_report_schema_name(project_id):
     # Database is named after project ID, and schema is "report" + project ID.
     return 'report{}'.format(project_id)
 
-def get_report_views(database, schema=None):    
+def get_report_views(database, schema=None):
     """Get a list of report views from a database.
 
     If a view is found in the database that is not yet listed in superset,
@@ -175,7 +175,7 @@ def get_report_views(database, schema=None):
     view_objs_in_db = db.session.query(
         SqlaTable
     ).filter(
-        SqlaTable.table_name.in_(view_names_in_plaid),
+        SqlaTable.table_name.in_(view_names_in_plaid.table),
         SqlaTable.schema == schema,
         SqlaTable.database_id == database.id
     ).all()
