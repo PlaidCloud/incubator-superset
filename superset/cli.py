@@ -466,6 +466,7 @@ def load_test_users_run():
         sm.get_session.commit()
 
 
+@app.cli.command()
 def sync_tags():
     """Rebuilds special tags (owner, type, favorited by)."""
     # pylint: disable=no-member
@@ -482,4 +483,3 @@ for module in config.get("CLI_MODULES"):
         app.cli.add_command(cli.group)
     except ImportError:
         pass
-@app.cli.command()
