@@ -19,14 +19,15 @@ from superset.db_engine_specs.postgres import PostgresBaseEngineSpec
 
 
 class RedshiftEngineSpec(PostgresBaseEngineSpec):
-    engine = 'redshift'
+    engine = "redshift"
     max_column_name_length = 127
 
     @staticmethod
-    def mutate_label(label):
+    def _mutate_label(label: str) -> str:
         """
         Redshift only supports lowercase column names and aliases.
-        :param str label: Original label which might include uppercase letters
-        :return: String that is supported by the database
+
+        :param label: Expected expression label
+        :return: Conditionally mutated label
         """
         return label.lower()

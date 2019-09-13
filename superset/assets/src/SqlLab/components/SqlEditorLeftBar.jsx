@@ -42,12 +42,6 @@ const defaultProps = {
 export default class SqlEditorLeftBar extends React.PureComponent {
   constructor(props) {
     super(props);
-    this.state = {
-      schemaLoading: false,
-      schemaOptions: [],
-      tableLoading: false,
-      tableOptions: [],
-    };
     this.resetState = this.resetState.bind(this);
     this.onSchemaChange = this.onSchemaChange.bind(this);
     this.onSchemasLoad = this.onSchemasLoad.bind(this);
@@ -92,12 +86,10 @@ export default class SqlEditorLeftBar extends React.PureComponent {
   }
   changeTable(tableOpt) {
     if (!tableOpt) {
-      this.setState({ tableName: '' });
       return;
     }
     const schemaName = tableOpt.value.schema;
     const tableName = tableOpt.value.table;
-    this.setState({ tableName });
     this.props.actions.queryEditorSetSchema(this.props.queryEditor, schemaName);
     this.props.actions.addTable(this.props.queryEditor, tableName, schemaName);
   }
@@ -132,10 +124,11 @@ export default class SqlEditorLeftBar extends React.PureComponent {
             ))}
           </div>
         </div>
-        {shouldShowReset &&
+        {shouldShowReset && (
           <Button bsSize="small" bsStyle="danger" onClick={this.resetState}>
             <i className="fa fa-bomb" /> {t('Reset State')}
-          </Button>}
+          </Button>
+        )}
       </div>
     );
   }

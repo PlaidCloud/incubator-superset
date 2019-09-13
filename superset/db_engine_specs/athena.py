@@ -15,47 +15,49 @@
 # specific language governing permissions and limitations
 # under the License.
 # pylint: disable=C,R,W
+from datetime import datetime
+
 from superset.db_engine_specs.base import BaseEngineSpec
 
 
 class AthenaEngineSpec(BaseEngineSpec):
-    engine = 'awsathena'
+    engine = "awsathena"
 
     time_grain_functions = {
-        None: '{col}',
-        'PT1S': "date_trunc('second', CAST({col} AS TIMESTAMP))",
-        'PT1M': "date_trunc('minute', CAST({col} AS TIMESTAMP))",
-        'PT1H': "date_trunc('hour', CAST({col} AS TIMESTAMP))",
-        'P1D': "date_trunc('day', CAST({col} AS TIMESTAMP))",
-        'P1W': "date_trunc('week', CAST({col} AS TIMESTAMP))",
-        'P1M': "date_trunc('month', CAST({col} AS TIMESTAMP))",
-        'P0.25Y': "date_trunc('quarter', CAST({col} AS TIMESTAMP))",
-        'P1Y': "date_trunc('year', CAST({col} AS TIMESTAMP))",
-        'P1W/1970-01-03T00:00:00Z': "date_add('day', 5, date_trunc('week', \
+        None: "{col}",
+        "PT1S": "date_trunc('second', CAST({col} AS TIMESTAMP))",
+        "PT1M": "date_trunc('minute', CAST({col} AS TIMESTAMP))",
+        "PT1H": "date_trunc('hour', CAST({col} AS TIMESTAMP))",
+        "P1D": "date_trunc('day', CAST({col} AS TIMESTAMP))",
+        "P1W": "date_trunc('week', CAST({col} AS TIMESTAMP))",
+        "P1M": "date_trunc('month', CAST({col} AS TIMESTAMP))",
+        "P0.25Y": "date_trunc('quarter', CAST({col} AS TIMESTAMP))",
+        "P1Y": "date_trunc('year', CAST({col} AS TIMESTAMP))",
+        "P1W/1970-01-03T00:00:00Z": "date_add('day', 5, date_trunc('week', \
                                     date_add('day', 1, CAST({col} AS TIMESTAMP))))",
-        '1969-12-28T00:00:00Z/P1W': "date_add('day', -1, date_trunc('week', \
+        "1969-12-28T00:00:00Z/P1W": "date_add('day', -1, date_trunc('week', \
                                     date_add('day', 1, CAST({col} AS TIMESTAMP))))",
     }
 
     @classmethod
-    def convert_dttm(cls, target_type, dttm):
+    def convert_dttm(cls, target_type: str, dttm: datetime) -> str:
         tt = target_type.upper()
-        if tt == 'DATE':
+        if tt == "DATE":
             return "from_iso8601_date('{}')".format(dttm.isoformat()[:10])
-        if tt == 'TIMESTAMP':
+        if tt == "TIMESTAMP":
             return "from_iso8601_timestamp('{}')".format(dttm.isoformat())
-        return ("CAST ('{}' AS TIMESTAMP)"
-                .format(dttm.strftime('%Y-%m-%d %H:%M:%S')))
+        return "CAST ('{}' AS TIMESTAMP)".format(dttm.strftime("%Y-%m-%d %H:%M:%S"))
 
     @classmethod
-    def epoch_to_dttm(cls):
-        return 'from_unixtime({col})'
+    def epoch_to_dttm(cls) -> str:
+        return "from_unixtime({col})"
 
     @staticmethod
-    def mutate_label(label):
+    def _mutate_label(label: str) -> str:
         """
         Athena only supports lowercase column names and aliases.
-        :param str label: Original label which might include uppercase letters
-        :return: String that is supported by the database
+
+        :param label: Expected expression label
+        :return: Conditionally mutated label
         """
         return label.lower()

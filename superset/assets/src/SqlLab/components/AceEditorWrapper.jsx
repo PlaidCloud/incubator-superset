@@ -83,7 +83,7 @@ class AceEditorWrapper extends React.PureComponent {
     this.props.actions.queryEditorSetSelectedText(this.props.queryEditor, null);
     this.setAutoCompleter(this.props);
   }
-  componentWillReceiveProps(nextProps) {
+  UNSAFE_componentWillReceiveProps(nextProps) {
     if (!areArraysShallowEqual(this.props.tables, nextProps.tables) ||
       !areArraysShallowEqual(this.props.schemas, nextProps.schemas) ||
       !areArraysShallowEqual(this.props.extendedTables, nextProps.extendedTables)) {
@@ -156,7 +156,7 @@ class AceEditorWrapper extends React.PureComponent {
     const tables = props.tables || [];
     const extendedTables = props.extendedTables || [];
     tables.forEach((t) => {
-      const tableName = t.value.table;
+      const tableName = t.value;
       words.push({ name: t.label, value: tableName, score: 55, meta: 'table' });
       const extendedTable = extendedTables.find(et => et.name === tableName);
       const cols = extendedTable && extendedTable.columns || [];
@@ -167,7 +167,6 @@ class AceEditorWrapper extends React.PureComponent {
     words = words.concat(Object.keys(columns).map(col => (
       { name: col, value: col, score: 50, meta: 'column' }
     )), sqlWords);
-
     this.setState({ words }, () => {
       const completer = {
         getCompletions: this.getCompletions.bind(this),
