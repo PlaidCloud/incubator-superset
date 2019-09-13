@@ -91,19 +91,20 @@ apt-get clean && \
 rm -r /var/lib/apt/lists/* && \
 pip install -r requirements.txt && \
 pip install --no-cache-dir \
-flask_oauthlib==0.9.5 \
 flask-cors==3.0.3 \
 flask-mail==0.9.1 \
 flask-oauth==0.12 \
+flask_oauthlib==0.9.5 \
 gevent==1.2.2 \
 impyla==0.14.0 \
 infi.clickhouse-orm==1.0.2 \
-mysqlclient==1.3.7 \
-psycopg2==2.6.1 \
-pyathena==1.2.5 \
+mysqlclient==1.4.2 \
+psycopg2==2.7.6.1 \
+pyathena==1.5.1 \
+pybigquery==0.4.10 \
 pyhive==0.5.1 \
 pyldap==2.4.28 \
-pymssql==2.1.3 \
+pymssql==2.1.4 \
 redis==2.10.5 \
 sqlalchemy-clickhouse==0.1.5.post0 \
 sqlalchemy-redshift==0.7.1 \

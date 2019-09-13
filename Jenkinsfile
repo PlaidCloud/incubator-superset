@@ -78,7 +78,7 @@ podTemplate(label: 'io',
               stage('Publish Commit Tag') {
                 // Add additional, unique image tag and push.
                 // https://github.com/jenkinsci/docker-workflow-plugin/blob/50ad50bad2ee14eb73d1ae3ef1058b8ad76c9e5d/src/main/resources/org/jenkinsci/plugins/docker/workflow/Docker.groovy#L176-L179
-                image_label = scm_map.GIT_COMMIT.substring(0, 7)
+                image_label = "${scm_map.GIT_COMMIT.substring(0, 7)}-${BUILD_NUMBER}"
                 image.push(image_label)
               }
 
