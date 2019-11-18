@@ -76,8 +76,6 @@ class QueryStringExtended(NamedTuple):
     sql: str
 
 
-hide_schema_names = app.config.get('HIDE_SCHEMA_NAMES', False)
-
 class AnnotationDatasource(BaseDatasource):
     """ Dummy object so we can query annotations using 'Viz' objects just like
         regular datasources.
@@ -417,7 +415,7 @@ class SqlaTable(Model, BaseDatasource):
 
     @property
     def name(self):
-        if not self.schema or hide_schema_names:
+        if not self.schema:
             return self.table_name
         return "{}.{}".format(self.schema, self.table_name)
 
@@ -1055,12 +1053,10 @@ class SqlaTable(Model, BaseDatasource):
 
     @classmethod
     def query_datasources_by_name(cls, session, database, datasource_name, schema=None):
-        unquote = db.engine.dialect.identifier_preparer.unformat_identifiers
-        unformatted_ds = unquote(datasource_name)[0]
         query = (
             session.query(cls)
             .filter_by(database_id=database.id)
-            .filter_by(table_name=unformatted_ds)
+            .filter_by(table_name=datasource_name)
         )
         if schema:
             query = query.filter_by(schema=schema)
