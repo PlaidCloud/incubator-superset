@@ -4,7 +4,7 @@ from flask_appbuilder.security.decorators import has_access_api
 from flask_babel import gettext as __
 from superset import appbuilder
 from superset.views.core import BaseSupersetView
-from superset.plaid import datasource_helpers as dh
+import plaid.datasource_helpers as dh
 import simplejson as json
 
 class Plaid(BaseSupersetView):
