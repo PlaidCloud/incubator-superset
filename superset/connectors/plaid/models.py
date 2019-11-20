@@ -19,6 +19,7 @@ from collections import OrderedDict
 from datetime import datetime
 import logging
 import re
+import textwrap
 from typing import Any, Dict, List, NamedTuple, Optional, Union
 
 from flask import escape, Markup
@@ -51,19 +52,20 @@ import sqlparse
 
 from superset import app, db, security_manager
 from superset.connectors.base.models import BaseColumn, BaseDatasource, BaseMetric
+from superset.connectors.sqla.models import SqlaTable, SqlMetric, TableColumn
 from superset.db_engine_specs.base import TimestampExpression
 from superset.exceptions import DatabaseNotFound
 from superset.jinja_context import get_template_processor
 from superset.models.annotations import Annotation
-from superset.models.core import Database
-from superset.models.helpers import QueryResult
+from superset.models.helpers import QueryResult, AuditMixinNullable, ImportMixin
 from superset.utils import core as utils, import_datasource
+from sqlalchemy_utils import EncryptedType
 
 config = app.config
 metadata = Model.metadata  # pylint: disable=no-member
 
 
-class SqlaQuery(NamedTuple):
+class PlaidQuery(NamedTuple):
     extra_cache_keys: List[Any]
     labels_expected: List[str]
     prequeries: List[str]
@@ -78,55 +80,17 @@ class QueryStringExtended(NamedTuple):
 
 hide_schema_names = app.config.get('HIDE_SCHEMA_NAMES', False)
 
-class AnnotationDatasource(BaseDatasource):
-    """ Dummy object so we can query annotations using 'Viz' objects just like
-        regular datasources.
-    """
 
-    cache_timeout = 0
-
-    def query(self, query_obj):
-        df = None
-        error_message = None
-        qry = db.session.query(Annotation)
-        qry = qry.filter(Annotation.layer_id == query_obj["filter"][0]["val"])
-        if query_obj["from_dttm"]:
-            qry = qry.filter(Annotation.start_dttm >= query_obj["from_dttm"])
-        if query_obj["to_dttm"]:
-            qry = qry.filter(Annotation.end_dttm <= query_obj["to_dttm"])
-        status = utils.QueryStatus.SUCCESS
-        try:
-            df = pd.read_sql_query(qry.statement, db.engine)
-        except Exception as e:
-            status = utils.QueryStatus.FAILED
-            logging.exception(e)
-            error_message = utils.error_msg_from_exception(e)
-        return QueryResult(
-            status=status, df=df, duration=0, query="", error_message=error_message
-        )
-
-    def get_query_str(self, query_obj):
-        raise NotImplementedError()
-
-    def values_for_column(self, column_name, limit=10000):
-        raise NotImplementedError()
-
-
-class TableColumn(Model, BaseColumn):
+class PlaidColumn(TableColumn):
 
     """ORM object for table columns, each table can have multiple columns"""
 
-    __tablename__ = "table_columns"
-    __table_args__ = (UniqueConstraint("table_id", "column_name"),)
-    table_id = Column(Integer, ForeignKey("tables.id"))
+    __tablename__ = "plaid_columns"
     table = relationship(
-        "SqlaTable",
+        "PlaidTable",
         backref=backref("columns", cascade="all, delete-orphan"),
         foreign_keys=[table_id],
     )
-    is_dttm = Column(Boolean, default=False)
-    expression = Column(Text)
-    python_date_format = Column(String(255))
 
     export_fields = (
         "table_id",
@@ -142,99 +106,17 @@ class TableColumn(Model, BaseColumn):
         "python_date_format",
     )
 
-    update_from_object_fields = [s for s in export_fields if s not in ("table_id",)]
-    export_parent = "table"
 
-    def get_sqla_col(self, label=None):
-        label = label or self.column_name
-        if not self.expression:
-            db_engine_spec = self.table.database.db_engine_spec
-            type_ = db_engine_spec.get_sqla_column_type(self.type)
-            col = column(self.column_name, type_=type_)
-        else:
-            col = literal_column(self.expression)
-        col = self.table.make_sqla_column_compatible(col, label)
-        return col
-
-    @property
-    def datasource(self):
-        return self.table
-
-    def get_time_filter(self, start_dttm, end_dttm):
-        col = self.get_sqla_col(label="__time")
-        l = []  # noqa: E741
-        if start_dttm:
-            l.append(col >= text(self.dttm_sql_literal(start_dttm)))
-        if end_dttm:
-            l.append(col <= text(self.dttm_sql_literal(end_dttm)))
-        return and_(*l)
-
-    def get_timestamp_expression(
-        self, time_grain: Optional[str]
-    ) -> Union[TimestampExpression, Label]:
-        """
-        Return a SQLAlchemy Core element representation of self to be used in a query.
-
-        :param time_grain: Optional time grain, e.g. P1Y
-        :return: A TimeExpression object wrapped in a Label if supported by db
-        """
-        label = utils.DTTM_ALIAS
-
-        db = self.table.database
-        pdf = self.python_date_format
-        is_epoch = pdf in ("epoch_s", "epoch_ms")
-        if not self.expression and not time_grain and not is_epoch:
-            sqla_col = column(self.column_name, type_=DateTime)
-            return self.table.make_sqla_column_compatible(sqla_col, label)
-        if self.expression:
-            col = literal_column(self.expression)
-        else:
-            col = column(self.column_name)
-        time_expr = db.db_engine_spec.get_timestamp_expr(col, pdf, time_grain)
-        return self.table.make_sqla_column_compatible(time_expr, label)
-
-    @classmethod
-    def import_obj(cls, i_column):
-        def lookup_obj(lookup_column):
-            return (
-                db.session.query(TableColumn)
-                .filter(
-                    TableColumn.table_id == lookup_column.table_id,
-                    TableColumn.column_name == lookup_column.column_name,
-                )
-                .first()
-            )
-
-        return import_datasource.import_simple_obj(db.session, i_column, lookup_obj)
-
-    def dttm_sql_literal(self, dttm):
-        """Convert datetime object to a SQL expression string"""
-        tf = self.python_date_format
-        if tf:
-            seconds_since_epoch = int(dttm.timestamp())
-            if tf == "epoch_s":
-                return str(seconds_since_epoch)
-            elif tf == "epoch_ms":
-                return str(seconds_since_epoch * 1000)
-            return "'{}'".format(dttm.strftime(tf))
-        else:
-            s = self.table.database.db_engine_spec.convert_dttm(self.type or "", dttm)
-            return s or "'{}'".format(dttm.strftime("%Y-%m-%d %H:%M:%S.%f"))
-
-
-class SqlMetric(Model, BaseMetric):
+class PlaidMetric(SqlMetric):
 
     """ORM object for metrics, each table can have multiple metrics"""
 
-    __tablename__ = "sql_metrics"
-    __table_args__ = (UniqueConstraint("table_id", "metric_name"),)
-    table_id = Column(Integer, ForeignKey("tables.id"))
+    __tablename__ = "plaid_metrics"
     table = relationship(
-        "SqlaTable",
+        "PlaidTable",
         backref=backref("metrics", cascade="all, delete-orphan"),
         foreign_keys=[table_id],
     )
-    expression = Column(Text, nullable=False)
 
     export_fields = (
         "metric_name",
@@ -246,46 +128,10 @@ class SqlMetric(Model, BaseMetric):
         "d3format",
         "warning_text",
     )
-    update_from_object_fields = list(
-        [s for s in export_fields if s not in ("table_id",)]
-    )
-    export_parent = "table"
-
-    def get_sqla_col(self, label=None):
-        label = label or self.metric_name
-        sqla_col = literal_column(self.expression)
-        return self.table.make_sqla_column_compatible(sqla_col, label)
-
-    @property
-    def perm(self):
-        return (
-            ("{parent_name}.[{obj.metric_name}](id:{obj.id})").format(
-                obj=self, parent_name=self.table.full_name
-            )
-            if self.table
-            else None
-        )
-
-    def get_perm(self):
-        return self.perm
-
-    @classmethod
-    def import_obj(cls, i_metric):
-        def lookup_obj(lookup_metric):
-            return (
-                db.session.query(SqlMetric)
-                .filter(
-                    SqlMetric.table_id == lookup_metric.table_id,
-                    SqlMetric.metric_name == lookup_metric.metric_name,
-                )
-                .first()
-            )
-
-        return import_datasource.import_simple_obj(db.session, i_metric, lookup_obj)
 
 
-sqlatable_user = Table(
-    "sqlatable_user",
+plaidtable_user = Table(
+    "plaidtable_user",
     metadata,
     Column("id", Integer, primary_key=True),
     Column("user_id", Integer, ForeignKey("ab_user.id")),
@@ -293,7 +139,7 @@ sqlatable_user = Table(
 )
 
 
-class SqlaTable(Model, BaseDatasource):
+class PlaidTable(Model, BaseDatasource):
 
     """An ORM object for SqlAlchemy table references"""
 
@@ -304,17 +150,17 @@ class SqlaTable(Model, BaseDatasource):
     owner_class = security_manager.user_model
 
     __tablename__ = "tables"
-    __table_args__ = (UniqueConstraint("database_id", "table_name"),)
+    __table_args__ = (UniqueConstraint("project", "table_name"),)
 
     table_name = Column(String(250))
     main_dttm_col = Column(String(250))
-    database_id = Column(Integer, ForeignKey("dbs.id"), nullable=False)
+    project_id = Column(String(250), ForeignKey("plaid_projects.uuid"), nullable=False)
     fetch_values_predicate = Column(String(1000))
-    owners = relationship(owner_class, secondary=sqlatable_user, backref="tables")
-    database = relationship(
-        "Database",
+    owners = relationship(owner_class, secondary=plaidtable_user, backref="tables")
+    project = relationship(
+        "PlaidProject",
         backref=backref("tables", cascade="all, delete-orphan"),
-        foreign_keys=[database_id],
+        foreign_keys=[project_id],
     )
     schema = Column(String(255))
     sql = Column(Text)
@@ -328,7 +174,7 @@ class SqlaTable(Model, BaseDatasource):
         "main_dttm_col",
         "description",
         "default_endpoint",
-        "database_id",
+        "project_id",
         "offset",
         "cache_timeout",
         "schema",
@@ -339,9 +185,9 @@ class SqlaTable(Model, BaseDatasource):
         "fetch_values_predicate",
     )
     update_from_object_fields = [
-        f for f in export_fields if f not in ("table_name", "database_id")
+        f for f in export_fields if f not in ("table_name", "project_id")
     ]
-    export_parent = "database"
+    export_parent = "project"
     export_children = ["metrics", "columns"]
 
     sqla_aggregations = {
@@ -372,7 +218,7 @@ class SqlaTable(Model, BaseDatasource):
 
     @property
     def connection(self):
-        return str(self.database)
+        return str(self.project)
 
     @property
     def description_markeddown(self):
@@ -383,17 +229,17 @@ class SqlaTable(Model, BaseDatasource):
         return self.table_name
 
     @property
-    def database_name(self):
-        return self.database.name
+    def name(self):
+        return self.project.name
 
     @classmethod
-    def get_datasource_by_name(cls, session, datasource_name, schema, database_name):
+    def get_datasource_by_name(cls, session, datasource_name, schema, name):
         schema = schema or None
         query = (
             session.query(cls)
-            .join(Database)
+            .join(PlaidProject)
             .filter(cls.table_name == datasource_name)
-            .filter(Database.database_name == database_name)
+            .filter(PlaidProject.name == name)
         )
         # Handling schema being '' or None, which is easier to handle
         # in python than in the SQLA query in a multi-dialect way
@@ -417,7 +263,7 @@ class SqlaTable(Model, BaseDatasource):
 
     @property
     def name(self):
-        if not self.schema or hide_schema_names:
+        if not self.schema:
             return self.table_name
         return "{}.{}".format(self.schema, self.table_name)
 
@@ -881,7 +727,7 @@ class SqlaTable(Model, BaseDatasource):
                 )
                 qry = qry.where(top_groups)
 
-        return SqlaQuery(
+        return PlaidQuery(
             extra_cache_keys=extra_cache_keys,
             labels_expected=labels_expected,
             sqla_query=qry.select_from(tbl),
@@ -1024,43 +870,41 @@ class SqlaTable(Model, BaseDatasource):
 
         def lookup_sqlatable(table):
             return (
-                db.session.query(SqlaTable)
-                .join(Database)
+                db.session.query(PlaidTable)
+                .join(PlaidProject)
                 .filter(
                     SqlaTable.table_name == table.table_name,
                     SqlaTable.schema == table.schema,
-                    Database.id == table.database_id,
+                    PlaidProject.id == table.project_id,
                 )
                 .first()
             )
 
-        def lookup_database(table):
+        def lookup_project(table):
             try:
                 return (
-                    db.session.query(Database)
-                    .filter_by(database_name=table.params_dict["database_name"])
+                    db.session.query(PlaidProject)
+                    .filter_by(name=table.params_dict["name"])
                     .one()
                 )
             except NoResultFound:
                 raise DatabaseNotFound(
                     _(
-                        "Database '%(name)s' is not found",
-                        name=table.params_dict["database_name"],
+                        "Project '%(name)s' is not found",
+                        name=table.params_dict["name"],
                     )
                 )
 
         return import_datasource.import_datasource(
-            db.session, i_datasource, lookup_database, lookup_sqlatable, import_time
+            db.session, i_datasource, lookup_project, lookup_sqlatable, import_time
         )
 
     @classmethod
     def query_datasources_by_name(cls, session, database, datasource_name, schema=None):
-        unquote = db.engine.dialect.identifier_preparer.unformat_identifiers
-        unformatted_ds = unquote(datasource_name)[0]
         query = (
             session.query(cls)
             .filter_by(database_id=database.id)
-            .filter_by(table_name=unformatted_ds)
+            .filter_by(table_name=datasource_name)
         )
         if schema:
             query = query.filter_by(schema=schema)
@@ -1102,5 +946,491 @@ class SqlaTable(Model, BaseDatasource):
         return []
 
 
-sa.event.listen(SqlaTable, "after_insert", security_manager.set_perm)
-sa.event.listen(SqlaTable, "after_update", security_manager.set_perm)
+sa.event.listen(PlaidTable, "after_insert", security_manager.set_perm)
+sa.event.listen(PlaidTable, "after_update", security_manager.set_perm)
+
+class PlaidProject(Model, AuditMixinNullable, ImportMixin):
+
+    """An ORM object that stores Database related information"""
+
+    __tablename__ = "plaid_projects"
+    type = "table"
+    __table_args__ = (UniqueConstraint("name"),)
+
+    id = Column(Integer, primary_key=True)
+    verbose_name = Column(String(250), unique=True)
+    # short unique name, used in permissions
+    name = Column(String(250), unique=True)
+    sqlalchemy_uri = Column(String(1024))
+    password = Column(EncryptedType(String(1024), config.get("SECRET_KEY")))
+    cache_timeout = Column(Integer)
+    select_as_create_table_as = Column(Boolean, default=False)
+    expose_in_sqllab = Column(Boolean, default=True)
+    allow_run_async = Column(Boolean, default=False)
+    allow_csv_upload = Column(Boolean, default=False)
+    allow_ctas = Column(Boolean, default=False)
+    allow_dml = Column(Boolean, default=False)
+    force_ctas_schema = Column(String(250))
+    allow_multi_schema_metadata_fetch = Column(Boolean, default=False)
+    extra = Column(
+        Text,
+        default=textwrap.dedent(
+            """\
+    {
+        "metadata_params": {},
+        "engine_params": {},
+        "metadata_cache_timeout": {},
+        "schemas_allowed_for_csv_upload": []
+    }
+    """
+        ),
+    )
+    perm = Column(String(1000))
+    impersonate_user = Column(Boolean, default=False)
+    export_fields = (
+        "name",
+        "sqlalchemy_uri",
+        "cache_timeout",
+        "expose_in_sqllab",
+        "allow_run_async",
+        "allow_ctas",
+        "allow_csv_upload",
+        "extra",
+    )
+    export_children = ["tables"]
+
+    def __repr__(self):
+        return self.verbose_name if self.verbose_name else self.name
+
+    @property
+    def name(self):
+        return self.verbose_name if self.verbose_name else self.name
+
+    @property
+    def allows_subquery(self):
+        return self.db_engine_spec.allows_subqueries
+
+    @property
+    def data(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "backend": self.backend,
+            "allow_multi_schema_metadata_fetch": self.allow_multi_schema_metadata_fetch,
+            "allows_subquery": self.allows_subquery,
+        }
+
+    @property
+    def unique_name(self):
+        return self.name
+
+    @property
+    def url_object(self):
+        return make_url(self.sqlalchemy_uri_decrypted)
+
+    @property
+    def backend(self):
+        url = make_url(self.sqlalchemy_uri_decrypted)
+        return url.get_backend_name()
+
+    @property
+    def metadata_cache_timeout(self):
+        return self.get_extra().get("metadata_cache_timeout", {})
+
+    @property
+    def schema_cache_enabled(self):
+        return "schema_cache_timeout" in self.metadata_cache_timeout
+
+    @property
+    def schema_cache_timeout(self):
+        return self.metadata_cache_timeout.get("schema_cache_timeout")
+
+    @property
+    def table_cache_enabled(self):
+        return "table_cache_timeout" in self.metadata_cache_timeout
+
+    @property
+    def table_cache_timeout(self):
+        return self.metadata_cache_timeout.get("table_cache_timeout")
+
+    @property
+    def default_schemas(self):
+        return self.get_extra().get("default_schemas", [])
+
+    @classmethod
+    def get_password_masked_url_from_uri(cls, uri):
+        url = make_url(uri)
+        return cls.get_password_masked_url(url)
+
+    @classmethod
+    def get_password_masked_url(cls, url):
+        url_copy = deepcopy(url)
+        if url_copy.password is not None and url_copy.password != PASSWORD_MASK:
+            url_copy.password = PASSWORD_MASK
+        return url_copy
+
+    def set_sqlalchemy_uri(self, uri):
+        conn = sqla.engine.url.make_url(uri.strip())
+        if conn.password != PASSWORD_MASK and not custom_password_store:
+            # do not over-write the password with the password mask
+            self.password = conn.password
+        conn.password = PASSWORD_MASK if conn.password else None
+        self.sqlalchemy_uri = str(conn)  # hides the password
+
+    def get_effective_user(self, url, user_name=None):
+        """
+        Get the effective user, especially during impersonation.
+        :param url: SQL Alchemy URL object
+        :param user_name: Default username
+        :return: The effective username
+        """
+        effective_username = None
+        if self.impersonate_user:
+            effective_username = url.username
+            if user_name:
+                effective_username = user_name
+            elif (
+                hasattr(g, "user")
+                and hasattr(g.user, "username")
+                and g.user.username is not None
+            ):
+                effective_username = g.user.username
+        return effective_username
+
+    @utils.memoized(watch=("impersonate_user", "sqlalchemy_uri_decrypted", "extra"))
+    def get_sqla_engine(self, schema=None, nullpool=True, user_name=None, source=None):
+        extra = self.get_extra()
+        url = make_url(self.sqlalchemy_uri_decrypted)
+        url = self.db_engine_spec.adjust_database_uri(url, schema)
+        effective_username = self.get_effective_user(url, user_name)
+        # If using MySQL or Presto for example, will set url.username
+        # If using Hive, will not do anything yet since that relies on a
+        # configuration parameter instead.
+        self.db_engine_spec.modify_url_for_impersonation(
+            url, self.impersonate_user, effective_username
+        )
+
+        masked_url = self.get_password_masked_url(url)
+        logging.info("Database.get_sqla_engine(). Masked URL: {0}".format(masked_url))
+
+        params = extra.get("engine_params", {})
+        if nullpool:
+            params["poolclass"] = NullPool
+
+        # If using Hive, this will set hive.server2.proxy.user=$effective_username
+        configuration = {}
+        configuration.update(
+            self.db_engine_spec.get_configuration_for_impersonation(
+                str(url), self.impersonate_user, effective_username
+            )
+        )
+        if configuration:
+            d = params.get("connect_args", {})
+            d["configuration"] = configuration
+            params["connect_args"] = d
+
+        DB_CONNECTION_MUTATOR = config.get("DB_CONNECTION_MUTATOR")
+        if DB_CONNECTION_MUTATOR:
+            url, params = DB_CONNECTION_MUTATOR(
+                url, params, effective_username, security_manager, source
+            )
+        return create_engine(url, **params)
+
+    def get_reserved_words(self):
+        return self.get_dialect().preparer.reserved_words
+
+    def get_quoter(self):
+        return self.get_dialect().identifier_preparer.quote
+
+    def get_df(self, sql, schema, mutator=None):
+        sqls = [str(s).strip().strip(";") for s in sqlparse.parse(sql)]
+        source_key = None
+        if request and request.referrer:
+            if "/superset/dashboard/" in request.referrer:
+                source_key = "dashboard"
+            elif "/superset/explore/" in request.referrer:
+                source_key = "chart"
+        engine = self.get_sqla_engine(
+            schema=schema, source=utils.sources.get(source_key, None)
+        )
+        username = utils.get_username()
+
+        def needs_conversion(df_series):
+            if df_series.empty:
+                return False
+            if isinstance(df_series[0], (list, dict)):
+                return True
+            return False
+
+        def _log_query(sql):
+            if log_query:
+                log_query(engine.url, sql, schema, username, __name__, security_manager)
+
+        with closing(engine.raw_connection()) as conn:
+            with closing(conn.cursor()) as cursor:
+                for sql in sqls[:-1]:
+                    _log_query(sql)
+                    self.db_engine_spec.execute(cursor, sql)
+                    cursor.fetchall()
+
+                _log_query(sqls[-1])
+                self.db_engine_spec.execute(cursor, sqls[-1])
+
+                if cursor.description is not None:
+                    columns = [col_desc[0] for col_desc in cursor.description]
+                else:
+                    columns = []
+
+                df = pd.DataFrame.from_records(
+                    data=list(cursor.fetchall()), columns=columns, coerce_float=True
+                )
+
+                if mutator:
+                    df = mutator(df)
+
+                for k, v in df.dtypes.items():
+                    if v.type == numpy.object_ and needs_conversion(df[k]):
+                        df[k] = df[k].apply(utils.json_dumps_w_dates)
+                return df
+
+    def compile_sqla_query(self, qry, schema=None):
+        engine = self.get_sqla_engine(schema=schema)
+
+        sql = str(qry.compile(engine, compile_kwargs={"literal_binds": True}))
+
+        if engine.dialect.identifier_preparer._double_percents:
+            sql = sql.replace("%%", "%")
+
+        return sql
+
+    def select_star(
+        self,
+        table_name,
+        schema=None,
+        limit=100,
+        show_cols=False,
+        indent=True,
+        latest_partition=False,
+        cols=None,
+    ):
+        """Generates a ``select *`` statement in the proper dialect"""
+        eng = self.get_sqla_engine(
+            schema=schema, source=utils.sources.get("sql_lab", None)
+        )
+        return self.db_engine_spec.select_star(
+            self,
+            table_name,
+            schema=schema,
+            engine=eng,
+            limit=limit,
+            show_cols=show_cols,
+            indent=indent,
+            latest_partition=latest_partition,
+            cols=cols,
+        )
+
+    def apply_limit_to_sql(self, sql, limit=1000):
+        return self.db_engine_spec.apply_limit_to_sql(sql, limit, self)
+
+    def safe_sqlalchemy_uri(self):
+        return self.sqlalchemy_uri
+
+    @property
+    def inspector(self):
+        engine = self.get_sqla_engine()
+        return sqla.inspect(engine)
+
+    @cache_util.memoized_func(
+        key=lambda *args, **kwargs: "db:{}:schema:None:table_list",
+        attribute_in_key="id",
+    )
+    def get_all_table_names_in_database(
+        self, cache: bool = False, cache_timeout: bool = None, force=False
+    ) -> List[utils.DatasourceName]:
+        """Parameters need to be passed as keyword arguments."""
+        if not self.allow_multi_schema_metadata_fetch:
+            return []
+        return self.db_engine_spec.get_all_datasource_names(self, "table")
+
+    @cache_util.memoized_func(
+        key=lambda *args, **kwargs: "db:{}:schema:None:view_list", attribute_in_key="id"
+    )
+    def get_all_view_names_in_database(
+        self, cache: bool = False, cache_timeout: bool = None, force: bool = False
+    ) -> List[utils.DatasourceName]:
+        """Parameters need to be passed as keyword arguments."""
+        if not self.allow_multi_schema_metadata_fetch:
+            return []
+        return self.db_engine_spec.get_all_datasource_names(self, "view")
+
+    @cache_util.memoized_func(
+        key=lambda *args, **kwargs: "db:{{}}:schema:{}:table_list".format(
+            kwargs.get("schema")
+        ),
+        attribute_in_key="id",
+    )
+    def get_all_table_names_in_schema(
+        self,
+        schema: str,
+        cache: bool = False,
+        cache_timeout: int = None,
+        force: bool = False,
+    ):
+        """Parameters need to be passed as keyword arguments.
+
+        For unused parameters, they are referenced in
+        cache_util.memoized_func decorator.
+
+        :param schema: schema name
+        :param cache: whether cache is enabled for the function
+        :param cache_timeout: timeout in seconds for the cache
+        :param force: whether to force refresh the cache
+        :return: list of tables
+        """
+        try:
+            tables = self.db_engine_spec.get_table_names(
+                inspector=self.inspector, schema=schema
+            )
+            return [
+                utils.DatasourceName(table=table, schema=schema) for table in tables
+            ]
+        except Exception as e:
+            logging.exception(e)
+
+    @cache_util.memoized_func(
+        key=lambda *args, **kwargs: "db:{{}}:schema:{}:view_list".format(
+            kwargs.get("schema")
+        ),
+        attribute_in_key="id",
+    )
+    def get_all_view_names_in_schema(
+        self,
+        schema: str,
+        cache: bool = False,
+        cache_timeout: int = None,
+        force: bool = False,
+    ):
+        """Parameters need to be passed as keyword arguments.
+
+        For unused parameters, they are referenced in
+        cache_util.memoized_func decorator.
+
+        :param schema: schema name
+        :param cache: whether cache is enabled for the function
+        :param cache_timeout: timeout in seconds for the cache
+        :param force: whether to force refresh the cache
+        :return: list of views
+        """
+        try:
+            views = self.db_engine_spec.get_view_names(
+                inspector=self.inspector, schema=schema
+            )
+            return [utils.DatasourceName(table=view, schema=schema) for view in views]
+        except Exception as e:
+            logging.exception(e)
+
+    @cache_util.memoized_func(
+        key=lambda *args, **kwargs: "db:{}:schema_list", attribute_in_key="id"
+    )
+    def get_all_schema_names(
+        self, cache: bool = False, cache_timeout: int = None, force: bool = False
+    ) -> List[str]:
+        """Parameters need to be passed as keyword arguments.
+
+        For unused parameters, they are referenced in
+        cache_util.memoized_func decorator.
+
+        :param cache: whether cache is enabled for the function
+        :param cache_timeout: timeout in seconds for the cache
+        :param force: whether to force refresh the cache
+        :return: schema list
+        """
+        return self.db_engine_spec.get_schema_names(self.inspector)
+
+    @property
+    def db_engine_spec(self):
+        return db_engine_specs.engines.get(self.backend, db_engine_specs.BaseEngineSpec)
+
+    @classmethod
+    def get_db_engine_spec_for_backend(cls, backend):
+        return db_engine_specs.engines.get(backend, db_engine_specs.BaseEngineSpec)
+
+    def grains(self):
+        """Defines time granularity database-specific expressions.
+
+        The idea here is to make it easy for users to change the time grain
+        from a datetime (maybe the source grain is arbitrary timestamps, daily
+        or 5 minutes increments) to another, "truncated" datetime. Since
+        each database has slightly different but similar datetime functions,
+        this allows a mapping between database engines and actual functions.
+        """
+        return self.db_engine_spec.get_time_grains()
+
+    def get_extra(self):
+        extra = {}
+        if self.extra:
+            try:
+                extra = json.loads(self.extra)
+            except Exception as e:
+                logging.error(e)
+                raise e
+        return extra
+
+    def get_table(self, table_name, schema=None):
+        extra = self.get_extra()
+        meta = MetaData(**extra.get("metadata_params", {}))
+        return Table(
+            table_name,
+            meta,
+            schema=schema or None,
+            autoload=True,
+            autoload_with=self.get_sqla_engine(),
+        )
+
+    def get_columns(self, table_name, schema=None):
+        return self.db_engine_spec.get_columns(self.inspector, table_name, schema)
+
+    def get_indexes(self, table_name, schema=None):
+        return self.inspector.get_indexes(table_name, schema)
+
+    def get_pk_constraint(self, table_name, schema=None):
+        return self.inspector.get_pk_constraint(table_name, schema)
+
+    def get_foreign_keys(self, table_name, schema=None):
+        return self.inspector.get_foreign_keys(table_name, schema)
+
+    def get_schema_access_for_csv_upload(self):
+        return self.get_extra().get("schemas_allowed_for_csv_upload", [])
+
+    @property
+    def sqlalchemy_uri_decrypted(self):
+        conn = sqla.engine.url.make_url(self.sqlalchemy_uri)
+        if custom_password_store:
+            conn.password = custom_password_store(conn)
+        else:
+            conn.password = self.password
+        return str(conn)
+
+    @property
+    def sql_url(self):
+        return "/superset/sql/{}/".format(self.id)
+
+    def get_perm(self):
+        return ("[{obj.name}].(id:{obj.id})").format(obj=self)
+
+    def has_table(self, table):
+        engine = self.get_sqla_engine()
+        return engine.has_table(table.table_name, table.schema or None)
+
+    def has_table_by_name(self, table_name, schema=None):
+        engine = self.get_sqla_engine()
+        return engine.has_table(table_name, schema)
+
+    @utils.memoized
+    def get_dialect(self):
+        sqla_url = url.make_url(self.sqlalchemy_uri_decrypted)
+        return sqla_url.get_dialect()()
+
+
+sqla.event.listen(Database, "after_insert", security_manager.set_perm)
+sqla.event.listen(Database, "after_update", security_manager.set_perm)

@@ -44,8 +44,8 @@ from . import models
 logger = logging.getLogger(__name__)
 
 
-class TableColumnInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
-    datamodel = SQLAInterface(models.TableColumn)
+class PlaidColumnInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
+    datamodel = SQLAInterface(models.PlaidColumn)
 
     list_title = _("Columns")
     show_title = _("Show Column")
@@ -125,7 +125,7 @@ class TableColumnInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
     add_form_extra_fields = {
         "table": QuerySelectField(
             "Table",
-            query_factory=lambda: db.session().query(models.SqlaTable),
+            query_factory=lambda: db.session().query(models.PlaidTable),
             allow_blank=True,
             widget=Select2Widget(extra_classes="readonly"),
         )
@@ -134,11 +134,11 @@ class TableColumnInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
     edit_form_extra_fields = add_form_extra_fields
 
 
-appbuilder.add_view_no_menu(TableColumnInlineView)
+appbuilder.add_view_no_menu(PlaidColumnInlineView)
 
 
-class SqlMetricInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
-    datamodel = SQLAInterface(models.SqlMetric)
+class PlaidMetricInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
+    datamodel = SQLAInterface(models.PlaidMetric)
 
     list_title = _("Metrics")
     show_title = _("Show Metric")
@@ -187,7 +187,7 @@ class SqlMetricInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
     add_form_extra_fields = {
         "table": QuerySelectField(
             "Table",
-            query_factory=lambda: db.session().query(models.SqlaTable),
+            query_factory=lambda: db.session().query(models.PlaidTable),
             allow_blank=True,
             widget=Select2Widget(extra_classes="readonly"),
         )
@@ -196,11 +196,11 @@ class SqlMetricInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
     edit_form_extra_fields = add_form_extra_fields
 
 
-appbuilder.add_view_no_menu(SqlMetricInlineView)
+appbuilder.add_view_no_menu(PlaidMetricInlineView)
 
 
 class TableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  # noqa
-    datamodel = SQLAInterface(models.SqlaTable)
+    datamodel = SQLAInterface(models.PlaidTable)
 
     list_title = _("Tables")
     show_title = _("Show Table")
@@ -228,7 +228,7 @@ class TableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  # noqa
     ]
     base_filters = [["id", DatasourceFilter, lambda: []]]
     show_columns = edit_columns + ["perm", "slices"]
-    related_views = [TableColumnInlineView, SqlMetricInlineView]
+    related_views = [PlaidColumnInlineView, PlaidMetricInlineView]
     base_order = ("changed_on", "desc")
     search_columns = ("database", "schema", "table_name", "owners", "is_sqllab_view")
     description_columns = {
@@ -307,17 +307,17 @@ class TableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  # noqa
     edit_form_extra_fields = {
         "database": QuerySelectField(
             "Database",
-            query_factory=lambda: db.session().query(models.Database),
+            query_factory=lambda: db.session().query(models.PlaidDatabase),
             widget=Select2Widget(extra_classes="readonly"),
         )
     }
 
     def pre_add(self, table):
         with db.session.no_autoflush:
-            table_query = db.session.query(models.SqlaTable).filter(
-                models.SqlaTable.table_name == table.table_name,
-                models.SqlaTable.schema == table.schema,
-                models.SqlaTable.database_id == table.database.id,
+            table_query = db.session.query(models.PlaidTable).filter(
+                models.PlaidTable.table_name == table.table_name,
+                models.PlaidTable.schema == table.schema,
+                models.PlaidTable.database_id == table.database.id,
             )
             if db.session.query(table_query.exists()).scalar():
                 raise Exception(get_datasource_exist_error_msg(table.full_name))
