@@ -42,6 +42,7 @@ from sqlalchemy import (
     Table,
     Text,
 )
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import CompileError
 from sqlalchemy.orm import backref, relationship
 from sqlalchemy.orm.exc import NoResultFound
@@ -229,17 +230,17 @@ class PlaidTable(Model, BaseDatasource):
         return self.table_name
 
     @property
-    def name(self):
+    def uuid(self):
         return self.project.name
 
     @classmethod
-    def get_datasource_by_name(cls, session, datasource_name, schema, name):
+    def get_datasource_by_name(cls, session, datasource_name, schema, uuid):
         schema = schema or None
         query = (
             session.query(cls)
-            .join(PlaidProject)
+            .join(Database)
             .filter(cls.table_name == datasource_name)
-            .filter(PlaidProject.name == name)
+            .filter(Database.database_name == database_name)
         )
         # Handling schema being '' or None, which is easier to handle
         # in python than in the SQLA query in a multi-dialect way
@@ -884,14 +885,14 @@ class PlaidTable(Model, BaseDatasource):
             try:
                 return (
                     db.session.query(PlaidProject)
-                    .filter_by(name=table.params_dict["name"])
+                    .filter_by(database_name=table.params_dict["database_name"])
                     .one()
                 )
             except NoResultFound:
                 raise DatabaseNotFound(
                     _(
                         "Project '%(name)s' is not found",
-                        name=table.params_dict["name"],
+                        name=table.params_dict["database_name"],
                     )
                 )
 
@@ -955,12 +956,12 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
 
     __tablename__ = "plaid_projects"
     type = "table"
-    __table_args__ = (UniqueConstraint("name"),)
+    __table_args__ = (UniqueConstraint("uuid"),)
 
     id = Column(Integer, primary_key=True)
-    verbose_name = Column(String(250), unique=True)
+    friendly_name = Column(String(250), unique=True)
     # short unique name, used in permissions
-    name = Column(String(250), unique=True)
+    uuid = Column(String(250), unique=True)
     sqlalchemy_uri = Column(String(1024))
     password = Column(EncryptedType(String(1024), config.get("SECRET_KEY")))
     cache_timeout = Column(Integer)
@@ -988,7 +989,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
     perm = Column(String(1000))
     impersonate_user = Column(Boolean, default=False)
     export_fields = (
-        "name",
+        "uuid",
         "sqlalchemy_uri",
         "cache_timeout",
         "expose_in_sqllab",
@@ -1000,11 +1001,11 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
     export_children = ["tables"]
 
     def __repr__(self):
-        return self.verbose_name if self.verbose_name else self.name
+        return self.friendly_name if self.friendly_name else self.uuid
 
     @property
     def name(self):
-        return self.verbose_name if self.verbose_name else self.name
+        return self.friendly_name if self.friendly_name else self.uuid
 
     @property
     def allows_subquery(self):
@@ -1014,7 +1015,8 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
     def data(self):
         return {
             "id": self.id,
-            "name": self.name,
+            "uuid": self.uuid,
+            "name": self.friendly_name,
             "backend": self.backend,
             "allow_multi_schema_metadata_fetch": self.allow_multi_schema_metadata_fetch,
             "allows_subquery": self.allows_subquery,
@@ -1022,7 +1024,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
 
     @property
     def unique_name(self):
-        return self.name
+        return self.friendly_name
 
     @property
     def url_object(self):
@@ -1416,7 +1418,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
         return "/superset/sql/{}/".format(self.id)
 
     def get_perm(self):
-        return ("[{obj.name}].(id:{obj.id})").format(obj=self)
+        return ("[{obj.uuid}].(id:{obj.id})").format(obj=self)
 
     def has_table(self, table):
         engine = self.get_sqla_engine()
