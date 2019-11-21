@@ -18,15 +18,18 @@
 """Views used by the SqlAlchemy connector"""
 import logging
 
-from flask import flash, Markup, redirect
+from flask import flash, Markup, redirect, request, redirect, Response
 from flask_appbuilder import CompactCRUDMixin, expose
 from flask_appbuilder.actions import action
+from flask_appbuilder.baseviews import expose, expose_api
 from flask_appbuilder.fieldwidgets import Select2Widget
 from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.security.decorators import has_access
+from flask_appbuilder.security.decorators import has_access, has_access_api
 from flask_babel import gettext as __
 from flask_babel import lazy_gettext as _
 from wtforms.ext.sqlalchemy.fields import QuerySelectField
+import plaid.datasource_helpers as dh
+import json
 
 from superset import appbuilder, db, security_manager
 from superset.connectors.base.views import DatasourceModelView
@@ -39,6 +42,7 @@ from superset.views.base import (
     SupersetModelView,
     YamlExportMixin,
 )
+from superset.views.core import BaseSupersetView
 from . import models
 
 logger = logging.getLogger(__name__)
@@ -199,7 +203,7 @@ class PlaidMetricInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
 appbuilder.add_view_no_menu(PlaidMetricInlineView)
 
 
-class TableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  # noqa
+class PlaidTableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  # noqa
     datamodel = SQLAInterface(models.PlaidTable)
 
     list_title = _("Tables")
@@ -207,15 +211,15 @@ class TableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  # noqa
     add_title = _("Import a table definition")
     edit_title = _("Edit Table")
 
-    list_columns = ["link", "database_name", "changed_by_", "modified"]
+    list_columns = ["link", "project_name", "changed_by_", "modified"]
     order_columns = ["modified"]
-    add_columns = ["database", "schema", "table_name"]
+    add_columns = ["project", "schema", "table_name"]
     edit_columns = [
         "table_name",
         "sql",
         "filter_select_enabled",
         "fetch_values_predicate",
-        "database",
+        "project",
         "schema",
         "description",
         "owners",
@@ -230,7 +234,7 @@ class TableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  # noqa
     show_columns = edit_columns + ["perm", "slices"]
     related_views = [PlaidColumnInlineView, PlaidMetricInlineView]
     base_order = ("changed_on", "desc")
-    search_columns = ("database", "schema", "table_name", "owners", "is_sqllab_view")
+    search_columns = ("project", "schema", "table_name", "owners", "is_sqllab_view")
     description_columns = {
         "slices": _(
             "The list of charts associated with this table. By "
@@ -242,7 +246,7 @@ class TableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  # noqa
             "overwrite the chart from the 'explore view'"
         ),
         "offset": _("Timezone offset (in hours) for this datasource"),
-        "table_name": _("Name of the table that exists in the source database"),
+        "table_name": _("Name of the table that exists in the plaid project"),
         "schema": _(
             "Schema, as used only in some databases like Postgres, Redshift " "and DB2"
         ),
@@ -286,8 +290,8 @@ class TableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  # noqa
         "slices": _("Associated Charts"),
         "link": _("Table"),
         "changed_by_": _("Changed By"),
-        "database": _("Database"),
-        "database_name": _("Database"),
+        "project_name": _("Project"),
+        "project": _("Project"),
         "changed_on_": _("Last Changed"),
         "filter_select_enabled": _("Enable Filter Select"),
         "schema": _("Schema"),
@@ -305,9 +309,9 @@ class TableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  # noqa
     }
 
     edit_form_extra_fields = {
-        "database": QuerySelectField(
-            "Database",
-            query_factory=lambda: db.session().query(models.PlaidDatabase),
+        "project": QuerySelectField(
+            "PlaidProject",
+            query_factory=lambda: db.session().query(models.PlaidProject),
             widget=Select2Widget(extra_classes="readonly"),
         )
     }
@@ -317,7 +321,7 @@ class TableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  # noqa
             table_query = db.session.query(models.PlaidTable).filter(
                 models.PlaidTable.table_name == table.table_name,
                 models.PlaidTable.schema == table.schema,
-                models.PlaidTable.database_id == table.database.id,
+                models.PlaidTable.project_id == table.project.uuid,
             )
             if db.session.query(table_query.exists()).scalar():
                 raise Exception(get_datasource_exist_error_msg(table.full_name))
@@ -365,7 +369,7 @@ class TableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  # noqa
     @has_access
     def edit(self, pk):
         """Simple hack to redirect to explore view after saving"""
-        resp = super(TableModelView, self).edit(pk)
+        resp = super(PlaidTableModelView, self).edit(pk)
         if isinstance(resp, str):
             return resp
         return redirect("/superset/explore/table/{}/".format(pk))
@@ -401,15 +405,72 @@ class TableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  # noqa
         return redirect("/tablemodelview/list/")
 
 
-appbuilder.add_view_no_menu(TableModelView)
+appbuilder.add_view_no_menu(PlaidTableModelView)
 appbuilder.add_link(
     "Tables",
     label=__("Tables"),
-    href="/tablemodelview/list/?_flt_1_is_sqllab_view=y",
+    href="/plaidtablemodelview/list/?_flt_1_is_sqllab_view=y",
     icon="fa-table",
-    category="Sources",
-    category_label=__("Sources"),
+    category="Data",
+    category_label=__("Data"),
     category_icon="fa-table",
 )
 
-appbuilder.add_separator("Sources")
+
+class Plaid(BaseSupersetView):
+    """FAB view exposing some endpoints for Plaidcloud datasource management.
+    """
+    def json_response(self, obj, status=200):
+        return Response(
+            json.dumps(obj),
+            status=status,
+            mimetype='application/json')
+
+    @expose_api(name='plaid_refresh', url='/api/refresh', methods=['GET'])
+    @expose_api(name='plaid_refresh', url='/api/refresh/<project_id>', methods=['GET'])
+    @has_access_api
+    def refresh_async(self, project_id=None):
+        """Endpoint to refresh user's datasource(s) without redirect.
+
+        All projects' datasources will be synchronized if ID is unspecified.
+
+        Args:
+            project_id (str, optional): The UID of the project to synchronize.
+
+        Returns:
+            bool: True.
+        """
+        project_ids = []
+        if project_id:
+            project_ids.append(project_id)
+        appbuilder.sm.sync_datasources(project_ids=project_ids)
+        return self.json_response(True)
+
+    @expose('/refresh')
+    @expose('/refresh/<project_id>')
+    @has_access_api
+    def refresh(self, project_id=None):
+        """Endpoint to refresh user's datasource(s) with redirect.
+
+        All projects' datasources will be synchronized if ID is unspecified.
+        This function will redirect the user to the tables list once finished.
+
+        Args:
+            project_id (str, optional): The UID of the project to synchronize.
+
+        Returns:
+            redirect to '/tablemodelview/list' view.
+        """
+        self.refresh_async(project_id)
+        return redirect('/tablemodelview/list')
+
+# TODO: Determine if it makes sense to continue to expose a "refresh" button.
+# appbuilder.add_view_no_menu(Plaid)
+# appbuilder.add_link(
+#     'Refresh',
+#     label=__('Refresh'),
+#     href='/plaid/refresh',
+#     icon='fa-refresh',
+#     category='Data',
+#     category_label=__('Data'),
+#     category_icon='fa-database')
