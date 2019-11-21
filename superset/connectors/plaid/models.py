@@ -16,15 +16,19 @@
 # under the License.
 # pylint: disable=C,R,W
 from collections import OrderedDict
+from contextlib import closing
+from copy import copy, deepcopy
 from datetime import datetime
+import json
 import logging
 import re
 import textwrap
 from typing import Any, Dict, List, NamedTuple, Optional, Union
 
-from flask import escape, Markup
+from flask import escape, g, Markup, request
 from flask_appbuilder import Model
 from flask_babel import lazy_gettext as _
+import numpy
 import pandas as pd
 import sqlalchemy as sa
 from sqlalchemy import (
@@ -32,39 +36,46 @@ from sqlalchemy import (
     asc,
     Boolean,
     Column,
+    create_engine,
     DateTime,
     desc,
     ForeignKey,
     Integer,
+    MetaData,
     or_,
     select,
     String,
     Table,
     Text,
 )
+from sqlalchemy.engine import url
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import CompileError
 from sqlalchemy.orm import backref, relationship
 from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.pool import NullPool
 from sqlalchemy.schema import UniqueConstraint
 from sqlalchemy.sql import column, literal_column, table, text
 from sqlalchemy.sql.expression import Label, Select, TextAsFrom
 import sqlparse
 
-from superset import app, db, security_manager
+from superset import app, db, db_engine_specs, is_feature_enabled, security_manager
 from superset.connectors.base.models import BaseColumn, BaseDatasource, BaseMetric
-from superset.connectors.sqla.models import SqlaTable, SqlMetric, TableColumn
 from superset.db_engine_specs.base import TimestampExpression
 from superset.exceptions import DatabaseNotFound
 from superset.jinja_context import get_template_processor
 from superset.models.annotations import Annotation
 from superset.models.helpers import QueryResult, AuditMixinNullable, ImportMixin
-from superset.utils import core as utils, import_datasource
+from superset.utils import cache as cache_util, core as utils, import_datasource
 from sqlalchemy_utils import EncryptedType
 
 config = app.config
+custom_password_store = config.get("SQLALCHEMY_CUSTOM_PASSWORD_STORE")
+stats_logger = config.get("STATS_LOGGER")
+log_query = config.get("QUERY_LOGGER")
 metadata = Model.metadata  # pylint: disable=no-member
 
+PASSWORD_MASK = "X" * 10
 
 class PlaidQuery(NamedTuple):
     extra_cache_keys: List[Any]
@@ -82,16 +93,20 @@ class QueryStringExtended(NamedTuple):
 hide_schema_names = app.config.get('HIDE_SCHEMA_NAMES', False)
 
 
-class PlaidColumn(TableColumn):
-
+class PlaidColumn(Model, BaseColumn):
     """ORM object for table columns, each table can have multiple columns"""
 
     __tablename__ = "plaid_columns"
+    __table_args__ = (UniqueConstraint("table_id", "column_name"),)
+    table_id = Column(Integer, ForeignKey("tables.id"))
     table = relationship(
         "PlaidTable",
         backref=backref("columns", cascade="all, delete-orphan"),
         foreign_keys=[table_id],
     )
+    is_dttm = Column(Boolean, default=False)
+    expression = Column(Text)
+    python_date_format = Column(String(255))
 
     export_fields = (
         "table_id",
@@ -107,17 +122,98 @@ class PlaidColumn(TableColumn):
         "python_date_format",
     )
 
+    update_from_object_fields = [s for s in export_fields if s not in ("table_id",)]
+    export_parent = "table"
 
-class PlaidMetric(SqlMetric):
+    def get_sqla_col(self, label=None):
+        label = label or self.column_name
+        if not self.expression:
+            db_engine_spec = self.table.project.db_engine_spec
+            type_ = db_engine_spec.get_sqla_column_type(self.type)
+            col = column(self.column_name, type_=type_)
+        else:
+            col = literal_column(self.expression)
+        col = self.table.make_sqla_column_compatible(col, label)
+        return col
 
+    @property
+    def datasource(self):
+        return self.table
+
+    def get_time_filter(self, start_dttm, end_dttm):
+        col = self.get_sqla_col(label="__time")
+        l = []  # noqa: E741
+        if start_dttm:
+            l.append(col >= text(self.dttm_sql_literal(start_dttm)))
+        if end_dttm:
+            l.append(col <= text(self.dttm_sql_literal(end_dttm)))
+        return and_(*l)
+
+    def get_timestamp_expression(
+        self, time_grain: Optional[str]
+    ) -> Union[TimestampExpression, Label]:
+        """
+        Return a SQLAlchemy Core element representation of self to be used in a query.
+
+        :param time_grain: Optional time grain, e.g. P1Y
+        :return: A TimeExpression object wrapped in a Label if supported by db
+        """
+        label = utils.DTTM_ALIAS
+
+        project = self.table.project
+        pdf = self.python_date_format
+        is_epoch = pdf in ("epoch_s", "epoch_ms")
+        if not self.expression and not time_grain and not is_epoch:
+            sqla_col = column(self.column_name, type_=DateTime)
+            return self.table.make_sqla_column_compatible(sqla_col, label)
+        if self.expression:
+            col = literal_column(self.expression)
+        else:
+            col = column(self.column_name)
+        time_expr = project.db_engine_spec.get_timestamp_expr(col, pdf, time_grain)
+        return self.table.make_sqla_column_compatible(time_expr, label)
+
+    @classmethod
+    def import_obj(cls, i_column):
+        def lookup_obj(lookup_column):
+            return (
+                db.session.query(PlaidColumn)
+                .filter(
+                    PlaidColumn.table_id == lookup_column.table_id,
+                    PlaidColumn.column_name == lookup_column.column_name,
+                )
+                .first()
+            )
+
+        return import_datasource.import_simple_obj(db.session, i_column, lookup_obj)
+
+    def dttm_sql_literal(self, dttm):
+        """Convert datetime object to a SQL expression string"""
+        tf = self.python_date_format
+        if tf:
+            seconds_since_epoch = int(dttm.timestamp())
+            if tf == "epoch_s":
+                return str(seconds_since_epoch)
+            elif tf == "epoch_ms":
+                return str(seconds_since_epoch * 1000)
+            return "'{}'".format(dttm.strftime(tf))
+        else:
+            s = self.table.project.db_engine_spec.convert_dttm(self.type or "", dttm)
+            return s or "'{}'".format(dttm.strftime("%Y-%m-%d %H:%M:%S.%f"))
+
+
+class PlaidMetric(Model, BaseMetric):
     """ORM object for metrics, each table can have multiple metrics"""
 
     __tablename__ = "plaid_metrics"
+    __table_args__ = (UniqueConstraint("table_id", "metric_name"),)
+    table_id = Column(Integer, ForeignKey("tables.id"))
     table = relationship(
         "PlaidTable",
         backref=backref("metrics", cascade="all, delete-orphan"),
         foreign_keys=[table_id],
     )
+    expression = Column(Text, nullable=False)
 
     export_fields = (
         "metric_name",
@@ -129,6 +225,42 @@ class PlaidMetric(SqlMetric):
         "d3format",
         "warning_text",
     )
+    update_from_object_fields = list(
+        [s for s in export_fields if s not in ("table_id",)]
+    )
+    export_parent = "table"
+
+    def get_sqla_col(self, label=None):
+        label = label or self.metric_name
+        sqla_col = literal_column(self.expression)
+        return self.table.make_sqla_column_compatible(sqla_col, label)
+
+    @property
+    def perm(self):
+        return (
+            ("{parent_name}.[{obj.metric_name}](id:{obj.id})").format(
+                obj=self, parent_name=self.table.full_name
+            )
+            if self.table
+            else None
+        )
+
+    def get_perm(self):
+        return self.perm
+
+    @classmethod
+    def import_obj(cls, i_metric):
+        def lookup_obj(lookup_metric):
+            return (
+                db.session.query(PlaidMetric)
+                .filter(
+                    PlaidMetric.table_id == lookup_metric.table_id,
+                    PlaidMetric.metric_name == lookup_metric.metric_name,
+                )
+                .first()
+            )
+
+        return import_datasource.import_simple_obj(db.session, i_metric, lookup_obj)
 
 
 plaidtable_user = Table(
@@ -146,11 +278,11 @@ class PlaidTable(Model, BaseDatasource):
 
     type = "table"
     query_language = "sql"
-    metric_class = SqlMetric
-    column_class = TableColumn
+    metric_class = PlaidMetric
+    column_class = PlaidColumn
     owner_class = security_manager.user_model
 
-    __tablename__ = "tables"
+    __tablename__ = "plaid_tables"
     __table_args__ = (UniqueConstraint("project", "table_name"),)
 
     table_name = Column(String(250))
@@ -207,7 +339,7 @@ class PlaidTable(Model, BaseDatasource):
         :return: either a sql alchemy column or label instance if supported by engine
         """
         label_expected = label or sqla_col.name
-        db_engine_spec = self.database.db_engine_spec
+        db_engine_spec = self.project.db_engine_spec
         if db_engine_spec.allows_column_aliases:
             label = db_engine_spec.make_label_compatible(label_expected)
             sqla_col = sqla_col.label(label)
@@ -238,9 +370,9 @@ class PlaidTable(Model, BaseDatasource):
         schema = schema or None
         query = (
             session.query(cls)
-            .join(Database)
+            .join(PlaidProject)
             .filter(cls.table_name == datasource_name)
-            .filter(Database.database_name == database_name)
+            .filter(PlaidProject.uuid == uuid)
         )
         # Handling schema being '' or None, which is easier to handle
         # in python than in the SQLA query in a multi-dialect way
@@ -257,7 +389,7 @@ class PlaidTable(Model, BaseDatasource):
     @property
     def schema_perm(self):
         """Returns schema permission if present, database one otherwise."""
-        return security_manager.get_schema_perm(self.database, self.schema)
+        return security_manager.get_schema_perm(self.project, self.schema)
 
     def get_perm(self):
         return ("[{obj.database}].[{obj.table_name}]" "(id:{obj.id})").format(obj=self)
@@ -271,7 +403,7 @@ class PlaidTable(Model, BaseDatasource):
     @property
     def full_name(self):
         return utils.get_datasource_full_name(
-            self.database, self.table_name, schema=self.schema
+            self.project, self.table_name, schema=self.schema
         )
 
     @property
@@ -303,10 +435,10 @@ class PlaidTable(Model, BaseDatasource):
 
     @property
     def sql_url(self):
-        return self.database.sql_url + "?table_name=" + str(self.table_name)
+        return self.project.sql_url + "?table_name=" + str(self.table_name)
 
     def external_metadata(self):
-        cols = self.database.get_columns(self.table_name, schema=self.schema)
+        cols = self.project.get_columns(self.table_name, schema=self.schema)
         for col in cols:
             try:
                 col["type"] = str(col["type"])
@@ -318,14 +450,14 @@ class PlaidTable(Model, BaseDatasource):
     def time_column_grains(self):
         return {
             "time_columns": self.dttm_cols,
-            "time_grains": [grain.name for grain in self.database.grains()],
+            "time_grains": [grain.name for grain in self.project.grains()],
         }
 
     @property
     def select_star(self):
         # show_cols and latest_partition set to false to avoid
         # the expensive cost of inspecting the DB
-        return self.database.select_star(
+        return self.project.select_star(
             self.table_name, schema=self.schema, show_cols=False, latest_partition=False
         )
 
@@ -337,9 +469,11 @@ class PlaidTable(Model, BaseDatasource):
 
     @property
     def data(self):
-        d = super(SqlaTable, self).data
+        d = super(PlaidTable, self).data
+        # TODO: Type should probably be something other than "table" to
+        # avoid conflict with sqla connector.
         if self.type == "table":
-            grains = self.database.grains() or []
+            grains = self.project.grains() or []
             if grains:
                 grains = [(g.duration, g.name) for g in grains]
             d["granularity_sqla"] = utils.choicify(self.dttm_cols)
@@ -369,7 +503,7 @@ class PlaidTable(Model, BaseDatasource):
             tp = self.get_template_processor()
             qry = qry.where(tp.process_template(self.fetch_values_predicate))
 
-        engine = self.database.get_sqla_engine()
+        engine = self.project.get_sqla_engine()
         sql = "{}".format(qry.compile(engine, compile_kwargs={"literal_binds": True}))
         sql = self.mutate_query_from_config(sql)
 
@@ -383,15 +517,15 @@ class PlaidTable(Model, BaseDatasource):
         SQL_QUERY_MUTATOR = config.get("SQL_QUERY_MUTATOR")
         if SQL_QUERY_MUTATOR:
             username = utils.get_username()
-            sql = SQL_QUERY_MUTATOR(sql, username, security_manager, self.database)
+            sql = SQL_QUERY_MUTATOR(sql, username, security_manager, self.project)
         return sql
 
     def get_template_processor(self, **kwargs):
-        return get_template_processor(table=self, database=self.database, **kwargs)
+        return get_template_processor(table=self, database=self.project, **kwargs)
 
     def get_query_str_extended(self, query_obj) -> QueryStringExtended:
         sqlaq = self.get_sqla_query(**query_obj)
-        sql = self.database.compile_sqla_query(sqlaq.sqla_query)
+        sql = self.project.compile_sqla_query(sqlaq.sqla_query)
         logging.info(sql)
         sql = sqlparse.format(sql, reindent=True)
         sql = self.mutate_query_from_config(sql)
@@ -480,7 +614,7 @@ class PlaidTable(Model, BaseDatasource):
         extra_cache_keys: List[Any] = []
         template_kwargs["extra_cache_keys"] = extra_cache_keys
         template_processor = self.get_template_processor(**template_kwargs)
-        db_engine_spec = self.database.db_engine_spec
+        db_engine_spec = self.project.db_engine_spec
         prequeries: List[str] = []
 
         orderby = orderby or []
@@ -650,7 +784,7 @@ class PlaidTable(Model, BaseDatasource):
             qry = qry.limit(row_limit)
 
         if is_timeseries and timeseries_limit and groupby and not time_groupby_inline:
-            if self.database.db_engine_spec.allows_joins:
+            if self.project.db_engine_spec.allows_joins:
                 # some sql dialects require for order by expressions
                 # to also be in the select clause -- others, e.g. vertica,
                 # require a unique inner alias
@@ -778,12 +912,12 @@ class PlaidTable(Model, BaseDatasource):
             return df
 
         try:
-            df = self.database.get_df(sql, self.schema, mutator)
+            df = self.project.get_df(sql, self.schema, mutator)
         except Exception as e:
             df = None
             status = utils.QueryStatus.FAILED
             logging.exception(f"Query {sql} on schema {self.schema} failed")
-            db_engine_spec = self.database.db_engine_spec
+            db_engine_spec = self.project.db_engine_spec
             error_message = db_engine_spec.extract_error_message(e)
 
         return QueryResult(
@@ -795,7 +929,7 @@ class PlaidTable(Model, BaseDatasource):
         )
 
     def get_sqla_table_object(self):
-        return self.database.get_table(self.table_name, schema=self.schema)
+        return self.project.get_table(self.table_name, schema=self.schema)
 
     def fetch_metadata(self):
         """Fetches the metadata for the table and merges it in"""
@@ -810,15 +944,15 @@ class PlaidTable(Model, BaseDatasource):
                 ).format(self.table_name)
             )
 
-        M = SqlMetric  # noqa
+        M = PlaidMetric  # noqa
         metrics = []
         any_date_col = None
-        db_engine_spec = self.database.db_engine_spec
-        db_dialect = self.database.get_dialect()
+        db_engine_spec = self.project.db_engine_spec
+        db_dialect = self.project.get_dialect()
         dbcols = (
-            db.session.query(TableColumn)
-            .filter(TableColumn.table == self)
-            .filter(or_(TableColumn.column_name == col.name for col in table.columns))
+            db.session.query(PlaidColumn)
+            .filter(PlaidColumn.table == self)
+            .filter(or_(PlaidColumn.column_name == col.name for col in table.columns))
         )
         dbcols = {dbcol.column_name: dbcol for dbcol in dbcols}
 
@@ -833,7 +967,7 @@ class PlaidTable(Model, BaseDatasource):
                 logging.exception(e)
             dbcol = dbcols.get(col.name, None)
             if not dbcol:
-                dbcol = TableColumn(column_name=col.name, type=datatype)
+                dbcol = PlaidColumn(column_name=col.name, type=datatype)
                 dbcol.sum = dbcol.is_num
                 dbcol.avg = dbcol.is_num
                 dbcol.is_dttm = dbcol.is_time
@@ -874,8 +1008,8 @@ class PlaidTable(Model, BaseDatasource):
                 db.session.query(PlaidTable)
                 .join(PlaidProject)
                 .filter(
-                    SqlaTable.table_name == table.table_name,
-                    SqlaTable.schema == table.schema,
+                    PlaidTable.table_name == table.table_name,
+                    PlaidTable.schema == table.schema,
                     PlaidProject.id == table.project_id,
                 )
                 .first()
@@ -962,6 +1096,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
     friendly_name = Column(String(250), unique=True)
     # short unique name, used in permissions
     uuid = Column(String(250), unique=True)
+    workspace_id = Column(String(250))
     sqlalchemy_uri = Column(String(1024))
     password = Column(EncryptedType(String(1024), config.get("SECRET_KEY")))
     cache_timeout = Column(Integer)
@@ -1016,6 +1151,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
         return {
             "id": self.id,
             "uuid": self.uuid,
+            "workspace_id": self.workspace_id,
             "name": self.friendly_name,
             "backend": self.backend,
             "allow_multi_schema_metadata_fetch": self.allow_multi_schema_metadata_fetch,
@@ -1072,7 +1208,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
         return url_copy
 
     def set_sqlalchemy_uri(self, uri):
-        conn = sqla.engine.url.make_url(uri.strip())
+        conn = sa.engine.url.make_url(uri.strip())
         if conn.password != PASSWORD_MASK and not custom_password_store:
             # do not over-write the password with the password mask
             self.password = conn.password
@@ -1240,7 +1376,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
     @property
     def inspector(self):
         engine = self.get_sqla_engine()
-        return sqla.inspect(engine)
+        return sa.inspect(engine)
 
     @cache_util.memoized_func(
         key=lambda *args, **kwargs: "db:{}:schema:None:table_list",
@@ -1254,6 +1390,8 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
             return []
         return self.db_engine_spec.get_all_datasource_names(self, "table")
 
+    # TODO: Consolidate get_all_view_names_in_database and get_all_table_names_in_schema, since
+    # each database will be using credentials with access to a single schema.
     @cache_util.memoized_func(
         key=lambda *args, **kwargs: "db:{}:schema:None:view_list", attribute_in_key="id"
     )
@@ -1331,6 +1469,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
         except Exception as e:
             logging.exception(e)
 
+    # TODO: Determine if this is needed.
     @cache_util.memoized_func(
         key=lambda *args, **kwargs: "db:{}:schema_list", attribute_in_key="id"
     )
@@ -1406,7 +1545,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
 
     @property
     def sqlalchemy_uri_decrypted(self):
-        conn = sqla.engine.url.make_url(self.sqlalchemy_uri)
+        conn = sa.engine.url.make_url(self.sqlalchemy_uri)
         if custom_password_store:
             conn.password = custom_password_store(conn)
         else:
@@ -1434,5 +1573,5 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
         return sqla_url.get_dialect()()
 
 
-sqla.event.listen(Database, "after_insert", security_manager.set_perm)
-sqla.event.listen(Database, "after_update", security_manager.set_perm)
+sa.event.listen(PlaidProject, "after_insert", security_manager.set_perm)
+sa.event.listen(PlaidProject, "after_update", security_manager.set_perm)
