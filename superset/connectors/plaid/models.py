@@ -276,7 +276,7 @@ class PlaidTable(Model, BaseDatasource):
 
     """An ORM object for SqlAlchemy table references"""
 
-    type = "table"
+    type = "plaid"
     query_language = "sql"
     metric_class = PlaidMetric
     column_class = PlaidColumn
@@ -1089,7 +1089,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
     """An ORM object that stores Database related information"""
 
     __tablename__ = "plaid_projects"
-    type = "table"
+    type = "plaid"
     __table_args__ = (UniqueConstraint("uuid"),)
 
     id = Column(Integer, primary_key=True)

@@ -62,7 +62,7 @@ GUNICORN_TIMEOUT=60 \
 GUNICORN_WORKERS=2 \
 LANG=C.UTF-8 \
 LC_ALL=C.UTF-8 \
-PYTHONPATH=/etc/superset:/home/superset:/plaidtools:$PYTHONPATH \
+PYTHONPATH=/etc/superset:/home/superset:/plaidtools:/plaid:$PYTHONPATH \
 SUPERSET_REPO=apache/incubator-superset \
 SUPERSET_HOME=/var/lib/superset
 ENV GUNICORN_CMD_ARGS="--workers ${GUNICORN_WORKERS} --timeout ${GUNICORN_TIMEOUT} --bind ${GUNICORN_BIND} --limit-request-line ${GUNICORN_LIMIT_REQUEST_LINE} --limit-request-field_size ${GUNICORN_LIMIT_REQUEST_FIELD_SIZE}"
@@ -117,6 +117,7 @@ WORKDIR /home/superset
 
 # COPY superset_config.py /etc/superset/
 COPY plaidtools /plaidtools/
+COPY plaid /plaid/plaid/
 
 RUN pip install -r /plaidtools/requirements.txt
 RUN pip install apache-superset-0.999.0.dev0.tar.gz
