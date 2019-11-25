@@ -6,12 +6,8 @@ metadata:
     app: plaid
     plaid: superset
 spec:
-  tls:
-  - hosts:
-    - visualize.plaidcloud.local
-    secretName: ingress-cert
   rules:
-  - host: visualize.plaidcloud.local
+  - host: gbates-viz.plaidcloud.io
     http:
       paths:
       - path: /

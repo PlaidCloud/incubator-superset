@@ -20,6 +20,7 @@ set -ex
 if [ "$#" -ne 0 ]; then
     exec "$@"
 elif [ "$SUPERSET_ENV" = "development" ]; then
+    export SUPERSET_CONFIG_PATH=/etc/superset/superset_config.py
     celery worker --app=superset.sql_lab:celery_app --pool=gevent -Ofair &
     # needed by superset runserver
     (cd superset/assets/ && npm ci)

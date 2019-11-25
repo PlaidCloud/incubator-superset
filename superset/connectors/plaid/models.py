@@ -98,7 +98,7 @@ class PlaidColumn(Model, BaseColumn):
 
     __tablename__ = "plaid_columns"
     __table_args__ = (UniqueConstraint("table_id", "column_name"),)
-    table_id = Column(Integer, ForeignKey("tables.id"))
+    table_id = Column(Integer, ForeignKey("plaid_tables.id"))
     table = relationship(
         "PlaidTable",
         backref=backref("columns", cascade="all, delete-orphan"),
@@ -207,7 +207,7 @@ class PlaidMetric(Model, BaseMetric):
 
     __tablename__ = "plaid_metrics"
     __table_args__ = (UniqueConstraint("table_id", "metric_name"),)
-    table_id = Column(Integer, ForeignKey("tables.id"))
+    table_id = Column(Integer, ForeignKey("plaid_tables.id"))
     table = relationship(
         "PlaidTable",
         backref=backref("metrics", cascade="all, delete-orphan"),
@@ -268,7 +268,7 @@ plaidtable_user = Table(
     metadata,
     Column("id", Integer, primary_key=True),
     Column("user_id", Integer, ForeignKey("ab_user.id")),
-    Column("table_id", Integer, ForeignKey("tables.id")),
+    Column("table_id", Integer, ForeignKey("plaid_tables.id")),
 )
 
 
@@ -283,16 +283,16 @@ class PlaidTable(Model, BaseDatasource):
     owner_class = security_manager.user_model
 
     __tablename__ = "plaid_tables"
-    __table_args__ = (UniqueConstraint("project", "table_name"),)
+    __table_args__ = (UniqueConstraint("project_id", "table_name"),)
 
     table_name = Column(String(250))
     main_dttm_col = Column(String(250))
     project_id = Column(String(250), ForeignKey("plaid_projects.uuid"), nullable=False)
     fetch_values_predicate = Column(String(1000))
-    owners = relationship(owner_class, secondary=plaidtable_user, backref="tables")
+    owners = relationship(owner_class, secondary=plaidtable_user, backref="plaid_tables")
     project = relationship(
         "PlaidProject",
-        backref=backref("tables", cascade="all, delete-orphan"),
+        backref=backref("plaid_tables", cascade="all, delete-orphan"),
         foreign_keys=[project_id],
     )
     schema = Column(String(255))
@@ -300,7 +300,7 @@ class PlaidTable(Model, BaseDatasource):
     is_sqllab_view = Column(Boolean, default=False)
     template_params = Column(Text)
 
-    baselink = "tablemodelview"
+    baselink = "plaidtablemodelview"
 
     export_fields = (
         "table_name",

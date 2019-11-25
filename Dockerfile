@@ -33,24 +33,33 @@ WORKDIR /home/superset
 
 COPY requirements.txt .
 COPY requirements-dev.txt .
+COPY contrib/docker/requirements-extra.txt .
 
 RUN pip install --upgrade setuptools pip \
-    && pip install -r requirements.txt -r requirements-dev.txt \
+    && pip install -r requirements.txt -r requirements-dev.txt -r requirements-extra.txt \
     && rm -rf /root/.cache/pip
-
-ENV PATH=/home/superset/superset/bin:$PATH \
-    PYTHONPATH=/home/superset/superset/:$PYTHONPATH
 
 COPY --chown=superset:superset setup.py setup.cfg README.md MANIFEST.in ./
 COPY --chown=superset:superset superset superset
 COPY --from=build-client --chown=superset:superset /superset/assets /home/superset/superset/assets/
 
-USER superset
+ENV PATH=/home/superset/superset/bin:$PATH \
+    PYTHONPATH=/etc/superset:/home/superset:/plaidtools:/plaid:$PYTHONPATH
  
-RUN cd /home/superset \
- && mkdir -p /home/superset/superset/static \
- && ln -s ../assets /home/superset/superset/static/assets \
- && python setup.py sdist
+RUN mkdir -p /home/superset/superset/static \
+ && ln -s ../assets /home/superset/superset/static/assets
+#  && python setup.py sdist
+
+# COPY superset_config.py /etc/superset/
+COPY plaidtools /plaidtools/
+COPY plaid /plaid/plaid/
+
+RUN pip install -r /plaidtools/requirements.txt
+
+COPY contrib/docker/docker-entrypoint.sh /entrypoint.sh
+
+USER superset
+ENTRYPOINT ["/entrypoint.sh"]
 
 FROM python:3.6
 
