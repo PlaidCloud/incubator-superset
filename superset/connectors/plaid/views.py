@@ -223,9 +223,9 @@ class PlaidTableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  #
 
     list_columns = ["link", "project_name", "changed_by_", "modified"]
     order_columns = ["modified"]
-    add_columns = ["project", "schema", "table_name"]
+    add_columns = ["project", "schema", "friendly_name"]
     edit_columns = [
-        "table_name",
+        "friendly_name",
         "sql",
         "filter_select_enabled",
         "fetch_values_predicate",
@@ -244,7 +244,7 @@ class PlaidTableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  #
     show_columns = edit_columns + ["perm", "slices"]
     related_views = [PlaidColumnInlineView, PlaidMetricInlineView]
     base_order = ("changed_on", "desc")
-    search_columns = ("project", "schema", "table_name", "owners", "is_sqllab_view")
+    search_columns = ("project", "schema", "friendly_name", "owners", "is_sqllab_view")
     description_columns = {
         "slices": _(
             "The list of charts associated with this table. By "
@@ -256,7 +256,7 @@ class PlaidTableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  #
             "overwrite the chart from the 'explore view'"
         ),
         "offset": _("Timezone offset (in hours) for this datasource"),
-        "table_name": _("Name of the table that exists in the plaid project"),
+        "friendly_name": _("Name of the table that exists in the plaid project"),
         "schema": _(
             "Schema, as used only in some databases like Postgres, Redshift " "and DB2"
         ),
@@ -308,7 +308,7 @@ class PlaidTableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  #
         "default_endpoint": _("Default Endpoint"),
         "offset": _("Offset"),
         "cache_timeout": _("Cache Timeout"),
-        "table_name": _("Table Name"),
+        "friendly_name": _("Table Name"),
         "fetch_values_predicate": _("Fetch Values Predicate"),
         "owners": _("Owners"),
         "main_dttm_col": _("Main Datetime Column"),
@@ -436,6 +436,8 @@ class PlaidProjectView(SupersetModelView, DeleteMixin, YamlExportMixin):  # noqa
     edit_title = _("Edit Project")
 
     list_columns = [
+        "name",
+        "workspace_name",
         "uuid",
         "workspace_id",
         "backend",
@@ -447,6 +449,8 @@ class PlaidProjectView(SupersetModelView, DeleteMixin, YamlExportMixin):  # noqa
         "modified",
     ]
     order_columns = [
+        "name",
+        "workspace_name",
         "uuid",
         "workspace_id",
         "allow_run_async",
@@ -456,6 +460,8 @@ class PlaidProjectView(SupersetModelView, DeleteMixin, YamlExportMixin):  # noqa
         "expose_in_sqllab",
     ]
     add_columns = [
+        "name",
+        "workspace_name",
         "uuid",
         "workspace_id",
         "sqlalchemy_uri",
@@ -480,6 +486,8 @@ class PlaidProjectView(SupersetModelView, DeleteMixin, YamlExportMixin):  # noqa
     )
     edit_columns = add_columns
     show_columns = [
+        "name",
+        "workspace_name",
         "tables",
         "cache_timeout",
         "extra",
@@ -572,7 +580,10 @@ class PlaidProjectView(SupersetModelView, DeleteMixin, YamlExportMixin):  # noqa
         "allow_ctas": _("Allow CREATE TABLE AS"),
         "allow_dml": _("Allow DML"),
         "force_ctas_schema": _("CTAS Schema"),
-        "uuid": _("Project"),
+        "name": _("Project"),
+        "workspace_name": _("Workspace"),
+        "uuid": _("Project UUID"),
+        "workspace_id": _("Workspace UUID"),
         "creator": _("Creator"),
         "changed_on_": _("Last Changed"),
         "sqlalchemy_uri": _("SQLAlchemy URI"),

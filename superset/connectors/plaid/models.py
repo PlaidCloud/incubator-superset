@@ -286,6 +286,7 @@ class PlaidTable(Model, BaseDatasource):
     __table_args__ = (UniqueConstraint("project_id", "table_name"),)
 
     table_name = Column(String(250))
+    friendly_name = Column(String(250))
     main_dttm_col = Column(String(250))
     project_id = Column(String(250), ForeignKey("plaid_projects.uuid"), nullable=False)
     fetch_values_predicate = Column(String(1000))
@@ -304,6 +305,7 @@ class PlaidTable(Model, BaseDatasource):
 
     export_fields = (
         "table_name",
+        "friendly_name",
         "main_dttm_col",
         "description",
         "default_endpoint",
@@ -1093,10 +1095,11 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
     __table_args__ = (UniqueConstraint("uuid"),)
 
     id = Column(Integer, primary_key=True)
-    friendly_name = Column(String(250), unique=True)
+    name = Column(String(250))
     # short unique name, used in permissions
     uuid = Column(String(250), unique=True)
     workspace_id = Column(String(250))
+    workspace_name = Column(String(250))
     sqlalchemy_uri = Column(String(1024))
     password = Column(EncryptedType(String(1024), config.get("SECRET_KEY")))
     cache_timeout = Column(Integer)
@@ -1136,11 +1139,11 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
     export_children = ["tables"]
 
     def __repr__(self):
-        return self.friendly_name if self.friendly_name else self.uuid
+        return self.name if self.name else self.uuid
 
     @property
     def name(self):
-        return self.friendly_name if self.friendly_name else self.uuid
+        return self.name if self.name else self.uuid
 
     @property
     def allows_subquery(self):
@@ -1152,7 +1155,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
             "id": self.id,
             "uuid": self.uuid,
             "workspace_id": self.workspace_id,
-            "name": self.friendly_name,
+            "name": self.name,
             "backend": self.backend,
             "allow_multi_schema_metadata_fetch": self.allow_multi_schema_metadata_fetch,
             "allows_subquery": self.allows_subquery,
@@ -1160,7 +1163,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
 
     @property
     def unique_name(self):
-        return self.friendly_name
+        return self.name
 
     @property
     def url_object(self):
