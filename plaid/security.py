@@ -184,7 +184,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
             None
         """
         # This import throws ImportError if hoisted to top of module.
-        from superset.plaid import datasource_helpers as dh
+        import plaid.datasource_helpers as dh
         for proj_id, views in dh.sync_report_datasources(project_ids).items():
             view_perms = [view.get_perm() for view in views]
 

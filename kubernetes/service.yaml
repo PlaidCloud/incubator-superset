@@ -7,13 +7,9 @@ metadata:
     plaid: superset  
 spec:
   ports:
-  - port: 80
-    targetPort: 80
+  - port: 8088
+    targetPort: 8088
     protocol: TCP
     name: http
-  - port: 443
-    targetPort: 443
-    protocol: TCP
-    name: https
   selector:
     plaid: superset
