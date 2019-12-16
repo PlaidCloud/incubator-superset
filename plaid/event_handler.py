@@ -138,16 +138,14 @@ class EventHandler():
 
 
         def insert_project(event_data):
-            try:
-                proj = db.session.query(PlaidProject).filter_by(uuid=event_data['id']).one()
-            except NoResultFound:
+            if db.session.query(PlaidProject).filter_by(uuid=event_data['id']).exists():
                 # Project doesn't exist, so make a new one.
-                new_proj = map_data_to_row(event_data)
-                db.session.add(new_proj)
+                new_project = map_data_to_row(event_data)
+                db.session.add(new_project)
                 db.session.commit()
             else:
                 # TODO: Log a warning here. No project should exist.
-                update_project(proj)
+                update_project(event_data)
 
 
         def update_project(event_data):
