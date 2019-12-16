@@ -98,29 +98,35 @@ class EventHandler():
 
 
     def _handle_workspace_event(self, event_type, data, **kwargs):
+        
+
+        if event_type is EventType.Create:
+            pass
+        elif event_type is EventType.Update:
+            pass
+        elif event_type is EventType.Delete:
+            pass
+
         raise NotImplementedError()
 
 
     def _handle_project_event(self, event_type, data, **kwargs):
-        # if 'workspace_id' not in kwargs:
-        #     raise KeyError('workspace_id is required for handling project events.')
-
-        def map_data_to_row(obj):
-            if isinstance(obj, PlaidProject):
-                proj = obj
+        def map_data_to_row(event_data, existing_project=None):
+            if isinstance(existing_project, PlaidProject):
+                proj = existing_project
             else:
                 proj = PlaidProject()
 
-            proj.name = obj["name"]
-            proj.uuid = obj["id"]
+            proj.name = event_data["name"]
+            proj.uuid = event_data["id"]
             proj.workspace_id = kwargs["workspace_id"]
-            proj.workspace_name = obj[""]
-            proj.password = obj["report_database_password"]
+            proj.workspace_name = event_data[""]
+            proj.password = event_data["report_database_password"]
 
-            # TODO: Parameterize port, and maybe database name.
+            # TODO: Parameterize port, and maybe database name and driver.
             driver = "postgresql"
             host = config.get("PLAID_DATABASE_HOST")
-            user = obj["report_database_user"]
+            user = event_data["report_database_user"]
             port = "5432"
             db_name = "plaid_data" # This is static. Maybe configurable?
 
@@ -131,32 +137,33 @@ class EventHandler():
             return proj
 
 
-        def insert_project(obj):
+        def insert_project(event_data):
             try:
-                proj = db.session.query(PlaidProject).filter_by(uuid=obj['id']).one()
+                proj = db.session.query(PlaidProject).filter_by(uuid=event_data['id']).one()
             except NoResultFound:
-                # TODO: Continue with insert, since no result was found
-                new_proj = map_data_to_row(obj)
+                # Project doesn't exist, so make a new one.
+                new_proj = map_data_to_row(event_data)
                 db.session.add(new_proj)
                 db.session.commit()
             else:
-                # TODO: Log a warning here.
-                update_project(obj)             
+                # TODO: Log a warning here. No project should exist.
+                update_project(proj)
 
 
-        def update_project(obj):
+        def update_project(event_data):
             try:
-                proj = db.session.query(PlaidProject).filter_by(uuid=obj['id']).one()
+                existing_project = db.session.query(PlaidProject).filter_by(uuid=event_data['id']).one()
             except NoResultFound:
-                # TODO: Log a warning here.
-                insert_project(obj)
+                # TODO: Log a warning here. A project should exist.
+                insert_project(event_data)
             else:
-                updated_proj = map_data_to_row(proj)
+                map_data_to_row(event_data, existing_project)
                 db.session.commit()
 
 
-        def delete_project(obj):
-            db.session.query(PlaidProject).filter_by(uuid=obj['id']).delete()
+        def delete_project(event_data):
+            db.session.query(PlaidProject).filter_by(uuid=event_data['id']).delete()
+
 
         if event_type is EventType.Create:
             insert_project(data)
