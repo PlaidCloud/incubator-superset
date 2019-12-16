@@ -98,16 +98,20 @@ class EventHandler():
 
 
     def _handle_workspace_event(self, event_type, data, **kwargs):
-        
-
         if event_type is EventType.Create:
+            # Create events would be a no-op here, so ignore them.
             pass
         elif event_type is EventType.Update:
-            pass
+            # TODO: Might need update call to use synchronize_session=False?
+            db.session.query(PlaidProject).filter_by(
+                workspace_id=data['id']
+            ).update(
+                {PlaidProject.workspace_name: data['name']}
+            )
         elif event_type is EventType.Delete:
-            pass
-
-        raise NotImplementedError()
+            db.session.query(PlaidProject).filter_by(workspace_id=data['id']).delete()
+        
+        db.session.commit()
 
 
     def _handle_project_event(self, event_type, data, **kwargs):
@@ -161,6 +165,7 @@ class EventHandler():
 
         def delete_project(event_data):
             db.session.query(PlaidProject).filter_by(uuid=event_data['id']).delete()
+            db.session.commit()
 
 
         if event_type is EventType.Create:
