@@ -6,7 +6,7 @@ import json
 import pika
 from sqlalchemy.orm.exc import NoResultFound
 
-from superset import app, db
+from superset import app, db, security_manager
 from superset.connectors.plaid.models import PlaidTable, PlaidProject
 
 config = app.config
@@ -90,6 +90,7 @@ class EventHandler():
             PlaidObjectType.Project: self._handle_project_event,
             PlaidObjectType.Table: self._handle_table_event,
             PlaidObjectType.View: self._handle_view_event,
+            PlaidObjectType.User: self._handle_user_event,
         }
 
         handle_event = event_handlers.get(object_type, self._handle_passthrough)
@@ -177,16 +178,103 @@ class EventHandler():
 
 
     def _handle_table_event(self, event_type, data, **kwargs):
+        if not data.get("published_name"):
+            # Table isn't published, so do nothing.
+            pass
+
+        def map_data_to_row(event_data, existing_table=None):
+            if isinstance(existing_table, PlaidTable):
+                table = existing_table
+            else:
+                table = PlaidTable()
+
+            table.table_name = event_data["id"]
+            table.friendly_name = event_data["name"]
+            table.project_id = kwargs["project_id"]
+            table.schema = f"report{table.project_id.strip('-')}"
+
+            return table
+
+
+        def insert_table(event_data):
+            # TODO: check if table exists. If it does, update, otherwise insert.
+            if db.session.query(PlaidTable).filter_by(name=event_data['id']).exists():
+                # Table doesn't exist, so make a new one.
+                new_table = map_data_to_row(event_data)
+                db.session.add(new_table)
+                db.session.commit()
+            else:
+                # TODO: Log a warning here. No table should exist.
+                update_table(event_data)
+
+
+        def update_table(event_data):
+            try:
+                existing_table = db.session.query(PlaidTable).filter_by(name=event_data['id']).one()
+            except NoResultFound:
+                # TODO: Log a warning here. A table should exist.
+                insert_table(event_data)
+            else:
+                map_data_to_row(event_data, existing_table)
+                db.session.commit()
+
+
+        def delete_table(event_data):
+            db.session.query(PlaidTable).filter_by(name=event_data['id']).delete()
+            db.session.commit()
+
+
+        if event_type is EventType.Create:
+            insert_table(data)
+        elif event_type is EventType.Update:
+            update_table(data)
+        elif event_type is EventType.Delete:
+            delete_table(data)
+
+
+    # TODO: Do we even care about views here?
+    def _handle_view_event(self, event_type, data, **kwargs):
         raise NotImplementedError()
 
 
-    def _handle_view_event(self, event_type, data, **kwargs):
+    def _handle_user_event(self, event_type, data, **kwargs):
+
+        def add_user(event_data):
+            security_manager.add_user(
+                username=event_data['name'],
+                first_name=event_data['first_name'],
+                last_name=event_data['last_name'],
+                email=event_data['email'],
+                role=security_manager.find_role('Plaid')
+            )
+
+        def update_user(event_data):
+            try:
+                user = self.get_session.query(  ).filter_by(name=event_data["name"]).one()
+                
+            except NoResultFound:
+                # TODO: Log warning. User should exist.
+                add_user(event_data)
+
+
+        if event_type is EventType.Create:
+            add_user(data)
+        elif event_type is EventType.Update:
+            self.get_session.query(self.user_model).get(pk)
+            pass
+        elif event_type is EventType.Delete:
+            pass
+        elif event_type is EventType.ProjectAccessChange:
+            pass
+        elif event_type is EventType.WorkspaceAccessChange:
+            pass
         raise NotImplementedError()
 
 
     def _handle_passthrough(self, event_type, data, **kwargs):
         # TODO: Should we debug log unhandled events?
         pass
+
 
 if __name__ == "__main__":
     handler = EventHandler()
