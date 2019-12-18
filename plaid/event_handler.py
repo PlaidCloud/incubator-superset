@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # coding=utf-8
 
+import logging
 from enum import Enum
 import json
 import pika
@@ -9,6 +10,7 @@ from sqlalchemy.orm.exc import NoResultFound
 from superset import app, db, security_manager
 from superset.connectors.plaid.models import PlaidTable, PlaidProject
 
+log = logging.getLogger(__name__)
 config = app.config
 REQUIRED_FIELDS = {'event', 'type', 'data'}
 
@@ -148,6 +150,8 @@ class EventHandler():
                 new_project = map_data_to_row(event_data)
                 db.session.add(new_project)
                 db.session.commit()
+                
+                security_manager.add_project(new_project)
             else:
                 # TODO: Log a warning here. No project should exist.
                 update_project(event_data)
@@ -232,7 +236,7 @@ class EventHandler():
             delete_table(data)
 
 
-    # TODO: Do we even care about views here?
+    # TODO: Do we even care about views here? Are views what I think they are?
     def _handle_view_event(self, event_type, data, **kwargs):
         raise NotImplementedError()
 
@@ -240,7 +244,7 @@ class EventHandler():
     def _handle_user_event(self, event_type, data, **kwargs):
 
         def add_user(event_data):
-            security_manager.add_user(
+            user = security_manager.add_user(
                 username=event_data['name'],
                 first_name=event_data['first_name'],
                 last_name=event_data['last_name'],
@@ -248,9 +252,13 @@ class EventHandler():
                 role=security_manager.find_role('Plaid')
             )
 
+            for project_id in event_data["projects"]:
+                security_manager.add_user_to_project(user, project_id)
+
+
         def update_user(event_data):
             try:
-                user = self.get_session.query(  ).filter_by(name=event_data["name"]).one()
+                user = self.get_session.query().filter_by(name=event_data["name"]).one()
                 
             except NoResultFound:
                 # TODO: Log warning. User should exist.
