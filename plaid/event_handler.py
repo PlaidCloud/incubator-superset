@@ -5,14 +5,34 @@ import logging
 from enum import Enum
 import json
 import pika
+from sqlalchemy import in_, notin_
 from sqlalchemy.orm.exc import NoResultFound
 
+from flask_appbuilder import Model
 from superset import app, db, security_manager
 from superset.connectors.plaid.models import PlaidTable, PlaidProject
 
 log = logging.getLogger(__name__)
 config = app.config
 REQUIRED_FIELDS = {'event', 'type', 'data'}
+
+class PlaidUserMap(Model):
+    """This model exists solely to relate superset user IDs to plaid user IDs."""
+
+    __tablename__ = "plaiduser_user"
+    __table_args__ = (UniqueConstraint("plaid_user_id"),)
+
+    user_id = Column(Integer, ForeignKey("ab_user.id"), primary_key=True)
+    plaid_user_id = Column(Integer, unique=True)
+
+    user = relationship(
+        "User",
+        backref=backref("plaiduser_user", cascade="all, delete-orphan"),
+        foreign_keys=[user_id],
+    )
+
+# Create just the table above, just in case.
+Model.metadata.create_all(db.engine, tables=[Model.metadata.tables["plaiduser_user"]])
 
 class BaseEnum(Enum):
     # TODO: Figure out how to avoid copy/pasting this class (and subclasses) from plaid.
@@ -244,6 +264,7 @@ class EventHandler():
     def _handle_user_event(self, event_type, data, **kwargs):
 
         def add_user(event_data):
+            # Create the user.
             user = security_manager.add_user(
                 username=event_data['name'],
                 first_name=event_data['first_name'],
@@ -252,31 +273,100 @@ class EventHandler():
                 role=security_manager.find_role('Plaid')
             )
 
+            # Map the user's ID to the plaid user's ID.
+            user_map = PlaidUserMap()
+            user_map.user_id = user.id
+            user_map.plaid_user_id = event_data["id"]
+            db.session.add(user_map)
+
+            # Grant the user access to authorized projects.
             for project_id in event_data["projects"]:
                 security_manager.add_user_to_project(user, project_id)
+            
+            db.session.commit()
 
 
         def update_user(event_data):
             try:
-                user = self.get_session.query().filter_by(name=event_data["name"]).one()
+                # Look up user by their ID in plaid's DB.
+                user = security_manager.get_session.query(
+                           security_manager.user_model
+                       ).join(
+                            (PlaidUserMap, security_manager.user_model.id == PlaidGroupMap.user_id),
+                       ).filter(
+                           PlaidUserMap.plaid_user_id=event_data["id"]
+                       ).one()
+
+                user.username = event_data["name"]
+                user.first_name = event_data["first_name"]
+                user.last_name = event_data["last_name"]
+                user.email = event_data["email"]
                 
+                security_manager.update_user(user)
+
             except NoResultFound:
-                # TODO: Log warning. User should exist.
+                log.warning(
+                    f"User {event_data['name']} ({event_data['id']}) "
+                    f"was found while attempting to update."
+                )
                 add_user(event_data)
 
+
+        def update_project_access(event_data):
+            try:
+                # Reassign table objects for readability.
+                User = security_manager.user_model
+                Role = security_manager.role_model
+                UserRoleMap = Model.metadata.tables["ab_user"]
+
+                project_role = security_manager.find_role(security_manager.get_project_role_name(project_id))
+
+                # Delete every user not in the list from the project role.
+                db.session.query(
+                    UserRoleMap
+                ).join(
+                    (PlaidUserMap, UserRoleMap.user_id == PlaidUserMap.user_id),
+                    (Role, UserRoleMap.role_id == Role.id)
+                ).filter(
+                    PlaidUserMap.plaid_user_id.notin_(event_data),
+                    Role.name == project_role.name,
+                ).delete()
+
+                # Get every user in the list that doesn't have the project role.
+                users = db.session.query(
+                    User
+                ).join(
+                    (Role, User.roles),
+                    (PlaidUserMap, User.id == PlaidUserMap.user_id),
+                ).filter(
+                    Role.name != project_role.name,
+                    PlaidUserMap.plaid_user_id.in_(event_data)
+                ).all()
+
+                # Add the project role for each user.
+                for user in users:
+                    user.roles.add(role)
+
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                raise
+            finally:
+                # TODO: I believe destroying scoped session is necessary for long-running tasks.
+                db.session.remove()
 
         if event_type is EventType.Create:
             add_user(data)
         elif event_type is EventType.Update:
-            self.get_session.query(self.user_model).get(pk)
-            pass
+            update_user(data)
         elif event_type is EventType.Delete:
+            # TODO: There isn't a means to delete a user via security manager, so need to make one.
             pass
         elif event_type is EventType.ProjectAccessChange:
-            pass
+            update_project_access(data)    
         elif event_type is EventType.WorkspaceAccessChange:
-            pass
-        raise NotImplementedError()
+            for project in db.session.query(PlaidProject).filter_by(workspace_id=event_data['workspace_id']).all():
+                update_project_access(data)
 
 
     def _handle_passthrough(self, event_type, data, **kwargs):
