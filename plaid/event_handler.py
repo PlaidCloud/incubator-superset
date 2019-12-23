@@ -5,16 +5,28 @@ import logging
 from enum import Enum
 import json
 import pika
-from sqlalchemy import in_, notin_
+from sqlalchemy import (
+    Column,
+    ForeignKey,
+    Integer,
+)
+from sqlalchemy.exc import NoSuchTableError
+from sqlalchemy.ext.automap import automap_base
+from sqlalchemy.orm import backref, relationship
 from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.schema import UniqueConstraint
 
 from flask_appbuilder import Model
 from superset import app, db, security_manager
 from superset.connectors.plaid.models import PlaidTable, PlaidProject
 
 log = logging.getLogger(__name__)
+log.setLevel('INFO')
+logging.getLogger("pika").setLevel(logging.WARNING)
 config = app.config
+metadata = Model.metadata  # pylint: disable=no-member
 REQUIRED_FIELDS = {'event', 'type', 'data'}
+
 
 class PlaidUserMap(Model):
     """This model exists solely to relate superset user IDs to plaid user IDs."""
@@ -32,7 +44,17 @@ class PlaidUserMap(Model):
     )
 
 # Create just the table above, just in case.
-Model.metadata.create_all(db.engine, tables=[Model.metadata.tables["plaiduser_user"]])
+metadata.create_all(db.engine, tables=[metadata.tables["plaiduser_user"]])
+
+# metadata.reflect(db.engine)
+Base = automap_base(metadata=metadata)
+
+Base.prepare()
+
+User = Base.classes.ab_user
+Role = Base.classes.ab_role
+UserRoleMap = Base.classes.ab_user_role
+PlaidGroupMap = Base.classes.plaiduser_user
 
 class BaseEnum(Enum):
     # TODO: Figure out how to avoid copy/pasting this class (and subclasses) from plaid.
@@ -70,7 +92,7 @@ class EventHandler():
 
     def __init__(self):
         """Docstring"""
-        self.host = 'rabbit-rabbitmq-ha.plaid'
+        self.host = 'gbates-rabbit-rabbitmq-ha.gbates'
         self.port = 5672
         self.queue = 'events'
         self.vhost = 'events'
@@ -97,8 +119,14 @@ class EventHandler():
     def consume(self):
         """Docstring"""
         channel = self._connect()
-        for _, __, body in channel.consume(self.queue, inactivity_timeout=1): # pylint: disable=unused-variable
-            self.process_event(json.loads(body))
+        for method, _, body in channel.consume(self.queue, inactivity_timeout=1): # pylint: disable=unused-variable
+            try:
+                data = json.loads(body)
+            except:
+                continue
+            # TODO: Uncomment this after debugging so messages aren't requeued.
+            # channel.basic_ack(method.delivery_tag)
+            self.process_event(data)
 
 
     def process_event(self, info):
@@ -147,7 +175,8 @@ class EventHandler():
             proj.name = event_data["name"]
             proj.uuid = event_data["id"]
             proj.workspace_id = kwargs["workspace_id"]
-            proj.workspace_name = event_data[""]
+            # TODO: Somehow get workspace name for projects.
+            proj.workspace_name = "" #event_data["workspace_name"]
             proj.password = event_data["report_database_password"]
 
             # TODO: Parameterize port, and maybe database name and driver.
@@ -165,7 +194,7 @@ class EventHandler():
 
 
         def insert_project(event_data):
-            if db.session.query(PlaidProject).filter_by(uuid=event_data['id']).exists():
+            if not db.session.query(db.session.query(PlaidProject).filter_by(uuid=event_data['id']).exists()).scalar():
                 # Project doesn't exist, so make a new one.
                 new_project = map_data_to_row(event_data)
                 db.session.add(new_project)
@@ -204,7 +233,7 @@ class EventHandler():
     def _handle_table_event(self, event_type, data, **kwargs):
         if not data.get("published_name"):
             # Table isn't published, so do nothing.
-            pass
+            return
 
         def map_data_to_row(event_data, existing_table=None):
             if isinstance(existing_table, PlaidTable):
@@ -212,7 +241,7 @@ class EventHandler():
             else:
                 table = PlaidTable()
 
-            table.table_name = event_data["id"]
+            table.table_name = event_data["published_name"]
             table.friendly_name = event_data["name"]
             table.project_id = kwargs["project_id"]
             table.schema = f"report{table.project_id.strip('-')}"
@@ -221,12 +250,22 @@ class EventHandler():
 
 
         def insert_table(event_data):
-            # TODO: check if table exists. If it does, update, otherwise insert.
-            if db.session.query(PlaidTable).filter_by(name=event_data['id']).exists():
+            if not db.session.query(db.session.query(PlaidTable).filter_by(table_name=event_data['id']).exists()).scalar():
                 # Table doesn't exist, so make a new one.
-                new_table = map_data_to_row(event_data)
-                db.session.add(new_table)
-                db.session.commit()
+                try:
+                    new_table = map_data_to_row(event_data)
+                    db.session.add(new_table)
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                    return
+
+                try:
+                    new_table.fetch_metadata()
+                except Exception:
+                    # The table doesn't exist, even if the event claims otherwise.
+                    # Delete it.
+                    db.session.delete(new_table)
             else:
                 # TODO: Log a warning here. No table should exist.
                 update_table(event_data)
@@ -234,13 +273,16 @@ class EventHandler():
 
         def update_table(event_data):
             try:
-                existing_table = db.session.query(PlaidTable).filter_by(name=event_data['id']).one()
-            except NoResultFound:
-                # TODO: Log a warning here. A table should exist.
-                insert_table(event_data)
-            else:
+                existing_table = db.session.query(PlaidTable).filter_by(table_name=event_data['id']).one()
                 map_data_to_row(event_data, existing_table)
+                existing_table.fetch_metadata()
                 db.session.commit()
+            except NoResultFound:
+                log.warning("Received an update event for a table that doesn't exist.")
+                insert_table(event_data)
+            except Exception:
+                db.session.rollback()
+
 
 
         def delete_table(event_data):
@@ -290,11 +332,11 @@ class EventHandler():
             try:
                 # Look up user by their ID in plaid's DB.
                 user = security_manager.get_session.query(
-                           security_manager.user_model
+                           User
                        ).join(
-                            (PlaidUserMap, security_manager.user_model.id == PlaidGroupMap.user_id),
+                            (PlaidUserMap, User.id == PlaidGroupMap.user_id),
                        ).filter(
-                           PlaidUserMap.plaid_user_id=event_data["id"]
+                           PlaidUserMap.plaid_user_id==event_data["id"]
                        ).one()
 
                 user.username = event_data["name"]
@@ -314,11 +356,6 @@ class EventHandler():
 
         def update_project_access(event_data):
             try:
-                # Reassign table objects for readability.
-                User = security_manager.user_model
-                Role = security_manager.role_model
-                UserRoleMap = Model.metadata.tables["ab_user"]
-
                 project_role = security_manager.find_role(security_manager.get_project_role_name(project_id))
 
                 # Delete every user not in the list from the project role.
@@ -348,9 +385,9 @@ class EventHandler():
                     user.roles.add(role)
 
                 db.session.commit()
-            except Exception as e:
+            except Exception:
+                log.exception("Something went wrong updating project access.")
                 db.session.rollback()
-                raise
             finally:
                 # TODO: I believe destroying scoped session is necessary for long-running tasks.
                 db.session.remove()

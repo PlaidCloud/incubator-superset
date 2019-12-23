@@ -172,7 +172,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
     def add_project(self, project):
         project_perm = project.get_perm()
-
+        log.info(f"project_perm = {project_perm}")
         def has_project_access_pvm(pvm):
             '''has_project_access_pvm()
 
@@ -185,7 +185,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
         # Name the role after the project.
         self.set_role(
-            role_name=get_project_role_name(project["id"]),
+            role_name=get_project_role_name(project.uuid),
             pvm_check=has_project_access_pvm
         )
 
