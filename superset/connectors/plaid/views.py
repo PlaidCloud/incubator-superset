@@ -41,7 +41,6 @@ from superset.views.base import (
     DeleteMixin,
     get_datasource_exist_error_msg,
     ListWidgetWithCheckboxes,
-    SupersetFilter,
     SupersetModelView,
     YamlExportMixin,
 )
