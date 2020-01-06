@@ -105,7 +105,7 @@ ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
 ######################################################################
 # Dev image...
 ######################################################################
-FROM python:${PY_VER}
+FROM lean
 
 COPY ./requirements-dev.txt ./docker/requirements-extra.txt /app/
 
