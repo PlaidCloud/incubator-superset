@@ -124,8 +124,8 @@ class EventHandler():
                 data = json.loads(body)
             except:
                 continue
-            # TODO: Uncomment this after debugging so messages aren't requeued.
-            # channel.basic_ack(method.delivery_tag)
+            # Comment this out for debugging so messages aren't requeued.
+            channel.basic_ack(method.delivery_tag)
             self.process_event(data)
 
 
