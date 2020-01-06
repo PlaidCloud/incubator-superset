@@ -57,6 +57,7 @@ parsedatetime==2.4
 pathlib2==2.3.4
 polyline==1.4.0
 prison==0.1.2             # via flask-appbuilder
+psycopg2-binary==2.7.5
 py==1.8.0                 # via retry
 pyarrow==0.15.1
 pycparser==2.19           # via cffi
