@@ -248,6 +248,8 @@ class PlaidMetric(Model, BaseMetric):
     def get_perm(self):
         return self.perm
 
+
+
     @classmethod
     def import_obj(cls, i_metric):
         def lookup_obj(lookup_metric):
@@ -369,7 +371,7 @@ class PlaidTable(Model, BaseDatasource):
 
     @property
     def uuid(self):
-        return self.project.name
+        return str(self.project)
 
     @classmethod
     def get_datasource_by_name(cls, session, datasource_name, schema, uuid):
@@ -393,23 +395,21 @@ class PlaidTable(Model, BaseDatasource):
         return Markup(anchor)
 
     @property
-    def schema_perm(self):
+    def get_schema_perm(self):
         """Returns schema permission if present, project one otherwise."""
-        return security_manager.get_schema_perm(self.project.name, self.schema)
+        return security_manager.get_schema_perm(self.project, self.schema)
 
     def get_perm(self):
-        return ("[{obj.project.name}].[{obj.table_name}]" "(id:{obj.id})").format(obj=self)
+        return ("[{obj.project}].[{obj.table_name}]" "(id:{obj.id})").format(obj=self)
 
     @property
     def name(self):
-        # if not self.schema:
-        #     return self.table_name
-        return "{} :: {}".format(self.project.workspace_name, self.table_name)
+        return "{} :: {}".format(str(self.project), self.table_name)
 
     @property
     def full_name(self):
         return utils.get_datasource_full_name(
-            self.project.name, self.table_name, schema=self.schema
+            str(self.project), self.table_name, schema=self.schema
         )
 
     @property
@@ -1147,9 +1147,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
 
     @property
     def project_name(self):
-        if self.name:
-            return self.name
-        return self.uuid
+        return self.name or self.uuid
 
     @property
     def allows_subquery(self):

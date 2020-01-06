@@ -31,6 +31,15 @@ data:
     PUBLIC_ROLE_LIKE_PLAID = False
     ADMIN_ENABLED = True
   
+    RABBITMQ_CONNECTION_INFO = {
+        "host": "rabbit-rabbitmq-ha.plaid",
+        "port": "5672",
+        "username": "event_user",
+        "password": "cocoa puffs",
+        "queue": "events",
+        "vhost": "events",
+    }
+
     # Use our security manager for plaid user management.
     CUSTOM_SECURITY_MANAGER = PlaidSecurityManager #noqa
   
@@ -70,7 +79,6 @@ data:
     # Load FAB views here.
     def import_stuff(app):
         from flask import request
-        from plaid import views
   
         @app.after_request
         def after_request(response):

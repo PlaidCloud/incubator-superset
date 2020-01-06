@@ -15,10 +15,14 @@ from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import backref, relationship
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.schema import UniqueConstraint
-
+from flask import current_app
 from flask_appbuilder import Model
+from superset.app import create_app
+app = create_app()
+app.app_context().push()
 from superset import app, db, security_manager
 from superset.connectors.plaid.models import PlaidTable, PlaidProject
+
 
 log = logging.getLogger(__name__)
 log.setLevel('INFO')
@@ -92,13 +96,15 @@ class EventHandler():
 
     def __init__(self):
         """Docstring"""
-        self.host = 'gbates-rabbit-rabbitmq-ha.gbates'
-        self.port = 5672
-        self.queue = 'events'
-        self.vhost = 'events'
+        rmq_connection_info = config.get('RABBITMQ_CONNECTION_INFO', {})
 
-        username = 'event_user'
-        password = 'cocoa puffs'
+        self.host = rmq_connection_info.get('host', 'gbates-rabbit-rabbitmq-ha.gbates')
+        self.port = rmq_connection_info.get('port', 5672)
+        self.queue = rmq_connection_info.get('queue', 'events')
+        self.vhost = rmq_connection_info.get('vhost', 'events')
+
+        username = rmq_connection_info.get('username', 'event_user')
+        password = rmq_connection_info.get('password', 'cocoa puffs')
         self.credentials = pika.PlainCredentials(username, password)
 
 
@@ -176,7 +182,7 @@ class EventHandler():
             proj.uuid = event_data["id"]
             proj.workspace_id = kwargs["workspace_id"]
             # TODO: Somehow get workspace name for projects.
-            proj.workspace_name = "" #event_data["workspace_name"]
+            # proj.workspace_name = "" #event_data["workspace_name"]
             proj.password = event_data["report_database_password"]
 
             # TODO: Parameterize port, and maybe database name and driver.
@@ -257,6 +263,7 @@ class EventHandler():
                         project_id=kwargs['project_id']
                     ).exists()
                 ).scalar():
+                log.info(f"Project {kwargs['project_id']} has a table update for {event_data['published_name']}.")
                 # Table doesn't exist, so make a new one.
                 try:
                     new_table = map_data_to_row(event_data)
@@ -266,6 +273,7 @@ class EventHandler():
                         project = db.session.query(PlaidProject).filter_by(uuid=new_table.project_id).one()
                         project.get_table(table_name=new_table.table_name, schema=new_table.schema)
                         new_table.project = project
+                        log.info(f"Table perm is: {new_table.get_perm()}")
                     except NoSuchTableError:
                         log.warning(f"Table {new_table.schema}.{new_table.table_name} doesn't exist. Skipping.")
                         return
@@ -294,6 +302,7 @@ class EventHandler():
 
         def update_table(event_data):
             try:
+                log.info(f"Project {kwargs['project_id']} has a table update for {event_data['published_name']}.")
                 existing_table = db.session.query(PlaidTable).filter_by(
                     table_name=event_data['published_name'],
                     project_id=kwargs['project_id'],
@@ -318,7 +327,7 @@ class EventHandler():
                 pv = security_manager.find_permissions_view_menu(table.get_perm())
                 project_role = security_manager.find_role(f"project_{table.project_id}")
                 project_role.permissions.remove(pv)
-                table.delete()
+                db.session.delete(table)
                 db.session.commit()
             except NoResultFound:
                 log.warning("Received a delete event for a table that doesn't exist.")
@@ -439,7 +448,7 @@ class EventHandler():
                 ).all()
 
                 for mapp in user_maps:
-                    mapp.delete()
+                    db.session.delete(mapp)
 
                 # Get every user in the list that doesn't have the project role.
                 # TODO: For workspace access changes, do we need to check access type?
