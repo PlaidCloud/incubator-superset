@@ -574,7 +574,7 @@ class PlaidProjectView(SupersetModelView, DeleteMixin, YamlExportMixin):  # noqa
             "If selected, please set the schemas allowed for csv upload in Extra."
         ),
     }
-    base_filters = [["id", DatabaseFilter, lambda: []]]
+    # base_filters = [["id", DatabaseFilter, lambda: []]]
     label_columns = {
         "expose_in_sqllab": _("Expose in SQL Lab"),
         "allow_ctas": _("Allow CREATE TABLE AS"),
