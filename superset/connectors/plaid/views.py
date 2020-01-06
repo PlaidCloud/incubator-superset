@@ -50,12 +50,14 @@ from . import models
 
 logger = logging.getLogger(__name__)
 
-class DatabaseFilter(SupersetFilter):
-    def apply(self, query, func):  # noqa
-        if security_manager.all_database_access():
-            return query
-        perms = self.get_view_menus("database_access")
-        return query.filter(self.model.perm.in_(perms))
+# TODO: In case we need UI access to project list, implement a database filter.
+# class DatabaseFilter(SupersetFilter):
+#     def apply(self, query, func):  # noqa
+#         if security_manager.all_database_access():
+#             return query
+#         perms = self.get_view_menus("database_access")
+#         return query.filter(self.model.perm.in_(perms))
+
 
 class PlaidColumnInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
     datamodel = SQLAInterface(models.PlaidColumn)
