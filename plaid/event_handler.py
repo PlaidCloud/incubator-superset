@@ -51,8 +51,8 @@ Base = automap_base(metadata=metadata)
 
 Base.prepare()
 
-User = Base.classes.ab_user
-Role = Base.classes.ab_role
+User = security_manager.user_model
+Role = security_manager.role_model
 UserRoleMap = Base.classes.ab_user_role
 PlaidGroupMap = Base.classes.plaiduser_user
 
@@ -199,8 +199,8 @@ class EventHandler():
                 new_project = map_data_to_row(event_data)
                 db.session.add(new_project)
                 db.session.commit()
-                
-                security_manager.add_project(new_project)
+
+                security_manager.set_project_role(new_project)
             else:
                 # TODO: Log a warning here. No project should exist.
                 update_project(event_data)
@@ -214,6 +214,7 @@ class EventHandler():
                 insert_project(event_data)
             else:
                 map_data_to_row(event_data, existing_project)
+                security_manager.set_project_role(existing_project)
                 db.session.commit()
 
 
@@ -244,36 +245,59 @@ class EventHandler():
             table.table_name = event_data["published_name"]
             table.friendly_name = event_data["name"]
             table.project_id = kwargs["project_id"]
-            table.schema = f"report{table.project_id.strip('-')}"
+            table.schema = f"report{table.project_id}"
 
             return table
 
 
         def insert_table(event_data):
-            if not db.session.query(db.session.query(PlaidTable).filter_by(table_name=event_data['id']).exists()).scalar():
+            if not db.session.query(
+                db.session.query(PlaidTable).filter_by(
+                        table_name=event_data['published_name'],
+                        project_id=kwargs['project_id']
+                    ).exists()
+                ).scalar():
                 # Table doesn't exist, so make a new one.
                 try:
                     new_table = map_data_to_row(event_data)
+
+                    # Test if source table/view actually exists before we add it.
+                    try:
+                        project = db.session.query(PlaidProject).filter_by(uuid=new_table.project_id).one()
+                        project.get_table(table_name=new_table.table_name, schema=new_table.schema)
+                        new_table.project = project
+                    except NoSuchTableError:
+                        log.warning(f"Table {new_table.schema}.{new_table.table_name} doesn't exist. Skipping.")
+                        return
+
+                    # If we've made it this far, the source table/view exists.
                     db.session.add(new_table)
                     db.session.commit()
+                    
+                    # Populate columns and metrics for table.
+                    new_table.fetch_metadata()
+
+                    # Create permissions for table, and add them to project role.
+                    pv = security_manager.add_permission_view_menu("datasource_access", new_table.get_perm())
+                    project_role = security_manager.find_role(f"project_{new_table.project_id}")
+                    security_manager.add_permission_role(project_role, pv)
+                    
+                    db.session.commit()
                 except Exception:
+                    log.exception("WTF")
                     db.session.rollback()
                     return
-
-                try:
-                    new_table.fetch_metadata()
-                except Exception:
-                    # The table doesn't exist, even if the event claims otherwise.
-                    # Delete it.
-                    db.session.delete(new_table)
             else:
-                # TODO: Log a warning here. No table should exist.
+                log.warning("Received a create event for a table, but the table already exists.")
                 update_table(event_data)
 
 
         def update_table(event_data):
             try:
-                existing_table = db.session.query(PlaidTable).filter_by(table_name=event_data['id']).one()
+                existing_table = db.session.query(PlaidTable).filter_by(
+                    table_name=event_data['published_name'],
+                    project_id=kwargs['project_id'],
+                ).one()
                 map_data_to_row(event_data, existing_table)
                 existing_table.fetch_metadata()
                 db.session.commit()
@@ -281,13 +305,26 @@ class EventHandler():
                 log.warning("Received an update event for a table that doesn't exist.")
                 insert_table(event_data)
             except Exception:
+                log.exception("Error occurred while updating a table.")
                 db.session.rollback()
 
 
-
         def delete_table(event_data):
-            db.session.query(PlaidTable).filter_by(name=event_data['id']).delete()
-            db.session.commit()
+            try:
+                table = db.session.query(PlaidTable).filter(
+                    PlaidTable.table_name == event_data['published_name'],
+                    PlaidTable.schema == f"report{kwargs['project_id']}",
+                ).one()
+                pv = security_manager.find_permissions_view_menu(table.get_perm())
+                project_role = security_manager.find_role(f"project_{table.project_id}")
+                project_role.permissions.remove(pv)
+                table.delete()
+                db.session.commit()
+            except NoResultFound:
+                log.warning("Received a delete event for a table that doesn't exist.")
+            except Exception:
+                log.exception("Error occurred while deleting a table.")
+                db.session.rollback()
 
 
         if event_type is EventType.Create:
@@ -304,27 +341,52 @@ class EventHandler():
 
 
     def _handle_user_event(self, event_type, data, **kwargs):
+        plaid_role = security_manager.find_role("Plaid")
 
         def add_user(event_data):
-            # Create the user.
-            user = security_manager.add_user(
-                username=event_data['name'],
-                first_name=event_data['first_name'],
-                last_name=event_data['last_name'],
-                email=event_data['email'],
-                role=security_manager.find_role('Plaid')
-            )
+            try:
+                user = db.session.query(User).filter(
+                    User.email == event_data["email"],
+                ).one()
 
-            # Map the user's ID to the plaid user's ID.
-            user_map = PlaidUserMap()
-            user_map.user_id = user.id
-            user_map.plaid_user_id = event_data["id"]
-            db.session.add(user_map)
+                log.warning(f"Received a create event for user {user.first_name} {user.last_name} ({user.username}), but the user already exists.")
+
+                user.username = event_data["name"]
+                user.first_name = event_data["first_name"]
+                user.last_name = event_data["last_name"]
+
+                if db.session.query(db.session.query(PlaidUserMap).filter_by(user_id=user.id).exists()).scalar():
+                    user_map = db.session.query(PlaidUserMap).filter_by(user_id=user.id).one()
+                    user_map.plaid_user_id = event_data["id"]
+                else:
+                    user_map = PlaidUserMap()
+                    user_map.user_id = user.id
+                    user_map.plaid_user_id = event_data["id"]
+                    db.session.add(user_map)                  
+
+            except NoResultFound:
+                # Create the user.
+                user = security_manager.add_user(
+                    username=event_data['name'],
+                    first_name=event_data['first_name'],
+                    last_name=event_data['last_name'],
+                    email=event_data['email'],
+                    role=security_manager.find_role('Plaid')
+                )
+
+                # Map the user's ID to the plaid user's ID.
+                user_map = PlaidUserMap()
+                user_map.user_id = user.id
+                user_map.plaid_user_id = event_data["id"]
+                db.session.add(user_map)
+
+            if plaid_role not in user.roles:
+                user.roles.append(plaid_role)
 
             # Grant the user access to authorized projects.
             for project_id in event_data["projects"]:
                 security_manager.add_user_to_project(user, project_id)
-            
+
             db.session.commit()
 
 
@@ -336,15 +398,18 @@ class EventHandler():
                        ).join(
                             (PlaidUserMap, User.id == PlaidGroupMap.user_id),
                        ).filter(
-                           PlaidUserMap.plaid_user_id==event_data["id"]
+                           PlaidUserMap.plaid_user_id == event_data["id"]
                        ).one()
 
                 user.username = event_data["name"]
                 user.first_name = event_data["first_name"]
                 user.last_name = event_data["last_name"]
-                user.email = event_data["email"]
-                
+
+                if plaid_role not in user.roles:
+                    user.roles.append(plaid_role)
+
                 security_manager.update_user(user)
+
 
             except NoResultFound:
                 log.warning(
@@ -354,12 +419,16 @@ class EventHandler():
                 add_user(event_data)
 
 
-        def update_project_access(event_data):
+        def update_project_access(event_data, project_id):
             try:
-                project_role = security_manager.find_role(security_manager.get_project_role_name(project_id))
+                project_role = security_manager.find_role(f'project_{project_id}')
+
+                if not project_role:
+                    log.warning(f"Role not found for project {project_id}")
+                    return
 
                 # Delete every user not in the list from the project role.
-                db.session.query(
+                user_maps = db.session.query(
                     UserRoleMap
                 ).join(
                     (PlaidUserMap, UserRoleMap.user_id == PlaidUserMap.user_id),
@@ -367,9 +436,19 @@ class EventHandler():
                 ).filter(
                     PlaidUserMap.plaid_user_id.notin_(event_data),
                     Role.name == project_role.name,
-                ).delete()
+                ).all()
+
+                for mapp in user_maps:
+                    mapp.delete()
 
                 # Get every user in the list that doesn't have the project role.
+                # TODO: For workspace access changes, do we need to check access type?
+                # For example:
+                #   A workspace is changed and user gains scope to see data.
+                #   However, they still don't have access to certain projects in
+                #   this workspace based on user ACL, but they'll be added here
+                #   anyway. It seems we need to reconfirm project access after
+                #   a workspace is updated.
                 users = db.session.query(
                     User
                 ).join(
@@ -382,7 +461,7 @@ class EventHandler():
 
                 # Add the project role for each user.
                 for user in users:
-                    user.roles.add(role)
+                    user.roles.append(project_role)
 
                 db.session.commit()
             except Exception:
@@ -400,10 +479,10 @@ class EventHandler():
             # TODO: There isn't a means to delete a user via security manager, so need to make one.
             pass
         elif event_type is EventType.ProjectAccessChange:
-            update_project_access(data)    
+            update_project_access(data, kwargs['project_id'])
         elif event_type is EventType.WorkspaceAccessChange:
-            for project in db.session.query(PlaidProject).filter_by(workspace_id=event_data['workspace_id']).all():
-                update_project_access(data)
+            for project_id in db.session.query(PlaidProject.uuid).filter_by(workspace_id=data['workspace_id']).scalar():
+                update_project_access(data, project_id)
 
 
     def _handle_passthrough(self, event_type, data, **kwargs):

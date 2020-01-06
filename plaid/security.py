@@ -16,10 +16,12 @@ __email__ = "garrett.bates@tartansolutions.com"
 
 log = logging.getLogger(__name__)
 
+
 def get_project_role_name(project_id):
     """Fetch the datasource role name by project ID.
     """
     return 'project_' + project_id
+
 
 class PlaidSecurityManager(SupersetSecurityManager):
     """Custom security manager class for PlaidCloud integration.
@@ -170,9 +172,10 @@ class PlaidSecurityManager(SupersetSecurityManager):
         return user
 
 
-    def add_project(self, project):
+    def set_project_role(self, project):
         project_perm = project.get_perm()
-        log.info(f"project_perm = {project_perm}")
+        self.add_permission_view_menu("database_access", project_perm)
+
         def has_project_access_pvm(pvm):
             '''has_project_access_pvm()
 

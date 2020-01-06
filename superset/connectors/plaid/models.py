@@ -395,21 +395,21 @@ class PlaidTable(Model, BaseDatasource):
     @property
     def schema_perm(self):
         """Returns schema permission if present, project one otherwise."""
-        return security_manager.get_schema_perm(self.project, self.schema)
+        return security_manager.get_schema_perm(self.project.name, self.schema)
 
     def get_perm(self):
-        return ("[{obj.project}].[{obj.table_name}]" "(id:{obj.id})").format(obj=self)
+        return ("[{obj.project.name}].[{obj.table_name}]" "(id:{obj.id})").format(obj=self)
 
     @property
     def name(self):
-        if not self.schema:
-            return self.table_name
-        return "{}.{}".format(self.schema, self.table_name)
+        # if not self.schema:
+        #     return self.table_name
+        return "{} :: {}".format(self.project.workspace_name, self.table_name)
 
     @property
     def full_name(self):
         return utils.get_datasource_full_name(
-            self.project, self.table_name, schema=self.schema
+            self.project.name, self.table_name, schema=self.schema
         )
 
     @property
@@ -1566,7 +1566,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
         return "/superset/sql/{}/".format(self.id)
 
     def get_perm(self):
-        return ("[{obj.uuid}].(id:{obj.id})").format(obj=self)
+        return ("[{obj.name}].(id:{obj.id})").format(obj=self)
 
     def has_table(self, table):
         engine = self.get_sqla_engine()
@@ -1580,7 +1580,3 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
     def get_dialect(self):
         sqla_url = url.make_url(self.sqlalchemy_uri_decrypted)
         return sqla_url.get_dialect()()
-
-
-sa.event.listen(PlaidProject, "after_insert", security_manager.set_perm)
-sa.event.listen(PlaidProject, "after_update", security_manager.set_perm)
