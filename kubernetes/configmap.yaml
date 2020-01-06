@@ -43,9 +43,6 @@ data:
     CACHE_CONFIG = {'CACHE_TYPE': 'simple'}
     TABLE_NAMES_CACHE_CONFIG = {'CACHE_TYPE': 'simple'}
   
-  
-    CLI_MODULES = ['plaidtools.superset.cli']
-  
     # Disable Druid. We don't use it.
     DRUID_IS_ACTIVE = False
   

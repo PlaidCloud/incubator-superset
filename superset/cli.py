@@ -503,12 +503,3 @@ def sync_tags():
     add_types(db.engine, metadata)
     add_owners(db.engine, metadata)
     add_favorites(db.engine, metadata)
-
-
-# Import any additional CLI modules.
-for module in config.get("CLI_MODULES"):
-    try:
-        cli = import_module(module)
-        app.cli.add_command(cli.group)
-    except ImportError:
-        pass
