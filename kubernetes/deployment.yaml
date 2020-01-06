@@ -17,10 +17,10 @@ spec:
     spec:
       containers:
       - name: superset
-        image: docker.io/plaidcloud/superset:develop-2
+        image: docker.io/plaidcloud/superset:1154-fix-1
         imagePullPolicy: IfNotPresent
-        # command: ["sleep"]
-        # args: ["48h"]
+        command: ["sleep"]
+        args: ["48h"]
         env:
         - name: SUPERSET_ENV
           value: "development"
