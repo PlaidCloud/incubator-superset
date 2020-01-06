@@ -68,7 +68,9 @@ podTemplate(label: 'io',
 
             if (CHANGE_BRANCH == 'develop' || params.deploy_to_kubernetes) {
               stage('Build Image') {
-                image = docker.build("${image_name}:latest", "--pull ${docker_args} --target lean .")
+                python_version="3.6.9"
+                sh "docker pull python:${python_version}"
+                image = docker.build("${image_name}:latest", "--build-args PY_VER=${python_version} --pull ${docker_args} --target lean .")
               }
 
               stage('Publish to DockerHub') {
