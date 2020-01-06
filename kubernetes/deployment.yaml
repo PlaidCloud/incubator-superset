@@ -19,8 +19,8 @@ spec:
       - name: superset
         image: docker.io/plaidcloud/superset:develop-2
         imagePullPolicy: IfNotPresent
-        command: ["sleep"]
-        args: ["48h"]
+        # command: ["sleep"]
+        # args: ["48h"]
         env:
         - name: SUPERSET_ENV
           value: "development"
