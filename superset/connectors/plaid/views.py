@@ -29,7 +29,6 @@ from flask_appbuilder.security.decorators import has_access, has_access_api
 from flask_babel import gettext as __
 from flask_babel import lazy_gettext as _
 from wtforms.ext.sqlalchemy.fields import QuerySelectField
-import plaid.datasource_helpers as dh
 import json
 from sqlalchemy import MetaData
 
