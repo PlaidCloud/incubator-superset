@@ -70,7 +70,7 @@ podTemplate(label: 'io',
               stage('Build Image') {
                 python_version="3.6.9"
                 sh "docker pull python:${python_version}"
-                image = docker.build("${image_name}:latest", "--build-args PY_VER=${python_version} --pull ${docker_args} --target lean .")
+                image = docker.build("${image_name}:latest", "--build-arg PY_VER=${python_version} --pull ${docker_args} --target lean .")
               }
 
               stage('Publish to DockerHub') {
