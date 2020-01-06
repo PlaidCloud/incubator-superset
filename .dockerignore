@@ -40,3 +40,4 @@ superset/assets/cypress/
 superset/assets/coverage/
 skaffold.yaml
 Dockerfile
+venv

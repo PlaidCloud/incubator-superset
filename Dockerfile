@@ -1,139 +1,115 @@
-FROM node:10-alpine AS build-client
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 
-COPY superset/assets /superset/assets
+######################################################################
+# PY stage that simply does a pip install on our requirements
+######################################################################
+ARG PY_VER=3.6.9
+FROM python:${PY_VER} AS superset-py
 
-RUN cd /superset/assets/ \
- && npm ci \
- && npm run build
+RUN mkdir /app \
+        && apt-get update -y \
+        && apt-get install -y --no-install-recommends \
+            build-essential \
+            default-libmysqlclient-dev \
+            libpq-dev \
+        && rm -rf /var/lib/apt/lists/*
 
-FROM python:3.6 AS build-distribution
-RUN useradd --user-group --create-home --no-log-init --shell /bin/bash superset
+# First, we just wanna install requirements, which will allow us to utilize the cache
+# in order to only build if and only if requirements change
+COPY ./requirements.txt /app/
+RUN cd /app \
+        && pip install --no-cache -r requirements.txt
 
-# Configure environment
+
+######################################################################
+# Node stage to deal with static asset construction
+######################################################################
+FROM node:10-jessie AS superset-node
+
+# NPM ci first, as to NOT invalidate previous steps except for when package.json changes
+RUN mkdir -p /app/superset/assets
+COPY ./superset/assets/package* /app/superset/assets/
+RUN cd /app/superset/assets \
+        && npm ci
+
+# Next, copy in the rest and let webpack do its thing
+COPY ./superset/assets /app/superset/assets
+# This is BY FAR the most expensive step (thanks Terser!)
+RUN cd /app/superset/assets \
+        && npm run build \
+        && rm -rf node_modules
+
+
+######################################################################
+# Final lean image...
+######################################################################
+ARG PY_VER=3.6.9
+FROM python:${PY_VER} AS lean
+
 ENV LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8
+    LC_ALL=C.UTF-8 \
+    FLASK_ENV=production \
+    FLASK_APP="superset.app:create_app()" \
+    PYTHONPATH="/app/pythonpath" \
+    SUPERSET_HOME="/app/superset_home" \
+    SUPERSET_PORT=8080
 
-RUN apt-get update -y
+RUN useradd --user-group --no-create-home --no-log-init --shell /bin/bash superset \
+        && mkdir -p ${SUPERSET_HOME} ${PYTHONPATH} \
+        && apt-get update -y \
+        && apt-get install -y --no-install-recommends \
+            build-essential \
+            default-libmysqlclient-dev \
+            libpq-dev \
+        && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies to fix `curl https support error` and `elaying package configuration warning`
-RUN apt-get install -y apt-transport-https apt-utils
+COPY --from=superset-py /usr/local/lib/python3.6/site-packages/ /usr/local/lib/python3.6/site-packages/
+# Copying site-packages doesn't move the CLIs, so let's copy them one by one
+COPY --from=superset-py /usr/local/bin/gunicorn /usr/local/bin/celery /usr/local/bin/flask /usr/bin/
+COPY --from=superset-node /app/superset/assets /app/superset/assets
 
-# Install superset dependencies
-# https://superset.incubator.apache.org/installation.html#os-dependencies
-RUN apt-get install -y build-essential libssl-dev \
-    libffi-dev python3-dev libsasl2-dev libldap2-dev libxi-dev
+## Lastly, let's install superset itself
+COPY superset /app/superset
+COPY setup.py MANIFEST.in README.md /app/
+RUN cd /app \
+        && chown -R superset:superset * \
+        && pip install -e .
 
-# Install nodejs for custom build
-# https://superset.incubator.apache.org/installation.html#making-your-own-build
-# https://nodejs.org/en/download/package-manager/
-RUN curl -sL https://deb.nodesource.com/setup_10.x | bash - \
-    && apt-get install -y nodejs
+COPY ./docker/docker-entrypoint.sh /usr/bin/
 
-WORKDIR /home/superset
-
-COPY requirements.txt .
-COPY requirements-dev.txt .
-COPY contrib/docker/requirements-extra.txt .
-
-RUN pip install --upgrade setuptools pip \
-    && pip install -r requirements.txt -r requirements-dev.txt -r requirements-extra.txt \
-    && rm -rf /root/.cache/pip
-
-COPY --chown=superset:superset setup.py setup.cfg README.md MANIFEST.in ./
-COPY --chown=superset:superset superset superset
-COPY --from=build-client --chown=superset:superset /superset/assets /home/superset/superset/assets/
-
-ENV PATH=/home/superset/superset/bin:$PATH \
-    PYTHONPATH=/etc/superset:/home/superset:/plaidtools:/plaid:$PYTHONPATH
- 
-RUN mkdir -p /home/superset/superset/static \
- && ln -s ../assets /home/superset/superset/static/assets
-#  && python setup.py sdist
-
-# COPY superset_config.py /etc/superset/
-COPY plaidtools /plaidtools/
-COPY plaid /plaid/plaid/
-
-RUN pip install -r /plaidtools/requirements.txt
-
-COPY contrib/docker/docker-entrypoint.sh /entrypoint.sh
+WORKDIR /app
 
 USER superset
-ENTRYPOINT ["/entrypoint.sh"]
 
-FROM python:3.6
-
-# Configure environment
-ENV GUNICORN_BIND=0.0.0.0:8088 \
-GUNICORN_LIMIT_REQUEST_FIELD_SIZE=0 \
-GUNICORN_LIMIT_REQUEST_LINE=0 \
-GUNICORN_TIMEOUT=60 \
-GUNICORN_WORKERS=2 \
-LANG=C.UTF-8 \
-LC_ALL=C.UTF-8 \
-PYTHONPATH=/etc/superset:/home/superset:/plaidtools:/plaid:$PYTHONPATH \
-SUPERSET_REPO=apache/incubator-superset \
-SUPERSET_HOME=/var/lib/superset
-ENV GUNICORN_CMD_ARGS="--workers ${GUNICORN_WORKERS} --timeout ${GUNICORN_TIMEOUT} --bind ${GUNICORN_BIND} --limit-request-line ${GUNICORN_LIMIT_REQUEST_LINE} --limit-request-field_size ${GUNICORN_LIMIT_REQUEST_FIELD_SIZE}"
-
-COPY requirements.txt .
-
-# Create superset user & install dependencies
-RUN useradd -U -m superset && \
-mkdir /etc/superset && \
-mkdir ${SUPERSET_HOME} && \
-chown -R superset:superset /etc/superset && \
-chown -R superset:superset ${SUPERSET_HOME} && \
-apt-get update && \
-apt-get install -y \
-build-essential \
-curl \
-default-libmysqlclient-dev \
-freetds-dev \
-freetds-bin \
-libffi-dev \
-libldap2-dev \
-libpq-dev \
-libsasl2-dev \
-libssl-dev && \
-apt-get clean && \
-rm -r /var/lib/apt/lists/* && \
-pip install -r requirements.txt && \
-pip install --no-cache-dir \
-flask-cors==3.0.3 \
-flask-mail==0.9.1 \
-flask-oauth==0.12 \
-flask_oauthlib==0.9.5 \
-gevent==1.2.2 \
-impyla==0.14.0 \
-infi.clickhouse-orm==1.0.2 \
-mysqlclient==1.4.2 \
-psycopg2==2.7.6.1 \
-pyathena==1.5.1 \
-pybigquery==0.4.10 \
-pyhive==0.5.1 \
-pyldap==2.4.28 \
-pymssql==2.1.4 \
-redis==2.10.5 \
-sqlalchemy-clickhouse==0.1.5.post0 \
-sqlalchemy-redshift==0.7.1 \
-Werkzeug==0.14.1 && \
-rm requirements.txt
-
-# Configure Filesystem
-COPY --from=build-distribution /home/superset/dist/apache-superset-0.999.0.dev0.tar.gz /home/superset
-WORKDIR /home/superset
-
-# COPY superset_config.py /etc/superset/
-COPY plaidtools /plaidtools/
-COPY plaid /plaid/plaid/
-
-RUN pip install -r /plaidtools/requirements.txt
-RUN pip install apache-superset-0.999.0.dev0.tar.gz
-
-
-# Deploy application
-EXPOSE 8088
 HEALTHCHECK CMD ["curl", "-f", "http://localhost:8088/health"]
-CMD ["gunicorn", "superset:app"]
+
+EXPOSE ${SUPERSET_PORT}
+
+ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
+
+######################################################################
+# Dev image...
+######################################################################
+FROM lean AS dev
+
+COPY ./requirements-dev.txt ./docker/requirements-extra.txt /app/
+
+USER root
+RUN cd /app \
+    && pip install --no-cache -r requirements-dev.txt -r requirements-extra.txt
 USER superset

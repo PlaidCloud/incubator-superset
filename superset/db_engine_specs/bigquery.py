@@ -14,10 +14,10 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from datetime import datetime
 import hashlib
 import re
-from typing import Any, Dict, List, Tuple
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 from sqlalchemy import literal_column
@@ -58,17 +58,21 @@ class BigQueryEngineSpec(BaseEngineSpec):
     }
 
     @classmethod
-    def convert_dttm(cls, target_type: str, dttm: datetime) -> str:
+    def convert_dttm(cls, target_type: str, dttm: datetime) -> Optional[str]:
         tt = target_type.upper()
         if tt == "DATE":
-            return "'{}'".format(dttm.strftime("%Y-%m-%d"))
-        return "'{}'".format(dttm.strftime("%Y-%m-%d %H:%M:%S"))
+            return f"CAST('{dttm.date().isoformat()}' AS DATE)"
+        if tt == "DATETIME":
+            return f"""CAST('{dttm.isoformat(timespec="microseconds")}' AS DATETIME)"""
+        if tt == "TIMESTAMP":
+            return f"""CAST('{dttm.isoformat(timespec="microseconds")}' AS TIMESTAMP)"""
+        return None
 
     @classmethod
     def fetch_data(cls, cursor, limit: int) -> List[Tuple]:
         data = super(BigQueryEngineSpec, cls).fetch_data(cursor, limit)
         if data and type(data[0]).__name__ == "Row":
-            data = [r.values() for r in data]
+            data = [r.values() for r in data]  # type: ignore
         return data
 
     @staticmethod
@@ -164,6 +168,7 @@ class BigQueryEngineSpec(BaseEngineSpec):
         """
         try:
             import pandas_gbq
+            from google.oauth2 import service_account
         except ImportError:
             raise Exception(
                 "Could not import the library `pandas_gbq`, which is "
@@ -173,9 +178,16 @@ class BigQueryEngineSpec(BaseEngineSpec):
 
         if not ("name" in kwargs and "schema" in kwargs):
             raise Exception("name and schema need to be defined in kwargs")
+
         gbq_kwargs = {}
         gbq_kwargs["project_id"] = kwargs["con"].engine.url.host
         gbq_kwargs["destination_table"] = f"{kwargs.pop('schema')}.{kwargs.pop('name')}"
+
+        # add credentials if they are set on the SQLAlchemy Dialect:
+        creds = kwargs["con"].dialect.credentials_info
+        if creds:
+            credentials = service_account.Credentials.from_service_account_info(creds)
+            gbq_kwargs["credentials"] = credentials
 
         # Only pass through supported kwargs
         supported_kwarg_keys = {"if_exists"}
