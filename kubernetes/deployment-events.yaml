@@ -1,0 +1,42 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: superset-events
+  labels:
+    app: plaid
+    plaid: superset-events
+spec:
+  replicas: 1
+  minReadySeconds: 10
+  template:
+    metadata:
+      name: superset
+      labels:
+        app: plaid
+        plaid: superset-events
+    spec:
+      containers:
+      - name: superset
+        image: docker.io/plaidcloud/superset:1154-1
+        imagePullPolicy: IfNotPresent
+        # Useful for debugging, so event handler can be run from REPL.
+        # command: ["sleep"]
+        # args: ["48h"]
+        env:
+        - name: SUPERSET_ENV
+          value: "development"
+        - name: HEADLESS
+          value: "true"
+        ports:
+        - name: http
+          containerPort: 8088
+        volumeMounts:
+        - name: superset-conf
+          mountPath: /etc/superset/
+        resources: {}
+      imagePullSecrets:
+      - name: dockerhub-key
+      volumes:
+      - name: superset-conf
+        configMap:
+            name: gbates-superset-config

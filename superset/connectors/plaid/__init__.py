@@ -14,5 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import os
 from . import models  # noqa
-from . import views  # noqa
+if not os.environ.get("HEADLESS", False):
+    from . import views  # noqa

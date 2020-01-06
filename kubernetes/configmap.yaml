@@ -116,7 +116,6 @@ data:
             'Charts',
             'Dashboards',
             'SQL Editor',
-            'SQL Lab',
             'Query Search',
             'Queries',
             'Saved Queries',
@@ -234,9 +233,6 @@ data:
         'yaml_export': {
             'TableModelView',
         },
-        'can_sqllab': {
-            'Superset',
-        },
         'can_dashboard': {
             'Superset',
         },
@@ -274,9 +270,6 @@ data:
             'Superset',
         },
         'can_created_dashboards': {
-            'Superset',
-        },
-        'can_sqllab_viz': {
             'Superset',
         },
         'can_warm_up_cache': {

@@ -364,6 +364,10 @@ class PlaidTable(Model, BaseDatasource):
         return self.table_name
 
     @property
+    def database(self):
+        return self.project
+
+    @property
     def uuid(self):
         return self.project.name
 
@@ -390,22 +394,22 @@ class PlaidTable(Model, BaseDatasource):
 
     @property
     def schema_perm(self):
-        """Returns schema permission if present, database one otherwise."""
-        return security_manager.get_schema_perm(self.project, self.schema)
+        """Returns schema permission if present, project one otherwise."""
+        return security_manager.get_schema_perm(self.project.name, self.schema)
 
     def get_perm(self):
-        return ("[{obj.database}].[{obj.table_name}]" "(id:{obj.id})").format(obj=self)
+        return ("[{obj.project.name}].[{obj.table_name}]" "(id:{obj.id})").format(obj=self)
 
     @property
     def name(self):
-        if not self.schema:
-            return self.table_name
-        return "{}.{}".format(self.schema, self.table_name)
+        # if not self.schema:
+        #     return self.table_name
+        return "{} :: {}".format(self.project.workspace_name, self.table_name)
 
     @property
     def full_name(self):
         return utils.get_datasource_full_name(
-            self.project, self.table_name, schema=self.schema
+            self.project.name, self.table_name, schema=self.schema
         )
 
     @property
@@ -941,7 +945,7 @@ class PlaidTable(Model, BaseDatasource):
             logging.exception(e)
             raise Exception(
                 _(
-                    "Table [{}] doesn't seem to exist in the specified database, "
+                    "Table [{}] doesn't seem to exist in the specified project, "
                     "couldn't fetch column information"
                 ).format(self.table_name)
             )
@@ -998,7 +1002,7 @@ class PlaidTable(Model, BaseDatasource):
 
     @classmethod
     def import_obj(cls, i_datasource, import_time=None):
-        """Imports the datasource from the object to the database.
+        """Imports the datasource from the object to the project.
 
          Metrics and columns and datasource will be overrided if exists.
          This function can be used to import/export dashboards between multiple
@@ -1021,14 +1025,14 @@ class PlaidTable(Model, BaseDatasource):
             try:
                 return (
                     db.session.query(PlaidProject)
-                    .filter_by(database_name=table.params_dict["database_name"])
+                    .filter_by(name=table.params_dict["name"])
                     .one()
                 )
             except NoResultFound:
                 raise DatabaseNotFound(
                     _(
                         "Project '%(name)s' is not found",
-                        name=table.params_dict["database_name"],
+                        name=table.params_dict["name"],
                     )
                 )
 
@@ -1040,7 +1044,7 @@ class PlaidTable(Model, BaseDatasource):
     def query_datasources_by_name(cls, session, database, datasource_name, schema=None):
         query = (
             session.query(cls)
-            .filter_by(database_id=database.id)
+            .filter_by(project_id=database.id)
             .filter_by(table_name=datasource_name)
         )
         if schema:
@@ -1088,7 +1092,7 @@ sa.event.listen(PlaidTable, "after_update", security_manager.set_perm)
 
 class PlaidProject(Model, AuditMixinNullable, ImportMixin):
 
-    """An ORM object that stores Database related information"""
+    """An ORM object that stores project related information"""
 
     __tablename__ = "plaid_projects"
     type = "plaid"
@@ -1139,11 +1143,13 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
     export_children = ["tables"]
 
     def __repr__(self):
-        return self.name if self.name else self.uuid
+        return self.project_name
 
     @property
-    def name(self):
-        return self.name if self.name else self.uuid
+    def project_name(self):
+        if self.name:
+            return self.name
+        return self.uuid
 
     @property
     def allows_subquery(self):
@@ -1163,7 +1169,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
 
     @property
     def unique_name(self):
-        return self.name
+        return self.uuid
 
     @property
     def url_object(self):
@@ -1252,7 +1258,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
         )
 
         masked_url = self.get_password_masked_url(url)
-        logging.info("Database.get_sqla_engine(). Masked URL: {0}".format(masked_url))
+        logging.info("PlaidProject.get_sqla_engine(). Masked URL: {0}".format(masked_url))
 
         params = extra.get("engine_params", {})
         if nullpool:
@@ -1560,7 +1566,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
         return "/superset/sql/{}/".format(self.id)
 
     def get_perm(self):
-        return ("[{obj.uuid}].(id:{obj.id})").format(obj=self)
+        return ("[{obj.name}].(id:{obj.id})").format(obj=self)
 
     def has_table(self, table):
         engine = self.get_sqla_engine()
@@ -1574,7 +1580,3 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
     def get_dialect(self):
         sqla_url = url.make_url(self.sqlalchemy_uri_decrypted)
         return sqla_url.get_dialect()()
-
-
-sa.event.listen(PlaidProject, "after_insert", security_manager.set_perm)
-sa.event.listen(PlaidProject, "after_update", security_manager.set_perm)

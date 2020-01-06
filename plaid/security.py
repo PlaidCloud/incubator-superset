@@ -16,12 +16,12 @@ __email__ = "garrett.bates@tartansolutions.com"
 
 log = logging.getLogger(__name__)
 
-DATASOURCE_PREFIX = 'datasource_'
 
-def get_ds_role_name(project_id):
+def get_project_role_name(project_id):
     """Fetch the datasource role name by project ID.
     """
-    return DATASOURCE_PREFIX + project_id
+    return 'project_' + project_id
+
 
 class PlaidSecurityManager(SupersetSecurityManager):
     """Custom security manager class for PlaidCloud integration.
@@ -172,6 +172,40 @@ class PlaidSecurityManager(SupersetSecurityManager):
         return user
 
 
+    def set_project_role(self, project):
+        project_perm = project.get_perm()
+        self.add_permission_view_menu("database_access", project_perm)
+
+        def has_project_access_pvm(pvm):
+            '''has_project_access_pvm()
+
+            Callable to determine which permission/view menu relations will
+            be added to a role. Used by self.set_role(name, callable)
+            method.
+            '''
+            return pvm.permission.name == 'database_access' \
+                   and pvm.view_menu.name == project_perm
+
+        # Name the role after the project.
+        self.set_role(
+            role_name=get_project_role_name(project.uuid),
+            pvm_check=has_project_access_pvm
+        )
+
+
+    def add_user_to_project(self, user, project_id):
+        role = self.find_role(get_project_role_name(project_id))
+
+        if not role:
+            return
+
+        if role not in user.roles:
+            user.roles.append(role)
+            log.debug(
+                "Appended %s to %s roles list.", role.name, user.username
+            )
+
+
     def sync_datasources(self, project_ids=[]):
         """Pulls all published tables from plaid and creates datasources for 
         them.
@@ -201,10 +235,10 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
             # Name the role after the project.
             self.set_role(
-                role_name=get_ds_role_name(proj_id),
+                role_name=get_project_role_name(proj_id),
                 pvm_check=has_project_access_pvm
             )
-            log.debug('Role {} created.'.format(get_ds_role_name(proj_id)))
+            log.debug('Role {} created.'.format(get_project_role_name(proj_id)))
             # Add every user that has access to the project to this role.
             self.sync_datasource_perms(proj_id)
 
@@ -223,7 +257,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         # Get a list of user names so we can bulk-select.
         usernames = [user['user_name'] for user in plaid_users]
         log.debug(usernames)
-        role = self.find_role(get_ds_role_name(project_id))
+        role = self.find_role(get_project_role_name(project_id))
 
         if not role:
             return
