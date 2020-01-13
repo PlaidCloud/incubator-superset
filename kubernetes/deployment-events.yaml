@@ -17,11 +17,11 @@ spec:
     spec:
       containers:
       - name: superset
-        image: docker.io/plaidcloud/superset:1154-1
+        image: docker.io/plaidcloud/superset:1154-event-7
         imagePullPolicy: IfNotPresent
         # Useful for debugging, so event handler can be run from REPL.
-        # command: ["sleep"]
-        # args: ["48h"]
+        command: ["sleep"]
+        args: ["48h"]
         env:
         - name: SUPERSET_ENV
           value: "development"

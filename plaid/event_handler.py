@@ -131,7 +131,7 @@ class EventHandler():
             except:
                 continue
             # Comment this out for debugging so messages aren't requeued.
-            channel.basic_ack(method.delivery_tag)
+            # channel.basic_ack(method.delivery_tag)
             self.process_event(data)
 
 
@@ -202,6 +202,7 @@ class EventHandler():
         def insert_project(event_data):
             if not db.session.query(db.session.query(PlaidProject).filter_by(uuid=event_data['id']).exists()).scalar():
                 # Project doesn't exist, so make a new one.
+                log.info(f"Inserting project {event_data['name']} ({event_data['id']}).")
                 new_project = map_data_to_row(event_data)
                 db.session.add(new_project)
                 db.session.commit()
@@ -214,6 +215,7 @@ class EventHandler():
 
         def update_project(event_data):
             try:
+                log.info(f"Updating project {event_data['name']} ({event_data['id']}).")
                 existing_project = db.session.query(PlaidProject).filter_by(uuid=event_data['id']).one()
             except NoResultFound:
                 # TODO: Log a warning here. A project should exist.
@@ -225,6 +227,7 @@ class EventHandler():
 
 
         def delete_project(event_data):
+            log.info(f"Deleting project {event_data['name']} ({event_data['id']}).")
             db.session.query(PlaidProject).filter_by(uuid=event_data['id']).delete()
             db.session.commit()
 
@@ -249,7 +252,7 @@ class EventHandler():
                 table = PlaidTable()
 
             table.table_name = event_data["published_name"]
-            table.friendly_name = event_data["name"]
+            table.base_table_name = event_data["id"]
             table.project_id = kwargs["project_id"]
             table.schema = f"report{table.project_id}"
 
@@ -257,20 +260,23 @@ class EventHandler():
 
 
         def insert_table(event_data):
+            log.info(f"Inserting table {event_data['published_name']} for project {kwargs['project_id']}.")
             if not db.session.query(
                 db.session.query(PlaidTable).filter_by(
                         table_name=event_data['published_name'],
                         project_id=kwargs['project_id']
                     ).exists()
                 ).scalar():
-                log.info(f"Project {kwargs['project_id']} has a table update for {event_data['published_name']}.")
                 # Table doesn't exist, so make a new one.
                 try:
                     new_table = map_data_to_row(event_data)
 
                     # Test if source table/view actually exists before we add it.
                     try:
+                        import time
+                        time.sleep(5)
                         project = db.session.query(PlaidProject).filter_by(uuid=new_table.project_id).one()
+                        log.info(project.get_all_view_names_in_schema(schema=new_table.schema))
                         project.get_table(table_name=new_table.table_name, schema=new_table.schema)
                         new_table.project = project
                         log.info(f"Table perm is: {new_table.get_perm()}")
@@ -302,7 +308,7 @@ class EventHandler():
 
         def update_table(event_data):
             try:
-                log.info(f"Project {kwargs['project_id']} has a table update for {event_data['published_name']}.")
+                log.info(f"Updating table {event_data['published_name']} for project {kwargs['project_id']}.")
                 existing_table = db.session.query(PlaidTable).filter_by(
                     table_name=event_data['published_name'],
                     project_id=kwargs['project_id'],
@@ -320,6 +326,7 @@ class EventHandler():
 
         def delete_table(event_data):
             try:
+                log.info(f"Deleting table {event_data['published_name']} for project {kwargs['project_id']}.")
                 table = db.session.query(PlaidTable).filter(
                     PlaidTable.table_name == event_data['published_name'],
                     PlaidTable.schema == f"report{kwargs['project_id']}",

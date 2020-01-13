@@ -3,9 +3,9 @@ kind: ConfigMap
 metadata:
   name: gbates-superset-config
 data:
-  init_superset.sh: |-
+  init_superset.sh: |
     gunicorn superset:app
-  superset_config.py: |-
+  superset_config.py: |
     import os
     import ssl
     from collections import OrderedDict
@@ -18,10 +18,8 @@ data:
     #ROW_LIMIT = 5000
     #SUPERSET_WORKERS = 4
   
-  
     # I created a mapbox account under garrett.bates@tartansolutions.com
-    MAPBOX_API_KEY = 'pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0b' \
-                    'XYifQ.KKZQGn5QOn14NTnyNFNczQ'
+    MAPBOX_API_KEY = 'pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ'
   
     HOSTNAME = 'gbates.plaidcloud.io'
     PLAID_HOST = 'gbates.plaidcloud.io'
@@ -32,7 +30,7 @@ data:
     ADMIN_ENABLED = True
   
     RABBITMQ_CONNECTION_INFO = {
-        "host": "rabbit-rabbitmq-ha.plaid",
+        "host": "gbates-rabbit-rabbitmq-ha.gbates",
         "port": "5672",
         "username": "event_user",
         "password": "cocoa puffs",

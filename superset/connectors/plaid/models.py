@@ -248,8 +248,6 @@ class PlaidMetric(Model, BaseMetric):
     def get_perm(self):
         return self.perm
 
-
-
     @classmethod
     def import_obj(cls, i_metric):
         def lookup_obj(lookup_metric):
@@ -288,7 +286,7 @@ class PlaidTable(Model, BaseDatasource):
     __table_args__ = (UniqueConstraint("project_id", "table_name"),)
 
     table_name = Column(String(250))
-    friendly_name = Column(String(250))
+    base_table_name = Column(String(250))
     main_dttm_col = Column(String(250))
     project_id = Column(String(250), ForeignKey("plaid_projects.uuid"), nullable=False)
     fetch_values_predicate = Column(String(1000))
@@ -307,7 +305,6 @@ class PlaidTable(Model, BaseDatasource):
 
     export_fields = (
         "table_name",
-        "friendly_name",
         "main_dttm_col",
         "description",
         "default_endpoint",
@@ -394,7 +391,6 @@ class PlaidTable(Model, BaseDatasource):
         anchor = f'<a target="_blank" href="{self.explore_url}">{name}</a>'
         return Markup(anchor)
 
-    @property
     def get_schema_perm(self):
         """Returns schema permission if present, project one otherwise."""
         return security_manager.get_schema_perm(self.project, self.schema)
@@ -1470,10 +1466,10 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
         """
         try:
             views = self.db_engine_spec.get_view_names(
-                inspector=self.inspector, schema=schema
+                database=self, inspector=self.inspector, schema=schema
             )
             return [utils.DatasourceName(table=view, schema=schema) for view in views]
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             logging.exception(e)
 
     # TODO: Determine if this is needed.
