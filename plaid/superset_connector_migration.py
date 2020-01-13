@@ -5,10 +5,11 @@ from sqlalchemy.orm.exc import NoResultFound
 from superset import appbuilder, conf, db, security_manager
 from superset.connectors.plaid.models import metadata, PlaidTable, PlaidProject, PlaidMetric
 from superset.connectors.sqla.models import SqlaTable, SqlMetric
-from superset.models.core import Slice
+from superset.models.slice import Slice
 
 log = logging.getLogger(__name__)
 log.setLevel('INFO')
+
 
 
 def initialize_schema_and_perms():
