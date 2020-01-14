@@ -73,6 +73,9 @@ class PlaidSecurityManager(SupersetSecurityManager):
         project_perm = project.get_perm()
         self.add_permission_view_menu("database_access", project_perm)
 
+        schema_perms = {t.schema for t in project.plaid_tables}
+        table_perms = {t.perm for t in project.plaid_tables}
+
         def has_project_access_pvm(pvm):
             '''has_project_access_pvm()
 
@@ -80,8 +83,17 @@ class PlaidSecurityManager(SupersetSecurityManager):
             be added to a role. Used by self.set_role(name, callable)
             method.
             '''
-            return pvm.permission.name == 'database_access' \
-                   and pvm.view_menu.name == project_perm
+            if pvm.permission.name == 'database_access':
+                return pvm.view_menu.name == project_perm
+            
+            if pvm.permission.name == 'schema_access':
+                return pvm.view_menu.name in schema_perms
+
+            if pvm.permission.name == 'datasource_access':
+                return pvm.view_menu.name in table_perms
+
+            return False
+
 
         # Name the role after the project.
         self.set_role(

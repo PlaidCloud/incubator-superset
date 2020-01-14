@@ -2,6 +2,7 @@
 # coding=utf-8
 
 import logging
+import time
 from enum import Enum
 import json
 import pika
@@ -131,7 +132,7 @@ class EventHandler():
             except:
                 continue
             # Comment this out for debugging so messages aren't requeued.
-            # channel.basic_ack(method.delivery_tag)
+            channel.basic_ack(method.delivery_tag)
             self.process_event(data)
 
 
@@ -196,6 +197,7 @@ class EventHandler():
             uri = f"{driver}://{user}:{proj.password}@{host}:{port}/{db_name}"
             proj.set_sqlalchemy_uri(uri)
 
+            proj.perm = proj.get_perm()
             return proj
 
 
@@ -260,10 +262,10 @@ class EventHandler():
 
 
         def insert_table(event_data):
-            log.info(f"Inserting table {event_data['published_name']} for project {kwargs['project_id']}.")
+            log.info(f"Inserting table {event_data['published_name']} ({event_data['id']}) for project {kwargs['project_id']}.")
             if not db.session.query(
                 db.session.query(PlaidTable).filter_by(
-                        table_name=event_data['published_name'],
+                        base_table_name=event_data['id'],
                         project_id=kwargs['project_id']
                     ).exists()
                 ).scalar():
@@ -273,7 +275,7 @@ class EventHandler():
 
                     # Test if source table/view actually exists before we add it.
                     try:
-                        import time
+                        # TODO: This is pretty dumb. Event is being processed before the DB can create the view. 
                         time.sleep(5)
                         project = db.session.query(PlaidProject).filter_by(uuid=new_table.project_id).one()
                         log.info(project.get_all_view_names_in_schema(schema=new_table.schema))
@@ -292,8 +294,10 @@ class EventHandler():
                     new_table.fetch_metadata()
 
                     # Create permissions for table, and add them to project role.
+                    schema_pv = security_manager.add_permission_view_menu("schema_access", new_table.get_schema_perm())
                     pv = security_manager.add_permission_view_menu("datasource_access", new_table.get_perm())
                     project_role = security_manager.find_role(f"project_{new_table.project_id}")
+                    security_manager.add_permission_role(project_role, schema_pv)
                     security_manager.add_permission_role(project_role, pv)
                     
                     db.session.commit()
@@ -308,15 +312,17 @@ class EventHandler():
 
         def update_table(event_data):
             try:
-                log.info(f"Updating table {event_data['published_name']} for project {kwargs['project_id']}.")
+                # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
+                time.sleep(5)
+                log.info(f"Updating table {event_data['published_name']} ({event_data['id']}) for project {kwargs['project_id']}.")
                 existing_table = db.session.query(PlaidTable).filter_by(
-                    table_name=event_data['published_name'],
+                    base_table_name=event_data['id'],
                     project_id=kwargs['project_id'],
                 ).one()
                 map_data_to_row(event_data, existing_table)
                 existing_table.fetch_metadata()
                 db.session.commit()
-            except NoResultFound:
+            except NoSuchTableError:
                 log.warning("Received an update event for a table that doesn't exist.")
                 insert_table(event_data)
             except Exception:
@@ -454,6 +460,7 @@ class EventHandler():
                     Role.name == project_role.name,
                 ).all()
 
+                log.info(f"Users who lost access: {[user.user_id for user in user_maps]}")
                 for mapp in user_maps:
                     db.session.delete(mapp)
 
@@ -475,6 +482,7 @@ class EventHandler():
                     PlaidUserMap.plaid_user_id.in_(event_data)
                 ).all()
 
+                log.info(f"Users with access: {users}")
                 # Add the project role for each user.
                 for user in users:
                     user.roles.append(project_role)

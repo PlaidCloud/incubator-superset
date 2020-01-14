@@ -56,7 +56,7 @@ def add_changeme_datasource():
     table = PlaidTable()
 
     table.table_name = "change_me"
-    table.friendly_name = "change_me"
+    table.base_table_name = "change_me"
     table.project_id = "placeholder_project"
     table.project = proj
     table.schema = "placeholder"

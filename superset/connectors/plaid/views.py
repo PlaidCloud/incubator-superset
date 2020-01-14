@@ -223,9 +223,9 @@ class PlaidTableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  #
 
     list_columns = ["link", "project_name", "changed_by_", "modified"]
     order_columns = ["modified"]
-    add_columns = ["project", "schema", "friendly_name"]
+    add_columns = ["project", "schema", "table_name"]
     edit_columns = [
-        "friendly_name",
+        "table_name",
         "sql",
         "filter_select_enabled",
         "fetch_values_predicate",
@@ -244,7 +244,7 @@ class PlaidTableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  #
     show_columns = edit_columns + ["perm", "slices"]
     related_views = [PlaidColumnInlineView, PlaidMetricInlineView]
     base_order = ("changed_on", "desc")
-    search_columns = ("project", "schema", "friendly_name", "owners", "is_sqllab_view")
+    search_columns = ("project", "schema", "table_name", "owners", "is_sqllab_view")
     description_columns = {
         "slices": _(
             "The list of charts associated with this table. By "
@@ -256,7 +256,7 @@ class PlaidTableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  #
             "overwrite the chart from the 'explore view'"
         ),
         "offset": _("Timezone offset (in hours) for this datasource"),
-        "friendly_name": _("Name of the table that exists in the plaid project"),
+        "table_name": _("Name of the table that exists in the plaid project"),
         "schema": _(
             "Schema, as used only in some databases like Postgres, Redshift " "and DB2"
         ),
@@ -308,7 +308,7 @@ class PlaidTableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  #
         "default_endpoint": _("Default Endpoint"),
         "offset": _("Offset"),
         "cache_timeout": _("Cache Timeout"),
-        "friendly_name": _("Table Name"),
+        "table_name": _("Table Name"),
         "fetch_values_predicate": _("Fetch Values Predicate"),
         "owners": _("Owners"),
         "main_dttm_col": _("Main Datetime Column"),
