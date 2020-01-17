@@ -982,6 +982,12 @@ class PlaidTable(Model, BaseDatasource):
             if not any_date_col and dbcol.is_time:
                 any_date_col = col.name
 
+        actual_cols = {col.name for col in table.columns}
+        for col_name, col in dbcols.items():
+            if col_name not in actual_cols:
+                db.session.delete(col)
+                db.session.commit()
+
         metrics.append(
             M(
                 metric_name="count",
