@@ -229,8 +229,21 @@ class EventHandler():
 
 
         def delete_project(event_data):
+            # TODO: Deleting a table associated with a chart breaks UI (can't set new datasource, can only delete chart)
+            # Need to figure out how to handle this circumstance (delete charts too? update dataousrce to placeholder?)
+            # If update to placeholder, how to regulate perms?
+            project = db.session.query(PlaidProject).filter_by(uuid=event_data['id']).one()
+            role = security_manager.find_role(f"project_{project.uuid}")
+            for table in project.plaid_tables:
+                log.info(f"Deleting table {table.table_name} ({table.base_table_name}).")
+                security_manager.del_permission_view_menu('datasource_access', table.perm)
+                db.session.delete(table)
+            log.info(f"Deleting role {role.name}.")
+            security_manager.del_permission_view_menu('schema_access', f"report{project.uuid}")
+            security_manager.del_permission_view_menu('database_access', project.perm)
+            db.session.delete(role)
             log.info(f"Deleting project {event_data['name']} ({event_data['id']}).")
-            db.session.query(PlaidProject).filter_by(uuid=event_data['id']).delete()
+            db.session.delete(project)
             db.session.commit()
 
 
@@ -276,12 +289,11 @@ class EventHandler():
                     # Test if source table/view actually exists before we add it.
                     try:
                         # TODO: This is pretty dumb. Event is being processed before the DB can create the view. 
-                        time.sleep(5)
+                        time.sleep(2)
                         project = db.session.query(PlaidProject).filter_by(uuid=new_table.project_id).one()
                         log.info(project.get_all_view_names_in_schema(schema=new_table.schema))
                         project.get_table(table_name=new_table.table_name, schema=new_table.schema)
                         new_table.project = project
-                        log.info(f"Table perm is: {new_table.get_perm()}")
                     except NoSuchTableError:
                         log.warning(f"Table {new_table.schema}.{new_table.table_name} doesn't exist. Skipping.")
                         return
@@ -313,7 +325,7 @@ class EventHandler():
         def update_table(event_data):
             try:
                 # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
-                time.sleep(5)
+                time.sleep(2)
                 log.info(f"Updating table {event_data['published_name']} ({event_data['id']}) for project {kwargs['project_id']}.")
                 existing_table = db.session.query(PlaidTable).filter_by(
                     base_table_name=event_data['id'],
@@ -322,7 +334,7 @@ class EventHandler():
                 map_data_to_row(event_data, existing_table)
                 existing_table.fetch_metadata()
                 db.session.commit()
-            except NoSuchTableError:
+            except NoResultFound:
                 log.warning("Received an update event for a table that doesn't exist.")
                 insert_table(event_data)
             except Exception:
@@ -337,9 +349,7 @@ class EventHandler():
                     PlaidTable.table_name == event_data['published_name'],
                     PlaidTable.schema == f"report{kwargs['project_id']}",
                 ).one()
-                pv = security_manager.find_permissions_view_menu(table.get_perm())
-                project_role = security_manager.find_role(f"project_{table.project_id}")
-                project_role.permissions.remove(pv)
+                security_manager.del_permission_view_menu('datasource_access', table.get_perm())
                 db.session.delete(table)
                 db.session.commit()
             except NoResultFound:
