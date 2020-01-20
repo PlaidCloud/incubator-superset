@@ -319,7 +319,7 @@ class EventHandler():
                     
                     db.session.commit()
                 except Exception:
-                    log.exception("WTF")
+                    log.exception("Error occurred while inserting a new table.")
                     db.session.rollback()
                     return
             else:
@@ -354,11 +354,11 @@ class EventHandler():
             try:
                 log.info(f"Deleting table {event_data['published_name']} for project {kwargs['project_id']}.")
                 table = db.session.query(PlaidTable).filter(
-                    PlaidTable.table_name == event_data['published_name'],
+                    PlaidTable.base_table_name == event_data['id'],
                     PlaidTable.schema == f"report{kwargs['project_id']}",
                 ).one()
                 placeholder_table = db.session.query(PlaidTable).filter(
-                    PlaidTable.table_name == "change_me",
+                    PlaidTable.base_table_name == "change_me",
                     PlaidTable.project_id == "placeholder_project",
                 ).one()
                 charts = db.session.query(Slice).filter_by(datasource_id=table.id, datasource_type='plaid').all()
