@@ -954,7 +954,6 @@ class PlaidTable(Model, BaseDatasource):
         dbcols = (
             db.session.query(PlaidColumn)
             .filter(PlaidColumn.table == self)
-            #.filter(or_(PlaidColumn.column_name == col.name for col in table.columns))
         )
         dbcols = {dbcol.column_name: dbcol for dbcol in dbcols}
 
