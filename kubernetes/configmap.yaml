@@ -80,6 +80,9 @@ data:
   
         @app.after_request
         def after_request(response):
+            location = response.headers.get('Location')
+            if location and location.startswith('http://'):
+                response.headers.set('Location', location.replace('http://', 'https://', 1))
             if any(request.path.startswith(u) for u in DISABLED_CACHE_URIS):
                 response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
             return response
@@ -94,7 +97,7 @@ data:
   
     # If users can register for an account (see above setting), this would be their default role.
     #AUTH_USER_REGISTRATION_ROLE = "Public"
-    #AUTH_TYPE = AUTH_DB  
+    AUTH_TYPE = 1
     #OAUTH_PROVIDERS = [
     #     {
     #        'name': 'plaidcloud',
@@ -118,12 +121,12 @@ data:
             'Projects',
             'Charts',
             'Dashboards',
-            'SQL Editor',
-            'Query Search',
-            'Queries',
-            'Saved Queries',
+            # 'SQL Editor',
+            # 'Query Search',
+            # 'Queries',
+            # 'Saved Queries',
             'Tables',
-            'Refresh',
+            # 'Refresh',
         },
         'can_list': {
             'DatabaseAsync',
@@ -137,10 +140,12 @@ data:
             'QueryView',
             'SavedQueryViewApi',
             'SavedQueryView',
-            'TableColumnInlineView',
+            # 'TableColumnInlineView',
             'SqlMetricInlineView',
             'TableModelView',
             'CssTemplateAsyncModelView',
+            'PlaidMetricInlineView',
+            'Datasource',
         },
         'can_show': {
             'DatabaseAsync',
@@ -157,6 +162,8 @@ data:
             'TableColumnInlineView',
             'SqlMetricInlineView',
             'TableModelView',
+            'PlaidMetricInlineView',
+            'Datasource',
         },
         'can_delete': {
             'SliceModelView',
@@ -171,6 +178,7 @@ data:
             'TableColumnInlineView',
             'SqlMetricInlineView',
             'TableModelView',
+            'PlaidMetricInlineView',
         } ,
         'can_edit': {
             'SliceModelView',
@@ -185,6 +193,7 @@ data:
             'TableColumnInlineView',
             'SqlMetricInlineView',
             'TableModelView',
+            'PlaidMetricInlineView',
         },
         'can_download': {
             'SliceModelView',
@@ -199,6 +208,7 @@ data:
             'TableColumnInlineView',
             'SqlMetricInlineView',
             'TableModelView',
+            'PlaidMetricInlineView',
         },
         'can_add': {
             'SliceModelView',
@@ -213,6 +223,7 @@ data:
             'TableColumnInlineView',
             'SqlMetricInlineView',
             'TableModelView',
+            'PlaidMetricInlineView',
         },
         'muldelete': {
             'SliceModelView',
@@ -224,6 +235,7 @@ data:
             'SavedQueryViewApi',
             'SavedQueryView',
             'TableModelView',
+            'PlaidMetricInlineView',
         },
         'mulexport': {
             'DashboardModelView',
@@ -350,6 +362,12 @@ data:
         'can_databases': {
             'Superset',
         },
+        'can_datasources'{
+            'Superset'
+        },
+        'datasource_access': {
+            '[placeholder_project].[change_me](id:1)',
+        }
     }
   
     class SetURLScheme(object):
@@ -374,7 +392,7 @@ data:
             self.app = app
   
         def __call__(self, environ, start_response):
-            scheme = environ.get('HTTP_X_SCHEME', '')
+            scheme = environ.get('HTTP_X_SCHEME', 'https')
             if scheme:
                 environ['wsgi.url_scheme'] = scheme
             return self.app(environ, start_response)
