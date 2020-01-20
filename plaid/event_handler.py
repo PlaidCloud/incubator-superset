@@ -23,6 +23,7 @@ app = create_app()
 app.app_context().push()
 from superset import app, db, security_manager
 from superset.connectors.plaid.models import PlaidTable, PlaidProject
+from superset.models.slice import Slice
 
 
 log = logging.getLogger(__name__)
@@ -256,9 +257,6 @@ class EventHandler():
 
 
     def _handle_table_event(self, event_type, data, **kwargs):
-        if not data.get("published_name"):
-            # Table isn't published, so do nothing.
-            return
 
         def map_data_to_row(event_data, existing_table=None):
             if isinstance(existing_table, PlaidTable):
@@ -275,6 +273,13 @@ class EventHandler():
 
 
         def insert_table(event_data):
+            if not event_data.get("published_name"):
+                log.info(
+                    f"Received table insert event for {event_data['id']} "
+                    f"(Project {event_data['project_id']}), but no published name is set. "
+                    f"Skipping."
+                )
+                return
             log.info(f"Inserting table {event_data['published_name']} ({event_data['id']}) for project {kwargs['project_id']}.")
             if not db.session.query(
                 db.session.query(PlaidTable).filter_by(
@@ -331,6 +336,9 @@ class EventHandler():
                     base_table_name=event_data['id'],
                     project_id=kwargs['project_id'],
                 ).one()
+                if not event_data.get("published_name"):
+                    # Table still exists, but the user unpublished it. So we want to delete.
+                    delete_table(event_data)
                 map_data_to_row(event_data, existing_table)
                 existing_table.fetch_metadata()
                 db.session.commit()
@@ -349,6 +357,14 @@ class EventHandler():
                     PlaidTable.table_name == event_data['published_name'],
                     PlaidTable.schema == f"report{kwargs['project_id']}",
                 ).one()
+                placeholder_table = db.session.query(PlaidTable).filter(
+                    PlaidTable.table_name == "change_me",
+                    PlaidTable.project_id == "placeholder_project",
+                ).one()
+                charts = db.session.query(Slice).filter_by(datasource_id=table.id, datasource_type='plaid').all()
+                for chart in charts:
+                    chart.datasource_id = placeholder_table.id
+                    db.session.commit()
                 security_manager.del_permission_view_menu('datasource_access', table.get_perm())
                 db.session.delete(table)
                 db.session.commit()
