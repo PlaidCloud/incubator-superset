@@ -276,7 +276,7 @@ class EventHandler():
             if not event_data.get("published_name"):
                 log.info(
                     f"Received table insert event for {event_data['id']} "
-                    f"(Project {event_data['project_id']}), but no published name is set. "
+                    f"(Project {kwargs['project_id']}), but no published name is set. "
                     f"Skipping."
                 )
                 return
