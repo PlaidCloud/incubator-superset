@@ -1,0 +1,12 @@
+redis:
+    host: "redis-ha.default"
+    port: 26379
+    group: "superset"
+
+rabbitmq:
+    host: "rabbitmq-ha.default"
+    port: 5672
+    username: "event_user"
+    password: "event password"
+    queue: "events"
+    vhost: "events"

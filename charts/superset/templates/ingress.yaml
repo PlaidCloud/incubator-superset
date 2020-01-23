@@ -1,0 +1,16 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: superset
+  labels:
+    app: plaid
+    plaid: superset
+spec:
+  rules:
+  - host: stage-viz.plaidcloud.com
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: superset
+          servicePort: 8088

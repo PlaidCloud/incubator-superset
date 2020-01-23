@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: superset
+  labels:
+    app: plaid
+    plaid: superset  
+spec:
+  ports:
+  - port: 8088
+    targetPort: 8088
+    protocol: TCP
+    name: http
+  selector:
+    plaid: superset

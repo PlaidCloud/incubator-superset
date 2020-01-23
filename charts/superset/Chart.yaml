@@ -1,0 +1,12 @@
+name: workflow-monitor
+description: A monitoring service for plaid workflow health
+version: 0.0.1
+keywords:
+  - superset
+  - plaid
+home: https://github.com/PlaidCloud/incubator-superset
+sources:
+  - https://cloud.docker.com/u/plaidcloud/repository/docker/plaidcloud/superset
+maintainers:
+- name: Garrett Bates
+  email: garrett.bates@tartansolutions.com
