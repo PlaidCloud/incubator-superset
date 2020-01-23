@@ -33,15 +33,16 @@ data:
     #SUPERSET_WORKERS = 4
   
     # I created a mapbox account under garrett.bates@tartansolutions.com
-    MAPBOX_API_KEY = 'pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ'
+    MAPBOX_API_KEY = '{{ .Values.mapbox.api_key }}'
   
-    HOSTNAME = 'stage.plaidcloud.com'
-    PLAID_HOST = 'stage.plaidcloud.com'
-    PLAID_DATABASE_HOST = '192.168.6.8'
+    HOSTNAME = '{{ .Values.superset.hostname }}'
+    PLAID_HOST = '{{ .Values.superset.hostname }}'
+    PLAID_DATABASE_HOST = '{{ .Values.database.greenplum_host }}'
     SCHEME = 'https'
-    SQLALCHEMY_DATABASE_URI = 'postgresql://superset_prod:appliance chalk closet statement@psql-stage-postgresql:5432/superset_prod'
+    SQLALCHEMY_DATABASE_URI = 'postgresql://{{ .Values.database.user }}:{{ .Values.database.pass }}@{{ .Values.database.host }}:{{ .Values.database.port }}/{{ .Values.database.name }}'
     PUBLIC_ROLE_LIKE_PLAID = False
     ADMIN_ENABLED = True
+
   
     RABBITMQ_CONNECTION_INFO = {
         "host": "{{ .Values.rabbitmq.host }}",

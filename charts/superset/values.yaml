@@ -23,6 +23,17 @@ superset_events:
     - name: HEADLESS
       value: "true"
 
+database:
+  user: superset
+  pass: "strong superset password"
+  host: superset-postgresql
+  port: 5432
+  name: superset
+  greenplum_host: "127.0.0.1"
+
+mapbox:
+  api_key: "pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ"
+
 redis:
   host: "redis-ha.default"
   port: 26379
