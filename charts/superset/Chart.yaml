@@ -1,9 +1,10 @@
-name: workflow-monitor
-description: A monitoring service for plaid workflow health
+name: superset
+description: Deploys superset along with the proprietary superset-events service.
 version: 0.0.1
 keywords:
   - superset
   - plaid
+  - events
 home: https://github.com/PlaidCloud/incubator-superset
 sources:
   - https://cloud.docker.com/u/plaidcloud/repository/docker/plaidcloud/superset
