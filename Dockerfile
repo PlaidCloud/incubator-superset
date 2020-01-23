@@ -65,7 +65,7 @@ ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     FLASK_ENV=production \
     FLASK_APP="superset.app:create_app()" \
-    PYTHONPATH="/app/pythonpath" \
+    PYTHONPATH="/app/pythonpath:/plaid:/etc/superset" \
     SUPERSET_HOME="/app/superset_home" \
     SUPERSET_PORT=8080
 
@@ -91,6 +91,8 @@ RUN cd /app \
         && pip install -e .
 
 COPY ./docker/docker-entrypoint.sh /usr/bin/
+
+COPY plaid /plaid/plaid/
 
 WORKDIR /app
 

@@ -29,7 +29,6 @@ from flask_appbuilder.security.decorators import has_access, has_access_api
 from flask_babel import gettext as __
 from flask_babel import lazy_gettext as _
 from wtforms.ext.sqlalchemy.fields import QuerySelectField
-import plaid.datasource_helpers as dh
 import json
 from sqlalchemy import MetaData
 
@@ -42,7 +41,6 @@ from superset.views.base import (
     DeleteMixin,
     get_datasource_exist_error_msg,
     ListWidgetWithCheckboxes,
-    SupersetFilter,
     SupersetModelView,
     YamlExportMixin,
 )
@@ -51,12 +49,14 @@ from . import models
 
 logger = logging.getLogger(__name__)
 
-class DatabaseFilter(SupersetFilter):
-    def apply(self, query, func):  # noqa
-        if security_manager.all_database_access():
-            return query
-        perms = self.get_view_menus("database_access")
-        return query.filter(self.model.perm.in_(perms))
+# TODO: In case we need UI access to project list, implement a database filter.
+# class DatabaseFilter(SupersetFilter):
+#     def apply(self, query, func):  # noqa
+#         if security_manager.all_database_access():
+#             return query
+#         perms = self.get_view_menus("database_access")
+#         return query.filter(self.model.perm.in_(perms))
+
 
 class PlaidColumnInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
     datamodel = SQLAInterface(models.PlaidColumn)
@@ -223,9 +223,9 @@ class PlaidTableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  #
 
     list_columns = ["link", "project_name", "changed_by_", "modified"]
     order_columns = ["modified"]
-    add_columns = ["project", "schema", "friendly_name"]
+    add_columns = ["project", "schema", "table_name"]
     edit_columns = [
-        "friendly_name",
+        "table_name",
         "sql",
         "filter_select_enabled",
         "fetch_values_predicate",
@@ -244,7 +244,7 @@ class PlaidTableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  #
     show_columns = edit_columns + ["perm", "slices"]
     related_views = [PlaidColumnInlineView, PlaidMetricInlineView]
     base_order = ("changed_on", "desc")
-    search_columns = ("project", "schema", "friendly_name", "owners", "is_sqllab_view")
+    search_columns = ("project", "schema", "table_name", "owners", "is_sqllab_view")
     description_columns = {
         "slices": _(
             "The list of charts associated with this table. By "
@@ -256,7 +256,7 @@ class PlaidTableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  #
             "overwrite the chart from the 'explore view'"
         ),
         "offset": _("Timezone offset (in hours) for this datasource"),
-        "friendly_name": _("Name of the table that exists in the plaid project"),
+        "table_name": _("Name of the table that exists in the plaid project"),
         "schema": _(
             "Schema, as used only in some databases like Postgres, Redshift " "and DB2"
         ),
@@ -308,7 +308,7 @@ class PlaidTableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  #
         "default_endpoint": _("Default Endpoint"),
         "offset": _("Offset"),
         "cache_timeout": _("Cache Timeout"),
-        "friendly_name": _("Table Name"),
+        "table_name": _("Table Name"),
         "fetch_values_predicate": _("Fetch Values Predicate"),
         "owners": _("Owners"),
         "main_dttm_col": _("Main Datetime Column"),
@@ -574,7 +574,7 @@ class PlaidProjectView(SupersetModelView, DeleteMixin, YamlExportMixin):  # noqa
             "If selected, please set the schemas allowed for csv upload in Extra."
         ),
     }
-    base_filters = [["id", DatabaseFilter, lambda: []]]
+    # base_filters = [["id", DatabaseFilter, lambda: []]]
     label_columns = {
         "expose_in_sqllab": _("Expose in SQL Lab"),
         "allow_ctas": _("Allow CREATE TABLE AS"),

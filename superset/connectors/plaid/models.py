@@ -286,7 +286,7 @@ class PlaidTable(Model, BaseDatasource):
     __table_args__ = (UniqueConstraint("project_id", "table_name"),)
 
     table_name = Column(String(250))
-    friendly_name = Column(String(250))
+    base_table_name = Column(String(250))
     main_dttm_col = Column(String(250))
     project_id = Column(String(250), ForeignKey("plaid_projects.uuid"), nullable=False)
     fetch_values_predicate = Column(String(1000))
@@ -305,7 +305,6 @@ class PlaidTable(Model, BaseDatasource):
 
     export_fields = (
         "table_name",
-        "friendly_name",
         "main_dttm_col",
         "description",
         "default_endpoint",
@@ -369,7 +368,7 @@ class PlaidTable(Model, BaseDatasource):
 
     @property
     def uuid(self):
-        return self.project.name
+        return str(self.project)
 
     @classmethod
     def get_datasource_by_name(cls, session, datasource_name, schema, uuid):
@@ -392,24 +391,21 @@ class PlaidTable(Model, BaseDatasource):
         anchor = f'<a target="_blank" href="{self.explore_url}">{name}</a>'
         return Markup(anchor)
 
-    @property
-    def schema_perm(self):
+    def get_schema_perm(self):
         """Returns schema permission if present, project one otherwise."""
-        return security_manager.get_schema_perm(self.project.name, self.schema)
+        return security_manager.get_schema_perm(self.project, self.schema)
 
     def get_perm(self):
-        return ("[{obj.project.name}].[{obj.table_name}]" "(id:{obj.id})").format(obj=self)
+        return ("[{obj.project}].[{obj.table_name}]" "(id:{obj.id})").format(obj=self)
 
     @property
     def name(self):
-        # if not self.schema:
-        #     return self.table_name
-        return "{} :: {}".format(self.project.workspace_name, self.table_name)
+        return "{} :: {}".format(str(self.project), self.table_name)
 
     @property
     def full_name(self):
         return utils.get_datasource_full_name(
-            self.project.name, self.table_name, schema=self.schema
+            str(self.project), self.table_name, schema=self.schema
         )
 
     @property
@@ -958,7 +954,6 @@ class PlaidTable(Model, BaseDatasource):
         dbcols = (
             db.session.query(PlaidColumn)
             .filter(PlaidColumn.table == self)
-            .filter(or_(PlaidColumn.column_name == col.name for col in table.columns))
         )
         dbcols = {dbcol.column_name: dbcol for dbcol in dbcols}
 
@@ -985,6 +980,12 @@ class PlaidTable(Model, BaseDatasource):
             self.columns.append(dbcol)
             if not any_date_col and dbcol.is_time:
                 any_date_col = col.name
+
+        actual_cols = {col.name for col in table.columns}
+        for col_name, col in dbcols.items():
+            if col_name not in actual_cols:
+                db.session.delete(col)
+                db.session.commit()
 
         metrics.append(
             M(
@@ -1147,9 +1148,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
 
     @property
     def project_name(self):
-        if self.name:
-            return self.name
-        return self.uuid
+        return self.name or self.uuid
 
     @property
     def allows_subquery(self):
@@ -1472,10 +1471,10 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
         """
         try:
             views = self.db_engine_spec.get_view_names(
-                inspector=self.inspector, schema=schema
+                database=self, inspector=self.inspector, schema=schema
             )
             return [utils.DatasourceName(table=view, schema=schema) for view in views]
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             logging.exception(e)
 
     # TODO: Determine if this is needed.

@@ -17,13 +17,15 @@ spec:
     spec:
       containers:
       - name: superset
-        image: docker.io/plaidcloud/superset:plaid-776-16
+        image: docker.io/plaidcloud/superset:1154-fix-10
         imagePullPolicy: IfNotPresent
         # command: ["sleep"]
         # args: ["48h"]
         env:
         - name: SUPERSET_ENV
           value: "development"
+        - name: SUPERSET_PORT
+          value: "8088"
         ports:
         - name: http
           containerPort: 8088

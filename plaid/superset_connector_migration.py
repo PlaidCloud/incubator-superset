@@ -2,13 +2,32 @@ import logging
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.exc import NoResultFound
 
-from superset import db
-from superset.connectors.plaid.models import PlaidTable, PlaidProject, PlaidMetric
+from superset import appbuilder, conf, db, security_manager
+from superset.connectors.plaid.models import metadata, PlaidTable, PlaidProject, PlaidMetric
 from superset.connectors.sqla.models import SqlaTable, SqlMetric
-from superset.models.core import Slice
+from superset.models.slice import Slice
 
 log = logging.getLogger(__name__)
 log.setLevel('INFO')
+
+
+
+def initialize_schema_and_perms():
+    # Run this function _before_ processing events.
+    metadata.create_all(bind=db.engine)
+    appbuilder.add_permissions(update_perms=True)
+    security_manager.create_custom_permissions()
+    security_manager.set_role("Admin", security_manager._is_admin_pvm)
+    security_manager.set_role("Alpha", security_manager._is_alpha_pvm)
+    security_manager.set_role("Gamma", security_manager._is_gamma_pvm)
+    security_manager.set_role("granter", security_manager._is_granter_pvm)
+    security_manager.set_role("sql_lab", security_manager._is_sql_lab_pvm)
+    if conf.get("PUBLIC_ROLE_LIKE_GAMMA", False):
+        security_manager.set_role("Public", security_manager._is_gamma_pvm)
+    security_manager.set_role('Plaid', security_manager.is_plaid_user_pvm)
+    if security_manager.appbuilder.app.config.get('PUBLIC_ROLE_LIKE_PLAID', False):
+        security_manager.set_role('Public', security_manager.is_plaid_user_pvm)
+
 
 def add_changeme_datasource():
     proj = db.session.query(PlaidProject).filter_by(uuid="placeholder_project").first()
@@ -37,7 +56,7 @@ def add_changeme_datasource():
     table = PlaidTable()
 
     table.table_name = "change_me"
-    table.friendly_name = "change_me"
+    table.base_table_name = "change_me"
     table.project_id = "placeholder_project"
     table.project = proj
     table.schema = "placeholder"

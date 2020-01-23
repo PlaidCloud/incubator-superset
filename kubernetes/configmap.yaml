@@ -3,9 +3,9 @@ kind: ConfigMap
 metadata:
   name: gbates-superset-config
 data:
-  init_superset.sh: |-
+  init_superset.sh: |
     gunicorn superset:app
-  superset_config.py: |-
+  superset_config.py: |
     import os
     import ssl
     from collections import OrderedDict
@@ -18,10 +18,8 @@ data:
     #ROW_LIMIT = 5000
     #SUPERSET_WORKERS = 4
   
-  
     # I created a mapbox account under garrett.bates@tartansolutions.com
-    MAPBOX_API_KEY = 'pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0b' \
-                    'XYifQ.KKZQGn5QOn14NTnyNFNczQ'
+    MAPBOX_API_KEY = 'pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ'
   
     HOSTNAME = 'gbates.plaidcloud.io'
     PLAID_HOST = 'gbates.plaidcloud.io'
@@ -31,6 +29,15 @@ data:
     PUBLIC_ROLE_LIKE_PLAID = False
     ADMIN_ENABLED = True
   
+    RABBITMQ_CONNECTION_INFO = {
+        "host": "gbates-rabbit-rabbitmq-ha.gbates",
+        "port": "5672",
+        "username": "event_user",
+        "password": "cocoa puffs",
+        "queue": "events",
+        "vhost": "events",
+    }
+
     # Use our security manager for plaid user management.
     CUSTOM_SECURITY_MANAGER = PlaidSecurityManager #noqa
   
@@ -42,9 +49,6 @@ data:
   
     CACHE_CONFIG = {'CACHE_TYPE': 'simple'}
     TABLE_NAMES_CACHE_CONFIG = {'CACHE_TYPE': 'simple'}
-  
-  
-    CLI_MODULES = ['plaidtools.superset.cli']
   
     # Disable Druid. We don't use it.
     DRUID_IS_ACTIVE = False
@@ -73,10 +77,12 @@ data:
     # Load FAB views here.
     def import_stuff(app):
         from flask import request
-        from plaid import views
   
         @app.after_request
         def after_request(response):
+            location = response.headers.get('Location')
+            if location and location.startswith('http://'):
+                response.headers.set('Location', location.replace('http://', 'https://', 1))
             if any(request.path.startswith(u) for u in DISABLED_CACHE_URIS):
                 response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
             return response
@@ -91,7 +97,7 @@ data:
   
     # If users can register for an account (see above setting), this would be their default role.
     #AUTH_USER_REGISTRATION_ROLE = "Public"
-    #AUTH_TYPE = AUTH_DB  
+    AUTH_TYPE = 1
     #OAUTH_PROVIDERS = [
     #     {
     #        'name': 'plaidcloud',
@@ -115,12 +121,12 @@ data:
             'Projects',
             'Charts',
             'Dashboards',
-            'SQL Editor',
-            'Query Search',
-            'Queries',
-            'Saved Queries',
+            # 'SQL Editor',
+            # 'Query Search',
+            # 'Queries',
+            # 'Saved Queries',
             'Tables',
-            'Refresh',
+            # 'Refresh',
         },
         'can_list': {
             'DatabaseAsync',
@@ -134,10 +140,12 @@ data:
             'QueryView',
             'SavedQueryViewApi',
             'SavedQueryView',
-            'TableColumnInlineView',
+            # 'TableColumnInlineView',
             'SqlMetricInlineView',
             'TableModelView',
             'CssTemplateAsyncModelView',
+            'PlaidMetricInlineView',
+            'Datasource',
         },
         'can_show': {
             'DatabaseAsync',
@@ -154,6 +162,8 @@ data:
             'TableColumnInlineView',
             'SqlMetricInlineView',
             'TableModelView',
+            'PlaidMetricInlineView',
+            'Datasource',
         },
         'can_delete': {
             'SliceModelView',
@@ -168,6 +178,7 @@ data:
             'TableColumnInlineView',
             'SqlMetricInlineView',
             'TableModelView',
+            'PlaidMetricInlineView',
         } ,
         'can_edit': {
             'SliceModelView',
@@ -182,6 +193,7 @@ data:
             'TableColumnInlineView',
             'SqlMetricInlineView',
             'TableModelView',
+            'PlaidMetricInlineView',
         },
         'can_download': {
             'SliceModelView',
@@ -196,6 +208,7 @@ data:
             'TableColumnInlineView',
             'SqlMetricInlineView',
             'TableModelView',
+            'PlaidMetricInlineView',
         },
         'can_add': {
             'SliceModelView',
@@ -210,6 +223,7 @@ data:
             'TableColumnInlineView',
             'SqlMetricInlineView',
             'TableModelView',
+            'PlaidMetricInlineView',
         },
         'muldelete': {
             'SliceModelView',
@@ -221,6 +235,7 @@ data:
             'SavedQueryViewApi',
             'SavedQueryView',
             'TableModelView',
+            'PlaidMetricInlineView',
         },
         'mulexport': {
             'DashboardModelView',
@@ -347,6 +362,12 @@ data:
         'can_databases': {
             'Superset',
         },
+        'can_datasources'{
+            'Superset'
+        },
+        'datasource_access': {
+            '[placeholder_project].[change_me](id:1)',
+        }
     }
   
     class SetURLScheme(object):
@@ -371,7 +392,7 @@ data:
             self.app = app
   
         def __call__(self, environ, start_response):
-            scheme = environ.get('HTTP_X_SCHEME', '')
+            scheme = environ.get('HTTP_X_SCHEME', 'https')
             if scheme:
                 environ['wsgi.url_scheme'] = scheme
             return self.app(environ, start_response)

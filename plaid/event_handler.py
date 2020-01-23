@@ -2,6 +2,7 @@
 # coding=utf-8
 
 import logging
+import time
 from enum import Enum
 import json
 import pika
@@ -15,10 +16,15 @@ from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import backref, relationship
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.schema import UniqueConstraint
-
+from flask import current_app
 from flask_appbuilder import Model
+from superset.app import create_app
+app = create_app()
+app.app_context().push()
 from superset import app, db, security_manager
 from superset.connectors.plaid.models import PlaidTable, PlaidProject
+from superset.models.slice import Slice
+
 
 log = logging.getLogger(__name__)
 log.setLevel('INFO')
@@ -92,13 +98,15 @@ class EventHandler():
 
     def __init__(self):
         """Docstring"""
-        self.host = 'gbates-rabbit-rabbitmq-ha.gbates'
-        self.port = 5672
-        self.queue = 'events'
-        self.vhost = 'events'
+        rmq_connection_info = config.get('RABBITMQ_CONNECTION_INFO', {})
 
-        username = 'event_user'
-        password = 'cocoa puffs'
+        self.host = rmq_connection_info.get('host', 'gbates-rabbit-rabbitmq-ha.gbates')
+        self.port = rmq_connection_info.get('port', 5672)
+        self.queue = rmq_connection_info.get('queue', 'events')
+        self.vhost = rmq_connection_info.get('vhost', 'events')
+
+        username = rmq_connection_info.get('username', 'event_user')
+        password = rmq_connection_info.get('password', 'cocoa puffs')
         self.credentials = pika.PlainCredentials(username, password)
 
 
@@ -124,8 +132,8 @@ class EventHandler():
                 data = json.loads(body)
             except:
                 continue
-            # TODO: Uncomment this after debugging so messages aren't requeued.
-            # channel.basic_ack(method.delivery_tag)
+            # Comment this out for debugging so messages aren't requeued.
+            channel.basic_ack(method.delivery_tag)
             self.process_event(data)
 
 
@@ -176,7 +184,7 @@ class EventHandler():
             proj.uuid = event_data["id"]
             proj.workspace_id = kwargs["workspace_id"]
             # TODO: Somehow get workspace name for projects.
-            proj.workspace_name = "" #event_data["workspace_name"]
+            # proj.workspace_name = "" #event_data["workspace_name"]
             proj.password = event_data["report_database_password"]
 
             # TODO: Parameterize port, and maybe database name and driver.
@@ -190,12 +198,14 @@ class EventHandler():
             uri = f"{driver}://{user}:{proj.password}@{host}:{port}/{db_name}"
             proj.set_sqlalchemy_uri(uri)
 
+            proj.perm = proj.get_perm()
             return proj
 
 
         def insert_project(event_data):
             if not db.session.query(db.session.query(PlaidProject).filter_by(uuid=event_data['id']).exists()).scalar():
                 # Project doesn't exist, so make a new one.
+                log.info(f"Inserting project {event_data['name']} ({event_data['id']}).")
                 new_project = map_data_to_row(event_data)
                 db.session.add(new_project)
                 db.session.commit()
@@ -208,6 +218,7 @@ class EventHandler():
 
         def update_project(event_data):
             try:
+                log.info(f"Updating project {event_data['name']} ({event_data['id']}).")
                 existing_project = db.session.query(PlaidProject).filter_by(uuid=event_data['id']).one()
             except NoResultFound:
                 # TODO: Log a warning here. A project should exist.
@@ -219,7 +230,21 @@ class EventHandler():
 
 
         def delete_project(event_data):
-            db.session.query(PlaidProject).filter_by(uuid=event_data['id']).delete()
+            # TODO: Deleting a table associated with a chart breaks UI (can't set new datasource, can only delete chart)
+            # Need to figure out how to handle this circumstance (delete charts too? update dataousrce to placeholder?)
+            # If update to placeholder, how to regulate perms?
+            project = db.session.query(PlaidProject).filter_by(uuid=event_data['id']).one()
+            role = security_manager.find_role(f"project_{project.uuid}")
+            for table in project.plaid_tables:
+                log.info(f"Deleting table {table.table_name} ({table.base_table_name}).")
+                security_manager.del_permission_view_menu('datasource_access', table.perm)
+                db.session.delete(table)
+            log.info(f"Deleting role {role.name}.")
+            security_manager.del_permission_view_menu('schema_access', f"report{project.uuid}")
+            security_manager.del_permission_view_menu('database_access', project.perm)
+            db.session.delete(role)
+            log.info(f"Deleting project {event_data['name']} ({event_data['id']}).")
+            db.session.delete(project)
             db.session.commit()
 
 
@@ -232,9 +257,6 @@ class EventHandler():
 
 
     def _handle_table_event(self, event_type, data, **kwargs):
-        if not data.get("published_name"):
-            # Table isn't published, so do nothing.
-            return
 
         def map_data_to_row(event_data, existing_table=None):
             if isinstance(existing_table, PlaidTable):
@@ -243,7 +265,7 @@ class EventHandler():
                 table = PlaidTable()
 
             table.table_name = event_data["published_name"]
-            table.friendly_name = event_data["name"]
+            table.base_table_name = event_data["id"]
             table.project_id = kwargs["project_id"]
             table.schema = f"report{table.project_id}"
 
@@ -251,9 +273,17 @@ class EventHandler():
 
 
         def insert_table(event_data):
+            if not event_data.get("published_name"):
+                log.info(
+                    f"Received table insert event for {event_data['id']} "
+                    f"(Project {kwargs['project_id']}), but no published name is set. "
+                    f"Skipping."
+                )
+                return
+            log.info(f"Inserting table {event_data['published_name']} ({event_data['id']}) for project {kwargs['project_id']}.")
             if not db.session.query(
                 db.session.query(PlaidTable).filter_by(
-                        table_name=event_data['published_name'],
+                        base_table_name=event_data['id'],
                         project_id=kwargs['project_id']
                     ).exists()
                 ).scalar():
@@ -263,7 +293,10 @@ class EventHandler():
 
                     # Test if source table/view actually exists before we add it.
                     try:
+                        # TODO: This is pretty dumb. Event is being processed before the DB can create the view. 
+                        time.sleep(2)
                         project = db.session.query(PlaidProject).filter_by(uuid=new_table.project_id).one()
+                        log.info(project.get_all_view_names_in_schema(schema=new_table.schema))
                         project.get_table(table_name=new_table.table_name, schema=new_table.schema)
                         new_table.project = project
                     except NoSuchTableError:
@@ -278,13 +311,15 @@ class EventHandler():
                     new_table.fetch_metadata()
 
                     # Create permissions for table, and add them to project role.
+                    schema_pv = security_manager.add_permission_view_menu("schema_access", new_table.get_schema_perm())
                     pv = security_manager.add_permission_view_menu("datasource_access", new_table.get_perm())
                     project_role = security_manager.find_role(f"project_{new_table.project_id}")
+                    security_manager.add_permission_role(project_role, schema_pv)
                     security_manager.add_permission_role(project_role, pv)
                     
                     db.session.commit()
                 except Exception:
-                    log.exception("WTF")
+                    log.exception("Error occurred while inserting a new table.")
                     db.session.rollback()
                     return
             else:
@@ -294,10 +329,16 @@ class EventHandler():
 
         def update_table(event_data):
             try:
+                # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
+                time.sleep(2)
+                log.info(f"Updating table {event_data['published_name']} ({event_data['id']}) for project {kwargs['project_id']}.")
                 existing_table = db.session.query(PlaidTable).filter_by(
-                    table_name=event_data['published_name'],
+                    base_table_name=event_data['id'],
                     project_id=kwargs['project_id'],
                 ).one()
+                if not event_data.get("published_name"):
+                    # Table still exists, but the user unpublished it. So we want to delete.
+                    delete_table(event_data)
                 map_data_to_row(event_data, existing_table)
                 existing_table.fetch_metadata()
                 db.session.commit()
@@ -311,14 +352,21 @@ class EventHandler():
 
         def delete_table(event_data):
             try:
+                log.info(f"Deleting table {event_data['published_name']} for project {kwargs['project_id']}.")
                 table = db.session.query(PlaidTable).filter(
-                    PlaidTable.table_name == event_data['published_name'],
+                    PlaidTable.base_table_name == event_data['id'],
                     PlaidTable.schema == f"report{kwargs['project_id']}",
                 ).one()
-                pv = security_manager.find_permissions_view_menu(table.get_perm())
-                project_role = security_manager.find_role(f"project_{table.project_id}")
-                project_role.permissions.remove(pv)
-                table.delete()
+                placeholder_table = db.session.query(PlaidTable).filter(
+                    PlaidTable.base_table_name == "change_me",
+                    PlaidTable.project_id == "placeholder_project",
+                ).one()
+                charts = db.session.query(Slice).filter_by(datasource_id=table.id, datasource_type='plaid').all()
+                for chart in charts:
+                    chart.datasource_id = placeholder_table.id
+                    db.session.commit()
+                security_manager.del_permission_view_menu('datasource_access', table.get_perm())
+                db.session.delete(table)
                 db.session.commit()
             except NoResultFound:
                 log.warning("Received a delete event for a table that doesn't exist.")
@@ -438,8 +486,9 @@ class EventHandler():
                     Role.name == project_role.name,
                 ).all()
 
+                log.info(f"Users who lost access: {[user.user_id for user in user_maps]}")
                 for mapp in user_maps:
-                    mapp.delete()
+                    db.session.delete(mapp)
 
                 # Get every user in the list that doesn't have the project role.
                 # TODO: For workspace access changes, do we need to check access type?
@@ -459,6 +508,7 @@ class EventHandler():
                     PlaidUserMap.plaid_user_id.in_(event_data)
                 ).all()
 
+                log.info(f"Users with access: {users}")
                 # Add the project role for each user.
                 for user in users:
                     user.roles.append(project_role)
