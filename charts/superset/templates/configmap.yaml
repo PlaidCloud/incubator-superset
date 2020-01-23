@@ -5,20 +5,6 @@ metadata:
 data:
   init_superset.sh: |
     gunicorn superset:app
-  connection_info.yaml: |
-    # TODO: WIP on templating the superset config file with connection info.
-    rabbitmq:
-      host: "rabbit-rabbitmq-ha.plaid"
-      port: "5672"
-      username: "event_user"
-      password: "village painting wedding outcome"
-      queue: "events_stage"
-      vhost: "events"
-    redis:
-      CACHE_REDIS_SENTINELS: 
-      CACHE_REDIS_SENTINEL_MASTER: 
-      CACHE_REDIS_PASSWORD: 
-      CACHE_REDIS_DB: 
   superset_config.py: |
     import os
     import ssl
