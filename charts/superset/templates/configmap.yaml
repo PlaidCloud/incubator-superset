@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: superset-config
+  name: {{ .Release.Name }}-config
 data:
   init_superset.sh: |
     gunicorn superset:app
