@@ -1,0 +1,66 @@
+################################################################################################################
+#
+# If you don't have a skaffold.yaml file, run this command (replace 'gbates' with your first initial and last name):
+#
+#   Bash:       sed -e 's/<dev-name>/gbates/g' skaffold.example.yaml > skaffold.yaml
+#   Powershell: get-content skaffold.example.yaml | %{$_ -replace "<dev-name>","gbates"} | out-file -FilePath .\skaffold.yaml
+#
+# Refer to this guide for more info:
+#
+#   https://docs.google.com/document/d/1h9m4xU8Pg2eaVPhy3nDhwer_LDQOBiKy5p2iyx77VT4/edit
+#
+################################################################################################################
+apiVersion: skaffold/v1beta11
+kind: Config
+deploy:
+  helm:
+    releases:
+    - name: <dev-name>-superset
+      namespace: <dev-name>
+      chartPath: charts/superset
+      values:
+        # This is how skaffold knows which pods to sync with.
+        superset.image: plaidcloud/superset
+      overrides:
+        superset:
+          repo: plaidcloud/superset
+          #tag: 1227-redis-cache-1
+          pullPolicy: IfNotPresent
+          imagePullSecret: dockerhub-key
+          hostname: <dev-name>-viz.plaidcloud.io
+          port: 80
+          targetPort: 8088
+          env:
+            - name: SUPERSET_ENV
+              value: "development"
+            - name: SUPERSET_PORT
+              value: "8088"
+
+        superset_events:
+          repo: plaidcloud/superset-events
+          #tag: 1154-post-update-fixes-2
+          pullPolicy: IfNotPresent
+          imagePullSecret: dockerhub-key
+          env:
+            - name: SUPERSET_ENV
+              value: "development"
+            - name: HEADLESS
+              value: "true"
+
+        redis:
+          host: "<dev-name>-superset-redis-redis-ha.plaid-stage"
+          port: 26379
+          group: "superset"
+
+        rabbitmq:
+          host: "<dev-name>-rabbit-rabbitmq-ha.<dev-name>"
+          port: 5672
+          username: "event_user"
+          password: "apple jacks"
+          queue: "events"
+          vhost: "events"
+      # recreatePods will pass --recreate-pods to helm upgrade
+      # recreatePods: true
+      # setValues get appended to the helm deploy with --set.  
+      # setValues:
+        #some.key: someValue

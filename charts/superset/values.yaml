@@ -1,0 +1,48 @@
+superset:
+  repo: plaidcloud/superset
+  tag: latest
+  pullPolicy: Always
+  imagePullSecret: dockerhub-key
+  hostname: viz.plaidcloud.com
+  port: 80
+  targetPort: 8088
+  env:
+    - name: SUPERSET_ENV
+      value: "development"
+    - name: SUPERSET_PORT
+      value: "8088"
+
+superset_events:
+  repo: plaidcloud/superset-events
+  tag: latest
+  pullPolicy: Always
+  imagePullSecret: dockerhub-key
+  env:
+    - name: SUPERSET_ENV
+      value: "development"
+    - name: HEADLESS
+      value: "true"
+
+database:
+  user: superset
+  pass: "strong superset password"
+  host: superset-postgresql
+  port: 5432
+  name: superset
+  greenplum_host: "127.0.0.1"
+
+mapbox:
+  api_key: "pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ"
+
+redis:
+  host: "redis-ha.default"
+  port: 26379
+  group: "superset"
+
+rabbitmq:
+  host: "rabbitmq-ha.default"
+  port: 5672
+  username: "event_user"
+  password: "event password"
+  queue: "events"
+  vhost: "events"

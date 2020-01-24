@@ -1,0 +1,16 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app: plaid
+    plaid: {{ .Release.Name }}
+spec:
+  rules:
+  - host: {{ .Values.superset.hostname }}
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: {{ .Release.Name }}
+          servicePort: {{ .Values.superset.port }}

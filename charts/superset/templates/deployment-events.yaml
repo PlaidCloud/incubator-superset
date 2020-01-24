@@ -1,0 +1,49 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-events
+  labels:
+    app: plaid
+    plaid: {{ .Release.Name }}-events
+spec:
+  replicas: 1
+  minReadySeconds: 10
+  template:
+    metadata:
+      name: superset
+      labels:
+        app: plaid
+        plaid: {{ .Release.Name }}-events
+    spec:
+      containers:
+      - name: superset
+        image: {{ .Values.superset_events.repo }}:{{ .Values.superset_events.tag }}
+        imagePullPolicy: {{ .Values.superset_events.pullPolicy }}
+        env:
+{{ .Values.superset_events.env | toYaml | indent 10 }}
+        ports:
+        - name: http
+          containerPort: 8088
+        # TODO: Need to figure out how to write a liveness probe for event handler.
+        # livenessProbe:
+        #   httpGet:
+        #     path: /
+        #     port: 80
+        #   initialDelaySeconds: 3
+        #   periodSeconds: 3
+        # readinessProbe:
+        #   httpGet:
+        #     path: /
+        #     port: 80
+        #   initialDelaySeconds: 3
+        #   periodSeconds: 3
+        volumeMounts:
+        - name: superset-conf
+          mountPath: /etc/superset/
+        resources: {}
+      imagePullSecrets:
+      - name: {{ .Values.superset_events.imagePullSecret }}
+      volumes:
+      - name: superset-conf
+        configMap:
+            name: {{ .Release.Name }}-config
