@@ -5,6 +5,10 @@ Plaid Security Class for Superset
 import logging
 from sqlalchemy import func
 from superset.security import SupersetSecurityManager
+from flask_appbuilder.security.manager import AUTH_OID
+from flask_appbuilder.security.sqla.manager import SecurityManager
+from flask_oidc import OpenIDConnect
+from plaid.auth_oidc import AuthOIDCView
 
 __author__ = "Garrett Bates"
 __copyright__ = "© Copyright 2018, Tartan Solutions, Inc"
@@ -25,6 +29,12 @@ def get_project_role_name(project_id):
 class PlaidSecurityManager(SupersetSecurityManager):
     """Custom security manager class for PlaidCloud integration.
     """
+    def __init__(self):
+        super(PlaidSecurityManager, self).__init__(appbuilder)
+        if self.auth_type == AUTH_OID:
+            self.oid = OpenIDConnect(self.appbuilder.get_app)
+        self.authoidview = AuthOIDCView
+
 
     def sync_role_definitions(self):
         """PlaidSecurityManager contructor.
