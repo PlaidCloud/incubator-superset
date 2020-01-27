@@ -29,7 +29,7 @@ def get_project_role_name(project_id):
 class PlaidSecurityManager(SupersetSecurityManager):
     """Custom security manager class for PlaidCloud integration.
     """
-    def __init__(self):
+    def __init__(self, appbuilder):
         super(PlaidSecurityManager, self).__init__(appbuilder)
         if self.auth_type == AUTH_OID:
             self.oid = OpenIDConnect(self.appbuilder.get_app)
