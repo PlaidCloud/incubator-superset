@@ -5,6 +5,16 @@ metadata:
 data:
   init_superset.sh: |
     gunicorn superset:app
+  client_secret.json: |
+    {
+        "web": { 
+            "client_id": "{{ .Values.oidc.clientId }}",
+            "client_secret": "{{ .Values.oidc.clientSecret }}",
+            "auth_uri": "{{ .Values.oidc.authEndpoint }}",
+            "token_uri": "{{ .Values.oidc.tokenEndpoint }}",
+            "redirect_uris": {{- .Values.oidc.redirect_uris | toPrettyJson | indent 12 | trimPrefix "           " }}
+        }
+    }
   superset_config.py: |
     import os
     import ssl
@@ -19,16 +29,17 @@ data:
     #SUPERSET_WORKERS = 4
   
     # I created a mapbox account under garrett.bates@tartansolutions.com
-    MAPBOX_API_KEY = '{{ .Values.mapbox.api_key }}'
+    MAPBOX_API_KEY = '{{ .Values.mapbox.apiKey }}'
   
     HOSTNAME = '{{ .Values.superset.hostname }}'
     PLAID_HOST = '{{ .Values.superset.hostname }}'
-    PLAID_DATABASE_HOST = '{{ .Values.database.greenplum_host }}'
+    PLAID_DATABASE_HOST = '{{ .Values.database.greenplumHost }}'
     SCHEME = 'https'
     SQLALCHEMY_DATABASE_URI = 'postgresql://{{ .Values.database.user }}:{{ .Values.database.pass }}@{{ .Values.database.host }}:{{ .Values.database.port }}/{{ .Values.database.name }}'
     PUBLIC_ROLE_LIKE_PLAID = False
     ADMIN_ENABLED = True
 
+    ENABLE_CORS = True
   
     RABBITMQ_CONNECTION_INFO = {
         "host": "{{ .Values.rabbitmq.host }}",
@@ -49,19 +60,19 @@ data:
     APP_ICON = '/static/assets/images/plaidcloud.png'
   
     CACHE_CONFIG = {
-        'CACHE_TYPE': 'simple',
-        # 'CACHE_TYPE': 'redissentinel',
-        # 'CACHE_REDIS_SENTINELS': [("{{ .Values.redis.host }}", {{ .Values.redis.port }})],
-        # 'CACHE_REDIS_SENTINEL_MASTER': "{{ .Values.redis.group }}",
-        # 'CACHE_REDIS_DB': 0,
+        # 'CACHE_TYPE': 'simple',
+        'CACHE_TYPE': 'redissentinel',
+        'CACHE_REDIS_SENTINELS': [("{{ .Values.redis.host }}", {{ .Values.redis.port }})],
+        'CACHE_REDIS_SENTINEL_MASTER': "{{ .Values.redis.group }}",
+        'CACHE_REDIS_DB': 0,
     }
     
     TABLE_NAMES_CACHE_CONFIG = {
-        'CACHE_TYPE': 'simple',
-        # 'CACHE_TYPE': 'redissentinel',
-        # 'CACHE_REDIS_SENTINELS': [("{{ .Values.redis.host }}", {{ .Values.redis.port }})],
-        # 'CACHE_REDIS_SENTINEL_MASTER': "{{ .Values.redis.group }}",
-        # 'CACHE_REDIS_DB': 1,
+        # 'CACHE_TYPE': 'simple',
+        'CACHE_TYPE': 'redissentinel',
+        'CACHE_REDIS_SENTINELS': [("{{ .Values.redis.host }}", {{ .Values.redis.port }})],
+        'CACHE_REDIS_SENTINEL_MASTER': "{{ .Values.redis.group }}",
+        'CACHE_REDIS_DB': 1,
     }
   
     # Disable Druid. We don't use it.
@@ -112,12 +123,11 @@ data:
     # If users can register for an account (see above setting), this would be their default role.
     #AUTH_USER_REGISTRATION_ROLE = "Public"
     AUTH_TYPE = AUTH_OID
-    OIDC_CLIENT_SECRETS = 'client_secret.json'
-    OIDC_ID_TOKEN_COOKIE_SECURE = False
+    OIDC_SCOPES = ['openid', 'profile']
+    OIDC_CLIENT_SECRETS = "/etc/superset/client_secret.json"
+    OIDC_ID_TOKEN_COOKIE_SECURE = True
     OIDC_REQUIRE_VERIFIED_EMAIL = False
-    OPENID_PROVIDERS = [
-        { 'name': 'PlaidCloud', 'url': 'https://claymon.plaidcloud.io/login' },
-    ]
+    OIDC_ID_TOKEN_COOKIE_NAME = "{{ .Values.oidc.cookieName }}"
   
     PLAID_BASE_PERMISSIONS = {
         'menu_access': {
