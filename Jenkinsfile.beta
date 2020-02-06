@@ -21,8 +21,7 @@ podTemplate(label: 'superset',
   node(label: 'superset') {
     properties([
       parameters([
-        booleanParam(name: 'no_cache', defaultValue: false, description: 'Adds --no-cache flag to docker build command(s).'),
-        booleanParam(name: 'deploy_to_kubernetes', defaultValue: false, description: 'Force Jenkins to run the "Deploy to Kubernetes" stage')
+        booleanParam(name: 'no_cache', defaultValue: false, description: 'Adds --no-cache flag to docker build command(s).')
       ])
     ]) 
     container('docker') {
