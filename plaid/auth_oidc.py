@@ -1,8 +1,11 @@
+import logging
 from urllib.parse import quote
-from flask import redirect, request
+from flask import g, redirect, request
 from flask_appbuilder.security.views import AuthOIDView
 from flask_appbuilder import expose
 from flask_login import login_user
+
+logger = logging.getLogger()
 
 class AuthOIDCView(AuthOIDView):
 
@@ -11,13 +14,16 @@ class AuthOIDCView(AuthOIDView):
         sm = self.appbuilder.sm
         oidc = sm.oid
 
-        @self.appbuilder.sm.oid.require_login
+        if g.oidc_id_token is None:
+            logger.info(f"Redirect URL: {request.url.replace('http://', 'https://', 1)}")
+            return sm.oid.redirect_to_auth_server(request.url.replace('http://', 'https://', 1))
+
         def handle_login():
             user = sm.auth_user_oid(oidc.user_getfield('email'))
 
             if user is None:
                 info = oidc.user_getinfo(['preferred_username', 'given_name', 'family_name', 'email'])
-                user = sm.add_user(info.get('preferred_username'), info.get('given_name'), info.get('family_name'), info.get('email'), sm.find_role('Gamma'))
+                user = sm.add_user(info.get('preferred_username'), info.get('given_name'), info.get('family_name'), info.get('email'), sm.find_role('Plaid'))
 
             login_user(user, remember=False)
             return redirect(self.appbuilder.get_url_for_index)
