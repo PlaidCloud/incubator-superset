@@ -10,7 +10,7 @@
 #   https://docs.google.com/document/d/1h9m4xU8Pg2eaVPhy3nDhwer_LDQOBiKy5p2iyx77VT4/edit
 #
 ################################################################################################################
-apiVersion: skaffold/v1beta11
+apiVersion: skaffold/v2alpha2
 kind: Config
 deploy:
   helm:
@@ -21,6 +21,7 @@ deploy:
       values:
         # This is how skaffold knows which pods to sync with.
         superset.image: plaidcloud/superset
+        superset_events.image: plaidcloud/superset-events
       overrides:
         superset:
           repo: plaidcloud/superset

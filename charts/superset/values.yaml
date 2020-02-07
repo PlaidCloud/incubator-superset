@@ -29,10 +29,20 @@ database:
   host: superset-postgresql
   port: 5432
   name: superset
-  greenplum_host: "127.0.0.1"
+  greenplumHost: "127.0.0.1"
 
 mapbox:
-  api_key: "pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ"
+  apiKey: "pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ"
+
+oidc:
+  cookieName: "_session_id"
+  clientId: ""
+  clientSecret: ""
+  authEndpoint: https://plaidcloud.com/oauth/authorize
+  tokenEndpoint: https://plaidcloud.com/oauth/token
+  redirectUris:
+  - https://viz.plaidcloud.com/oidc_callback
+  
 
 redis:
   host: "redis-ha.default"
