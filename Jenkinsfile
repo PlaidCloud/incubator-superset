@@ -104,7 +104,7 @@ podTemplate(label: 'superset',
           sh "kubectl -n plaid set image deployment/superset superset=${image_name}:${image_label} --record"
         }
         stage("Deploy superset-events to Kubernetes") {
-          sh "kubectl -n plaid set image deployment/superset superset=${image_name}-events:${image_label} --record"
+          sh "kubectl -n plaid set image deployment/superset-events superset=${image_name}-events:${image_label} --record"
         }
       }
     }
