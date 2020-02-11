@@ -41,6 +41,7 @@ oidc:
   clientSecret: ""
   authEndpoint: https://plaidcloud.com/oauth/authorize
   tokenEndpoint: https://plaidcloud.com/oauth/token
+  jwksEndpoint: https://plaidcloud.com/oauth/jwks
   redirectUris:
   - https://viz.plaidcloud.com/oidc_callback
   

@@ -30,7 +30,7 @@ data:
     PUBLIC_ROLE_LIKE_PLAID = False
     ADMIN_ENABLED = True
 
-    ENABLE_CORS = True
+    ENABLE_CORS = False
   
     RABBITMQ_CONNECTION_INFO = {
         "host": "{{ .Values.rabbitmq.host }}",
@@ -123,21 +123,8 @@ data:
     PLAID_AUTHORIZE_PARAMS = {}
     PLAID_API_BASE_URL = "{{ .Values.oidc.baseUrl }}"
     PLAID_CLIENT_KWARGS = {'scope': 'openid profile'}
-    PLAID_JWKS_URL = "{{ .Values.oidc.jwksUrl }}"
+    PLAID_JWKS_URL = "{{ .Values.oidc.jwksEndpoint }}"
 
-
-    oauth.register(
-        name="plaid",
-        client_id="{{ .Values.oidc.clientId }}",
-        client_secret=,
-        access_token_url=,
-        access_token_params=None,
-        authorize_url=,
-        authorize_params=None,
-        api_base_url="",
-        userinfo_endpoint="{{ .Values.oidc.userinfoEndpoint }}"
-        client_kwargs={'scope': 'openid profile'},
-    )
   
     PLAID_BASE_PERMISSIONS = {
         'menu_access': {
