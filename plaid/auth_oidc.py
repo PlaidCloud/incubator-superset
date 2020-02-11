@@ -35,16 +35,17 @@ class AuthOIDCView(AuthOIDView):
     def authorize(self):
         oauth = self.appbuilder.sm.oauth
         token = oauth.plaid.authorize_access_token()
+        # TODO: Determine if there is anything we actually need to do with the user info.
         userinfo = oauth.plaid.parse_id_token(token)
         return redirect('/')
 
-    @expose('/logout/', methods=['GET', 'POST'])
-    def logout(self):
+    # @expose('/logout/', methods=['GET', 'POST'])
+    # def logout(self):
 
-        oidc = self.appbuilder.sm.oid
+    #     oidc = self.appbuilder.sm.oid
 
-        oidc.logout()
-        super(AuthOIDCView, self).logout()
-        redirect_url = request.url_root.strip('/') + self.appbuilder.get_url_for_login
+    #     oidc.logout()
+    #     super(AuthOIDCView, self).logout()
+    #     redirect_url = request.url_root.strip('/') + self.appbuilder.get_url_for_login
 
-        return redirect(oidc.client_secrets.get('issuer') + '/protocol/openid-connect/logout?redirect_uri=' + quote(redirect_url))
+    #     return redirect(oidc.client_secrets.get('issuer') + '/protocol/openid-connect/logout?redirect_uri=' + quote(redirect_url))
