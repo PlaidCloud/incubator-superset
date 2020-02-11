@@ -34,10 +34,33 @@ class PlaidSecurityManager(SupersetSecurityManager):
     def __init__(self, appbuilder):
         super(PlaidSecurityManager, self).__init__(appbuilder)
         if self.auth_type == AUTH_OID:
-            self.oauth = OAuth(app=appbuilder.get_app, cache=cache_manager.cache)
+            oidc_params = self.appbuilder.app.config.get("OIDC_PARAMS")
+            # session_expiration = self.appbuilder.app.config.get("SESSION_EXPIRATION")
+            # def fetch_request_token():
+            #     key = _req_token_tpl.format(name)
+            #     sid = session.pop(key, None)
+            #     if not sid:
+            #         return None
+
+            #     token = cache.get(sid)
+            #     cache.delete(sid)
+            #     return token
+
+            # def save_request_token(token):
+            #     key = _req_token_tpl.format(name)
+            #     sid = uuid.uuid4().hex
+            #     session[key] = sid
+            #     cache.set(sid, token, ex=session_expiration)
+
+            self.oauth = OAuth(app=appbuilder.get_app)
             self.oauth.register(
                 'plaid',
-                jwks_uri=self.appbuilder.app.config.get("PLAID_JWKS_URL"),
+                client_id=oidc_params['client_id'],
+                client_secret=oidc_params['client_secret'],
+                access_token_url=oidc_params['token_url'],
+                authorize_url=oidc_params['auth_url'],
+                jwks_uri=oidc_params['jwks_uri'],
+                client_kwargs=oidc_params['client_kwargs'],
             )
         self.authoidview = AuthOIDCView
 

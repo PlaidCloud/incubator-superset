@@ -29,8 +29,10 @@ data:
     SQLALCHEMY_DATABASE_URI = 'postgresql://{{ .Values.database.user }}:{{ .Values.database.pass }}@{{ .Values.database.host }}:{{ .Values.database.port }}/{{ .Values.database.name }}'
     PUBLIC_ROLE_LIKE_PLAID = False
     ADMIN_ENABLED = True
+    SESSION_EXPIRATION = 600
 
     ENABLE_CORS = False
+    PREFERRED_URL_SCHEME = 'https'
   
     RABBITMQ_CONNECTION_INFO = {
         "host": "{{ .Values.rabbitmq.host }}",
@@ -115,15 +117,20 @@ data:
     #AUTH_USER_REGISTRATION_ROLE = "Public"
     AUTH_TYPE = AUTH_OID
 
-    PLAID_CLIENT_ID = "{{ .Values.oidc.clientId }}"
-    PLAID_CLIENT_SECRET = "{{ .Values.oidc.clientSecret }}"
-    PLAID_ACCESS_TOKEN_URL = "{{ .Values.oidc.tokenEndpoint }}"
-    PLAID_ACCESS_TOKEN_PARAMS = {}
-    PLAID_AUTHORIZE_URL = "{{ .Values.oidc.authEndpoint }}"
-    PLAID_AUTHORIZE_PARAMS = {}
-    PLAID_API_BASE_URL = "{{ .Values.oidc.baseUrl }}"
-    PLAID_CLIENT_KWARGS = {'scope': 'openid profile'}
-    PLAID_JWKS_URL = "{{ .Values.oidc.jwksEndpoint }}"
+    OIDC_PARAMS = {
+        "client_id": "{{ .Values.oidc.clientId }}",
+        "client_secret": "{{ .Values.oidc.clientSecret }}",
+        "token_url": "{{ .Values.oidc.tokenEndpoint }}",
+        # token_params: {},
+        "auth_url": "{{ .Values.oidc.authEndpoint }}",
+        # auth_params: {},
+        "base_url": "{{ .Values.oidc.baseUrl }}",
+        "jwks_uri": "{{ .Values.oidc.jwksEndpoint }}",
+        "client_kwargs": {
+            'scope': 'openid profile',
+            'token_endpoint_auth_method': 'client_secret_basic',
+        },
+    }
 
   
     PLAID_BASE_PERMISSIONS = {
