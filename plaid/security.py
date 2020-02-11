@@ -34,7 +34,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
     def __init__(self, appbuilder):
         super(PlaidSecurityManager, self).__init__(appbuilder)
         if self.auth_type == AUTH_OID:
-            self.oauth = OAuth(appbuilder.get_app(), cache=cache_manager.cache)
+            self.oauth = OAuth(app=appbuilder.get_app, cache=cache_manager.cache)
             self.oauth.register(
                 'plaid',
                 jwks_uri=self.appbuilder.app.config.get("PLAID_JWKS_URL"),
