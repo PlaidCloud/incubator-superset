@@ -35,6 +35,7 @@ mapbox:
   apiKey: "pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ"
 
 oidc:
+  baseUrl: "https://plaidcloud.com/"
   cookieName: "_session_id"
   clientId: ""
   clientSecret: ""

@@ -5,16 +5,7 @@ metadata:
 data:
   init_superset.sh: |
     gunicorn superset:app
-  client_secret.json: |
-    {
-        "web": { 
-            "client_id": "{{ .Values.oidc.clientId }}",
-            "client_secret": "{{ .Values.oidc.clientSecret }}",
-            "auth_uri": "{{ .Values.oidc.authEndpoint }}",
-            "token_uri": "{{ .Values.oidc.tokenEndpoint }}",
-            "redirect_uris": {{- .Values.oidc.redirect_uris | toPrettyJson | indent 12 | trimPrefix "           " }}
-        }
-    }
+
   superset_config.py: |
     import os
     import ssl
@@ -123,11 +114,30 @@ data:
     # If users can register for an account (see above setting), this would be their default role.
     #AUTH_USER_REGISTRATION_ROLE = "Public"
     AUTH_TYPE = AUTH_OID
-    OIDC_SCOPES = ['openid', 'profile']
-    OIDC_CLIENT_SECRETS = "/etc/superset/client_secret.json"
-    OIDC_ID_TOKEN_COOKIE_SECURE = True
-    OIDC_REQUIRE_VERIFIED_EMAIL = False
-    OIDC_ID_TOKEN_COOKIE_NAME = "{{ .Values.oidc.cookieName }}"
+
+    PLAID_CLIENT_ID = "{{ .Values.oidc.clientId }}"
+    PLAID_CLIENT_SECRET = "{{ .Values.oidc.clientSecret }}"
+    PLAID_ACCESS_TOKEN_URL = "{{ .Values.oidc.tokenEndpoint }}"
+    PLAID_ACCESS_TOKEN_PARAMS = {}
+    PLAID_AUTHORIZE_URL = "{{ .Values.oidc.authEndpoint }}"
+    PLAID_AUTHORIZE_PARAMS = {}
+    PLAID_API_BASE_URL = "{{ .Values.oidc.baseUrl }}"
+    PLAID_CLIENT_KWARGS = {'scope': 'openid profile'}
+    PLAID_JWKS_URL = "{{ .Values.oidc.jwksUrl }}"
+
+
+    oauth.register(
+        name="plaid",
+        client_id="{{ .Values.oidc.clientId }}",
+        client_secret=,
+        access_token_url=,
+        access_token_params=None,
+        authorize_url=,
+        authorize_params=None,
+        api_base_url="",
+        userinfo_endpoint="{{ .Values.oidc.userinfoEndpoint }}"
+        client_kwargs={'scope': 'openid profile'},
+    )
   
     PLAID_BASE_PERMISSIONS = {
         'menu_access': {

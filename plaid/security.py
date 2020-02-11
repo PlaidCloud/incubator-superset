@@ -3,11 +3,13 @@
 Plaid Security Class for Superset
 """
 import logging
+import redis
 from sqlalchemy import func
+from superset.extensions import cache_manager
 from superset.security import SupersetSecurityManager
 from flask_appbuilder.security.manager import AUTH_OID
 from flask_appbuilder.security.sqla.manager import SecurityManager
-from flask_oidc import OpenIDConnect
+from authlib.integrations.flask_client import OAuth
 from plaid.auth_oidc import AuthOIDCView
 
 __author__ = "Garrett Bates"
@@ -32,7 +34,11 @@ class PlaidSecurityManager(SupersetSecurityManager):
     def __init__(self, appbuilder):
         super(PlaidSecurityManager, self).__init__(appbuilder)
         if self.auth_type == AUTH_OID:
-            self.oid = OpenIDConnect(self.appbuilder.get_app)
+            self.oauth = OAuth(appbuilder.get_app(), cache=cache_manager.cache)
+            self.oauth.register(
+                'plaid',
+                jwks_uri=self.appbuilder.app.config.get("PLAID_JWKS_URL"),
+            )
         self.authoidview = AuthOIDCView
 
 
