@@ -25,6 +25,6 @@ class AuthOIDCView(AuthOIDView):
     @expose("/logout/")
     def logout(self):
         logout_user()
-        base_url = self.appbuilder.app.config["OIDC_PARAMS"]["baseUrl"]
+        base_url = self.appbuilder.app.config["OIDC_PARAMS"]["base_url"]
         return redirect(urljoin(base_url, "/logout"))
         
