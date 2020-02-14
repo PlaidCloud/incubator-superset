@@ -1,12 +1,8 @@
-import logging
-from urllib.parse import quote
-from flask import g, redirect, request, url_for
+from flask import redirect, url_for
 from flask_appbuilder.security.views import AuthOIDView
 from flask_appbuilder import expose
 from flask_login import login_user
 
-logger = logging.getLogger(__name__)
-logging.getLogger('authlib.integrations._client.base_app').setLevel("DEBUG")
 
 class AuthOIDCView(AuthOIDView):
 
@@ -18,9 +14,9 @@ class AuthOIDCView(AuthOIDView):
 
     @expose('/authorize')
     def authorize(self):
-        oauth = self.appbuilder.sm.oauth
-        logger.info(f"params: {oauth.plaid.retrieve_access_token_params(request)}")
+        oauth = self.appbuilder.sm.oauth        
         token = oauth.plaid.authorize_access_token()
-        # TODO: Determine if there is anything we actually need to do with the user info.
         userinfo = oauth.plaid.parse_id_token(token)
+        user = self.appbuilder.sm.find_user(username=userinfo['name'])
+        login_user(user)
         return redirect('/')

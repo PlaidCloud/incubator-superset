@@ -35,23 +35,6 @@ class PlaidSecurityManager(SupersetSecurityManager):
         super(PlaidSecurityManager, self).__init__(appbuilder)
         if self.auth_type == AUTH_OID:
             oidc_params = self.appbuilder.app.config.get("OIDC_PARAMS")
-            # session_expiration = self.appbuilder.app.config.get("SESSION_EXPIRATION")
-            # def fetch_request_token():
-            #     key = _req_token_tpl.format(name)
-            #     sid = session.pop(key, None)
-            #     if not sid:
-            #         return None
-
-            #     token = cache.get(sid)
-            #     cache.delete(sid)
-            #     return token
-
-            # def save_request_token(token):
-            #     key = _req_token_tpl.format(name)
-            #     sid = uuid.uuid4().hex
-            #     session[key] = sid
-            #     cache.set(sid, token, ex=session_expiration)
-
             self.oauth = OAuth(app=appbuilder.get_app)
             self.oauth.register(
                 'plaid',
