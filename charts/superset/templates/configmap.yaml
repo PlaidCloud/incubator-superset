@@ -5,16 +5,7 @@ metadata:
 data:
   init_superset.sh: |
     gunicorn superset:app
-  client_secret.json: |
-    {
-        "web": { 
-            "client_id": "{{ .Values.oidc.clientId }}",
-            "client_secret": "{{ .Values.oidc.clientSecret }}",
-            "auth_uri": "{{ .Values.oidc.authEndpoint }}",
-            "token_uri": "{{ .Values.oidc.tokenEndpoint }}",
-            "redirect_uris": {{- .Values.oidc.redirect_uris | toPrettyJson | indent 12 | trimPrefix "           " }}
-        }
-    }
+
   superset_config.py: |
     import os
     import ssl
@@ -38,8 +29,10 @@ data:
     SQLALCHEMY_DATABASE_URI = 'postgresql://{{ .Values.database.user }}:{{ .Values.database.pass }}@{{ .Values.database.host }}:{{ .Values.database.port }}/{{ .Values.database.name }}'
     PUBLIC_ROLE_LIKE_PLAID = False
     ADMIN_ENABLED = True
+    SESSION_EXPIRATION = 600
 
-    ENABLE_CORS = True
+    ENABLE_CORS = False
+    PREFERRED_URL_SCHEME = 'https'
   
     RABBITMQ_CONNECTION_INFO = {
         "host": "{{ .Values.rabbitmq.host }}",
@@ -123,11 +116,22 @@ data:
     # If users can register for an account (see above setting), this would be their default role.
     #AUTH_USER_REGISTRATION_ROLE = "Public"
     AUTH_TYPE = AUTH_OID
-    OIDC_SCOPES = ['openid', 'profile']
-    OIDC_CLIENT_SECRETS = "/etc/superset/client_secret.json"
-    OIDC_ID_TOKEN_COOKIE_SECURE = True
-    OIDC_REQUIRE_VERIFIED_EMAIL = False
-    OIDC_ID_TOKEN_COOKIE_NAME = "{{ .Values.oidc.cookieName }}"
+
+    OIDC_PARAMS = {
+        "client_id": "{{ .Values.oidc.clientId }}",
+        "client_secret": "{{ .Values.oidc.clientSecret }}",
+        "token_url": "{{ .Values.oidc.tokenEndpoint }}",
+        # token_params: {},
+        "auth_url": "{{ .Values.oidc.authEndpoint }}",
+        # auth_params: {},
+        "base_url": "{{ .Values.oidc.baseUrl }}",
+        "jwks_uri": "{{ .Values.oidc.jwksEndpoint }}",
+        "client_kwargs": {
+            'scope': 'openid profile',
+            'token_endpoint_auth_method': 'client_secret_basic',
+        },
+    }
+
   
     PLAID_BASE_PERMISSIONS = {
         'menu_access': {

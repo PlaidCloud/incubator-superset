@@ -35,11 +35,13 @@ mapbox:
   apiKey: "pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ"
 
 oidc:
+  baseUrl: "https://plaidcloud.com/"
   cookieName: "_session_id"
   clientId: ""
   clientSecret: ""
   authEndpoint: https://plaidcloud.com/oauth/authorize
   tokenEndpoint: https://plaidcloud.com/oauth/token
+  jwksEndpoint: https://plaidcloud.com/oauth/jwks
   redirectUris:
   - https://viz.plaidcloud.com/oidc_callback
   
