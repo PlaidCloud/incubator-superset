@@ -42,6 +42,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
                 client_secret=oidc_params['client_secret'],
                 access_token_url=oidc_params['token_url'],
                 authorize_url=oidc_params['auth_url'],
+                authorize_params=oidc_params['auth_params'],
                 jwks_uri=oidc_params['jwks_uri'],
                 client_kwargs=oidc_params['client_kwargs'],
             )

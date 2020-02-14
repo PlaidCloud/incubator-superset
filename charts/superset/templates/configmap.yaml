@@ -123,7 +123,9 @@ data:
         "token_url": "{{ .Values.oidc.tokenEndpoint }}",
         # token_params: {},
         "auth_url": "{{ .Values.oidc.authEndpoint }}",
-        # auth_params: {},
+        "auth_params": {
+            "prompt": "none",
+        },
         "base_url": "{{ .Values.oidc.baseUrl }}",
         "jwks_uri": "{{ .Values.oidc.jwksEndpoint }}",
         "client_kwargs": {
