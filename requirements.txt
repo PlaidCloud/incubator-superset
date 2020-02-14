@@ -30,7 +30,6 @@ flask-compress==1.4.0
 flask-jwt-extended==3.20.0  # via flask-appbuilder
 flask-login==0.4.1        # via flask-appbuilder
 flask-migrate==2.5.2
-flask-oidc
 flask-openid==1.2.5       # via flask-appbuilder
 flask-sqlalchemy==2.4.0   # via flask-appbuilder, flask-migrate
 flask-talisman==0.7.0
