@@ -4,7 +4,8 @@ metadata:
   name: {{ .Release.Name }}-events
   labels:
     app: plaid
-    plaid: {{ .Release.Name }}-events
+    plaid: superset-events
+    release: {{ .Release.Name }}
 spec:
   replicas: 1
   minReadySeconds: 10
@@ -13,7 +14,8 @@ spec:
       name: superset
       labels:
         app: plaid
-        plaid: {{ .Release.Name }}-events
+        plaid: superset-events
+        release: {{ .Release.Name }}
     spec:
       containers:
       - name: superset
@@ -24,19 +26,6 @@ spec:
         ports:
         - name: http
           containerPort: 8088
-        # TODO: Need to figure out how to write a liveness probe for event handler.
-        # livenessProbe:
-        #   httpGet:
-        #     path: /
-        #     port: 80
-        #   initialDelaySeconds: 3
-        #   periodSeconds: 3
-        # readinessProbe:
-        #   httpGet:
-        #     path: /
-        #     port: 80
-        #   initialDelaySeconds: 3
-        #   periodSeconds: 3
         volumeMounts:
         - name: superset-conf
           mountPath: /etc/superset/

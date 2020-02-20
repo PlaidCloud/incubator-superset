@@ -12,4 +12,5 @@ spec:
     protocol: TCP
     name: http
   selector:
-    plaid: {{ .Release.Name }}
+    plaid: superset
+    release: {{ .Release.Name }}

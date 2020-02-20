@@ -19,6 +19,7 @@ from collections import OrderedDict
 from contextlib import closing
 from copy import copy, deepcopy
 from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type
 import json
 import logging
 import re
@@ -30,7 +31,7 @@ from flask_appbuilder import Model
 from flask_babel import lazy_gettext as _
 import numpy
 import pandas as pd
-import sqlalchemy as sa
+import sqlalchemy as sqla
 from sqlalchemy import (
     and_,
     asc,
@@ -48,8 +49,9 @@ from sqlalchemy import (
     Table,
     Text,
 )
-from sqlalchemy.engine import url
-from sqlalchemy.engine.url import make_url
+from sqlalchemy.engine import Dialect, Engine, url
+from sqlalchemy.engine.reflection import Inspector
+from sqlalchemy.engine.url import make_url, URL
 from sqlalchemy.exc import CompileError
 from sqlalchemy.orm import backref, relationship
 from sqlalchemy.orm.exc import NoResultFound
@@ -61,7 +63,7 @@ import sqlparse
 
 from superset import app, db, db_engine_specs, is_feature_enabled, security_manager
 from superset.connectors.base.models import BaseColumn, BaseDatasource, BaseMetric
-from superset.db_engine_specs.base import TimestampExpression
+from superset.db_engine_specs.base import TimeGrain, TimestampExpression
 from superset.exceptions import DatabaseNotFound
 from superset.jinja_context import get_template_processor
 from superset.models.annotations import Annotation
@@ -70,12 +72,14 @@ from superset.utils import cache as cache_util, core as utils, import_datasource
 from sqlalchemy_utils import EncryptedType
 
 config = app.config
-custom_password_store = config.get("SQLALCHEMY_CUSTOM_PASSWORD_STORE")
+custom_password_store = config["SQLALCHEMY_CUSTOM_PASSWORD_STORE"]
 stats_logger = config.get("STATS_LOGGER")
 log_query = config.get("QUERY_LOGGER")
 metadata = Model.metadata  # pylint: disable=no-member
+logger = logging.getLogger(__name__)
 
 PASSWORD_MASK = "X" * 10
+DB_CONNECTION_MUTATOR = config["DB_CONNECTION_MUTATOR"]
 
 class PlaidQuery(NamedTuple):
     extra_cache_keys: List[Any]
@@ -325,12 +329,12 @@ class PlaidTable(Model, BaseDatasource):
     export_children = ["metrics", "columns"]
 
     sqla_aggregations = {
-        "COUNT_DISTINCT": lambda column_name: sa.func.COUNT(sa.distinct(column_name)),
-        "COUNT": sa.func.COUNT,
-        "SUM": sa.func.SUM,
-        "AVG": sa.func.AVG,
-        "MIN": sa.func.MIN,
-        "MAX": sa.func.MAX,
+        "COUNT_DISTINCT": lambda column_name: sqla.func.COUNT(sqla.distinct(column_name)),
+        "COUNT": sqla.func.COUNT,
+        "SUM": sqla.func.SUM,
+        "AVG": sqla.func.AVG,
+        "MIN": sqla.func.MIN,
+        "MAX": sqla.func.MAX,
     }
 
     def make_sqla_column_compatible(self, sqla_col, label=None):
@@ -528,7 +532,7 @@ class PlaidTable(Model, BaseDatasource):
     def get_query_str_extended(self, query_obj) -> QueryStringExtended:
         sqlaq = self.get_sqla_query(**query_obj)
         sql = self.project.compile_sqla_query(sqlaq.sqla_query)
-        logging.info(sql)
+        logger.info(sql)
         sql = sqlparse.format(sql, reindent=True)
         sql = self.mutate_query_from_config(sql)
         return QueryStringExtended(
@@ -553,7 +557,7 @@ class PlaidTable(Model, BaseDatasource):
             if template_processor:
                 from_sql = template_processor.process_template(from_sql)
             from_sql = sqlparse.format(from_sql, strip_comments=True)
-            return TextAsFrom(sa.text(from_sql), []).alias("expr_qry")
+            return TextAsFrom(sqla.text(from_sql), []).alias("expr_qry")
         return self.get_sqla_table()
 
     def adhoc_metric_to_sqla(self, metric, cols):
@@ -706,7 +710,7 @@ class PlaidTable(Model, BaseDatasource):
         select_exprs = db_engine_spec.make_select_compatible(
             groupby_exprs_with_timestamp.values(), select_exprs
         )
-        qry = sa.select(select_exprs)
+        qry = sqla.select(select_exprs)
 
         tbl = self.get_from_clause(template_processor)
 
@@ -760,11 +764,11 @@ class PlaidTable(Model, BaseDatasource):
             where = extras.get("where")
             if where:
                 where = template_processor.process_template(where)
-                where_clause_and += [sa.text("({})".format(where))]
+                where_clause_and += [sqla.text("({})".format(where))]
             having = extras.get("having")
             if having:
                 having = template_processor.process_template(having)
-                having_clause_and += [sa.text("({})".format(having))]
+                having_clause_and += [sqla.text("({})".format(having))]
         if granularity:
             qry = qry.where(and_(*(time_filters + where_clause_and)))
         else:
@@ -918,7 +922,7 @@ class PlaidTable(Model, BaseDatasource):
         except Exception as e:
             df = None
             status = utils.QueryStatus.FAILED
-            logging.exception(f"Query {sql} on schema {self.schema} failed")
+            logger.exception(f"Query {sql} on schema {self.schema} failed")
             db_engine_spec = self.project.db_engine_spec
             error_message = db_engine_spec.extract_error_message(e)
 
@@ -938,7 +942,7 @@ class PlaidTable(Model, BaseDatasource):
         try:
             table = self.get_sqla_table_object()
         except Exception as e:
-            logging.exception(e)
+            logger.exception(e)
             raise Exception(
                 _(
                     "Table [{}] doesn't seem to exist in the specified project, "
@@ -964,8 +968,8 @@ class PlaidTable(Model, BaseDatasource):
                 )
             except Exception as e:
                 datatype = "UNKNOWN"
-                logging.error("Unrecognized data type in {}.{}".format(table, col.name))
-                logging.exception(e)
+                logger.error("Unrecognized data type in {}.{}".format(table, col.name))
+                logger.exception(e)
             dbcol = dbcols.get(col.name, None)
             if not dbcol:
                 dbcol = PlaidColumn(column_name=col.name, type=datatype)
@@ -1088,25 +1092,27 @@ class PlaidTable(Model, BaseDatasource):
         return []
 
 
-sa.event.listen(PlaidTable, "after_insert", security_manager.set_perm)
-sa.event.listen(PlaidTable, "after_update", security_manager.set_perm)
+sqla.event.listen(PlaidTable, "after_insert", security_manager.set_perm)
+sqla.event.listen(PlaidTable, "after_update", security_manager.set_perm)
 
-class PlaidProject(Model, AuditMixinNullable, ImportMixin):
+class PlaidProject(
+    Model, AuditMixinNullable, ImportMixin
+):  # pylint: disable=too-many-public-methods
 
-    """An ORM object that stores project related information"""
+    """An ORM object that stores Database related information"""
 
     __tablename__ = "plaid_projects"
     type = "plaid"
     __table_args__ = (UniqueConstraint("uuid"),)
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True)  # pylint: disable=invalid-name
     name = Column(String(250))
     # short unique name, used in permissions
     uuid = Column(String(250), unique=True)
     workspace_id = Column(String(250))
     workspace_name = Column(String(250))
-    sqlalchemy_uri = Column(String(1024))
-    password = Column(EncryptedType(String(1024), config.get("SECRET_KEY")))
+    sqlalchemy_uri = Column(String(1024), nullable=False)
+    password = Column(EncryptedType(String(1024), config["SECRET_KEY"]))
     cache_timeout = Column(Integer)
     select_as_create_table_as = Column(Boolean, default=False)
     expose_in_sqllab = Column(Boolean, default=True)
@@ -1115,7 +1121,9 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
     allow_ctas = Column(Boolean, default=False)
     allow_dml = Column(Boolean, default=False)
     force_ctas_schema = Column(String(250))
-    allow_multi_schema_metadata_fetch = Column(Boolean, default=False)
+    allow_multi_schema_metadata_fetch = Column(  # pylint: disable=invalid-name
+        Boolean, default=False
+    )
     extra = Column(
         Text,
         default=textwrap.dedent(
@@ -1129,9 +1137,10 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
     """
         ),
     )
+    encrypted_extra = Column(EncryptedType(Text, config["SECRET_KEY"]), nullable=True)
     perm = Column(String(1000))
     impersonate_user = Column(Boolean, default=False)
-    export_fields = (
+    export_fields = [
         "uuid",
         "sqlalchemy_uri",
         "cache_timeout",
@@ -1140,22 +1149,38 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
         "allow_ctas",
         "allow_csv_upload",
         "extra",
-    )
+    ]
     export_children = ["tables"]
 
     def __repr__(self):
         return self.project_name
 
     @property
-    def project_name(self):
-        return self.name or self.uuid
+    def project_name(self) -> str:
+        return self.name if self.name else self.uuid
 
     @property
-    def allows_subquery(self):
+    def allows_subquery(self) -> bool:
         return self.db_engine_spec.allows_subqueries
 
     @property
-    def data(self):
+    def function_names(self) -> List[str]:
+        return self.db_engine_spec.get_function_names(self)
+
+    @property
+    def allows_cost_estimate(self) -> bool:
+        extra = self.get_extra()
+
+        database_version = extra.get("version")
+        cost_estimate_enabled: bool = extra.get("cost_estimate_enabled")  # type: ignore
+
+        return (
+            self.db_engine_spec.get_allow_cost_estimate(database_version)
+            and cost_estimate_enabled
+        )
+
+    @property
+    def data(self) -> Dict[str, Any]:
         return {
             "id": self.id,
             "uuid": self.uuid,
@@ -1164,66 +1189,73 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
             "backend": self.backend,
             "allow_multi_schema_metadata_fetch": self.allow_multi_schema_metadata_fetch,
             "allows_subquery": self.allows_subquery,
+            "allows_cost_estimate": self.allows_cost_estimate,
         }
 
     @property
-    def unique_name(self):
+    def unique_name(self) -> str:
         return self.uuid
 
     @property
-    def url_object(self):
+    def url_object(self) -> URL:
         return make_url(self.sqlalchemy_uri_decrypted)
 
     @property
-    def backend(self):
-        url = make_url(self.sqlalchemy_uri_decrypted)
-        return url.get_backend_name()
+    def backend(self) -> str:
+        sqlalchemy_url = make_url(self.sqlalchemy_uri_decrypted)
+        return sqlalchemy_url.get_backend_name()
 
     @property
-    def metadata_cache_timeout(self):
+    def metadata_cache_timeout(self) -> Dict[str, Any]:
         return self.get_extra().get("metadata_cache_timeout", {})
 
     @property
-    def schema_cache_enabled(self):
+    def schema_cache_enabled(self) -> bool:
         return "schema_cache_timeout" in self.metadata_cache_timeout
 
     @property
-    def schema_cache_timeout(self):
+    def schema_cache_timeout(self) -> Optional[int]:
         return self.metadata_cache_timeout.get("schema_cache_timeout")
 
     @property
-    def table_cache_enabled(self):
+    def table_cache_enabled(self) -> bool:
         return "table_cache_timeout" in self.metadata_cache_timeout
 
     @property
-    def table_cache_timeout(self):
+    def table_cache_timeout(self) -> Optional[int]:
         return self.metadata_cache_timeout.get("table_cache_timeout")
 
     @property
-    def default_schemas(self):
+    def default_schemas(self) -> List[str]:
         return self.get_extra().get("default_schemas", [])
 
     @classmethod
-    def get_password_masked_url_from_uri(cls, uri):
-        url = make_url(uri)
-        return cls.get_password_masked_url(url)
+    def get_password_masked_url_from_uri(cls, uri: str):  # pylint: disable=invalid-name
+        sqlalchemy_url = make_url(uri)
+        return cls.get_password_masked_url(sqlalchemy_url)
 
     @classmethod
-    def get_password_masked_url(cls, url):
+    def get_password_masked_url(
+        cls, url: URL  # pylint: disable=redefined-outer-name
+    ) -> URL:
         url_copy = deepcopy(url)
-        if url_copy.password is not None and url_copy.password != PASSWORD_MASK:
+        if url_copy.password is not None:
             url_copy.password = PASSWORD_MASK
         return url_copy
 
-    def set_sqlalchemy_uri(self, uri):
-        conn = sa.engine.url.make_url(uri.strip())
+    def set_sqlalchemy_uri(self, uri: str) -> None:
+        conn = sqla.engine.url.make_url(uri.strip())
         if conn.password != PASSWORD_MASK and not custom_password_store:
             # do not over-write the password with the password mask
             self.password = conn.password
         conn.password = PASSWORD_MASK if conn.password else None
         self.sqlalchemy_uri = str(conn)  # hides the password
 
-    def get_effective_user(self, url, user_name=None):
+    def get_effective_user(
+        self,
+        url: URL,  # pylint: disable=redefined-outer-name
+        user_name: Optional[str] = None,
+    ) -> Optional[str]:
         """
         Get the effective user, especially during impersonation.
         :param url: SQL Alchemy URL object
@@ -1244,52 +1276,63 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
         return effective_username
 
     @utils.memoized(watch=("impersonate_user", "sqlalchemy_uri_decrypted", "extra"))
-    def get_sqla_engine(self, schema=None, nullpool=True, user_name=None, source=None):
+    def get_sqla_engine(
+        self,
+        schema: Optional[str] = None,
+        nullpool: bool = True,
+        user_name: Optional[str] = None,
+        source: Optional[int] = None,
+    ) -> Engine:
         extra = self.get_extra()
-        url = make_url(self.sqlalchemy_uri_decrypted)
-        url = self.db_engine_spec.adjust_database_uri(url, schema)
-        effective_username = self.get_effective_user(url, user_name)
+        sqlalchemy_url = make_url(self.sqlalchemy_uri_decrypted)
+        self.db_engine_spec.adjust_database_uri(sqlalchemy_url, schema)
+        effective_username = self.get_effective_user(sqlalchemy_url, user_name)
         # If using MySQL or Presto for example, will set url.username
         # If using Hive, will not do anything yet since that relies on a
         # configuration parameter instead.
         self.db_engine_spec.modify_url_for_impersonation(
-            url, self.impersonate_user, effective_username
+            sqlalchemy_url, self.impersonate_user, effective_username
         )
 
-        masked_url = self.get_password_masked_url(url)
-        logging.info("PlaidProject.get_sqla_engine(). Masked URL: {0}".format(masked_url))
+        masked_url = self.get_password_masked_url(sqlalchemy_url)
+        logger.info("Database.get_sqla_engine(). Masked URL: %s", str(masked_url))
 
         params = extra.get("engine_params", {})
         if nullpool:
             params["poolclass"] = NullPool
 
+        connect_args = params.get("connect_args", {})
+        configuration = connect_args.get("configuration", {})
+
         # If using Hive, this will set hive.server2.proxy.user=$effective_username
-        configuration = {}
         configuration.update(
             self.db_engine_spec.get_configuration_for_impersonation(
-                str(url), self.impersonate_user, effective_username
+                str(sqlalchemy_url), self.impersonate_user, effective_username
             )
         )
         if configuration:
-            d = params.get("connect_args", {})
-            d["configuration"] = configuration
-            params["connect_args"] = d
+            connect_args["configuration"] = configuration
+            params["connect_args"] = connect_args
 
-        DB_CONNECTION_MUTATOR = config.get("DB_CONNECTION_MUTATOR")
+        params.update(self.get_encrypted_extra())
+
         if DB_CONNECTION_MUTATOR:
-            url, params = DB_CONNECTION_MUTATOR(
-                url, params, effective_username, security_manager, source
+            sqlalchemy_url, params = DB_CONNECTION_MUTATOR(
+                sqlalchemy_url, params, effective_username, security_manager, source
             )
-        return create_engine(url, **params)
 
-    def get_reserved_words(self):
+        return create_engine(sqlalchemy_url, **params)
+
+    def get_reserved_words(self) -> Set[str]:
         return self.get_dialect().preparer.reserved_words
 
     def get_quoter(self):
         return self.get_dialect().identifier_preparer.quote
 
-    def get_df(self, sql, schema, mutator=None):
-        sqls = [str(s).strip().strip(";") for s in sqlparse.parse(sql)]
+    def get_df(  # pylint: disable=too-many-locals
+        self, sql: str, schema: Optional[str] = None, mutator: Optional[Callable] = None
+    ) -> pd.DataFrame:
+        sqls = [str(s).strip(" ;") for s in sqlparse.parse(sql)]
         source_key = None
         if request and request.referrer:
             if "/superset/dashboard/" in request.referrer:
@@ -1297,26 +1340,22 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
             elif "/superset/explore/" in request.referrer:
                 source_key = "chart"
         engine = self.get_sqla_engine(
-            schema=schema, source=utils.sources.get(source_key, None)
+            schema=schema, source=utils.sources[source_key] if source_key else None
         )
         username = utils.get_username()
 
-        def needs_conversion(df_series):
-            if df_series.empty:
-                return False
-            if isinstance(df_series[0], (list, dict)):
-                return True
-            return False
+        def needs_conversion(df_series: pd.Series) -> bool:
+            return not df_series.empty and isinstance(df_series[0], (list, dict))
 
-        def _log_query(sql):
+        def _log_query(sql: str) -> None:
             if log_query:
                 log_query(engine.url, sql, schema, username, __name__, security_manager)
 
         with closing(engine.raw_connection()) as conn:
             with closing(conn.cursor()) as cursor:
-                for sql in sqls[:-1]:
-                    _log_query(sql)
-                    self.db_engine_spec.execute(cursor, sql)
+                for sql_ in sqls[:-1]:
+                    _log_query(sql_)
+                    self.db_engine_spec.execute(cursor, sql_)
                     cursor.fetchall()
 
                 _log_query(sqls[-1])
@@ -1332,32 +1371,34 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
                 )
 
                 if mutator:
-                    df = mutator(df)
+                    mutator(df)
 
                 for k, v in df.dtypes.items():
                     if v.type == numpy.object_ and needs_conversion(df[k]):
                         df[k] = df[k].apply(utils.json_dumps_w_dates)
                 return df
 
-    def compile_sqla_query(self, qry, schema=None):
+    def compile_sqla_query(self, qry: Select, schema: Optional[str] = None) -> str:
         engine = self.get_sqla_engine(schema=schema)
 
         sql = str(qry.compile(engine, compile_kwargs={"literal_binds": True}))
 
-        if engine.dialect.identifier_preparer._double_percents:
+        if (
+            engine.dialect.identifier_preparer._double_percents  # pylint: disable=protected-access
+        ):
             sql = sql.replace("%%", "%")
 
         return sql
 
-    def select_star(
+    def select_star(  # pylint: disable=too-many-arguments
         self,
-        table_name,
-        schema=None,
-        limit=100,
-        show_cols=False,
-        indent=True,
-        latest_partition=False,
-        cols=None,
+        table_name: str,
+        schema: Optional[str] = None,
+        limit: int = 100,
+        show_cols: bool = False,
+        indent: bool = True,
+        latest_partition: bool = False,
+        cols: Optional[List[Dict[str, Any]]] = None,
     ):
         """Generates a ``select *`` statement in the proper dialect"""
         eng = self.get_sqla_engine(
@@ -1375,36 +1416,38 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
             cols=cols,
         )
 
-    def apply_limit_to_sql(self, sql, limit=1000):
+    def apply_limit_to_sql(self, sql: str, limit: int = 1000) -> str:
         return self.db_engine_spec.apply_limit_to_sql(sql, limit, self)
 
-    def safe_sqlalchemy_uri(self):
+    def safe_sqlalchemy_uri(self) -> str:
         return self.sqlalchemy_uri
 
     @property
-    def inspector(self):
+    def inspector(self) -> Inspector:
         engine = self.get_sqla_engine()
-        return sa.inspect(engine)
+        return sqla.inspect(engine)
 
     @cache_util.memoized_func(
         key=lambda *args, **kwargs: "db:{}:schema:None:table_list",
         attribute_in_key="id",
     )
     def get_all_table_names_in_database(
-        self, cache: bool = False, cache_timeout: bool = None, force=False
+        self, cache: bool = False, cache_timeout: Optional[bool] = None, force=False
     ) -> List[utils.DatasourceName]:
         """Parameters need to be passed as keyword arguments."""
         if not self.allow_multi_schema_metadata_fetch:
             return []
         return self.db_engine_spec.get_all_datasource_names(self, "table")
 
-    # TODO: Consolidate get_all_view_names_in_database and get_all_table_names_in_schema, since
-    # each database will be using credentials with access to a single schema.
     @cache_util.memoized_func(
-        key=lambda *args, **kwargs: "db:{}:schema:None:view_list", attribute_in_key="id"
+        key=lambda *args, **kwargs: "db:{}:schema:None:view_list",
+        attribute_in_key="id",  # type: ignore
     )
     def get_all_view_names_in_database(
-        self, cache: bool = False, cache_timeout: bool = None, force: bool = False
+        self,
+        cache: bool = False,
+        cache_timeout: Optional[bool] = None,
+        force: bool = False,
     ) -> List[utils.DatasourceName]:
         """Parameters need to be passed as keyword arguments."""
         if not self.allow_multi_schema_metadata_fetch:
@@ -1412,9 +1455,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
         return self.db_engine_spec.get_all_datasource_names(self, "view")
 
     @cache_util.memoized_func(
-        key=lambda *args, **kwargs: "db:{{}}:schema:{}:table_list".format(
-            kwargs.get("schema")
-        ),
+        key=lambda *args, **kwargs: f"db:{{}}:schema:{kwargs.get('schema')}:table_list",  # type: ignore
         attribute_in_key="id",
     )
     def get_all_table_names_in_schema(
@@ -1423,7 +1464,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
         cache: bool = False,
         cache_timeout: int = None,
         force: bool = False,
-    ):
+    ) -> List[utils.DatasourceName]:
         """Parameters need to be passed as keyword arguments.
 
         For unused parameters, they are referenced in
@@ -1437,18 +1478,16 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
         """
         try:
             tables = self.db_engine_spec.get_table_names(
-                inspector=self.inspector, schema=schema
+                database=self, inspector=self.inspector, schema=schema
             )
             return [
                 utils.DatasourceName(table=table, schema=schema) for table in tables
             ]
-        except Exception as e:
-            logging.exception(e)
+        except Exception as e:  # pylint: disable=broad-except
+            logger.exception(e)
 
     @cache_util.memoized_func(
-        key=lambda *args, **kwargs: "db:{{}}:schema:{}:view_list".format(
-            kwargs.get("schema")
-        ),
+        key=lambda *args, **kwargs: f"db:{{}}:schema:{kwargs.get('schema')}:view_list",  # type: ignore
         attribute_in_key="id",
     )
     def get_all_view_names_in_schema(
@@ -1457,7 +1496,7 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
         cache: bool = False,
         cache_timeout: int = None,
         force: bool = False,
-    ):
+    ) -> List[utils.DatasourceName]:
         """Parameters need to be passed as keyword arguments.
 
         For unused parameters, they are referenced in
@@ -1475,14 +1514,16 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
             )
             return [utils.DatasourceName(table=view, schema=schema) for view in views]
         except Exception as e:  # pylint: disable=broad-except
-            logging.exception(e)
+            logger.exception(e)
 
-    # TODO: Determine if this is needed.
     @cache_util.memoized_func(
         key=lambda *args, **kwargs: "db:{}:schema_list", attribute_in_key="id"
     )
     def get_all_schema_names(
-        self, cache: bool = False, cache_timeout: int = None, force: bool = False
+        self,
+        cache: bool = False,
+        cache_timeout: Optional[int] = None,
+        force: bool = False,
     ) -> List[str]:
         """Parameters need to be passed as keyword arguments.
 
@@ -1497,14 +1538,16 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
         return self.db_engine_spec.get_schema_names(self.inspector)
 
     @property
-    def db_engine_spec(self):
+    def db_engine_spec(self) -> Type[db_engine_specs.BaseEngineSpec]:
         return db_engine_specs.engines.get(self.backend, db_engine_specs.BaseEngineSpec)
 
     @classmethod
-    def get_db_engine_spec_for_backend(cls, backend):
+    def get_db_engine_spec_for_backend(
+        cls, backend
+    ) -> Type[db_engine_specs.BaseEngineSpec]:
         return db_engine_specs.engines.get(backend, db_engine_specs.BaseEngineSpec)
 
-    def grains(self):
+    def grains(self) -> Tuple[TimeGrain, ...]:
         """Defines time granularity database-specific expressions.
 
         The idea here is to make it easy for users to change the time grain
@@ -1515,17 +1558,27 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
         """
         return self.db_engine_spec.get_time_grains()
 
-    def get_extra(self):
-        extra = {}
+    def get_extra(self) -> Dict[str, Any]:
+        extra: Dict[str, Any] = {}
         if self.extra:
             try:
                 extra = json.loads(self.extra)
-            except Exception as e:
-                logging.error(e)
+            except json.JSONDecodeError as e:
+                logger.error(e)
                 raise e
         return extra
 
-    def get_table(self, table_name, schema=None):
+    def get_encrypted_extra(self):
+        encrypted_extra = {}
+        if self.encrypted_extra:
+            try:
+                encrypted_extra = json.loads(self.encrypted_extra)
+            except json.JSONDecodeError as e:
+                logger.error(e)
+                raise e
+        return encrypted_extra
+
+    def get_table(self, table_name: str, schema: Optional[str] = None) -> Table:
         extra = self.get_extra()
         meta = MetaData(**extra.get("metadata_params", {}))
         return Table(
@@ -1536,24 +1589,34 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
             autoload_with=self.get_sqla_engine(),
         )
 
-    def get_columns(self, table_name, schema=None):
+    def get_columns(
+        self, table_name: str, schema: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         return self.db_engine_spec.get_columns(self.inspector, table_name, schema)
 
-    def get_indexes(self, table_name, schema=None):
+    def get_indexes(
+        self, table_name: str, schema: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         return self.inspector.get_indexes(table_name, schema)
 
-    def get_pk_constraint(self, table_name, schema=None):
+    def get_pk_constraint(
+        self, table_name: str, schema: Optional[str] = None
+    ) -> Dict[str, Any]:
         return self.inspector.get_pk_constraint(table_name, schema)
 
-    def get_foreign_keys(self, table_name, schema=None):
+    def get_foreign_keys(
+        self, table_name: str, schema: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         return self.inspector.get_foreign_keys(table_name, schema)
 
-    def get_schema_access_for_csv_upload(self):
+    def get_schema_access_for_csv_upload(  # pylint: disable=invalid-name
+        self,
+    ) -> List[str]:
         return self.get_extra().get("schemas_allowed_for_csv_upload", [])
 
     @property
-    def sqlalchemy_uri_decrypted(self):
-        conn = sa.engine.url.make_url(self.sqlalchemy_uri)
+    def sqlalchemy_uri_decrypted(self) -> str:
+        conn = sqla.engine.url.make_url(self.sqlalchemy_uri)
         if custom_password_store:
             conn.password = custom_password_store(conn)
         else:
@@ -1561,21 +1624,22 @@ class PlaidProject(Model, AuditMixinNullable, ImportMixin):
         return str(conn)
 
     @property
-    def sql_url(self):
-        return "/superset/sql/{}/".format(self.id)
+    def sql_url(self) -> str:
+        return f"/superset/sql/{self.id}/"
 
-    def get_perm(self):
-        return ("[{obj.name}].(id:{obj.id})").format(obj=self)
+    def get_perm(self) -> str:
+        return f"[{self.name}].(id:{self.id})"
 
-    def has_table(self, table):
+    def has_table(self, table: Table) -> bool:
         engine = self.get_sqla_engine()
         return engine.has_table(table.table_name, table.schema or None)
 
-    def has_table_by_name(self, table_name, schema=None):
+    def has_table_by_name(self, table_name: str, schema: Optional[str] = None) -> bool:
         engine = self.get_sqla_engine()
         return engine.has_table(table_name, schema)
 
     @utils.memoized
-    def get_dialect(self):
+    def get_dialect(self) -> Dialect:
         sqla_url = url.make_url(self.sqlalchemy_uri_decrypted)
         return sqla_url.get_dialect()()
+
