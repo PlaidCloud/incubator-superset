@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [ "$1" != "" ]; then
-    ksync create -n $1 -l plaid=superset-events --name superset-events --local-read-only --reload=false $(readlink -f ./plaid) /plaid/plaid
+    ksync create -n $1 -l plaid=superset -c node --name superset-frontend --local-read-only --reload=false $(readlink -f ./superset/assets/src) /tmp/superset/assets/src
     if [ $? -eq 0 ]; then 
         echo "ksync spec created successfully for superset-events."
     fi

@@ -1,10 +1,17 @@
 apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/server-snippet: |
+      if ( $http_x_forwarded_proto != 'https' ) {
+        return 307 https://$host$request_uri;
+      }
+
   name: {{ .Release.Name }}
   labels:
     app: plaid
-    plaid: {{ .Release.Name }}
+    plaid: superset
+    release: {{ .Release.Name }}
 spec:
   rules:
   - host: {{ .Values.superset.hostname }}

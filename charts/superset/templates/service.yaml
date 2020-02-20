@@ -4,11 +4,12 @@ metadata:
   name: {{ .Release.Name }}
   labels:
     app: plaid
-    plaid: {{ .Release.Name }}
+    plaid: superset
+    release: {{ .Release.Name }}
 spec:
   ports:
   - port: {{ .Values.superset.port }}  
-    targetPort: {{ .Values.superset.targetPort }}  
+    targetPort: 9000 #{{ .Values.superset.targetPort }}  
     protocol: TCP
     name: http
   selector:
