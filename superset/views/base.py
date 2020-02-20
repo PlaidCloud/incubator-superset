@@ -18,21 +18,18 @@ import functools
 import logging
 import traceback
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import simplejson as json
 import yaml
 from flask import abort, flash, g, get_flashed_messages, redirect, Response, session
-from flask_appbuilder import BaseView, Model, ModelRestApi, ModelView
+from flask_appbuilder import BaseView, ModelView
 from flask_appbuilder.actions import action
-from flask_appbuilder.api import expose, protect, rison, safe
 from flask_appbuilder.forms import DynamicForm
-from flask_appbuilder.models.filters import Filters
 from flask_appbuilder.models.sqla.filters import BaseFilter
 from flask_appbuilder.widgets import ListWidget
 from flask_babel import get_locale, gettext as __, lazy_gettext as _
 from flask_wtf.form import FlaskForm
-from marshmallow import Schema
 from sqlalchemy import or_
 from werkzeug.exceptions import HTTPException
 from wtforms.fields.core import Field, UnboundField
@@ -41,6 +38,8 @@ from superset import appbuilder, conf, db, get_feature_flags, security_manager
 from superset.exceptions import SupersetException, SupersetSecurityException
 from superset.translations.utils import get_language_pack
 from superset.utils import core as utils
+
+from .utils import bootstrap_user_data
 
 FRONTEND_CONF_KEYS = (
     "SUPERSET_WEBSERVER_TIMEOUT",
@@ -52,6 +51,7 @@ FRONTEND_CONF_KEYS = (
     "SQLLAB_SAVE_WARNING_MESSAGE",
     "DISPLAY_MAX_ROW",
 )
+logger = logging.getLogger(__name__)
 
 
 def get_error_msg():
@@ -66,12 +66,9 @@ def get_error_msg():
     return error_msg
 
 
-def json_error_response(msg=None, status=500, stacktrace=None, payload=None, link=None):
+def json_error_response(msg=None, status=500, payload=None, link=None):
     if not payload:
         payload = {"error": "{}".format(msg)}
-    if not stacktrace:
-        stacktrace = utils.get_stacktrace()
-    payload["stacktrace"] = stacktrace
     if link:
         payload["link"] = link
 
@@ -93,7 +90,7 @@ def data_payload_response(payload_json, has_error=False):
 
 def generate_download_headers(extension, filename=None):
     filename = filename if filename else datetime.now().strftime("%Y%m%d_%H%M%S")
-    content_disp = "attachment; filename={}.{}".format(filename, extension)
+    content_disp = f"attachment; filename={filename}.{extension}"
     headers = {"Content-Disposition": content_disp}
     return headers
 
@@ -108,7 +105,7 @@ def api(f):
         try:
             return f(self, *args, **kwargs)
         except Exception as e:  # pylint: disable=broad-except
-            logging.exception(e)
+            logger.exception(e)
             return json_error_response(get_error_msg())
 
     return functools.update_wrapper(wraps, f)
@@ -125,32 +122,21 @@ def handle_api_exception(f):
         try:
             return f(self, *args, **kwargs)
         except SupersetSecurityException as e:
-            logging.exception(e)
+            logger.exception(e)
             return json_error_response(
-                utils.error_msg_from_exception(e),
-                status=e.status,
-                stacktrace=utils.get_stacktrace(),
-                link=e.link,
+                utils.error_msg_from_exception(e), status=e.status, link=e.link
             )
         except SupersetException as e:
-            logging.exception(e)
+            logger.exception(e)
             return json_error_response(
-                utils.error_msg_from_exception(e),
-                stacktrace=utils.get_stacktrace(),
-                status=e.status,
+                utils.error_msg_from_exception(e), status=e.status
             )
         except HTTPException as e:
-            logging.exception(e)
-            return json_error_response(
-                utils.error_msg_from_exception(e),
-                stacktrace=traceback.format_exc(),
-                status=e.code,
-            )
+            logger.exception(e)
+            return json_error_response(utils.error_msg_from_exception(e), status=e.code)
         except Exception as e:  # pylint: disable=broad-except
-            logging.exception(e)
-            return json_error_response(
-                utils.error_msg_from_exception(e), stacktrace=utils.get_stacktrace()
-            )
+            logger.exception(e)
+            return json_error_response(utils.error_msg_from_exception(e))
 
     return functools.update_wrapper(wraps, f)
 
@@ -188,7 +174,7 @@ def menu_data():
             )
         # when user object has no username
         except NameError as e:
-            logging.exception(e)
+            logger.exception(e)
 
         if logo_target_path.startswith("/"):
             root_path = f"/superset{logo_target_path}"
@@ -247,6 +233,19 @@ class SupersetModelView(ModelView):
     page_size = 100
     list_widget = SupersetListWidget
 
+    def render_app_template(self):
+        payload = {
+            "user": bootstrap_user_data(g.user),
+            "common": common_bootstrap_payload(),
+        }
+        return self.render_template(
+            "superset/welcome.html",
+            entry="welcome",
+            bootstrap_data=json.dumps(
+                payload, default=utils.pessimistic_json_iso_dttm_ser
+            ),
+        )
+
 
 class ListWidgetWithCheckboxes(ListWidget):  # pylint: disable=too-few-public-methods
     """An alternative to list view that renders Boolean fields as checkboxes
@@ -260,7 +259,7 @@ def validate_json(_form, field):
     try:
         json.loads(field.data)
     except Exception as e:
-        logging.exception(e)
+        logger.exception(e)
         raise Exception(_("json isn't valid"))
 
 
@@ -356,148 +355,6 @@ class DatasourceFilter(BaseFilter):  # pylint: disable=too-few-public-methods
                 self.model.schema_perm.in_(schema_perms),
             )
         )
-
-
-class BaseSupersetSchema(Schema):
-    """
-    Extends Marshmallow schema so that we can pass a Model to load
-    (following marshamallow-sqlalchemy pattern). This is useful
-    to perform partial model merges on HTTP PUT
-    """
-
-    def __init__(self, **kwargs):
-        self.instance = None
-        super().__init__(**kwargs)
-
-    def load(
-        self, data, many=None, partial=None, instance: Model = None, **kwargs
-    ):  # pylint: disable=arguments-differ
-        self.instance = instance
-        return super().load(data, many=many, partial=partial, **kwargs)
-
-
-get_related_schema = {
-    "type": "object",
-    "properties": {
-        "page_size": {"type": "integer"},
-        "page": {"type": "integer"},
-        "filter": {"type": "string"},
-    },
-}
-
-
-class BaseSupersetModelRestApi(ModelRestApi):
-    """
-    Extends FAB's ModelResApi to implement specific superset generic functionality
-    """
-
-    order_rel_fields: Dict[str, Tuple[str, str]] = {}
-    """
-    Impose ordering on related fields query::
-
-        order_rel_fields = {
-            "<RELATED_FIELD>": ("<RELATED_FIELD_FIELD>", "<asc|desc>"),
-             ...
-        }
-    """  # pylint: disable=pointless-string-statement
-    filter_rel_fields_field: Dict[str, str] = {}
-    """
-    Declare the related field field for filtering::
-
-        filter_rel_fields_field = {
-            "<RELATED_FIELD>": "<RELATED_FIELD_FIELD>", "<asc|desc>")
-        }
-    """  # pylint: disable=pointless-string-statement
-
-    def _get_related_filter(self, datamodel, column_name: str, value: str) -> Filters:
-        filter_field = self.filter_rel_fields_field.get(column_name)
-        filters = datamodel.get_filters([filter_field])
-        if value:
-            filters.rest_add_filters(
-                [{"opr": "sw", "col": filter_field, "value": value}]
-            )
-        return filters
-
-    @expose("/related/<column_name>", methods=["GET"])
-    @protect()
-    @safe
-    @rison(get_related_schema)
-    def related(self, column_name: str, **kwargs):
-        """Get related fields data
-        ---
-        get:
-          parameters:
-          - in: path
-            schema:
-              type: string
-            name: column_name
-          - in: query
-            name: q
-            content:
-              application/json:
-                schema:
-                  type: object
-                  properties:
-                    page_size:
-                      type: integer
-                    page:
-                      type: integer
-                    filter:
-                      type: string
-          responses:
-            200:
-              description: Related column data
-              content:
-                application/json:
-                  schema:
-                    type: object
-                    properties:
-                      count:
-                        type: integer
-                      result:
-                        type: object
-                        properties:
-                          value:
-                            type: integer
-                          text:
-                            type: string
-            400:
-              $ref: '#/components/responses/400'
-            401:
-              $ref: '#/components/responses/401'
-            404:
-              $ref: '#/components/responses/404'
-            422:
-              $ref: '#/components/responses/422'
-            500:
-              $ref: '#/components/responses/500'
-        """
-        args = kwargs.get("rison", {})
-        # handle pagination
-        page, page_size = self._handle_page_args(args)
-        try:
-            datamodel = self.datamodel.get_related_interface(column_name)
-        except KeyError:
-            return self.response_404()
-        page, page_size = self._sanitize_page_args(page, page_size)
-        # handle ordering
-        order_field = self.order_rel_fields.get(column_name)
-        if order_field:
-            order_column, order_direction = order_field
-        else:
-            order_column, order_direction = "", ""
-        # handle filters
-        filters = self._get_related_filter(datamodel, column_name, args.get("filter"))
-        # Make the query
-        count, values = datamodel.query(
-            filters, order_column, order_direction, page=page, page_size=page_size
-        )
-        # produce response
-        result = [
-            {"value": datamodel.get_pk_value(value), "text": str(value)}
-            for value in values
-        ]
-        return self.response(200, count=count, result=result)
 
 
 class CsvResponse(Response):  # pylint: disable=too-many-ancestors

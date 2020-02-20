@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+# isort:skip_file
 """Unit tests for Superset"""
 import json
 import unittest
@@ -22,6 +23,7 @@ from random import random
 from flask import escape
 from sqlalchemy import func
 
+import tests.test_app
 from superset import db, security_manager
 from superset.connectors.sqla.models import SqlaTable
 from superset.models import core as models
@@ -305,27 +307,27 @@ class DashboardTests(SupersetTestCase):
         self.revoke_public_access_to_table(table)
         self.logout()
 
-        resp = self.get_resp("/chart/list/")
-        self.assertNotIn("birth_names</a>", resp)
+        resp = self.get_resp("/api/v1/chart/")
+        self.assertNotIn("birth_names", resp)
 
-        resp = self.get_resp("/dashboard/list/")
+        resp = self.get_resp("/api/v1/dashboard/")
         self.assertNotIn("/superset/dashboard/births/", resp)
 
         self.grant_public_access_to_table(table)
 
         # Try access after adding appropriate permissions.
-        self.assertIn("birth_names", self.get_resp("/chart/list/"))
+        self.assertIn("birth_names", self.get_resp("/api/v1/chart/"))
 
-        resp = self.get_resp("/dashboard/list/")
+        resp = self.get_resp("/api/v1/dashboard/")
         self.assertIn("/superset/dashboard/births/", resp)
 
         self.assertIn("Births", self.get_resp("/superset/dashboard/births/"))
 
         # Confirm that public doesn't have access to other datasets.
-        resp = self.get_resp("/chart/list/")
-        self.assertNotIn("wb_health_population</a>", resp)
+        resp = self.get_resp("/api/v1/chart/")
+        self.assertNotIn("wb_health_population", resp)
 
-        resp = self.get_resp("/dashboard/list/")
+        resp = self.get_resp("/api/v1/dashboard/")
         self.assertNotIn("/superset/dashboard/world_health/", resp)
 
     def test_dashboard_with_created_by_can_be_accessed_by_public_users(self):
@@ -374,7 +376,7 @@ class DashboardTests(SupersetTestCase):
         gamma_user = security_manager.find_user("gamma")
         self.login(gamma_user.username)
 
-        resp = self.get_resp("/dashboard/list/")
+        resp = self.get_resp("/api/v1/dashboard/")
         self.assertNotIn("/superset/dashboard/empty_dashboard/", resp)
 
     def test_users_can_view_published_dashboard(self):
@@ -404,7 +406,7 @@ class DashboardTests(SupersetTestCase):
         db.session.merge(hidden_dash)
         db.session.commit()
 
-        resp = self.get_resp("/dashboard/list/")
+        resp = self.get_resp("/api/v1/dashboard/")
         self.assertNotIn(f"/superset/dashboard/{hidden_dash_slug}/", resp)
         self.assertIn(f"/superset/dashboard/{published_dash_slug}/", resp)
 
@@ -432,7 +434,7 @@ class DashboardTests(SupersetTestCase):
 
         self.login(user.username)
 
-        resp = self.get_resp("/dashboard/list/")
+        resp = self.get_resp("/api/v1/dashboard/")
         self.assertIn(f"/superset/dashboard/{my_dash_slug}/", resp)
         self.assertNotIn(f"/superset/dashboard/{not_my_dash_slug}/", resp)
 
@@ -465,7 +467,7 @@ class DashboardTests(SupersetTestCase):
 
         self.login(user.username)
 
-        resp = self.get_resp("/dashboard/list/")
+        resp = self.get_resp("/api/v1/dashboard/")
         self.assertIn(f"/superset/dashboard/{fav_dash_slug}/", resp)
 
     def test_user_can_not_view_unpublished_dash(self):
@@ -485,7 +487,7 @@ class DashboardTests(SupersetTestCase):
 
         # list dashboards as a gamma user
         self.login(gamma_user.username)
-        resp = self.get_resp("/dashboard/list/")
+        resp = self.get_resp("/api/v1/dashboard/")
         self.assertNotIn(f"/superset/dashboard/{slug}/", resp)
 
 

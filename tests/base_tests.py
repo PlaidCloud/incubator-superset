@@ -40,6 +40,13 @@ FAKE_DB_NAME = "fake_db_100"
 
 
 class SupersetTestCase(TestCase):
+
+    default_schema_backend_map = {
+        "sqlite": "main",
+        "mysql": "superset",
+        "postgresql": "public",
+    }
+
     def __init__(self, *args, **kwargs):
         super(SupersetTestCase, self).__init__(*args, **kwargs)
         self.maxDiff = None
@@ -61,9 +68,19 @@ class SupersetTestCase(TestCase):
             username, first_name, last_name, email, role_admin, password
         )
 
+    @staticmethod
+    def get_user(username: str) -> ab_models.User:
+        user = (
+            db.session.query(security_manager.user_model)
+            .filter_by(username=username)
+            .one_or_none()
+        )
+        return user
+
     @classmethod
     def create_druid_test_objects(cls):
         # create druid cluster and druid datasources
+
         with app.app_context():
             session = db.session
             cluster = (
@@ -75,11 +92,11 @@ class SupersetTestCase(TestCase):
                 session.commit()
 
                 druid_datasource1 = DruidDatasource(
-                    datasource_name="druid_ds_1", cluster_name="druid_test"
+                    datasource_name="druid_ds_1", cluster=cluster
                 )
                 session.add(druid_datasource1)
                 druid_datasource2 = DruidDatasource(
-                    datasource_name="druid_ds_2", cluster_name="druid_test"
+                    datasource_name="druid_ds_2", cluster=cluster
                 )
                 session.add(druid_datasource2)
                 session.commit()

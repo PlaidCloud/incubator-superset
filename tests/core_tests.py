@@ -28,15 +28,24 @@ import pytz
 import random
 import re
 import string
+from typing import Any, Dict
 import unittest
-from unittest import mock
+from unittest import mock, skipUnless
 
 import pandas as pd
-import psycopg2
 import sqlalchemy as sqla
 
 from tests.test_app import app
-from superset import dataframe, db, jinja_context, security_manager, sql_lab
+from superset import (
+    dataframe,
+    db,
+    jinja_context,
+    security_manager,
+    sql_lab,
+    is_feature_enabled,
+)
+from superset.common.query_context import QueryContext
+from superset.connectors.connector_registry import ConnectorRegistry
 from superset.connectors.sqla.models import SqlaTable
 from superset.db_engine_specs.base import BaseEngineSpec
 from superset.db_engine_specs.mssql import MssqlEngineSpec
@@ -51,6 +60,8 @@ from superset.views import core as views
 from superset.views.database.views import DatabaseView
 
 from .base_tests import SupersetTestCase
+
+logger = logging.getLogger(__name__)
 
 
 class CoreTests(SupersetTestCase):
@@ -98,7 +109,23 @@ class CoreTests(SupersetTestCase):
         resp = self.client.get("/superset/slice/-1/")
         assert resp.status_code == 404
 
-    def test_cache_key(self):
+    def _get_query_context_dict(self) -> Dict[str, Any]:
+        self.login(username="admin")
+        slc = self.get_slice("Girl Name Cloud", db.session)
+        return {
+            "datasource": {"id": slc.datasource_id, "type": slc.datasource_type},
+            "queries": [
+                {
+                    "granularity": "ds",
+                    "groupby": ["name"],
+                    "metrics": [{"label": "sum__num"}],
+                    "filters": [],
+                    "row_limit": 100,
+                }
+            ],
+        }
+
+    def test_viz_cache_key(self):
         self.login(username="admin")
         slc = self.get_slice("Girls", db.session)
 
@@ -110,30 +137,77 @@ class CoreTests(SupersetTestCase):
         qobj["groupby"] = []
         self.assertNotEqual(cache_key, viz.cache_key(qobj))
 
+    def test_cache_key_changes_when_datasource_is_updated(self):
+        qc_dict = self._get_query_context_dict()
+
+        # construct baseline cache_key
+        query_context = QueryContext(**qc_dict)
+        query_object = query_context.queries[0]
+        cache_key_original = query_context.cache_key(query_object)
+
+        # make temporary change and revert it to refresh the changed_on property
+        datasource = ConnectorRegistry.get_datasource(
+            datasource_type=qc_dict["datasource"]["type"],
+            datasource_id=qc_dict["datasource"]["id"],
+            session=db.session,
+        )
+        description_original = datasource.description
+        datasource.description = "temporary description"
+        db.session.commit()
+        datasource.description = description_original
+        db.session.commit()
+
+        # create new QueryContext with unchanged attributes and extract new cache_key
+        query_context = QueryContext(**qc_dict)
+        query_object = query_context.queries[0]
+        cache_key_new = query_context.cache_key(query_object)
+
+        # the new cache_key should be different due to updated datasource
+        self.assertNotEqual(cache_key_original, cache_key_new)
+
+    def test_get_superset_tables_not_allowed(self):
+        example_db = utils.get_example_database()
+        schema_name = self.default_schema_backend_map[example_db.backend]
+        self.login(username="gamma")
+        uri = f"superset/tables/{example_db.id}/{schema_name}/undefined/"
+        rv = self.client.get(uri)
+        self.assertEqual(rv.status_code, 404)
+
+    def test_get_superset_tables_substr(self):
+        example_db = utils.get_example_database()
+        self.login(username="admin")
+        schema_name = self.default_schema_backend_map[example_db.backend]
+        uri = f"superset/tables/{example_db.id}/{schema_name}/ab_role/"
+        rv = self.client.get(uri)
+        response = json.loads(rv.data.decode("utf-8"))
+        self.assertEqual(rv.status_code, 200)
+
+        expeted_response = {
+            "options": [
+                {
+                    "label": "ab_role",
+                    "schema": schema_name,
+                    "title": "ab_role",
+                    "type": "table",
+                    "value": "ab_role",
+                }
+            ],
+            "tableLength": 1,
+        }
+        self.assertEqual(response, expeted_response)
+
+    def test_get_superset_tables_not_found(self):
+        self.login(username="admin")
+        uri = f"superset/tables/invalid/public/undefined/"
+        rv = self.client.get(uri)
+        self.assertEqual(rv.status_code, 404)
+
     def test_api_v1_query_endpoint(self):
         self.login(username="admin")
-        slc = self.get_slice("Girl Name Cloud", db.session)
-        form_data = slc.form_data
-        data = json.dumps(
-            {
-                "datasource": {"id": slc.datasource_id, "type": slc.datasource_type},
-                "queries": [
-                    {
-                        "granularity": "ds",
-                        "groupby": ["name"],
-                        "metrics": ["sum__num"],
-                        "filters": [],
-                        "time_range": "{} : {}".format(
-                            form_data.get("since"), form_data.get("until")
-                        ),
-                        "limit": 100,
-                    }
-                ],
-            }
-        )
-        # TODO: update once get_data is implemented for QueryObject
-        with self.assertRaises(Exception):
-            self.get_resp("/api/v1/query/", {"query_context": data})
+        qc_dict = self._get_query_context_dict()
+        data = json.dumps(qc_dict)
+        resp = json.loads(self.get_resp("/api/v1/query/", {"query_context": data}))
+        self.assertEqual(resp[0]["rowcount"], 100)
 
     def test_old_slice_json_endpoint(self):
         self.login(username="admin")
@@ -216,6 +290,7 @@ class CoreTests(SupersetTestCase):
             "metric": "sum__value",
             "row_limit": 5000,
             "slice_id": slice_id,
+            "time_range_endpoints": ["inclusive", "exclusive"],
         }
         # Changing name and save as a new slice
         resp = self.client.post(
@@ -237,6 +312,7 @@ class CoreTests(SupersetTestCase):
             "row_limit": 5000,
             "slice_id": new_slice_id,
             "time_range": "now",
+            "time_range_endpoints": ["inclusive", "exclusive"],
         }
         # Setting the name back to its original name by overwriting new slice
         self.client.post(
@@ -291,7 +367,7 @@ class CoreTests(SupersetTestCase):
                 (slc.slice_name, "explore_json", slc.explore_json_url),
             ]
         for name, method, url in urls:
-            logging.info(f"[{name}]/[{method}]: {url}")
+            logger.info(f"[{name}]/[{method}]: {url}")
             print(f"[{name}]/[{method}]: {url}")
             resp = self.client.get(url)
             self.assertEqual(resp.status_code, 200)
@@ -317,7 +393,7 @@ class CoreTests(SupersetTestCase):
     def test_get_user_slices(self):
         self.login(username="admin")
         userid = security_manager.find_user("admin").id
-        url = "/sliceaddview/api/read?_flt_0_created_by={}".format(userid)
+        url = f"/sliceasync/api/read?_flt_0_created_by={userid}"
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
 
@@ -388,6 +464,26 @@ class CoreTests(SupersetTestCase):
         assert response.status_code == 200
         assert response.headers["Content-Type"] == "application/json"
 
+    def test_testconn_failed_conn(self, username="admin"):
+        self.login(username=username)
+
+        data = json.dumps(
+            {"uri": "broken://url", "name": "examples", "impersonate_user": False}
+        )
+        response = self.client.post(
+            "/superset/testconn", data=data, content_type="application/json"
+        )
+        assert response.status_code == 400
+        assert response.headers["Content-Type"] == "application/json"
+        response_body = json.loads(response.data.decode("utf-8"))
+        expected_body = {
+            "error": "Connection failed!\n\nThe error message returned was:\nCan't load plugin: sqlalchemy.dialects:broken"
+        }
+        assert response_body == expected_body, "%s != %s" % (
+            response_body,
+            expected_body,
+        )
+
     def test_custom_password_store(self):
         database = utils.get_example_database()
         conn_pre = sqla.engine.url.make_url(database.sqlalchemy_uri_decrypted)
@@ -445,6 +541,9 @@ class CoreTests(SupersetTestCase):
         resp = self.client.post("/r/shortner/", data=dict(data=data))
         assert re.search(r"\/r\/[0-9]+", resp.data.decode("utf-8"))
 
+    @skipUnless(
+        (is_feature_enabled("KV_STORE")), "skipping as /kv/ endpoints are not enabled"
+    )
     def test_kv(self):
         self.login(username="admin")
 
@@ -525,13 +624,6 @@ class CoreTests(SupersetTestCase):
         sql = "SELECT '{{ datetime(2017, 1, 1).isoformat() }}' as test"
         data = self.run_sql(sql, "fdaklj3ws")
         self.assertEqual(data["data"][0]["test"], "2017-01-01T00:00:00")
-
-    def test_table_metadata(self):
-        maindb = utils.get_example_database()
-        data = self.get_json_resp(f"/superset/table/{maindb.id}/birth_names/null/")
-        self.assertEqual(data["name"], "birth_names")
-        assert len(data["columns"]) > 5
-        assert data.get("selectStar").startswith("SELECT")
 
     def test_fetch_datasource_metadata(self):
         self.login(username="admin")
@@ -814,6 +906,15 @@ class CoreTests(SupersetTestCase):
         examples_db = utils.get_example_database()
         resp = self.get_resp(f"/superset/select_star/{examples_db.id}/birth_names")
         self.assertIn("gender", resp)
+
+    def test_get_select_star_not_allowed(self):
+        """
+            Database API: Test get select star not allowed
+        """
+        self.login(username="gamma")
+        example_db = utils.get_example_database()
+        resp = self.client.get(f"/superset/select_star/{example_db.id}/birth_names")
+        self.assertEqual(resp.status_code, 404)
 
     @mock.patch("superset.views.core.results_backend_use_msgpack", False)
     @mock.patch("superset.views.core.results_backend")

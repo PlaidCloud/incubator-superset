@@ -24,6 +24,7 @@ from typing import List, Optional
 # isort and pylint disagree, isort should win
 # pylint: disable=ungrouped-imports
 import humanize
+import pandas as pd
 import sqlalchemy as sa
 import yaml
 from flask import escape, g, Markup
@@ -34,6 +35,8 @@ from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm.exc import MultipleResultsFound
 
 from superset.utils.core import QueryStatus
+
+logger = logging.getLogger(__name__)
 
 
 def json_to_dict(json_str):
@@ -164,7 +167,7 @@ class ImportMixin:
             obj_query = session.query(cls).filter(and_(*filters))
             obj = obj_query.one_or_none()
         except MultipleResultsFound as e:
-            logging.error(
+            logger.error(
                 "Error importing %s \n %s \n %s",
                 cls.__name__,
                 str(obj_query),
@@ -176,13 +179,13 @@ class ImportMixin:
             is_new_obj = True
             # Create new DB object
             obj = cls(**dict_rep)
-            logging.info("Importing new %s %s", obj.__tablename__, str(obj))
+            logger.info("Importing new %s %s", obj.__tablename__, str(obj))
             if cls.export_parent and parent:
                 setattr(obj, cls.export_parent, parent)
             session.add(obj)
         else:
             is_new_obj = False
-            logging.info("Updating %s %s", obj.__tablename__, str(obj))
+            logger.info("Updating %s %s", obj.__tablename__, str(obj))
             # Update columns
             for k, v in dict_rep.items():
                 setattr(obj, k, v)
@@ -212,7 +215,7 @@ class ImportMixin:
                         session.query(child_class).filter(and_(*delete_filters))
                     ).difference(set(added))
                     for o in to_delete:
-                        logging.info("Deleting %s %s", child, str(obj))
+                        logger.info("Deleting %s %s", child, str(obj))
                         session.delete(o)
 
         return obj
@@ -273,6 +276,11 @@ class ImportMixin:
     def alter_params(self, **kwargs):
         d = self.params_dict
         d.update(kwargs)
+        self.params = json.dumps(d)
+
+    def remove_params(self, param_to_remove: str) -> None:
+        d = self.params_dict
+        d.pop(param_to_remove, None)
         self.params = json.dumps(d)
 
     def reset_ownership(self):
@@ -368,11 +376,11 @@ class QueryResult:  # pylint: disable=too-few-public-methods
     def __init__(  # pylint: disable=too-many-arguments
         self, df, query, duration, status=QueryStatus.SUCCESS, error_message=None
     ):
-        self.df = df  # pylint: disable=invalid-name
-        self.query = query
-        self.duration = duration
-        self.status = status
-        self.error_message = error_message
+        self.df: pd.DataFrame = df  # pylint: disable=invalid-name
+        self.query: str = query
+        self.duration: int = duration
+        self.status: str = status
+        self.error_message: Optional[str] = error_message
 
 
 class ExtraJSONMixin:

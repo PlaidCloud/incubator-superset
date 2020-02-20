@@ -25,7 +25,12 @@ from sqlalchemy.orm.session import make_transient
 from tests.test_app import app
 from superset.utils.dashboard_import_export import decode_dashboards
 from superset import db, security_manager
-from superset.connectors.druid.models import DruidColumn, DruidDatasource, DruidMetric
+from superset.connectors.druid.models import (
+    DruidColumn,
+    DruidDatasource,
+    DruidMetric,
+    DruidCluster,
+)
 from superset.connectors.sqla.models import SqlaTable, SqlMetric, TableColumn
 from superset.models.dashboard import Dashboard
 from superset.models.slice import Slice
@@ -119,11 +124,16 @@ class ImportExportTests(SupersetTestCase):
         return table
 
     def create_druid_datasource(self, name, id=0, cols_names=[], metric_names=[]):
-        params = {"remote_id": id, "database_name": "druid_test"}
+        cluster_name = "druid_test"
+        cluster = self.get_or_create(
+            DruidCluster, {"cluster_name": cluster_name}, db.session
+        )
+
+        params = {"remote_id": id, "database_name": cluster_name}
         datasource = DruidDatasource(
             id=id,
             datasource_name=name,
-            cluster_name="druid_test",
+            cluster_id=cluster.id,
             params=json.dumps(params),
         )
         for col_name in cols_names:
@@ -225,9 +235,8 @@ class ImportExportTests(SupersetTestCase):
     def test_export_1_dashboard(self):
         self.login("admin")
         birth_dash = self.get_dash_by_slug("births")
-        export_dash_url = "/dashboard/export_dashboards_form?id={}&action=go".format(
-            birth_dash.id
-        )
+        id_ = birth_dash.id
+        export_dash_url = f"/dashboard/export_dashboards_form?id={id_}&action=go"
         resp = self.client.get(export_dash_url)
         exported_dashboards = json.loads(
             resp.data.decode("utf-8"), object_hook=decode_dashboards
@@ -237,7 +246,7 @@ class ImportExportTests(SupersetTestCase):
         self.assert_only_exported_slc_fields(birth_dash, exported_dashboards[0])
         self.assert_dash_equals(birth_dash, exported_dashboards[0])
         self.assertEqual(
-            birth_dash.id,
+            id_,
             json.loads(
                 exported_dashboards[0].json_metadata, object_hook=decode_dashboards
             )["remote_id"],
@@ -391,10 +400,15 @@ class ImportExportTests(SupersetTestCase):
         dash_with_2_slices.json_metadata = json.dumps(
             {
                 "remote_id": 10003,
-                "filter_immune_slices": ["{}".format(e_slc.id)],
                 "expanded_slices": {
                     "{}".format(e_slc.id): True,
                     "{}".format(b_slc.id): False,
+                },
+                # mocked filter_scope metadata
+                "filter_scopes": {
+                    str(e_slc.id): {
+                        "region": {"scope": ["ROOT_ID"], "immune": [b_slc.id]}
+                    }
                 },
             }
         )
@@ -412,7 +426,11 @@ class ImportExportTests(SupersetTestCase):
         expected_json_metadata = {
             "remote_id": 10003,
             "import_time": 1991,
-            "filter_immune_slices": ["{}".format(i_e_slc.id)],
+            "filter_scopes": {
+                str(i_e_slc.id): {
+                    "region": {"scope": ["ROOT_ID"], "immune": [i_b_slc.id]}
+                }
+            },
             "expanded_slices": {
                 "{}".format(i_e_slc.id): True,
                 "{}".format(i_b_slc.id): False,
