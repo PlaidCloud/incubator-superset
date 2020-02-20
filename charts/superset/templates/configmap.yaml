@@ -10,7 +10,7 @@ data:
     import os
     import ssl
     from collections import OrderedDict
-    from flask_appbuilder.security.manager import AUTH_OID
+    from flask_appbuilder.security.manager import AUTH_DB, AUTH_OID
     from plaid.security import PlaidSecurityManager
   
     ssl._create_default_https_context = ssl._create_unverified_context
@@ -313,6 +313,12 @@ data:
             'Superset',
         },
         'can_results': {
+            'Superset',
+        },
+        'can_publish': {
+            'Superset',
+        },
+        'can_favstar': {
             'Superset',
         },
         'can_fave_dashboards': {
