@@ -119,7 +119,7 @@ data:
   
     # If users can register for an account (see above setting), this would be their default role.
     #AUTH_USER_REGISTRATION_ROLE = "Public"
-    AUTH_TYPE = AUTH_OID
+    AUTH_TYPE = AUTH_DB
 
     OIDC_PARAMS = {
         "client_id": "{{ .Values.oidc.clientId }}",
@@ -171,7 +171,7 @@ data:
   plaid_permissions.py: |
     PLAID_BASE_PERMISSIONS = {
         'can_activate': {
-            #'TabStateView',
+            'TabStateView',
         },
         'can_add': {
             #'AnnotationLayerModelView',
@@ -277,9 +277,9 @@ data:
             #'TabStateView',
         },
         'can_download_dashboards': {
-            #'DashboardAddView',
-            #'DashboardModelView',
-            #'DashboardModelViewAsync',
+            'DashboardAddView',
+            'DashboardModelView',
+            'DashboardModelViewAsync',
         },
         'can_download': {
             #'AnnotationLayerModelView',
@@ -294,7 +294,7 @@ data:
             #'DatabaseView',
             #'LogModelView',
             'PlaidMetricInlineView',
-            #'PlaidTableModelView',
+            'PlaidTableModelView',
             'QueryView',
             #'RoleModelView',
             'SavedQueryView',
@@ -376,7 +376,7 @@ data:
             'Datasource',
             #'MenuApi',
             #'OpenApi',
-            #'TabStateView',
+            'TabStateView',
             #'TagView',
         },
         'can_get_value': {
@@ -645,5 +645,7 @@ data:
             'DatabaseTablesAsync',
             'DatabaseView',
             'TableModelView',
+            'PlaidTableModelView',
+            'PlaidProject',
         }
     }
