@@ -20,7 +20,7 @@ import logging
 import time
 from datetime import datetime
 
-from superset.connectors.sqla.models import SqlaTable, SqlMetric, TableColumn
+from superset.connectors.plaid.models import PlaidTable, PlaidColumn, PlaidMetric
 from superset.models.dashboard import Dashboard
 from superset.models.slice import Slice
 
@@ -38,12 +38,12 @@ def decode_dashboards(o):
         return Dashboard(**o["__Dashboard__"])
     elif "__Slice__" in o:
         return Slice(**o["__Slice__"])
-    elif "__TableColumn__" in o:
-        return TableColumn(**o["__TableColumn__"])
-    elif "__SqlaTable__" in o:
-        return SqlaTable(**o["__SqlaTable__"])
-    elif "__SqlMetric__" in o:
-        return SqlMetric(**o["__SqlMetric__"])
+    elif "__PlaidColumn__" in o:
+        return PlaidColumn(**o["__PlaidColumn__"])
+    elif "__PlaidTable__" in o:
+        return PlaidTable(**o["__PlaidTable__"])
+    elif "__PlaidMetric__" in o:
+        return PlaidMetric(**o["__PlaidMetric__"])
     elif "__datetime__" in o:
         return datetime.strptime(o["__datetime__"], "%Y-%m-%dT%H:%M:%S")
     else:
