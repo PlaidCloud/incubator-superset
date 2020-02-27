@@ -309,6 +309,7 @@ class PlaidTable(Model, BaseDatasource):
 
     export_fields = (
         "table_name",
+        "base_table_name",
         "main_dttm_col",
         "description",
         "default_endpoint",
@@ -375,13 +376,14 @@ class PlaidTable(Model, BaseDatasource):
         return str(self.project)
 
     @classmethod
-    def get_datasource_by_name(cls, session, datasource_name, schema, uuid):
+    def get_datasource_by_name(cls, session, table_name, schema, project_name):
         schema = schema or None
         query = (
             session.query(cls)
             .join(PlaidProject)
-            .filter(cls.table_name == datasource_name)
-            .filter(PlaidProject.uuid == uuid)
+            .filter(cls.table_name == table_name)
+            .filter(cls.schema == schema)
+            .filter(PlaidProject.name == project_name)
         )
         # Handling schema being '' or None, which is easier to handle
         # in python than in the SQLA query in a multi-dialect way
@@ -1019,18 +1021,19 @@ class PlaidTable(Model, BaseDatasource):
                 db.session.query(PlaidTable)
                 .join(PlaidProject)
                 .filter(
-                    PlaidTable.table_name == table.table_name,
+                    PlaidTable.base_table_name == table.base_table_name,
                     PlaidTable.schema == table.schema,
-                    PlaidProject.id == table.project_id,
+                    PlaidProject.uuid == table.project_id,
                 )
                 .first()
             )
 
         def lookup_project(table):
             try:
+                logger.debug(table)
                 return (
                     db.session.query(PlaidProject)
-                    .filter_by(name=table.params_dict["name"])
+                    .filter_by(uuid=table.project_id)
                     .one()
                 )
             except NoResultFound:
