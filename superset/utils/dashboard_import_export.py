@@ -64,7 +64,6 @@ def import_dashboards(session, data_stream, import_time=None):
     data = json.loads(data_stream.read(), object_hook=decode_dashboards)
     # TODO: import DRUID datasources
     for table in data["datasources"]:
-        logger.debug(f"Importing table {table}")
         type(table).import_obj(table, import_time=import_time)
     session.commit()
     for dashboard in data["dashboards"]:
