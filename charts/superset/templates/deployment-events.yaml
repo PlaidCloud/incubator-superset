@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: superset
-        image: {{ .Values.superset_events.repo }}:{{ .Values.superset_events.tag }}
+        image: {{ .Values.superset_events.image }}
         imagePullPolicy: {{ .Values.superset_events.pullPolicy }}
         env:
 {{ .Values.superset_events.env | toYaml | indent 10 }}

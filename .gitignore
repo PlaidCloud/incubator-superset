@@ -85,3 +85,6 @@ apache-superset-*.tar.gz*
 messages.mo
 
 skaffold.yaml
+devspace.yaml
+generated.yaml
+.devspace/

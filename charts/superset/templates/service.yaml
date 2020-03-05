@@ -4,7 +4,8 @@ metadata:
   name: {{ .Release.Name }}
   labels:
     app: plaid
-    plaid: {{ .Release.Name }}
+    plaid: superset
+    release: {{ .Release.Name }}
 spec:
   ports:
   - port: {{ .Values.superset.port }}  

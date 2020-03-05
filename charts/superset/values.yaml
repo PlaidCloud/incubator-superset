@@ -1,6 +1,5 @@
 superset:
-  repo: plaidcloud/superset
-  tag: latest
+  image: plaidcloud/superset:latest
   pullPolicy: Always
   imagePullSecret: dockerhub-key
   hostname: viz.plaidcloud.com
@@ -12,9 +11,15 @@ superset:
     - name: SUPERSET_PORT
       value: "8088"
 
+node:
+  image: plaidcloud/superset:latest
+  pullPolicy: Always
+  imagePullSecret: dockerhub-key
+  port: 80
+  targetPort: 9000
+
 superset_events:
-  repo: plaidcloud/superset-events
-  tag: latest
+  image: plaidcloud/superset-events:latest
   pullPolicy: Always
   imagePullSecret: dockerhub-key
   env:
