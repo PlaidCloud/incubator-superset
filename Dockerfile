@@ -42,13 +42,16 @@ RUN cd /app \
 FROM node:10-jessie AS superset-node
 
 # NPM ci first, as to NOT invalidate previous steps except for when package.json changes
-RUN mkdir -p /tmp/superset-frontend
-COPY ./superset-frontend/package* /tmp/superset-frontend/
-RUN cd /tmp/superset-frontend \
+RUN mkdir -p /app/superset-frontend
+COPY ./superset-frontend/package* /app/superset-frontend/
+RUN cd /app/superset-frontend \
         && npm ci
 
 # Next, copy in the rest and let webpack do its thing
-COPY ./superset-frontend /tmp/superset-frontend
+COPY ./superset-frontend /app/superset-frontend
+RUN cd /app/superset-frontend \
+        && npm run build \
+        && rm -rf node_modules
 
 
 ######################################################################
@@ -72,6 +75,7 @@ ENV LANG=C.UTF-8 \
 
 
 COPY superset /app/superset
+COPY --from=superset-node /app/superset/static/assets /app/superset/static/assets
 COPY plaid /plaid
 
 USER root
@@ -103,12 +107,8 @@ RUN useradd --user-group --no-create-home --no-log-init --shell /bin/bash supers
 COPY --from=superset-py /usr/local/lib/python3.6/site-packages/ /usr/local/lib/python3.6/site-packages/
 # Copying site-packages doesn't move the CLIs, so let's copy them one by one
 COPY --from=superset-py /usr/local/bin/gunicorn /usr/local/bin/celery /usr/local/bin/flask /usr/bin/
-<<<<<<< HEAD
 COPY --from=superset-node /app/superset/static/assets /app/superset/static/assets
 COPY --from=superset-node /app/superset-frontend /app/superset-frontend
-=======
-COPY --from=superset-node /tmp/superset/assets /app/superset/assets
->>>>>>> Dockerfile, chart, and package.json changes for running webpack
 
 ## Lastly, let's install superset itself
 COPY superset /app/superset
@@ -128,19 +128,3 @@ HEALTHCHECK CMD ["curl", "-f", "http://localhost:8088/health"]
 EXPOSE ${SUPERSET_PORT}
 
 ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
-<<<<<<< HEAD
-
-######################################################################
-# Dev image...
-######################################################################
-ARG PY_VER=3.6.9
-FROM python:${PY_VER}
-
-COPY ./requirements-dev.txt ./docker/requirements-extra.txt /app/
-
-USER root
-RUN cd /app \
-    && pip install --no-cache -r requirements-dev.txt -r requirements-extra.txt
-USER superset
-=======
->>>>>>> Dockerfile, chart, and package.json changes for running webpack

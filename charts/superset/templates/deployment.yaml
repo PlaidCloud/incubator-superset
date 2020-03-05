@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: superset
-        image: {{ .Values.superset.repo }}:{{ .Values.superset.tag }}
+        image: {{ .Values.superset.image }}
         imagePullPolicy: {{ .Values.superset.pullPolicy }}
         command: ["flask", "run", "-p", "8088", "--with-threads", "--reload", "--debugger", "--host=0.0.0.0"]
         env:
@@ -31,18 +31,19 @@ spec:
         - name: superset-conf
           mountPath: /etc/superset/
         - name: static-assets
-          mountPath: /app/superset/assets
+          mountPath: /app/superset/static/assets
         resources: {}
       - name: node
-        image: plaidcloud/superset:node-test-9
+        image: {{ .Values.node.image }}
         imagePullPolicy: IfNotPresent
-        command: ["bash", "-c", "cp -r /tmp/superset/assets /app/superset && cd /app/superset/assets && npm ci && npm run dev-server"]
+        # command: ["sleep", "48h"]
+        command: ["bash", "-c", "cd /app/superset-frontend && npm ci && npm run build && npm run dev-server"]
         ports:
         - name: http
           containerPort: 9000
         volumeMounts:
         - name: static-assets
-          mountPath: /app/superset/assets
+          mountPath: /app/superset/static/assets
       imagePullSecrets:
       - name: {{ .Values.superset.imagePullSecret }}
       volumes:

@@ -9,7 +9,7 @@ metadata:
 spec:
   ports:
   - port: {{ .Values.superset.port }}  
-    targetPort: 9000 #{{ .Values.superset.targetPort }}  
+    targetPort: {{ .Values.superset.targetPort }}  
     protocol: TCP
     name: http
   selector:
