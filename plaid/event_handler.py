@@ -338,7 +338,9 @@ class EventHandler():
                 ).one()
                 if not event_data.get("published_name"):
                     # Table still exists, but the user unpublished it. So we want to delete.
+                    log.info(f"Table {event_data['published_name']} ({event_data['id']}) has no published name, and will be deleted.")
                     delete_table(event_data)
+                    return
                 map_data_to_row(event_data, existing_table)
                 existing_table.fetch_metadata()
                 db.session.commit()

@@ -1,7 +1,8 @@
+from urllib.parse import urljoin
 from flask import redirect, url_for
 from flask_appbuilder.security.views import AuthOIDView
 from flask_appbuilder import expose
-from flask_login import login_user
+from flask_login import login_user, logout_user
 
 
 class AuthOIDCView(AuthOIDView):
@@ -20,3 +21,10 @@ class AuthOIDCView(AuthOIDView):
         user = self.appbuilder.sm.find_user(username=userinfo['name'])
         login_user(user)
         return redirect('/')
+
+    @expose("/logout/")
+    def logout(self):
+        logout_user()
+        base_url = self.appbuilder.app.config["OIDC_PARAMS"]["base_url"]
+        return redirect(urljoin(base_url, "/logout"))
+        

@@ -20,11 +20,24 @@ import logging
 import time
 from datetime import datetime
 
-from superset.connectors.sqla.models import SqlaTable, SqlMetric, TableColumn
+from superset.connectors.connector_registry import ConnectorRegistry
 from superset.models.dashboard import Dashboard
 from superset.models.slice import Slice
 
 logger = logging.getLogger(__name__)
+
+
+def load_types():
+    types = {
+        "__Dashboard__": Dashboard,
+        "__Slice__": Slice,
+        # "datetime": lambda dt: datetime.strptime(dt, "%Y-%m-%dT%H:%M:%S"),
+    }
+    for source_type, source_class in ConnectorRegistry.sources.items():
+        types[f"__{source_class.__name__}__"] = source_class
+        types[f"__{source_class.metric_class.__name__}__"] = source_class.metric_class
+        types[f"__{source_class.column_class.__name__}__"] = source_class.column_class
+    return types
 
 
 def decode_dashboards(o):
@@ -33,19 +46,13 @@ def decode_dashboards(o):
     Recreates the dashboard object from a json representation.
     """
     import superset.models.core as models
+    decode_types = load_types()
 
-    if "__Dashboard__" in o:
-        return Dashboard(**o["__Dashboard__"])
-    elif "__Slice__" in o:
-        return Slice(**o["__Slice__"])
-    elif "__TableColumn__" in o:
-        return TableColumn(**o["__TableColumn__"])
-    elif "__SqlaTable__" in o:
-        return SqlaTable(**o["__SqlaTable__"])
-    elif "__SqlMetric__" in o:
-        return SqlMetric(**o["__SqlMetric__"])
-    elif "__datetime__" in o:
+    if "__datetime__" in o:
         return datetime.strptime(o["__datetime__"], "%Y-%m-%dT%H:%M:%S")
+    elif any(key in decode_types for key in o):
+        key = next(iter(o.keys()))
+        return decode_types[key](**o[key])
     else:
         return o
 

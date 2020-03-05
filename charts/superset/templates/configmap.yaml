@@ -3,6 +3,9 @@ kind: ConfigMap
 metadata:
   name: {{ .Release.Name }}-config
 data:
+  __init__.py: |
+    # Exists for making imports easier.
+    
   init_superset.sh: |
     gunicorn superset:app
 
@@ -12,6 +15,7 @@ data:
     from collections import OrderedDict
     from flask_appbuilder.security.manager import AUTH_DB, AUTH_OID
     from plaid.security import PlaidSecurityManager
+    from plaid_permissions import PLAID_BASE_PERMISSIONS
   
     ssl._create_default_https_context = ssl._create_unverified_context
   
@@ -115,7 +119,7 @@ data:
   
     # If users can register for an account (see above setting), this would be their default role.
     #AUTH_USER_REGISTRATION_ROLE = "Public"
-    AUTH_TYPE = AUTH_OID
+    AUTH_TYPE = AUTH_DB
 
     OIDC_PARAMS = {
         "client_id": "{{ .Values.oidc.clientId }}",
@@ -132,270 +136,6 @@ data:
             'scope': 'openid profile',
             'token_endpoint_auth_method': 'client_secret_basic',
         },
-    }
-
-  
-    PLAID_BASE_PERMISSIONS = {
-        'menu_access': {
-            'Import Dashboards',
-            'Manage',
-            'Data',
-            'Projects',
-            'Charts',
-            'Dashboards',
-            # 'SQL Editor',
-            # 'Query Search',
-            # 'Queries',
-            # 'Saved Queries',
-            'Tables',
-            # 'Refresh',
-        },
-        'can_list': {
-            'DatabaseAsync',
-            'DatabaseTablesAsync',
-            'SliceModelView',
-            'SliceAsync',
-            'SliceAddView',
-            'DashboardModelView',
-            'DashboardModelViewAsync',
-            'DashboardAddView',
-            'QueryView',
-            'SavedQueryViewApi',
-            'SavedQueryView',
-            # 'TableColumnInlineView',
-            'SqlMetricInlineView',
-            'TableModelView',
-            'CssTemplateAsyncModelView',
-            'PlaidMetricInlineView',
-            'Datasource',
-        },
-        'can_show': {
-            'DatabaseAsync',
-            'DatabaseTablesAsync',
-            'SliceModelView',
-            'SliceAsync',
-            'SliceAddView',
-            'DashboardModelView',
-            'DashboardModelViewAsync',
-            'DashboardAddView',
-            'QueryView',
-            'SavedQueryViewApi',
-            'SavedQueryView',
-            'TableColumnInlineView',
-            'SqlMetricInlineView',
-            'TableModelView',
-            'PlaidMetricInlineView',
-            'Datasource',
-        },
-        'can_delete': {
-            'SliceModelView',
-            'SliceAsync',
-            'SliceAddView',
-            'DashboardModelView',
-            'DashboardModelViewAsync',
-            'DashboardAddView',
-            'QueryView',
-            'SavedQueryViewApi',
-            'SavedQueryView',
-            'TableColumnInlineView',
-            'SqlMetricInlineView',
-            'TableModelView',
-            'PlaidMetricInlineView',
-        } ,
-        'can_edit': {
-            'SliceModelView',
-            'SliceAsync',
-            'SliceAddView',
-            'DashboardModelView',
-            'DashboardModelViewAsync',
-            'DashboardAddView',
-            'QueryView',
-            'SavedQueryViewApi',
-            'SavedQueryView',
-            'TableColumnInlineView',
-            'SqlMetricInlineView',
-            'TableModelView',
-            'PlaidMetricInlineView',
-        },
-        'can_download': {
-            'SliceModelView',
-            'SliceAsync',
-            'SliceAddView',
-            'DashboardModelView',
-            'DashboardModelViewAsync',
-            'DashboardAddView',
-            'QueryView',
-            'SavedQueryViewApi',
-            'SavedQueryView',
-            'TableColumnInlineView',
-            'SqlMetricInlineView',
-            'TableModelView',
-            'PlaidMetricInlineView',
-        },
-        'can_add': {
-            'SliceModelView',
-            'SliceAsync',
-            'SliceAddView',
-            'DashboardModelView',
-            'DashboardModelViewAsync',
-            'DashboardAddView',
-            'QueryView',
-            'SavedQueryViewApi',
-            'SavedQueryView',
-            'TableColumnInlineView',
-            'SqlMetricInlineView',
-            'TableModelView',
-            'PlaidMetricInlineView',
-        },
-        'muldelete': {
-            'SliceModelView',
-            'SliceAsync',
-            'SliceAddView',
-            'DashboardModelView',
-            'DashboardModelViewAsync',
-            'DashboardAddView',
-            'SavedQueryViewApi',
-            'SavedQueryView',
-            'TableModelView',
-            'PlaidMetricInlineView',
-        },
-        'mulexport': {
-            'DashboardModelView',
-            'DashboardModelViewAsync',
-            'DashboardAddView',
-        },
-        'refresh': {
-            'TableModelView',
-        },
-        'yaml_export': {
-            'TableModelView',
-        },
-        'can_dashboard': {
-            'Superset',
-        },
-        'can_checkbox': {
-            'Superset',
-        },
-        'can_csrf_token': {
-            'Superset',
-        },
-        'can_csv': {
-            'Superset',
-        },
-        'can_fetch_datasource_metadata': {
-            'Superset',
-        },
-        'can_search_queries': {
-            'Superset',
-        },
-        'can_tables': {
-            'Superset',
-        },
-        'can_table': {
-            'Superset',
-        },
-        'can_user_slices': {
-            'Superset',
-        },
-        'can_copy_dash': {
-            'Superset',
-        },
-        'can_explore_json': {
-            'Superset',
-        },
-        'can_slice': {
-            'Superset',
-        },
-        'can_created_dashboards': {
-            'Superset',
-        },
-        'can_warm_up_cache': {
-            'Superset',
-        },
-        'can_results': {
-            'Superset',
-        },
-        'can_publish': {
-            'Superset',
-        },
-        'can_favstar': {
-            'Superset',
-        },
-        'can_fave_dashboards': {
-            'Superset',
-        },
-        'can_sliceQuery': {
-            'Superset',
-        },
-        'can_add_slices': {
-            'Superset',
-        },
-        'can_fave_slices': {
-            'Superset',
-        },
-        'can_save_dash': {
-            'Superset',
-        },
-        'can_select_star': {
-            'Superset',
-        },
-        'can_schemas': {
-            'Superset',
-        },
-        'can_cache_key_exist': {
-            'Superset',
-        },
-        'can_fave_dashboards_by_username': {
-            'Superset',
-        },
-        'can_filter': {
-            'Superset',
-        },
-        'can_created_slices': {
-            'Superset',
-        },
-        'can_slice_json': {
-            'Superset',
-        },
-        'can_stop_query': {
-            'Superset',
-        },
-        'can_explore': {
-            'Superset',
-        },
-        'can_explorev2': {
-            'Superset',
-        },
-        'can_recent_activity': {
-            'Superset',
-        },
-        'can_import_dashboards': {
-            'Superset',
-        },
-        'can_approve': {
-            'Superset',
-        },
-        'can_cached_key': {
-            'Superset',
-        },
-        'can_sql_json': {
-            'Superset',
-        },
-        'can_refresh': {
-            'Plaid',
-        },
-        'can_refresh_async': {
-            'Plaid',
-        },
-        'can_databases': {
-            'Superset',
-        },
-        'can_datasources': {
-            'Superset'
-        },
-        'datasource_access': {
-            '[placeholder_project].[change_me](id:1)',
-        }
     }
   
     class SetURLScheme(object):
@@ -426,3 +166,486 @@ data:
             return self.app(environ, start_response)
   
     ADDITIONAL_MIDDLEWARE = [SetURLScheme, ]
+
+
+  plaid_permissions.py: |
+    PLAID_BASE_PERMISSIONS = {
+        'can_activate': {
+            'TabStateView',
+        },
+        'can_add': {
+            #'AnnotationLayerModelView',
+            #'AnnotationModelView',
+            #'CssTemplateAsyncModelView',
+            #'CssTemplateModelView',
+            'DashboardAddView',
+            'DashboardModelView',
+            'DashboardModelViewAsync',
+            #'DatabaseAsync',
+            #'DatabaseTablesAsync',
+            #'DatabaseView',
+            #'LogModelView',
+            'PlaidMetricInlineView',
+            #'PlaidTableModelView',
+            'QueryView',
+            #'RoleModelView',
+            'SavedQueryView',
+            'SavedQueryViewApi',
+            'SliceAddView',
+            'SliceAsync',
+            'SliceModelView',
+            'SqlMetricInlineView',
+            'TableColumnInlineView',
+            #'TableModelView',
+            #'UserDBModelView',
+        },
+        'can_add_slices': {
+            'Superset',
+        },
+        'can_annotation_json': {
+            #'Superset',
+        },
+        'can_approve': {
+            'Superset',
+        },
+        'can_available_domains': {
+            #'Superset',
+        },
+        'can_cache_key_exist': {
+            'Superset',
+        },
+        'can_cached_key': {
+            'Superset',
+        },
+        'can_chart': {
+            #'UserStatsChartView',
+        },
+        'can_checkbox': {
+            'Superset',
+        },
+        'can_copy_dash': {
+            'Superset',
+        },
+        'can_created_dashboards': {
+            'Superset',
+        },
+        'can_created_slices': {
+            'Superset',
+        },
+        'can_csrf_token': {
+            'Superset',
+        },
+        'can_csv': {
+            'Superset',
+        },
+        'can_dashboard': {
+            'Superset',
+        },
+        'can_datasources': {
+            'Superset',
+        },
+        'can_delete': {
+            #'AnnotationLayerModelView',
+            #'AnnotationModelView',
+            #'CssTemplateAsyncModelView',
+            #'CssTemplateModelView',
+            'DashboardAddView',
+            'DashboardModelView',
+            'DashboardModelViewAsync',
+            #'DatabaseAsync',
+            #'DatabaseTablesAsync',
+            #'DatabaseView',
+            #'LogModelView',
+            'PlaidMetricInlineView',
+            #'PlaidTableModelView',
+            'QueryView',
+            #'RoleModelView',
+            'SavedQueryView',
+            'SavedQueryViewApi',
+            'SliceAddView',
+            'SliceAsync',
+            'SliceModelView',
+            'SqlMetricInlineView',
+            'TableColumnInlineView',
+            #'TableModelView',
+            #'TableSchemaView',
+            #'TabStateView',
+            #'TagView',
+            #'UserDBModelView',
+        },
+        'can_delete_query': {
+            #'TabStateView',
+        },
+        'can_download_dashboards': {
+            'DashboardAddView',
+            'DashboardModelView',
+            'DashboardModelViewAsync',
+        },
+        'can_download': {
+            #'AnnotationLayerModelView',
+            #'AnnotationModelView',
+            #'CssTemplateAsyncModelView',
+            #'CssTemplateModelView',
+            'DashboardAddView',
+            'DashboardModelView',
+            'DashboardModelViewAsync',
+            #'DatabaseAsync',
+            #'DatabaseTablesAsync',
+            #'DatabaseView',
+            #'LogModelView',
+            'PlaidMetricInlineView',
+            'PlaidTableModelView',
+            'QueryView',
+            #'RoleModelView',
+            'SavedQueryView',
+            'SavedQueryViewApi',
+            'SliceAddView',
+            'SliceAsync',
+            'SliceModelView',
+            'SqlMetricInlineView',
+            'TableColumnInlineView',
+            #'TableModelView',
+            #'UserDBModelView',
+        },
+        'can_edit': {
+            #'AnnotationLayerModelView',
+            #'AnnotationModelView',
+            #'CssTemplateAsyncModelView',
+            #'CssTemplateModelView',
+            'DashboardAddView',
+            'DashboardModelView',
+            'DashboardModelViewAsync',
+            #'DatabaseAsync',
+            #'DatabaseTablesAsync',
+            #'DatabaseView',
+            #'LogModelView',
+            'PlaidMetricInlineView',
+            'PlaidTableModelView',
+            'QueryView',
+            #'RoleModelView',
+            'SavedQueryView',
+            'SavedQueryViewApi',
+            'SliceAddView',
+            'SliceAsync',
+            'SliceModelView',
+            'SqlMetricInlineView',
+            'TableColumnInlineView',
+            #'TableModelView',
+            #'UserDBModelView',
+        },
+        'can_estimate_query_cost': {
+            #'Superset',
+        },
+        'can_expanded': {
+            #'TableSchemaView',
+        },
+        'can_explore': {
+            'Superset',
+        },
+        'can_explore_json': {
+            'Superset',
+        },
+        'can_explorev2': {
+            'Superset',
+        },
+        'can_external_metadata': {
+            #'Datasource',
+        },
+        'can_extra_table_metadata': {
+            #'Superset',
+        },
+        'can_fave_dashboards_by_username': {
+            'Superset',
+        },
+        'can_fave_dashboards': {
+            'Superset',
+        },
+        'can_fave_slices': {
+            'Superset',
+        },
+        'can_favstar': {
+            'Superset',
+        },
+        'can_fetch_datasource_metadata': {
+            'Superset',
+        },
+        'can_filter': {
+            'Superset',
+        },
+        'can_get': {
+            'Datasource',
+            #'MenuApi',
+            #'OpenApi',
+            'TabStateView',
+            #'TagView',
+        },
+        'can_get_value': {
+            #'KV',
+        },
+        'can_import_dashboards': {
+            'Superset',
+        },
+        'can_list': {
+            #'AnnotationLayerModelView',
+            #'AnnotationModelView',
+            'CssTemplateAsyncModelView',
+            #'CssTemplateModelView',
+            'DashboardAddView',
+            'DashboardModelView',
+            'DashboardModelViewAsync',
+            'DatabaseAsync',
+            'DatabaseTablesAsync',
+            #'DatabaseView',
+            #'LogModelView',
+            #'PermissionModelView',
+            #'PermissionViewModelView',
+            'PlaidMetricInlineView',
+            'PlaidTableModelView',
+            'QueryView',
+            #'RoleModelView',
+            'SavedQueryView',
+            'SavedQueryViewApi',
+            'SliceAddView',
+            'SliceAsync',
+            'SliceModelView',
+            'SqlMetricInlineView',
+            #'TableColumnInlineView',
+            #'TableModelView',
+            #'UserDBModelView',
+            #'ViewMenuModelView',
+        },
+        'can_migrate_query': {
+            #'TabStateView',
+        },
+        'can_my_queries': {
+            #'SqlLab',
+        },
+        'can_new': {
+            'Dashboard',
+        },
+        'can_override_role_permissions': {
+            #'Superset',
+        },
+        'can_post': {
+            #'TableSchemaView',
+            #'TabStateView',
+            #'TagView',
+        },
+        'can_profile': {
+            #'Superset',
+        },
+        'can_publish': {
+            'Superset',
+        },
+        'can_put': {
+            #'TabStateView',
+        },
+        'can_queries': {
+            #'Superset',
+        },
+        'can_query_form_data': {
+            #'Api',
+        },
+        'can_query': {
+            #'Api',
+        },
+        'can_recent_activity': {
+            'Superset',
+        },
+        'can_request_access': {
+            '#Superset'
+        },
+        'can_results': {
+            'Superset',
+        },
+        'can_save_dash': {
+            'Superset',
+        },
+        'can_save': {
+            #'Datasource',
+        },
+        'can_schemas_access_for_csv_upload': {
+            #'Superset',
+        },
+        'can_schemas': {
+            'Superset',
+        },
+        'can_search_queries': {
+            'Superset',
+        },
+        'can_select_star': {
+            'Superset',
+        },
+        'can_shortner': {
+            #'R',
+        },
+        'can_show': {
+            #'AnnotationLayerModelView',
+            #'AnnotationModelView',
+            #'CssTemplateAsyncModelView',
+            #'CssTemplateModelView',
+            'DashboardAddView',
+            'DashboardModelView',
+            'DashboardModelViewAsync',
+            'DatabaseAsync',
+            'DatabaseTablesAsync',
+            #'DatabaseView',
+            #'LogModelView',
+            'PlaidMetricInlineView',
+            'PlaidTableModelView',
+            'QueryView',
+            #'RoleModelView',
+            'SavedQueryView',
+            'SavedQueryViewApi',
+            'SliceAddView',
+            'SliceAsync',
+            'SliceModelView',
+            'SqlMetricInlineView',
+            #'SwaggerView',
+            'TableColumnInlineView',
+            #'TableModelView',
+            #'UserDBModelView',
+        },
+        'can_slice_json': {
+            'Superset',
+        },
+        'can_slice': {
+            'Superset',
+        },
+        'can_slice_query': {
+            'Superset',
+        },
+        'can_sql_json': {
+            'Superset',
+        },
+        'can_sqllab': {
+            #'Superset',
+        },
+        'can_sqllab_viz': {
+            #'Superset',
+        },
+        'can_stop_query': {
+            'Superset',
+        },
+        'can_store': {
+            'KV',
+        },
+        'can_suggestions': {
+            'TagView',
+        },
+        'can_sync_druid_source': {
+            #'Superset',
+        },
+        'can_table': {
+            'Superset',
+        },
+        'can_tables': {
+            'Superset',
+        },
+        'can_tagged_objects': {
+            'TagView',
+        },
+        'can_testconn': {
+            'Superset',
+        },
+        'can_this_form_get': {
+            #'CsvToDatabaseView',
+            #'ResetMyPasswordView',
+            #'ResetPasswordView',
+            #'UserInfoEditView',
+        },
+        'can_this_form_post': {
+            #'CsvToDatabaseView',
+            #'ResetMyPasswordView',
+            #'ResetPasswordView',
+            #'UserInfoEditView',
+        },
+        'can_user_slices': {
+            'Superset',
+        },
+        'can_userinfo': {
+            #'UserDBModelView',
+        },
+        'can_validate_sql_json': {
+            'Superset',
+        },
+        'can_warm_up_cache': {
+            'Superset',
+        },
+        'copyrole': {
+            #'RoleModelView',
+        },
+        'menu_access': {
+            #'Action Log',
+            #'Annotation Layers',
+            #'Annotations',
+            #'Base Permissions',
+            'Charts',
+            #'CSS Templates',
+            'Dashboards',
+            'Data',
+            #'Databases',
+            'Import Dashboards',
+            #'List Roles',
+            #'List Users',
+            'Manage',
+            #'Permission on Views/Menus',
+            #'Projects',
+            #'Queries',
+            #'Query Search',
+            #'Saved Queries',
+            #'Security',
+            #'Sources',
+            #'SQL Editor',
+            #'SQL Lab',
+            'Tables',
+            #'Upload a CSV',
+            #'User\'s Statistics',
+            #'Views/Menus',
+        },
+        'muldelete': {
+            #'AnnotationLayerModelView',
+            #'AnnotationModelView',
+            #'CssTemplateAsyncModelView',
+            #'CssTemplateModelView',
+            'DashboardAddView',
+            'DashboardModelView',
+            'DashboardModelViewAsync',
+            #'DatabaseAsync',
+            #'DatabaseTablesAsync',
+            #'DatabaseView',
+            #'PlaidMetricInlineView',
+            #'PlaidTableModelView',
+            'SavedQueryView',
+            'SavedQueryViewApi',
+            'SliceAddView',
+            'SliceAsync',
+            'SliceModelView',
+            #'TableModelView',
+        },
+        'mulexport': {
+            'DashboardAddView',
+            'DashboardModelView',
+            'DashboardModelViewAsync',
+        },
+        'refresh': {
+            'TableModelView',
+        },
+        'resetmypassword': {
+            #'UserDBModelView',
+        },
+        'resetpasswords': {
+            #'UserDBModelView',
+        },
+        'userinfoedit': {
+            #'UserDBModelView',
+        },
+        'yaml_export': {
+            'DatabaseAsync',
+            'DatabaseTablesAsync',
+            'DatabaseView',
+            'TableModelView',
+            'PlaidTableModelView',
+            'PlaidProject',
+        }
+    }
