@@ -21,7 +21,9 @@ spec:
       - name: superset
         image: {{ .Values.superset.image }}
         imagePullPolicy: {{ .Values.superset.pullPolicy }}
+        {{- if .Values.superset.dev }}
         command: ["flask", "run", "-p", "8088", "--with-threads", "--reload", "--debugger", "--host=0.0.0.0"]
+        {{- end }}
         env:
 {{ .Values.superset.env | toYaml | indent 10 }}
         ports:
@@ -30,13 +32,15 @@ spec:
         volumeMounts:
         - name: superset-conf
           mountPath: /etc/superset/
+        {{- if .Values.superset.dev }}      
         - name: static-assets
           mountPath: /app/superset/static/assets
+        {{- end }}
         resources: {}
+      {{- if .Values.superset.dev }}
       - name: node
         image: {{ .Values.node.image }}
         imagePullPolicy: IfNotPresent
-        # command: ["sleep", "48h"]
         command: ["bash", "-c", "cd /app/superset-frontend && npm ci && npm run build && npm run dev-server"]
         ports:
         - name: http
@@ -44,11 +48,14 @@ spec:
         volumeMounts:
         - name: static-assets
           mountPath: /app/superset/static/assets
+      {{- end }}
       imagePullSecrets:
       - name: {{ .Values.superset.imagePullSecret }}
       volumes:
       - name: superset-conf
         configMap:
             name: {{ .Release.Name }}-config
+      {{- if .Values.superset.dev }}
       - name: static-assets
         emptyDir: {}
+      {{- end }}
