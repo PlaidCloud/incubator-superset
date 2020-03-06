@@ -76,7 +76,7 @@ podTemplate(label: 'superset',
                 stage('Build Image') {
                   python_version="3.6.9"
                   sh "docker pull python:${python_version}"
-                  image = docker.build("${image_name}:latest", "--build-arg PY_VER=${python_version} --pull ${docker_args} --target lean .")
+                  image = docker.build("${image_name}:latest", "--build-arg PY_VER=${python_version} --pull ${docker_args} .")
                   events_image = docker.build("${image_name}-events:latest", "--build-arg PY_VER=${python_version} --pull ${docker_args} -f Dockerfile.events .")
                 }
 
