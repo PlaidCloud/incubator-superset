@@ -85,13 +85,13 @@ USER root
 # Final lean image...
 ######################################################################
 ARG PY_VER=3.6.9
-FROM python:${PY_VER} AS lean
+FROM python:${PY_VER}
 
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     FLASK_ENV=production \
     FLASK_APP="superset.app:create_app()" \
-    PYTHONPATH="/app/pythonpath" \
+    PYTHONPATH="/app/superset:/plaid:/etc/superset" \
     SUPERSET_HOME="/app/superset_home" \
     SUPERSET_PORT=8080
 
@@ -117,6 +117,7 @@ RUN cd /app \
         && chown -R superset:superset * \
         && pip install -e .
 
+COPY plaid /plaid/plaid/
 COPY ./docker/docker-entrypoint.sh /usr/bin/
 
 WORKDIR /app
