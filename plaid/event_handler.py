@@ -22,7 +22,7 @@ from superset.app import create_app
 app = create_app()
 app.app_context().push()
 from superset import app, db, security_manager
-from superset.connectors.plaid.models import PlaidTable, PlaidProject
+from superset.connectors.plaid.models import PlaidTable, PlaidProject, PlaidMetric
 from superset.models.slice import Slice
 
 
@@ -359,17 +359,22 @@ class EventHandler():
                     PlaidTable.base_table_name == event_data['id'],
                     PlaidTable.schema == f"report{kwargs['project_id']}",
                 ).one()
-                placeholder_table = db.session.query(PlaidTable).filter(
-                    PlaidTable.base_table_name == "change_me",
-                    PlaidTable.project_id == "placeholder_project",
-                ).one()
-                charts = db.session.query(Slice).filter_by(datasource_id=table.id, datasource_type='plaid').all()
-                for chart in charts:
-                    chart.datasource_id = placeholder_table.id
+
+                has_charts = db.session.query(
+                        db.session.query(Slice).filter_by(datasource_id=table.id, datasource_type='plaid').exists()
+                    ).scalar()
+
+                has_metrics = db.session.query(
+                        db.session.query(PlaidMetric).filter(
+                            PlaidMetric.table_id == table.id,
+                            PlaidMetric.metric_name != 'count'
+                        ).exists()
+                    ).scalar()
+
+                if not has_charts and not has_metrics:
+                    security_manager.del_permission_view_menu('datasource_access', table.get_perm())
+                    db.session.delete(table)
                     db.session.commit()
-                security_manager.del_permission_view_menu('datasource_access', table.get_perm())
-                db.session.delete(table)
-                db.session.commit()
             except NoResultFound:
                 log.warning("Received a delete event for a table that doesn't exist.")
             except Exception:
