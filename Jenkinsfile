@@ -2,7 +2,7 @@
 import groovy.transform.Field
 
 @Field 
-def image_name = "plaidcloud/superset"
+def image_name = "gcr.io/plaidcloud-build/superset"
 
 @Field
 def image_label = ""
@@ -29,7 +29,7 @@ podTemplate(label: 'superset',
       withCredentials([string(credentialsId: 'docker-server-ip', variable: 'host')]) {
         docker.withServer("$host", "docker-server") {
           withCredentials([dockerCert(credentialsId: 'docker-server', variable: "DOCKER_CERT_PATH")]) {
-            docker.withRegistry("", "plaid-docker") {
+            docker.withRegistry('https://gcr.io', 'gcr:plaidcloud-build') {
               // Checkout source before doing anything else
               scm_map = checkout([
                   $class: 'GitSCM',
@@ -76,8 +76,8 @@ podTemplate(label: 'superset',
                 stage('Build Image') {
                   python_version="3.6.9"
                   sh "docker pull python:${python_version}"
-                  image = docker.build("${image_name}:latest", "--build-arg PY_VER=${python_version} --pull ${docker_args} .")
-                  events_image = docker.build("${image_name}-events:latest", "--build-arg PY_VER=${python_version} --pull ${docker_args} -f Dockerfile.events .")
+                  image = docker.build("${image_name}/production:latest", "--build-arg PY_VER=${python_version} --pull ${docker_args} .")
+                  events_image = docker.build("${image_name}/events:latest", "--build-arg PY_VER=${python_version} --pull ${docker_args} -f Dockerfile.events .")
                 }
 
                 stage('Publish to DockerHub') {
@@ -101,10 +101,10 @@ podTemplate(label: 'superset',
     if (branch == 'develop' || params.deploy_to_kubernetes) {
       container('kubectl') {
         stage("Deploy superset to Kubernetes") {
-          sh "kubectl -n plaid set image deployment/superset superset=${image_name}:${image_label} --record"
+          sh "kubectl -n plaid set image deployment/superset superset=${image_name}/production:${image_label} --record"
         }
         stage("Deploy superset-events to Kubernetes") {
-          sh "kubectl -n plaid set image deployment/superset-events superset=${image_name}-events:${image_label} --record"
+          sh "kubectl -n plaid set image deployment/superset-events superset=${image_name}/events:${image_label} --record"
         }
       }
     }
