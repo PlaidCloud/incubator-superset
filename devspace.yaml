@@ -1,7 +1,7 @@
 version: v1beta7
 images:
   backend:
-    image: gcr.io/plaidcloud-build/superset/main
+    image: gcr.io/plaidcloud-build/superset/dev
     build:
       custom:
         command: "./deploy"
