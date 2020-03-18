@@ -84,7 +84,4 @@ apache-superset-*.tar.gz*
 # Translation binaries
 messages.mo
 
-skaffold.yaml
-devspace.yaml
-generated.yaml
 .devspace/

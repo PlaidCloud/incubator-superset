@@ -1,0 +1,11 @@
+steps:
+- name: "gcr.io/cloud-builders/docker"
+  args:
+  - build
+  - "--tag=gcr.io/plaidcloud-build/superset/$TAG_NAME"
+  - "$_ARGS"
+  - .
+substitutions:
+  _ARGS: ""
+images:
+- "gcr.io/plaidcloud-build/superset/$TAG_NAME"
