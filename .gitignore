@@ -85,3 +85,4 @@ apache-superset-*.tar.gz*
 messages.mo
 
 .devspace/
+.last_tag

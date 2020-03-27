@@ -1,11 +1,21 @@
 steps:
-- name: "gcr.io/cloud-builders/docker"
+- name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'
   args:
-  - build
-  - "--tag=gcr.io/plaidcloud-build/superset/$TAG_NAME"
-  - "$_ARGS"
-  - .
+  - '-c'
+  - |
+    docker pull gcr.io/plaidcloud-build/superset/${_LAST_TAG} || exit 0
+- name: "gcr.io/cloud-builders/docker"
+  args: [
+          "build",
+          "-t", "gcr.io/plaidcloud-build/superset/${TAG_NAME}",
+          "-f", "Dockerfile.py3",
+          "--cache-from", "gcr.io/plaidcloud-build/superset/${_LAST_TAG}",
+          "${_ARGS}",
+          "."
+        ]
 substitutions:
+  _LAST_TAG: "workflow-runner:latest"
   _ARGS: ""
 images:
 - "gcr.io/plaidcloud-build/superset/$TAG_NAME"
