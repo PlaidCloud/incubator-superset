@@ -9,13 +9,12 @@ steps:
   args: [
           "build",
           "-t", "gcr.io/plaidcloud-build/superset/${TAG_NAME}",
-          "-f", "Dockerfile.py3",
           "--cache-from", "gcr.io/plaidcloud-build/superset/${_LAST_TAG}",
           "${_ARGS}",
           "."
         ]
 substitutions:
-  _LAST_TAG: "workflow-runner:latest"
   _ARGS: ""
+  _LAST_TAG: "workflow-runner:latest"
 images:
 - "gcr.io/plaidcloud-build/superset/$TAG_NAME"

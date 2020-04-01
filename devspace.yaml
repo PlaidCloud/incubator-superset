@@ -30,8 +30,9 @@ deployments:
     values:
       superset:
         dev: true
-        repo: plaidcloud/superset
+        repo: gcr.io/plaidcloud-build/superset/dev
         hostname: gbates-viz.plaidcloud.io
+        imagePullSecret: gcr-key
         env:
           - name: SUPERSET_ENV
             value: "production"
@@ -44,11 +45,11 @@ deployments:
           - name: PYTHONPATH
             value: "/app:/plaid:/etc/superset"
       node:
-        image: gcr.io/plaidcloud-build/superset-node
+        image: gcr.io/plaidcloud-build/superset/node
       superset_events:
-        image: gcr.io/plaidcloud-build/superset-events
+        image: gcr.io/plaidcloud-build/superset/events
         pullPolicy: Always
-        imagePullSecret: dockerhub-key
+        imagePullSecret: gcr-key
         env:
           - name: SUPERSET_ENV
             value: "development"
