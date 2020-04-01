@@ -70,7 +70,7 @@ class BaseEnum(Enum):
 
 
 class PlaidObjectType(BaseEnum):
-    __order__ = 'Workspace Project Workflow Step Table View Udf Editor User'
+    __order__ = 'Workspace Project Workflow Step Table View Udf Editor User WorkflowState StepState'
 
     Workspace = 'workspace'
     Project = 'project'
@@ -81,6 +81,8 @@ class PlaidObjectType(BaseEnum):
     Udf = 'user-defined-function'
     Editor = 'data_editor'
     User = 'user'
+    WorkflowState = 'workflow-state'
+    StepState = 'step-state'
 
 
 class EventType(BaseEnum):
@@ -91,7 +93,6 @@ class EventType(BaseEnum):
     Delete = 'delete'
     WorkspaceAccessChange = 'workspace-access-change'
     ProjectAccessChange = 'project-access-change'
-
 
 class EventHandler():
     """Handles plaid-sourced events from a message queue."""
