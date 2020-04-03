@@ -1,10 +1,12 @@
 #!/bin/bash
 
 # Takes the 'main:abcdef' out of 'gcr.io/plaidcloud-build/superset/main:abcdef'
-tvar=$(echo $1 | cut -d/ -f4)
+tvar=$(echo $2 | cut -d/ -f4)
 
 # Build using that tag name, plus an additional build arg.
 gcloud builds submit --project plaidcloud-build \
   --config=cloudbuild.yaml \
   --machine-type=n1-highcpu-8 \
-  --substitutions=TAG_NAME="$tvar",_ARGS="$2"
+  --substitutions=TAG_NAME="$tvar",_ARGS="$1",_LAST_TAG="$(cat .last_tag)"
+
+echo "$tvar" > .last_tag
