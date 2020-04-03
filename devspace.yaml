@@ -30,7 +30,7 @@ deployments:
     values:
       superset:
         dev: true
-        repo: gcr.io/plaidcloud-build/superset/dev
+        image: gcr.io/plaidcloud-build/superset/dev
         hostname: gbates-viz.plaidcloud.io
         imagePullSecret: gcr-key
         env:

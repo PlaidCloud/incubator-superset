@@ -7,6 +7,6 @@ tvar=$(echo $2 | cut -d/ -f4)
 gcloud builds submit --project plaidcloud-build \
   --config=cloudbuild.yaml \
   --machine-type=n1-highcpu-8 \
-  --substitutions=TAG_NAME="$tvar",_ARGS="$2",_LAST_TAG="$(cat .last_tag)"
+  --substitutions=TAG_NAME="$tvar",_ARGS="$1",_LAST_TAG="$(cat .last_tag)"
 
 echo "$tvar" > .last_tag
