@@ -119,7 +119,7 @@ data:
   
     # If users can register for an account (see above setting), this would be their default role.
     #AUTH_USER_REGISTRATION_ROLE = "Public"
-    AUTH_TYPE = AUTH_DB
+    AUTH_TYPE = AUTH_OID
 
     OIDC_PARAMS = {
         "client_id": "{{ .Values.oidc.clientId }}",
