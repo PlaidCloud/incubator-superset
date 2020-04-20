@@ -15,6 +15,6 @@ steps:
         ]
 substitutions:
   _ARGS: ""
-  _LAST_TAG: "workflow-runner:latest"
+  _LAST_TAG: "dev:latest"
 images:
 - "gcr.io/plaidcloud-build/superset/$TAG_NAME"

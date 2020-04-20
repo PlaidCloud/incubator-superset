@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Takes the 'main:abcdef' out of 'gcr.io/plaidcloud-build/superset/main:abcdef'
+# Takes the 'dev:abcdef' out of 'gcr.io/plaidcloud-build/superset/dev:abcdef'
 tvar=$(echo $2 | cut -d/ -f4)
 
 # Build using that tag name, plus an additional build arg.
