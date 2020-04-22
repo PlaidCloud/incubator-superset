@@ -18,7 +18,7 @@ class AuthOIDCView(AuthOIDView):
         oauth = self.appbuilder.sm.oauth        
         token = oauth.plaid.authorize_access_token()
         userinfo = oauth.plaid.parse_id_token(token)
-        user = self.appbuilder.sm.find_user(username=userinfo['name'])
+        user = self.appbuilder.sm.find_user(email=userinfo['email'])
         login_user(user)
         return redirect('/')
 
