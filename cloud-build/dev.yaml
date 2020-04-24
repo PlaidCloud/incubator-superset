@@ -1,0 +1,46 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      mkdir tmp
+
+      (docker pull "gcr.io/plaidcloud-build/superset/py:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/py) ||
+        echo "latest" > tmp/py
+
+      docker build \
+        -t gcr.io/plaidcloud-build/superset/py:$TAG_NAME \
+        --cache-from gcr.io/plaidcloud-build/superset/py:$(cat tmp/py) \
+        --target=superset-py \
+        --build-arg PY_VER=3.6.9 \
+        .
+
+      (docker pull "gcr.io/plaidcloud-build/superset/node:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/node) ||
+        echo "latest" > tmp/node
+
+      docker build \
+        -t gcr.io/plaidcloud-build/superset/node:$TAG_NAME \
+        --cache-from gcr.io/plaidcloud-build/superset/py:$(cat tmp/py) \
+        --cache-from gcr.io/plaidcloud-build/superset/node:$(cat tmp/node) \
+        --target=superset-node \
+        --build-arg PY_VER=3.6.9 \
+        .
+
+      (docker pull "gcr.io/plaidcloud-build/superset/dev:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/dev) ||
+        echo "latest" > tmp/dev
+
+      docker build \
+        -t gcr.io/plaidcloud-build/superset/dev:$TAG_NAME \
+        --cache-from gcr.io/plaidcloud-build/superset/py:$(cat tmp/py) \
+        --cache-from gcr.io/plaidcloud-build/superset/node:$(cat tmp/node) \
+        --cache-from gcr.io/plaidcloud-build/superset/dev:$(cat tmp/dev) \
+        --target dev \
+        --build-arg PY_VER=3.6.9 \
+        .
+substitutions:
+  _LAST_TAG: "latest"
+images:
+- "gcr.io/plaidcloud-build/superset/py:$TAG_NAME"
+- "gcr.io/plaidcloud-build/superset/node:$TAG_NAME"
+- "gcr.io/plaidcloud-build/superset/dev:$TAG_NAME"

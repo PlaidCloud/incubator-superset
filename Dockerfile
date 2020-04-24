@@ -70,13 +70,15 @@ ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     FLASK_ENV=development \
     FLASK_APP="superset.app:create_app()" \
-    PYTHONPATH="/app/superset:/plaid:/etc/superset" \
+    PYTHONPATH="/app:/plaid:/etc/superset" \
     SUPERSET_HOME="/app/superset_home"
 
 
 COPY superset /app/superset
 COPY --from=superset-node /app/superset/static/assets /app/superset/static/assets
-COPY plaid /plaid
+COPY plaid/ /plaid/plaid/
+
+RUN cp /app/superset/bin/superset /usr/local/bin/ && chmod a+x /usr/local/bin/superset
 
 USER root
 
@@ -91,7 +93,7 @@ ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     FLASK_ENV=production \
     FLASK_APP="superset.app:create_app()" \
-    PYTHONPATH="/app/superset:/plaid:/etc/superset" \
+    PYTHONPATH="/app/pythonpath:/plaid:/etc/superset" \
     SUPERSET_HOME="/app/superset_home" \
     SUPERSET_PORT=8080
 

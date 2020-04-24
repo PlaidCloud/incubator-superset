@@ -1,0 +1,19 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    docker pull gcr.io/plaidcloud-build/superset/events:${_LAST_TAG} || exit 0
+- name: "gcr.io/cloud-builders/docker"
+  args: [
+          "build",
+          "-t", "gcr.io/plaidcloud-build/superset/events:${TAG_NAME}",
+          "--file=Dockerfile.events",
+          "--cache-from", "gcr.io/plaidcloud-build/superset/events:${_LAST_TAG}",
+          "."
+        ]
+substitutions:
+  _LAST_TAG: "latest"
+images:
+- "gcr.io/plaidcloud-build/superset/events:$TAG_NAME"
