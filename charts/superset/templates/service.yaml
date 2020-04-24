@@ -9,7 +9,7 @@ metadata:
 spec:
   ports:
   - port: {{ .Values.superset.port }}  
-    {{- if .Values.superset.dev }}
+    {{- if .Values.devMode }}
     targetPort: {{ .Values.node.targetPort }}
     {{- else }}
     targetPort: {{ .Values.superset.targetPort }}  

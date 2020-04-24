@@ -21,7 +21,7 @@ spec:
       - name: superset
         image: {{ .Values.superset.image }}
         imagePullPolicy: {{ .Values.superset.pullPolicy }}
-        {{- if .Values.superset.dev }}
+        {{- if .Values.devMode }}
         command: ["flask", "run", "-p", "8088", "--with-threads", "--reload", "--debugger", "--host=0.0.0.0"]
         {{- end }}
         env:
@@ -37,7 +37,7 @@ spec:
           mountPath: /app/superset/static/assets
         {{- end }}
         resources: {}
-      {{- if .Values.superset.dev }}
+      {{- if .Values.devMode }}
       - name: node
         image: {{ .Values.node.image }}
         imagePullPolicy: IfNotPresent
@@ -55,7 +55,7 @@ spec:
       - name: superset-conf
         configMap:
             name: {{ .Release.Name }}-config
-      {{- if .Values.superset.dev }}
+      {{- if .Values.devMode }}
       - name: static-assets
         emptyDir: {}
       {{- end }}

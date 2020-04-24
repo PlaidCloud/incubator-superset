@@ -50,7 +50,7 @@ class PlaidUserMap(Model):
     )
 
 # Create just the table above, just in case.
-metadata.create_all(db.engine, tables=[metadata.tables["plaiduser_user"]])
+metadata.create_all(db.engine)
 
 # metadata.reflect(db.engine)
 Base = automap_base(metadata=metadata)

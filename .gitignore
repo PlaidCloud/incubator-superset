@@ -83,6 +83,8 @@ apache-superset-*.tar.gz*
 
 # Translation binaries
 messages.mo
+__pycache__
 
 .devspace/
 .last_tag
+*.tmp

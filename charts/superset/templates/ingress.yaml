@@ -14,7 +14,11 @@ metadata:
     release: {{ .Release.Name }}
 spec:
   rules:
-  - host: {{ .Values.superset.hostname }}
+  {{- if .Values.devMode }}
+  - host: {{ .Release.Namespace }}-viz.plaidcloud.io
+  {{- else }}
+  - host: {{ .Values.ingress.hostname }}
+  {{- end }}
     http:
       paths:
       - path: /

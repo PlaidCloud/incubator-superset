@@ -1,3 +1,4 @@
+devMode: false
 superset:
   image: plaidcloud/superset:latest
   pullPolicy: Always
@@ -55,6 +56,8 @@ redis:
   host: "redis-ha.default"
   port: 26379
   group: "superset"
+  cache_db: 0
+  table_db: 1
 
 rabbitmq:
   host: "rabbitmq-ha.default"

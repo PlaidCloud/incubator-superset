@@ -15,10 +15,10 @@ class AuthOIDCView(AuthOIDView):
 
     @expose('/authorize')
     def authorize(self):
-        oauth = self.appbuilder.sm.oauth        
+        oauth = self.appbuilder.sm.oauth
         token = oauth.plaid.authorize_access_token()
         userinfo = oauth.plaid.parse_id_token(token)
-        user = self.appbuilder.sm.find_user(username=userinfo['name'])
+        user = self.appbuilder.sm.get_user_by_plaid_id(plaid_id=int(userinfo['sub']))
         login_user(user)
         return redirect('/')
 
@@ -27,4 +27,3 @@ class AuthOIDCView(AuthOIDView):
         logout_user()
         base_url = self.appbuilder.app.config["OIDC_PARAMS"]["base_url"]
         return redirect(urljoin(base_url, "/logout"))
-        

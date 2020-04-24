@@ -31,5 +31,4 @@ COPY --chown=superset:superset superset superset
 
 COPY plaid /plaid/plaid/
 
-USER superset
 ENTRYPOINT ["python", "/plaid/plaid/event_handler.py"]

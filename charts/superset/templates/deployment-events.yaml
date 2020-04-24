@@ -21,6 +21,9 @@ spec:
       - name: superset
         image: {{ .Values.superset_events.image }}
         imagePullPolicy: {{ .Values.superset_events.pullPolicy }}
+        {{- if .Values.devMode }}
+        command: ["watchmedo", "auto-restart", "-R",  "-p", "*.py", "python", "/plaid/plaid/event_handler.py"]
+        {{- end }}
         env:
 {{ .Values.superset_events.env | toYaml | indent 10 }}
         ports:
