@@ -23,7 +23,7 @@ import { Table } from 'reactable-arc';
 import { Label, ProgressBar, Well } from 'react-bootstrap';
 import { t } from '@superset-ui/translation';
 
-import Link from './Link';
+import Link from '../../components/Link';
 import ResultSet from './ResultSet';
 import ModalTrigger from '../../components/ModalTrigger';
 import HighlightedSql from './HighlightedSql';
@@ -94,7 +94,7 @@ class QueryTable extends React.PureComponent {
   render() {
     const data = this.props.queries
       .map(query => {
-        const q = Object.assign({}, query);
+        const q = { ...query };
         if (q.endDttm) {
           q.duration = fDuration(q.startDttm, q.endDttm);
         }

@@ -17,28 +17,27 @@
  * under the License.
  */
 import { t } from '@superset-ui/translation';
-import React, { FunctionComponent, useMemo } from 'react';
+import React, { FunctionComponent } from 'react';
 import {
-  Button,
   Col,
   DropdownButton,
-  FormControl,
   MenuItem,
-  Pagination,
   Row,
   // @ts-ignore
 } from 'react-bootstrap';
+// @ts-ignore
+import SelectComponent from 'react-select';
+// @ts-ignore
+import VirtualizedSelect from 'react-virtualized-select';
 import IndeterminateCheckbox from '../IndeterminateCheckbox';
-import './ListViewStyles.less';
 import TableCollection from './TableCollection';
-import {
-  FetchDataConfig,
-  FilterToggle,
-  FilterType,
-  FilterTypeMap,
-  SortColumn,
-} from './types';
-import { convertFilters, removeFromList, useListViewState } from './utils';
+import Pagination from './Pagination';
+import { FilterMenu, FilterInputs } from './LegacyFilters';
+import FilterControls from './Filters';
+import { FetchDataConfig, Filters, SortColumn } from './types';
+import { ListViewError, useListViewState } from './utils';
+
+import './ListViewStyles.less';
 
 interface Props {
   columns: any[];
@@ -50,12 +49,13 @@ interface Props {
   className?: string;
   title?: string;
   initialSort?: SortColumn[];
-  filterTypes?: FilterTypeMap;
+  filters?: Filters;
   bulkActions?: Array<{
     key?: string;
     name: React.ReactNode;
     onSelect: (rows: any[]) => any;
   }>;
+  useNewUIFilters?: boolean;
 }
 
 const bulkSelectColumnConfig = {
@@ -82,8 +82,9 @@ const ListView: FunctionComponent<Props> = ({
   initialSort = [],
   className = '',
   title = '',
-  filterTypes = {},
+  filters = [],
   bulkActions = [],
+  useNewUIFilters = false,
 }) => {
   const {
     getTableProps,
@@ -91,17 +92,16 @@ const ListView: FunctionComponent<Props> = ({
     headerGroups,
     rows,
     prepareRow,
-    canPreviousPage,
-    canNextPage,
     pageCount = 1,
     gotoPage,
-    setAllFilters,
-    setFilterToggles,
-    updateFilterToggle,
+    removeFilterAndApply,
+    setInternalFilters,
+    updateInternalFilter,
+    applyFilterValue,
     applyFilters,
     filtersApplied,
     selectedFlatRows,
-    state: { pageIndex, pageSize, filterToggles },
+    state: { pageIndex, pageSize, internalFilters },
   } = useListViewState({
     bulkSelectColumnConfig,
     bulkSelectMode: Boolean(bulkActions.length),
@@ -111,140 +111,73 @@ const ListView: FunctionComponent<Props> = ({
     fetchData,
     initialPageSize,
     initialSort,
+    initialFilters: useNewUIFilters ? filters : [],
   });
-  const filterableColumns = useMemo(() => columns.filter(c => c.filterable), [
-    columns,
-  ]);
-  const filterable = Boolean(columns.length);
-
-  const removeFilterAndApply = (index: number) => {
-    const updated = removeFromList(filterToggles, index);
-    setFilterToggles(updated);
-    setAllFilters(convertFilters(updated));
-  };
+  const filterable = Boolean(filters.length);
+  if (filterable) {
+    const columnAccessors = columns.reduce(
+      (acc, col) => ({ ...acc, [col.accessor || col.id]: true }),
+      {},
+    );
+    filters.forEach(f => {
+      if (!columnAccessors[f.id]) {
+        throw new ListViewError(
+          `Invalid filter config, ${f.id} is not present in columns`,
+        );
+      }
+    });
+  }
 
   return (
     <div className={`superset-list-view ${className}`}>
-      {title && filterable && (
-        <div className="header">
-          <Row>
-            <Col md={10}>
-              <h2>{t(title)}</h2>
-            </Col>
-            {filterable && (
-              <Col md={2}>
-                <div className="filter-dropdown">
-                  <DropdownButton
-                    id="filter-picker"
-                    bsSize="small"
-                    bsStyle={'default'}
-                    noCaret
-                    title={
-                      <>
-                        <i className="fa fa-filter text-primary" />
-                        {'  '}
-                        {t('Filter List')}
-                      </>
-                    }
-                  >
-                    {filterableColumns
-                      .map(({ id, accessor, Header }) => ({
-                        Header,
-                        id: id || accessor,
-                      }))
-                      .map((ft: FilterToggle) => (
-                        <MenuItem
-                          key={ft.id}
-                          eventKey={ft}
-                          onSelect={(fltr: FilterToggle) =>
-                            setFilterToggles([...filterToggles, fltr])
-                          }
-                        >
-                          {ft.Header}
-                        </MenuItem>
-                      ))}
-                  </DropdownButton>
-                </div>
-              </Col>
+      <div className="header">
+        {!useNewUIFilters && (
+          <>
+            {title && filterable && (
+              <>
+                <Row>
+                  <Col md={10}>
+                    <h2>{t(title)}</h2>
+                  </Col>
+                  {filterable && (
+                    <Col md={2}>
+                      <FilterMenu
+                        filters={filters}
+                        internalFilters={internalFilters}
+                        setInternalFilters={setInternalFilters}
+                      />
+                    </Col>
+                  )}
+                </Row>
+                <hr />
+                <FilterInputs
+                  internalFilters={internalFilters}
+                  filters={filters}
+                  updateInternalFilter={updateInternalFilter}
+                  removeFilterAndApply={removeFilterAndApply}
+                  filtersApplied={filtersApplied}
+                  applyFilters={applyFilters}
+                />
+              </>
             )}
-          </Row>
-          <hr />
-          {filterToggles.map((ft, i) => (
-            <div key={`${ft.Header}-${i}`} className="filter-inputs">
-              <Row>
-                <Col className="text-center filter-column" md={2}>
-                  <span>{ft.Header}</span>
-                </Col>
-                <Col md={2}>
-                  <FormControl
-                    componentClass="select"
-                    bsSize="small"
-                    value={ft.filterId}
-                    placeholder={
-                      filterTypes[ft.id] ? filterTypes[ft.id][0].name : ''
-                    }
-                    onChange={(e: React.MouseEvent<HTMLInputElement>) =>
-                      updateFilterToggle(i, { filterId: e.currentTarget.value })
-                    }
-                  >
-                    {filterTypes[ft.id] &&
-                      filterTypes[ft.id].map(
-                        ({ name, operator }: FilterType) => (
-                          <option key={name} value={operator}>
-                            {name}
-                          </option>
-                        ),
-                      )}
-                  </FormControl>
-                </Col>
-                <Col md={1} />
-                <Col md={4}>
-                  <FormControl
-                    type="text"
-                    bsSize="small"
-                    value={ft.value || ''}
-                    onChange={(e: React.KeyboardEvent<HTMLInputElement>) =>
-                      updateFilterToggle(i, {
-                        value: e.currentTarget.value,
-                      })
-                    }
-                  />
-                </Col>
-                <Col md={1}>
-                  <div
-                    className="filter-close"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => removeFilterAndApply(i)}
-                  >
-                    <i className="fa fa-close text-primary" />
-                  </div>
-                </Col>
-              </Row>
-              <br />
-            </div>
-          ))}
-          {filterToggles.length > 0 && (
-            <>
-              <Row>
-                <Col md={10} />
-                <Col md={2}>
-                  <Button
-                    data-test="apply-filters"
-                    disabled={!!filtersApplied}
-                    bsStyle="primary"
-                    onClick={applyFilters}
-                    bsSize="small"
-                  >
-                    {t('Apply')}
-                  </Button>
-                </Col>
-              </Row>
-              <br />
-            </>
-          )}
-        </div>
-      )}
+          </>
+        )}
+        {useNewUIFilters && (
+          <>
+            <Row>
+              <Col md={10}>
+                <h2>{t(title)}</h2>
+              </Col>
+            </Row>
+            <hr />
+            <FilterControls
+              filters={filters}
+              internalFilters={internalFilters}
+              updateFilterValue={applyFilterValue}
+            />
+          </>
+        )}
+      </div>
       <div className="body">
         <TableCollection
           getTableProps={getTableProps}
@@ -293,16 +226,10 @@ const ListView: FunctionComponent<Props> = ({
           </Col>
           <Col md={8} className="text-center">
             <Pagination
-              prev={canPreviousPage}
-              first={pageIndex > 1}
-              next={canNextPage}
-              last={pageIndex < pageCount - 2}
-              items={pageCount}
-              activePage={pageIndex + 1}
-              ellipsis
-              boundaryLinks
-              maxButtons={5}
-              onSelect={(p: number) => gotoPage(p - 1)}
+              totalPages={pageCount || 0}
+              currentPage={pageCount ? pageIndex + 1 : 0}
+              onChange={(p: number) => gotoPage(p - 1)}
+              hideFirstAndLastPageLinks
             />
           </Col>
           <Col md={2}>

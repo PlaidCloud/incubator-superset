@@ -17,7 +17,8 @@
  * under the License.
  */
 import { t } from '@superset-ui/translation';
-import { nonEmpty } from '../validators';
+import { validateNonEmpty } from '@superset-ui/validator';
+import { formatSelectOptionsForRange } from '../../modules/utils';
 
 export default {
   requiresTime: true,
@@ -28,8 +29,36 @@ export default {
         ['entity'],
         ['all_columns_x'],
         ['row_limit'],
-        ['order_by_entity'],
-        ['min_leaf_node_event_count'],
+        [
+          {
+            name: 'order_by_entity',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Order by entity id'),
+              description: t(
+                'Important! Select this if the table is not already sorted by entity id, ' +
+                  'else there is no guarantee that all events for each entity are returned.',
+              ),
+              default: true,
+            },
+          },
+        ],
+        [
+          {
+            name: 'min_leaf_node_event_count',
+            config: {
+              type: 'SelectControl',
+              freeForm: false,
+              label: t('Minimum leaf node event count'),
+              default: 1,
+              choices: formatSelectOptionsForRange(1, 10),
+              description: t(
+                'Leaf nodes that represent fewer than this number of events will be initially ' +
+                  'hidden in the visualization',
+              ),
+            },
+          },
+        ],
       ],
     },
     {
@@ -49,7 +78,7 @@ export default {
     },
     all_columns_x: {
       label: t('Column containing event names'),
-      validators: [nonEmpty],
+      validators: [validateNonEmpty],
       default: control =>
         control.choices && control.choices.length > 0
           ? control.choices[0][0]

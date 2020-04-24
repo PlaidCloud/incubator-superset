@@ -41,16 +41,22 @@ RUN cd /app \
 ######################################################################
 FROM node:10-jessie AS superset-node
 
+ARG NPM_BUILD_CMD="build"
+ENV BUILD_CMD=${NPM_BUILD_CMD}
+
 # NPM ci first, as to NOT invalidate previous steps except for when package.json changes
 RUN mkdir -p /app/superset-frontend
+RUN mkdir -p /app/superset/assets
 COPY ./superset-frontend/package* /app/superset-frontend/
-RUN cd /app/superset-frontend \
+COPY ./docker/frontend-mem-nag.sh /
+RUN /frontend-mem-nag.sh \
+        && cd /app/superset-frontend \
         && npm ci
 
 # Next, copy in the rest and let webpack do its thing
 COPY ./superset-frontend /app/superset-frontend
 RUN cd /app/superset-frontend \
-        && npm run build \
+        && npm run ${BUILD_CMD} \
         && rm -rf node_modules
 
 

@@ -43,8 +43,12 @@ from superset.models.helpers import AuditMixinNullable, ImportMixin
 from superset.models.slice import Slice as Slice
 from superset.models.tags import DashboardUpdater
 from superset.models.user_attributes import UserAttribute
+from superset.tasks.thumbnails import cache_dashboard_thumbnail
 from superset.utils import core as utils
-from superset.utils.dashboard_filter_scopes_converter import convert_filter_scopes
+from superset.utils.dashboard_filter_scopes_converter import (
+    convert_filter_scopes,
+    copy_filter_scopes,
+)
 
 if TYPE_CHECKING:
     # pylint: disable=unused-import
@@ -116,7 +120,7 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
     """The dashboard object!"""
 
     __tablename__ = "dashboards"
-    id = Column(Integer, primary_key=True)  # pylint: disable=invalid-name
+    id = Column(Integer, primary_key=True)
     dashboard_title = Column(String(500))
     position_json = Column(utils.MediumText())
     description = Column(Text)
@@ -180,6 +184,22 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
     def dashboard_link(self) -> Markup:
         title = escape(self.dashboard_title or "<empty>")
         return Markup(f'<a href="{self.url}">{title}</a>')
+
+    @property
+    def digest(self) -> str:
+        """
+            Returns a MD5 HEX digest that makes this dashboard unique
+        """
+        unique_string = f"{self.position_json}.{self.css}.{self.json_metadata}"
+        return utils.md5_hex(unique_string)
+
+    @property
+    def thumbnail_url(self) -> str:
+        """
+            Returns a thumbnail URL with a HEX digest. We want to avoid browser cache
+            if the dashboard has changed
+        """
+        return f"/api/v1/dashboard/{self.id}/thumbnail/{self.digest}/"
 
     @property
     def changed_by_name(self):
@@ -254,7 +274,7 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
                     "children": ["DASHBOARD_CHART_TYPE-2"]
                 },
                 "DASHBOARD_CHART_TYPE-2": {
-                    "type": "DASHBOARD_CHART_TYPE",
+                    "type": "CHART",
                     "id": "DASHBOARD_CHART_TYPE-2",
                     "children": [],
                     "meta": {
@@ -288,10 +308,10 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
         # and will remove the existing dashboard - slice association
         slices = copy(dashboard_to_import.slices)
         old_json_metadata = json.loads(dashboard_to_import.json_metadata or "{}")
-        old_to_new_slc_id_dict = {}
+        old_to_new_slc_id_dict: Dict[int, int] = {}
         new_timed_refresh_immune_slices = []
         new_expanded_slices = {}
-        new_filter_scopes = {}
+        new_filter_scopes: Dict[str, Dict] = {}
         i_params_dict = dashboard_to_import.params_dict
         remote_id_slice_map = {
             slc.params_dict["remote_id"]: slc
@@ -338,13 +358,11 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
             filter_scopes = old_json_metadata.get("filter_scopes")
 
         # then replace old slice id to new slice id:
-        for (slice_id, scopes) in filter_scopes.items():
-            new_filter_key = old_to_new_slc_id_dict[int(slice_id)]
-            new_filter_scopes[str(new_filter_key)] = scopes
-            for scope in scopes.values():
-                scope["immune"] = [
-                    old_to_new_slc_id_dict[slice_id] for slice_id in scope.get("immune")
-                ]
+        if filter_scopes:
+            new_filter_scopes = copy_filter_scopes(
+                old_to_new_slc_id_dict=old_to_new_slc_id_dict,
+                old_filter_scopes=filter_scopes,
+            )
 
         # override the dashboard
         existing_dashboard = None
@@ -451,8 +469,20 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
         )
 
 
+def event_after_dashboard_changed(  # pylint: disable=unused-argument
+    mapper, connection, target
+):
+    cache_dashboard_thumbnail.delay(target.id, force=True)
+
+
 # events for updating tags
 if is_feature_enabled("TAGGING_SYSTEM"):
     sqla.event.listen(Dashboard, "after_insert", DashboardUpdater.after_insert)
     sqla.event.listen(Dashboard, "after_update", DashboardUpdater.after_update)
     sqla.event.listen(Dashboard, "after_delete", DashboardUpdater.after_delete)
+
+
+# events for updating tags
+if is_feature_enabled("THUMBNAILS_SQLA_LISTENERS"):
+    sqla.event.listen(Dashboard, "after_insert", event_after_dashboard_changed)
+    sqla.event.listen(Dashboard, "after_update", event_after_dashboard_changed)

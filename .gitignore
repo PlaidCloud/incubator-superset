@@ -52,15 +52,13 @@ superset.egg-info/
 superset/bin/supersetc
 tmp
 rat-results.txt
+__pycache__
 
 # Node.js, webpack artifacts
 *.entry.js
 *.js.map
 node_modules
 npm-debug.log*
-superset-frontend/coverage/*
-superset-frontend/cypress/screenshots
-superset-frontend/cypress/videos
 superset/static/assets
 superset/static/version_info.json
 yarn-error.log
@@ -83,8 +81,9 @@ apache-superset-*.tar.gz*
 
 # Translation binaries
 messages.mo
-__pycache__
 
+# kubernetes-dev related stuff
 .devspace/
 .last_tag
 *.tmp
+docker/requirements-local.txt

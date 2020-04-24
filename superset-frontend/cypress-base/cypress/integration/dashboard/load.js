@@ -36,9 +36,7 @@ export default () =>
         slices.forEach(slice => {
           const alias = `getJson_${slice.slice_id}`;
           const formData = `{"slice_id":${slice.slice_id}}`;
-          cy.route('POST', `/superset/explore_json/?form_data=${formData}`).as(
-            alias,
-          );
+          cy.route('POST', `/superset/explore_json/?*${formData}*`).as(alias);
           aliases.push(`@${alias}`);
         });
       });
@@ -47,12 +45,15 @@ export default () =>
     it('should load dashboard', () => {
       // wait and verify one-by-one
       cy.wait(aliases).then(requests => {
-        requests.forEach(async xhr => {
-          expect(xhr.status).to.eq(200);
-          const responseBody = await readResponseBlob(xhr.response.body);
-          expect(responseBody).to.have.property('error', null);
-          cy.get(`#slice-container-${xhr.response.body.form_data.slice_id}`);
-        });
+        return Promise.all(
+          requests.map(async xhr => {
+            expect(xhr.status).to.eq(200);
+            const responseBody = await readResponseBlob(xhr.response.body);
+            expect(responseBody).to.have.property('error', null);
+            const sliceId = responseBody.form_data.slice_id;
+            cy.get(`#chart-id-${sliceId}`).should('be.visible');
+          }),
+        );
       });
     });
   });

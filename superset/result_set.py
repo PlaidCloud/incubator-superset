@@ -20,7 +20,6 @@
 import datetime
 import json
 import logging
-import re
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type
 
 import numpy as np
@@ -28,6 +27,7 @@ import pandas as pd
 import pyarrow as pa
 
 from superset import db_engine_specs
+from superset.typing import DbapiDescription, DbapiResult
 from superset.utils import core as utils
 
 logger = logging.getLogger(__name__)
@@ -71,10 +71,11 @@ def stringify_values(array: np.ndarray) -> np.ndarray:
 class SupersetResultSet:
     def __init__(
         self,
-        data: List[Tuple[Any, ...]],
-        cursor_description: Tuple[Any, ...],
+        data: DbapiResult,
+        cursor_description: DbapiDescription,
         db_engine_spec: Type[db_engine_specs.BaseEngineSpec],
     ):
+        self.db_engine_spec = db_engine_spec
         data = data or []
         column_names: List[str] = []
         pa_data: List[pa.Array] = []
@@ -95,9 +96,10 @@ class SupersetResultSet:
             # generate numpy structured array dtype
             numpy_dtype = [(column_name, "object") for column_name in column_names]
 
-        # put data in a structured array so we can efficiently access each column.
-        # cast `data` as list due to MySQL (others?) wrapping results with a tuple.
-        array = np.array(list(data), dtype=numpy_dtype)
+        # only do expensive recasting if datatype is not standard list of tuples
+        if data and (not isinstance(data, list) or not isinstance(data[0], tuple)):
+            data = [tuple(row) for row in data]
+        array = np.array(data, dtype=numpy_dtype)
         if array.size > 0:
             for column in column_names:
                 try:
@@ -136,8 +138,8 @@ class SupersetResultSet:
                                 pa_data[i] = pa.Array.from_pandas(
                                     series, type=pa.timestamp("ns", tz=tz)
                                 )
-                        except Exception as e:
-                            logger.exception(e)
+                        except Exception as ex:
+                            logger.exception(ex)
 
         self.table = pa.Table.from_arrays(pa_data, names=column_names)
         self._type_dict: Dict[str, Any] = {}
@@ -148,8 +150,8 @@ class SupersetResultSet:
                 for i, col in enumerate(column_names)
                 if deduped_cursor_desc
             }
-        except Exception as e:
-            logger.exception(e)
+        except Exception as ex:
+            logger.exception(ex)
 
     @staticmethod
     def convert_pa_dtype(pa_dtype: pa.DataType) -> Optional[str]:
@@ -173,9 +175,10 @@ class SupersetResultSet:
     def first_nonempty(items: List) -> Any:
         return next((i for i in items if i), None)
 
-    @staticmethod
-    def is_date(db_type_str: Optional[str]) -> bool:
-        return db_type_str in ("DATETIME", "TIMESTAMP")
+    def is_temporal(self, db_type_str: Optional[str]) -> bool:
+        return self.db_engine_spec.is_db_column_type_match(
+            db_type_str, utils.DbColumnType.TEMPORAL
+        )
 
     def data_type(self, col_name: str, pa_dtype: pa.DataType) -> Optional[str]:
         """Given a pyarrow data type, Returns a generic database type"""
@@ -211,7 +214,7 @@ class SupersetResultSet:
             column = {
                 "name": col.name,
                 "type": db_type_str,
-                "is_date": self.is_date(db_type_str),
+                "is_date": self.is_temporal(db_type_str),
             }
             columns.append(column)
 

@@ -26,8 +26,13 @@ import {
 } from 'react-bootstrap';
 
 const propTypes = {
+  children: PropTypes.node,
   tooltip: PropTypes.node,
   placement: PropTypes.string,
+  onClick: PropTypes.func,
+  disabled: PropTypes.bool,
+  bsSize: PropTypes.string,
+  btnStyles: PropTypes.string,
 };
 const defaultProps = {
   bsSize: 'sm',
@@ -37,7 +42,7 @@ const defaultProps = {
 const BUTTON_WRAPPER_STYLE = { display: 'inline-block', cursor: 'not-allowed' };
 
 export default function Button(props) {
-  const buttonProps = Object.assign({}, props);
+  const buttonProps = { ...props };
   const tooltip = props.tooltip;
   const placement = props.placement;
   delete buttonProps.tooltip;

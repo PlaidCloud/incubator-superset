@@ -69,7 +69,6 @@ declare module 'react-table' {
   export interface TableOptions<D extends object>
     extends UseExpandedOptions<D>,
       UseFiltersOptions<D>,
-      UseFiltersOptions<D>,
       UseGlobalFiltersOptions<D>,
       UseGroupByOptions<D>,
       UsePaginationOptions<D>,
@@ -116,6 +115,8 @@ declare module 'react-table' {
       UseGroupByColumnOptions<D>,
       UseResizeColumnsColumnOptions<D>,
       UseSortByColumnOptions<D> {
+    hidden?: boolean;
+    sortable?: boolean;
     cellProps?: any;
   }
 
