@@ -4,9 +4,10 @@ Plaid Security Class for Superset
 """
 import logging
 import redis
-from sqlalchemy import func
+from sqlalchemy import func, Table
 from superset.extensions import cache_manager
 from superset.security import SupersetSecurityManager
+from flask_appbuilder import Model
 from flask_appbuilder.security.manager import AUTH_OID
 from flask_appbuilder.security.sqla.manager import SecurityManager
 from authlib.integrations.flask_client import OAuth
@@ -18,6 +19,8 @@ __credits__ = ["Garrett Bates"]
 __license__ = "Proprietary"
 __maintainer__ = "Garrett Bates"
 __email__ = "garrett.bates@tartansolutions.com"
+
+metadata = Model.metadata
 
 log = logging.getLogger(__name__)
 
@@ -123,6 +126,16 @@ class PlaidSecurityManager(SupersetSecurityManager):
             role_name=get_project_role_name(project.uuid),
             pvm_check=has_project_access_pvm
         )
+
+
+    def get_user_by_plaid_id(self, plaid_id):
+        mapping = self.get_session.query(
+                metadata.tables['plaiduser_user']
+            ).filter_by(
+                plaid_user_id=plaid_id
+            ).one()
+
+        return self.get_user_by_id(mapping.user_id)
 
 
     def add_user_to_project(self, user, project_id):
