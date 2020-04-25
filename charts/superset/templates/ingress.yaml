@@ -17,7 +17,7 @@ spec:
   {{- if .Values.devMode }}
   - host: {{ .Release.Namespace }}-viz.plaidcloud.io
   {{- else }}
-  - host: {{ .Values.ingress.hostname }}
+  - host: {{ .Values.superset.hostname }}
   {{- end }}
     http:
       paths:

@@ -16,6 +16,8 @@ data:
     from flask_appbuilder.security.manager import AUTH_DB, AUTH_OID
     from plaid.security import PlaidSecurityManager
     from plaid_permissions import PLAID_BASE_PERMISSIONS
+    from superset.typing import CacheConfig
+
   
     ssl._create_default_https_context = ssl._create_unverified_context
   
@@ -56,7 +58,7 @@ data:
     # Uncomment to setup an App icon
     APP_ICON = '/static/assets/images/plaidcloud.png'
   
-    CACHE_CONFIG = {
+    CACHE_CONFIG: CacheConfig = {
         'CACHE_TYPE': '{{ .Values.devMode | ternary "redis" "redissentinel" }}',
         {{- if .Values.devMode }}
         'CACHE_REDIS_HOST': '{{ .Values.redis.host }}',
@@ -68,7 +70,7 @@ data:
         'CACHE_REDIS_DB': {{ .Values.redis.cache_db }},
     }
     
-    TABLE_NAMES_CACHE_CONFIG = {
+    TABLE_NAMES_CACHE_CONFIG: CacheConfig = {
         'CACHE_TYPE': '{{ .Values.devMode | ternary "redis" "redissentinel" }}',
         {{- if .Values.devMode }}
         'CACHE_REDIS_HOST': '{{ .Values.redis.host }}',
@@ -127,7 +129,7 @@ data:
   
     # If users can register for an account (see above setting), this would be their default role.
     #AUTH_USER_REGISTRATION_ROLE = "Public"
-    AUTH_TYPE = AUTH_DB
+    AUTH_TYPE = AUTH_OID
 
     OIDC_PARAMS = {
         "client_id": "{{ .Values.oidc.clientId }}",
