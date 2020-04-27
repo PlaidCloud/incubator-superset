@@ -1102,7 +1102,55 @@ class PlaidTable(Model, BaseDatasource):
 
     @property
     def data(self) -> Dict:
-        d = super().data
+        """Data representation of the datasource sent to the frontend"""
+        order_by_choices = []
+        # self.column_names return sorted column_names
+        for column_name in self.column_names:
+            column_name = str(column_name or "")
+            order_by_choices.append(
+                (json.dumps([column_name, True]), column_name + " [asc]")
+            )
+            order_by_choices.append(
+                (json.dumps([column_name, False]), column_name + " [desc]")
+            )
+
+        verbose_map = {"__timestamp": "Time"}
+        verbose_map.update(
+            {o.metric_name: o.verbose_name or o.metric_name for o in self.metrics}
+        )
+        verbose_map.update(
+            {o.column_name: o.verbose_name or o.column_name for o in self.columns}
+        )
+        d = {
+            # simple fields
+            "id": self.id,
+            "column_formats": self.column_formats,
+            "description": self.description,
+            "database": self.project.data,  # pylint: disable=no-member
+            "default_endpoint": self.default_endpoint,
+            "filter_select": self.filter_select_enabled,  # TODO deprecate
+            "filter_select_enabled": self.filter_select_enabled,
+            "name": self.name,
+            "datasource_name": self.datasource_name,
+            "type": self.type,
+            "schema": self.schema,
+            "offset": self.offset,
+            "cache_timeout": self.cache_timeout,
+            "params": self.params,
+            "perm": self.perm,
+            "edit_url": self.url,
+            # sqla-specific
+            "sql": self.sql,
+            # one to many
+            "columns": [o.data for o in self.columns],
+            "metrics": [o.data for o in self.metrics],
+            # TODO deprecate, move logic to JS
+            "order_by_choices": order_by_choices,
+            "owners": [owner.id for owner in self.owners],
+            "verbose_map": verbose_map,
+            "select_star": self.select_star,
+        }
+
         if self.type == "plaid":
             grains = self.project.grains() or []
             if grains:
