@@ -41,7 +41,7 @@ spec:
       - name: node
         image: {{ .Values.node.image }}
         imagePullPolicy: IfNotPresent
-        command: ["bash", "-c", "cd /app/superset-frontend && npm ci && npm run build && npm run dev-server"]
+        command: ["bash", "-c", "cd /app/superset-frontend && npm ci && npm run build-dev && npm run dev-server"]
         ports:
         - name: http
           containerPort: 9000
