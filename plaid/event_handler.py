@@ -198,8 +198,6 @@ class EventHandler():
             # Construct URI and use sqla mapping method to set it.
             uri = f"{driver}://{user}:{proj.password}@{host}:{port}/{db_name}"
             proj.set_sqlalchemy_uri(uri)
-
-            proj.perm = proj.get_perm()
             return proj
 
 
@@ -225,9 +223,11 @@ class EventHandler():
                 # TODO: Log a warning here. A project should exist.
                 insert_project(event_data)
             else:
+                # Test if project name changed, as this has a big influence in updating permissions.
+                name_changed = existing_project.name != event_data['name']         
                 map_data_to_row(event_data, existing_project)
-                security_manager.set_project_role(existing_project)
                 db.session.commit()
+                security_manager.set_project_role(existing_project, name_changed)
 
 
         def delete_project(event_data):

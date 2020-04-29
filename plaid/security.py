@@ -9,6 +9,7 @@ from superset.extensions import cache_manager
 from superset.security import SupersetSecurityManager
 from flask_appbuilder import Model
 from flask_appbuilder.security.manager import AUTH_OID
+from flask_appbuilder.security.sqla import models as ab_models
 from flask_appbuilder.security.sqla.manager import SecurityManager
 from authlib.integrations.flask_client import OAuth
 from plaid.auth_oidc import AuthOIDCView
@@ -98,9 +99,44 @@ class PlaidSecurityManager(SupersetSecurityManager):
         return self.appbuilder.app.config.get('PLAID_BASE_PERMISSIONS')
 
 
-    def set_project_role(self, project):
-        project_perm = project.get_perm()
-        self.add_permission_view_menu("database_access", project_perm)
+    def set_project_role(self, project, name_changed: bool = False):
+        # Upsert the view menu name for this project.
+        if project.perm:
+            pv = self.find_permission_view_menu("database_access", project.perm)
+            if pv:
+                pv.view_menu.name = project.get_perm()
+                self.get_session.commit()
+            else:
+                self.add_permission_view_menu("database_access", project.get_perm())
+
+        # Now that we've done an upsert for the view menu, overwrite old project perm.
+        project.perm = project.get_perm()
+        project_role_name = get_project_role_name(project.uuid)
+
+        log.info("Syncing {} perms".format(project_role_name))
+
+        def update_existing_perms(proj):
+            table_perm_map = dict()
+            schema_perm_map = dict()
+
+            # Update all of the table and schema perms since the project name changed.
+            # We do this by creating an old-to-new mapping _while_ we update each table.
+            for table in proj.plaid_tables:
+                table.perm = table_perm_map[table.perm] = table.get_perm()
+                table.schema_perm = schema_perm_map[table.schema_perm] = table.get_schema_perm()
+
+            self.get_session.commit()
+            sesh = self.get_session
+            pvms = sesh.query(ab_models.PermissionView).all()
+            pvms = [p for p in pvms if p.permission and p.view_menu]
+            table_pvms = [p for p in pvms if p.permission.name == 'datasource_access']
+            schema_pvms = [p for p in pvms if p.permission.name == 'schema_access']
+
+            for table_pvm in table_pvms:
+                table_pvm.view_menu.name = table_perm_map[table_pvm.view_menu.name]
+
+            for schema_pvm in schema_pvms:
+                schema_pvm.view_menu.name = schema_perm_map[schema_pvm.view_menu.name]
 
         schema_perms = {t.schema for t in project.plaid_tables}
         table_perms = {t.perm for t in project.plaid_tables}
@@ -113,7 +149,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
             method.
             '''
             if pvm.permission.name == 'database_access':
-                return pvm.view_menu.name == project_perm
+                return pvm.view_menu.name == project.perm
 
             if pvm.permission.name == 'schema_access':
                 return pvm.view_menu.name in schema_perms
@@ -123,12 +159,14 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
             return False
 
-
-        # Name the role after the project.
-        self.set_role(
-            role_name=get_project_role_name(project.uuid),
-            pvm_check=has_project_access_pvm
-        )
+        if name_changed:
+            update_existing_perms(project)
+        else:
+            # Name the role after the project.
+            self.set_role(
+                role_name=get_project_role_name(project.uuid),
+                pvm_check=has_project_access_pvm
+            )
 
 
     def get_user_by_plaid_id(self, plaid_id):
