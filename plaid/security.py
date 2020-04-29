@@ -138,6 +138,8 @@ class PlaidSecurityManager(SupersetSecurityManager):
             for schema_pvm in schema_pvms:
                 schema_pvm.view_menu.name = schema_perm_map[schema_pvm.view_menu.name]
 
+            self.get_session.commit()
+
         schema_perms = {t.schema for t in project.plaid_tables}
         table_perms = {t.perm for t in project.plaid_tables}
 
