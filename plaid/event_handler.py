@@ -170,7 +170,7 @@ class EventHandler():
             )
         elif event_type is EventType.Delete:
             db.session.query(PlaidProject).filter_by(workspace_id=data['id']).delete()
-        
+
         db.session.commit()
 
 
@@ -224,7 +224,8 @@ class EventHandler():
                 insert_project(event_data)
             else:
                 # Test if project name changed, as this has a big influence in updating permissions.
-                name_changed = existing_project.name != event_data['name']         
+                log.debug(f"Old name: {existing_project.name}, New name: {event_data['name']}")
+                name_changed = existing_project.name != event_data['name']
                 map_data_to_row(event_data, existing_project)
                 db.session.commit()
                 security_manager.set_project_role(existing_project, name_changed)
@@ -269,6 +270,8 @@ class EventHandler():
             table.base_table_name = event_data["id"]
             table.project_id = kwargs["project_id"]
             table.schema = f"report{table.project_id}"
+            table.perm = table.get_perm()
+            table.schema_perm = table.get_schema_perm()
 
             return table
 
@@ -294,7 +297,7 @@ class EventHandler():
 
                     # Test if source table/view actually exists before we add it.
                     try:
-                        # TODO: This is pretty dumb. Event is being processed before the DB can create the view. 
+                        # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
                         time.sleep(2)
                         project = db.session.query(PlaidProject).filter_by(uuid=new_table.project_id).one()
                         log.info(project.get_all_view_names_in_schema(schema=new_table.schema))
@@ -307,7 +310,7 @@ class EventHandler():
                     # If we've made it this far, the source table/view exists.
                     db.session.add(new_table)
                     db.session.commit()
-                    
+
                     # Populate columns and metrics for table.
                     new_table.fetch_metadata()
 
@@ -317,7 +320,7 @@ class EventHandler():
                     project_role = security_manager.find_role(f"project_{new_table.project_id}")
                     security_manager.add_permission_role(project_role, schema_pv)
                     security_manager.add_permission_role(project_role, pv)
-                    
+
                     db.session.commit()
                 except Exception:
                     log.exception("Error occurred while inserting a new table.")
@@ -330,6 +333,13 @@ class EventHandler():
 
         def update_table(event_data):
             try:
+                if not event_data.get("published_name"):
+                    log.info(
+                        f"Received table update event for {event_data['id']} "
+                        f"(Project {kwargs['project_id']}), but no published name is set. "
+                        f"Skipping."
+                    )
+                    return
                 # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
                 time.sleep(2)
                 log.info(f"Updating table {event_data['published_name']} ({event_data['id']}) for project {kwargs['project_id']}.")
@@ -418,7 +428,7 @@ class EventHandler():
                     user_map = PlaidUserMap()
                     user_map.user_id = user.id
                     user_map.plaid_user_id = event_data["id"]
-                    db.session.add(user_map)                  
+                    db.session.add(user_map)
 
             except NoResultFound:
                 # Create the user.

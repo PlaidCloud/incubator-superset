@@ -639,6 +639,7 @@ class PlaidProject(
         sqla_url = url.make_url(self.sqlalchemy_uri_decrypted)
         return sqla_url.get_dialect()()
 
+sa.event.listen(PlaidProject, "after_insert", security_manager.set_perm)
 
 class PlaidColumn(Model, BaseColumn):
     """ORM object for table columns, each table can have multiple columns"""
@@ -1800,4 +1801,3 @@ class PlaidTable(Model, BaseDatasource):
 
 
 sa.event.listen(PlaidTable, "after_insert", security_manager.set_perm)
-sa.event.listen(PlaidTable, "after_update", security_manager.set_perm)

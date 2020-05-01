@@ -821,7 +821,7 @@ class SupersetSecurityManager(SecurityManager):
             )
 
         pvm_names = []
-        if target.__tablename__ in {"dbs", "clusters"}:
+        if target.__tablename__ in {"dbs", "clusters", "plaid_tables"}:
             pvm_names.append(("database_access", target.get_perm()))
         else:
             pvm_names.append(("datasource_access", target.get_perm()))
