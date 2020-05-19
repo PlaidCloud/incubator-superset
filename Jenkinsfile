@@ -10,7 +10,7 @@ def image_label = ""
 @Field
 def branch = ""
 
-podTemplate(label: 'service',
+podTemplate(label: 'superset',
   containers: [
     containerTemplate(name: 'docker', image: 'docker:18.09.9-git', ttyEnabled: true, command: 'cat'),
     containerTemplate(name: 'argocd', image: "gcr.io/plaidcloud-build/tools/argocd:latest", ttyEnabled: true, command: 'cat', alwaysPullImage: true, workingDir: '/home/jenkins/agent')
