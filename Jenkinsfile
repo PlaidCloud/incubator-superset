@@ -10,12 +10,13 @@ def image_label = ""
 @Field
 def branch = ""
 
-podTemplate(label: 'superset',
+podTemplate(label: 'service',
   containers: [
-    containerTemplate(name: 'docker', image: 'docker:18.09.9', ttyEnabled: true, command: 'cat'),
-    containerTemplate(name: 'kubectl', image: "lachlanevenson/k8s-kubectl:v1.15.9", ttyEnabled: true, command: 'cat')
+    containerTemplate(name: 'docker', image: 'docker:18.09.9-git', ttyEnabled: true, command: 'cat'),
+    containerTemplate(name: 'argocd', image: "gcr.io/plaidcloud-build/tools/argocd:latest", ttyEnabled: true, command: 'cat', alwaysPullImage: true, workingDir: '/home/jenkins/agent')
   ],
-  serviceAccount: 'jenkins'
+  serviceAccount: 'jenkins',
+  imagePullSecrets: ['gcr-key']
 )
 {
   node(label: 'superset') {
