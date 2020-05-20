@@ -105,7 +105,7 @@ podTemplate(label: 'superset',
       }
     }
     container('argocd') {
-      if (branch == 'master') {
+      if (branch == 'develop') {
         stage("Deploy to Kubernetes") {
           withCredentials([usernamePassword(credentialsId: 'plaid-machine-user', usernameVariable: 'user', passwordVariable: 'pass')]) {
             sh """
