@@ -4,7 +4,7 @@ Plaid Security Class for Superset
 """
 import logging
 import redis
-from sqlalchemy import func, Table
+from sqlalchemy import func, Table, MetaData
 from superset.extensions import cache_manager
 from superset.security import SupersetSecurityManager
 from flask_appbuilder import Model
@@ -20,7 +20,6 @@ __license__ = "Proprietary"
 __maintainer__ = "Garrett Bates"
 __email__ = "garrett.bates@tartansolutions.com"
 
-metadata = Model.metadata
 
 log = logging.getLogger(__name__)
 
@@ -34,8 +33,12 @@ def get_project_role_name(project_id):
 class PlaidSecurityManager(SupersetSecurityManager):
     """Custom security manager class for PlaidCloud integration.
     """
+
     def __init__(self, appbuilder):
         super(PlaidSecurityManager, self).__init__(appbuilder)
+        engine = self.get_session.get_bind(mapper=None, clause=None)
+        metadata = MetaData(bind=engine, reflect=True)
+        self.plaiduser_user = metadata.tables['plaiduser_user']
         if self.auth_type == AUTH_OID:
             oidc_params = self.appbuilder.app.config.get("OIDC_PARAMS")
             self.oauth = OAuth(app=appbuilder.get_app)
@@ -111,7 +114,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
             '''
             if pvm.permission.name == 'database_access':
                 return pvm.view_menu.name == project_perm
-            
+
             if pvm.permission.name == 'schema_access':
                 return pvm.view_menu.name in schema_perms
 
@@ -130,7 +133,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
     def get_user_by_plaid_id(self, plaid_id):
         mapping = self.get_session.query(
-                metadata.tables['plaiduser_user']
+                self.plaiduser_user
             ).filter_by(
                 plaid_user_id=plaid_id
             ).one()

@@ -674,21 +674,21 @@ class PlaidColumn(Model, BaseColumn):
 
     @property
     def is_numeric(self) -> bool:
-        db_engine_spec = self.table.database.db_engine_spec
+        db_engine_spec = self.table.project.db_engine_spec
         return db_engine_spec.is_db_column_type_match(
             self.type, utils.DbColumnType.NUMERIC
         )
 
     @property
     def is_string(self) -> bool:
-        db_engine_spec = self.table.database.db_engine_spec
+        db_engine_spec = self.table.project.db_engine_spec
         return db_engine_spec.is_db_column_type_match(
             self.type, utils.DbColumnType.STRING
         )
 
     @property
     def is_temporal(self) -> bool:
-        db_engine_spec = self.table.database.db_engine_spec
+        db_engine_spec = self.table.project.db_engine_spec
         return db_engine_spec.is_db_column_type_match(
             self.type, utils.DbColumnType.TEMPORAL
         )
@@ -698,7 +698,7 @@ class PlaidColumn(Model, BaseColumn):
         if self.expression:
             col = literal_column(self.expression)
         else:
-            db_engine_spec = self.table.database.db_engine_spec
+            db_engine_spec = self.table.project.db_engine_spec
             type_ = db_engine_spec.get_sqla_column_type(self.type)
             col = column(self.column_name, type_=type_)
         col = self.table.make_sqla_column_compatible(col, label)
@@ -800,7 +800,7 @@ class PlaidColumn(Model, BaseColumn):
             utils.TimeRangeEndpoint.EXCLUSIVE,
         ):
             tf = (
-                self.table.database.get_extra()
+                self.table.project.get_extra()
                 .get("python_date_format_by_column_name", {})
                 .get(self.column_name)
             )
@@ -969,6 +969,10 @@ class PlaidTable(Model, BaseDatasource):
         return self.name
 
     @property
+    def database(self) -> relationship:
+        return self.project
+
+    @property
     def changed_by_name(self) -> str:
         if not self.changed_by:
             return ""
@@ -1102,6 +1106,7 @@ class PlaidTable(Model, BaseDatasource):
 
     @property
     def data(self) -> Dict:
+        """Data representation of the datasource sent to the frontend"""
         d = super().data
         if self.type == "plaid":
             grains = self.project.grains() or []
