@@ -294,10 +294,10 @@ class EventHandler():
 
                     # Test if source table/view actually exists before we add it.
                     try:
-                        # TODO: This is pretty dumb. Event is being processed before the DB can create the view. 
-                        time.sleep(2)
                         project = db.session.query(PlaidProject).filter_by(uuid=new_table.project_id).one()
                         log.info(project.get_all_view_names_in_schema(schema=new_table.schema))
+                        # TODO: This is pretty dumb. Event is being processed before the DB can create the view. 
+                        time.sleep(2)
                         project.get_table(table_name=new_table.table_name, schema=new_table.schema)
                         new_table.project = project
                     except NoSuchTableError:
@@ -330,8 +330,6 @@ class EventHandler():
 
         def update_table(event_data):
             try:
-                # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
-                time.sleep(2)
                 log.info(f"Updating table {event_data['published_name']} ({event_data['id']}) for project {kwargs['project_id']}.")
                 existing_table = db.session.query(PlaidTable).filter_by(
                     base_table_name=event_data['id'],
@@ -343,6 +341,8 @@ class EventHandler():
                     delete_table(event_data)
                     return
                 map_data_to_row(event_data, existing_table)
+                # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
+                time.sleep(2)
                 existing_table.fetch_metadata()
                 db.session.commit()
             except NoResultFound:
