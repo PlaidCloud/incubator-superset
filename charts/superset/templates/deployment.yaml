@@ -12,6 +12,10 @@ spec:
   template:
     metadata:
       name: superset
+      {{- if .Values.superset.annotations }}
+      annotations:
+{{ toYaml .Values.superset.annotations | indent 8 }}
+      {{- end }}
       labels:
         app: plaid
         plaid: superset
