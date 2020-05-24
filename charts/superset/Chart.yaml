@@ -1,6 +1,6 @@
 name: superset
 description: Deploys superset along with the proprietary superset-events service.
-version: 0.0.1
+version: 0.1.0
 keywords:
   - superset
   - plaid

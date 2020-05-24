@@ -28,8 +28,8 @@ data:
     # I created a mapbox account under garrett.bates@tartansolutions.com
     MAPBOX_API_KEY = '{{ .Values.mapbox.apiKey }}'
   
-    HOSTNAME = '{{ .Values.superset.hostname }}'
-    PLAID_HOST = '{{ .Values.superset.hostname }}'
+    HOSTNAME = '{{ .Values.ingress.hostname }}'
+    PLAID_HOST = '{{ .Values.ingress.hostname }}'
     PLAID_DATABASE_HOST = '{{ .Values.database.greenplumHost }}'
     SCHEME = 'https'
     SQLALCHEMY_DATABASE_URI = 'postgresql://{{ .Values.database.user }}:{{ .Values.database.pass }}@{{ .Values.database.host }}:{{ .Values.database.port }}/{{ .Values.database.name }}'

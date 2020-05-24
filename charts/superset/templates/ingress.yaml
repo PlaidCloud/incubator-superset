@@ -1,23 +1,28 @@
+{{- if .Values.ingress.enabled }}
 apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
+  {{- if .Values.ingress.annotations }}
   annotations:
-    nginx.ingress.kubernetes.io/server-snippet: |
-      if ( $http_x_forwarded_proto != 'https' ) {
-        return 307 https://$host$request_uri;
-      }
-
+{{ toYaml .Values.ingress.annotations | indent 4 }}
+  {{- end }}
   name: {{ .Release.Name }}
   labels:
     app: plaid
-    plaid: superset
+    plaid: plaid
     release: {{ .Release.Name }}
 spec:
+  {{- if .Values.ingress.tls }}
+  tls:
+  - hosts:
+    - {{ .Values.ingress.hostname }}
+    secretName: {{ .Values.ingress.tlsSecret }}
+  {{- end }}
   rules:
   {{- if .Values.devMode }}
-  - host: {{ .Release.Namespace }}-viz.plaidcloud.io
+  - host: {{ .Release.Namespace }}.plaidcloud.io
   {{- else }}
-  - host: {{ .Values.superset.hostname }}
+  - host: {{ .Values.ingress.hostname }}
   {{- end }}
     http:
       paths:
@@ -25,3 +30,4 @@ spec:
         backend:
           serviceName: {{ .Release.Name }}
           servicePort: {{ .Values.superset.port }}
+{{- end }}

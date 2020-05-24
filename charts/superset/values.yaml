@@ -3,9 +3,9 @@ superset:
   image: plaidcloud/superset:latest
   pullPolicy: Always
   imagePullSecret: dockerhub-key
-  hostname: viz.plaidcloud.com
   port: 80
   targetPort: 8088
+  annotations: {}
   env:
     - name: SUPERSET_ENV
       value: "development"
@@ -23,11 +23,20 @@ superset_events:
   image: plaidcloud/superset-events:latest
   pullPolicy: Always
   imagePullSecret: dockerhub-key
+  annotations: {}
   env:
     - name: SUPERSET_ENV
       value: "development"
     - name: HEADLESS
       value: "true"
+
+ingress:
+  enabled: true
+  annotations: {}
+  #   kubernetes.io/ingress.class: nginx
+  hostname: "plaidcloud.io"
+  tls: true
+  tlsSecret: ingress-cert
 
 database:
   user: superset
