@@ -20,7 +20,8 @@ import React from 'react';
 import { mount, shallow } from 'enzyme';
 import { act } from 'react-dom/test-utils';
 import { MenuItem, Pagination } from 'react-bootstrap';
-import Select from 'react-select';
+import Select from 'src/components/Select';
+import { QueryParamProvider } from 'use-query-params';
 
 import ListView from 'src/components/ListView/ListView';
 import ListViewFilters from 'src/components/ListView/Filters';
@@ -28,6 +29,16 @@ import ListViewPagination from 'src/components/ListView/Pagination';
 import { areArraysShallowEqual } from 'src/reduxUtils';
 import { ThemeProvider } from 'emotion-theming';
 import { supersetTheme } from '@superset-ui/style';
+
+export function makeMockLocation(query) {
+  const queryStr = encodeURIComponent(query);
+  return {
+    protocol: 'http:',
+    host: 'localhost',
+    pathname: '/',
+    search: queryStr.length ? `?${queryStr}` : '',
+  };
+}
 
 const mockedProps = {
   title: 'Data Table',
@@ -64,11 +75,19 @@ const mockedProps = {
   bulkActions: [{ name: 'do something', onSelect: jest.fn() }],
 };
 
+const factory = (props = mockedProps) =>
+  mount(
+    <QueryParamProvider location={makeMockLocation()}>
+      <ListView {...props} />
+    </QueryParamProvider>,
+    {
+      wrappingComponent: ThemeProvider,
+      wrappingComponentProps: { theme: supersetTheme },
+    },
+  );
+
 describe('ListView', () => {
-  const wrapper = mount(<ListView {...mockedProps} />, {
-    wrappingComponent: ThemeProvider,
-    wrappingComponentProps: { theme: supersetTheme },
-  });
+  const wrapper = factory();
 
   afterEach(() => {
     mockedProps.fetchData.mockClear();
@@ -92,10 +111,7 @@ describe('ListView', () => {
   });
 
   it('calls fetchData on sort', () => {
-    wrapper
-      .find('[data-test="sort-header"]')
-      .at(1)
-      .simulate('click');
+    wrapper.find('[data-test="sort-header"]').at(1).simulate('click');
 
     expect(mockedProps.fetchData).toHaveBeenCalled();
     expect(mockedProps.fetchData.mock.calls[0]).toMatchInlineSnapshot(`
@@ -141,10 +157,7 @@ describe('ListView', () => {
     wrapper.update();
 
     act(() => {
-      wrapper
-        .find('[data-test="apply-filters"]')
-        .last()
-        .prop('onClick')();
+      wrapper.find('[data-test="apply-filters"]').last().prop('onClick')();
     });
     wrapper.update();
 
@@ -222,10 +235,7 @@ Array [
         .onClick();
     });
     wrapper.update();
-    const bulkActionsProps = wrapper
-      .find(MenuItem)
-      .last()
-      .props();
+    const bulkActionsProps = wrapper.find(MenuItem).last().props();
 
     bulkActionsProps.onSelect(bulkActionsProps.eventKey);
     expect(mockedProps.bulkActions[0].onSelect.mock.calls[0])
@@ -256,10 +266,7 @@ Array [
         .onClick();
     });
     wrapper.update();
-    const bulkActionsProps = wrapper
-      .find(MenuItem)
-      .last()
-      .props();
+    const bulkActionsProps = wrapper.find(MenuItem).last().props();
 
     bulkActionsProps.onSelect(bulkActionsProps.eventKey);
     expect(mockedProps.bulkActions[0].onSelect.mock.calls[0])
@@ -327,10 +334,7 @@ describe('ListView with new UI filters', () => {
     ],
   };
 
-  const wrapper = mount(<ListView {...newFiltersProps} />, {
-    wrappingComponent: ThemeProvider,
-    wrappingComponentProps: { theme: supersetTheme },
-  });
+  const wrapper = factory(newFiltersProps);
 
   afterEach(() => {
     mockedProps.fetchData.mockClear();
@@ -367,11 +371,7 @@ describe('ListView with new UI filters', () => {
     wrapper.update();
 
     act(() => {
-      wrapper
-        .find('[data-test="filters-search"]')
-        .last()
-        .props()
-        .onBlur();
+      wrapper.find('[data-test="search-input"]').last().props().onBlur();
     });
 
     expect(newFiltersProps.fetchData.mock.calls[0]).toMatchInlineSnapshot(`
