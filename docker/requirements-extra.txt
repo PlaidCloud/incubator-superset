@@ -17,4 +17,3 @@
 gevent==1.4.0
 pika
 psycopg2-binary==2.8.5
-redis==3.2.1
