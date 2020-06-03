@@ -37,6 +37,7 @@ from superset.connectors.base.views import DatasourceModelView
 from superset.exceptions import SupersetException
 from superset.utils import core as utils
 from superset.views.base import (
+    create_table_permissions,
     DatasourceFilter,
     DeleteMixin,
     get_datasource_exist_error_msg,
@@ -60,6 +61,8 @@ logger = logging.getLogger(__name__)
 
 class PlaidColumnInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
     datamodel = SQLAInterface(models.PlaidColumn)
+    # TODO TODO, review need for this on related_views
+    include_route_methods = RouteMethod.RELATED_VIEW_SET | RouteMethod.API_SET
 
     list_title = _("Columns")
     show_title = _("Show Column")
@@ -113,12 +116,20 @@ class PlaidColumnInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
         ),
         "python_date_format": utils.markdown(
             Markup(
-                "The pattern of timestamp format, use "
+                "The pattern of timestamp format. For strings use "
                 '<a href="https://docs.python.org/2/library/'
                 'datetime.html#strftime-strptime-behavior">'
-                "python datetime string pattern</a> "
-                "expression. If time is stored in epoch "
-                "format, put `epoch_s` or `epoch_ms`."
+                "python datetime string pattern</a> expression which needs to "
+                'adhere to the <a href="https://en.wikipedia.org/wiki/ISO_8601">'
+                "ISO 8601</a> standard to ensure that the lexicographical ordering "
+                "coincides with the chronological ordering. If the timestamp "
+                "format does not adhere to the ISO 8601 standard you will need to "
+                "define an expression and type for transforming the string into a "
+                "date or timestamp. Note currently time zones are not supported. "
+                "If time is stored in epoch format, put `epoch_s` or `epoch_ms`."
+                "If no pattern is specified we fall back to using the optional "
+                "defaults on a per database/column name level via the extra parameter."
+                ""
             ),
             True,
         ),
@@ -134,6 +145,24 @@ class PlaidColumnInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
         "is_dttm": _("Is temporal"),
         "python_date_format": _("Datetime Format"),
         "type": _("Type"),
+    }
+    validators_columns = {
+        "python_date_format": [
+            # Restrict viable values to epoch_s, epoch_ms, or a strftime format
+            # which adhere's to the ISO 8601 format (without time zone).
+            Regexp(
+                re.compile(
+                    r"""
+                    ^(
+                        epoch_s|epoch_ms|
+                        (?P<date>%Y(-%m(-%d)?)?)([\sT](?P<time>%H(:%M(:%S(\.%f)?)?)?))?
+                    )$
+                    """,
+                    re.VERBOSE,
+                ),
+                message=_("Invalid date/timestamp format"),
+            )
+        ]
     }
 
     add_form_extra_fields = {
@@ -153,6 +182,7 @@ appbuilder.add_view_no_menu(PlaidColumnInlineView)
 
 class PlaidMetricInlineView(CompactCRUDMixin, SupersetModelView):  # noqa
     datamodel = SQLAInterface(models.PlaidMetric)
+    include_route_methods = RouteMethod.RELATED_VIEW_SET | RouteMethod.API_SET
 
     list_title = _("Metrics")
     show_title = _("Show Metric")
@@ -242,7 +272,10 @@ class PlaidTableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  #
     ]
     base_filters = [["id", DatasourceFilter, lambda: []]]
     show_columns = edit_columns + ["perm", "slices"]
-    related_views = [PlaidColumnInlineView, PlaidMetricInlineView]
+    related_views = [
+        PlaidColumnInlineView,
+        PlaidMetricInlineView,
+    ]
     base_order = ("changed_on", "desc")
     search_columns = ("project", "schema", "table_name", "owners", "is_sqllab_view")
     description_columns = {
@@ -326,7 +359,8 @@ class PlaidTableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  #
         )
     }
 
-    def pre_add(self, table):
+    def pre_add(self, table: "PlaidTableModelView") -> None:
+        """Checks the table existence in the database."""
         with db.session.no_autoflush:
             table_query = db.session.query(models.PlaidTable).filter(
                 models.PlaidTable.table_name == table.table_name,
@@ -350,14 +384,9 @@ class PlaidTableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  #
                 ).format(table.name, str(e))
             )
 
-    def post_add(self, table, flash_message=True):
+    def post_add(self, table: "TableModelView", flash_message: bool = True) -> None:
         table.fetch_metadata()
-        security_manager.add_permission_view_menu("datasource_access", table.get_perm())
-        if table.schema:
-            security_manager.add_permission_view_menu(
-                "schema_access", table.schema_perm
-            )
-
+        create_table_permissions(table)
         if flash_message:
             flash(
                 _(
@@ -369,15 +398,15 @@ class PlaidTableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  #
                 "info",
             )
 
-    def post_update(self, table):
+    def post_update(self, table: "PlaidTableModelView") -> None:
         self.post_add(table, flash_message=False)
 
-    def _delete(self, pk):
+    def _delete(self, pk: int) -> None:
         DeleteMixin._delete(self, pk)
 
     @expose("/edit/<pk>", methods=["GET", "POST"])
     @has_access
-    def edit(self, pk):
+    def edit(self, pk: int) -> FlaskResponse:
         """Simple hack to redirect to explore view after saving"""
         resp = super(PlaidTableModelView, self).edit(pk)
         if isinstance(resp, str):
@@ -387,7 +416,9 @@ class PlaidTableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  #
     @action(
         "refresh", __("Refresh Metadata"), __("Refresh column metadata"), "fa-refresh"
     )
-    def refresh(self, tables):
+    def refresh(
+        self, tables: Union["PlaidTableModelView", List["PlaidTableModelView"]]
+    ) -> FlaskResponse:
         if not isinstance(tables, list):
             tables = [tables]
         successes = []
@@ -414,6 +445,13 @@ class PlaidTableModelView(DatasourceModelView, DeleteMixin, YamlExportMixin):  #
 
         return redirect("/tablemodelview/list/")
 
+    @expose("/list/")
+    @has_access
+    def list(self) -> FlaskResponse:
+        if not app.config["ENABLE_REACT_CRUD_VIEWS"]:
+            return super().list()
+
+        return super().render_app_template()
 
 appbuilder.add_view_no_menu(PlaidTableModelView)
 appbuilder.add_link(

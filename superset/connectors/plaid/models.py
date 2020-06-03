@@ -67,9 +67,14 @@ from superset.connectors.base.models import BaseColumn, BaseDatasource, BaseMetr
 from superset.constants import NULL_STRING
 from superset.db_engine_specs.base import TimeGrain, TimestampExpression
 from superset.exceptions import DatabaseNotFound
-from superset.jinja_context import ExtraCache, get_template_processor
+from superset.jinja_context import (
+    BaseTemplateProcessor,
+    ExtraCache,
+    get_template_processor,
+)
 from superset.models.annotations import Annotation
 from superset.models.helpers import QueryResult, AuditMixinNullable, ImportMixin
+from superset.typing import Metric, QueryObjectDict
 from superset.utils import cache as cache_util, core as utils, import_datasource
 from sqlalchemy_utils import EncryptedType
 
@@ -143,6 +148,7 @@ class PlaidProject(
     encrypted_extra = Column(EncryptedType(Text, config["SECRET_KEY"]), nullable=True)
     perm = Column(String(1000))
     impersonate_user = Column(Boolean, default=False)
+    server_cert = Column(EncryptedType(Text, config["SECRET_KEY"]), nullable=True)
     export_fields = [
         "uuid",
         "sqlalchemy_uri",
@@ -155,7 +161,7 @@ class PlaidProject(
     ]
     export_children = ["tables"]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.project_name
 
     @property
@@ -168,7 +174,13 @@ class PlaidProject(
 
     @property
     def function_names(self) -> List[str]:
-        return self.db_engine_spec.get_function_names(self)
+        try:
+            return self.db_engine_spec.get_function_names(self)
+        except Exception as ex:  # pylint: disable=broad-except
+            # function_names property is used in bulk APIs and should not hard crash
+            # more info in: https://github.com/apache/incubator-superset/issues/9678
+            logger.error(f"Failed to fetch database function names with error: {ex}")
+        return []
 
     @property
     def allows_cost_estimate(self) -> bool:
@@ -233,7 +245,9 @@ class PlaidProject(
         return self.get_extra().get("default_schemas", [])
 
     @classmethod
-    def get_password_masked_url_from_uri(cls, uri: str):  # pylint: disable=invalid-name
+    def get_password_masked_url_from_uri(  # pylint: disable=invalid-name
+        cls, uri: str
+    ) -> URL:
         sqlalchemy_url = make_url(uri)
         return cls.get_password_masked_url(sqlalchemy_url)
 
@@ -278,7 +292,7 @@ class PlaidProject(
                 effective_username = g.user.username
         return effective_username
 
-    @utils.memoized(watch=("impersonate_user", "sqlalchemy_uri_decrypted", "extra"))
+    @utils.memoized(watch=["impersonate_user", "sqlalchemy_uri_decrypted", "extra"])
     def get_sqla_engine(
         self,
         schema: Optional[str] = None,
@@ -338,7 +352,7 @@ class PlaidProject(
     def get_reserved_words(self) -> Set[str]:
         return self.get_dialect().preparer.reserved_words
 
-    def get_quoter(self):
+    def get_quoter(self) -> Callable:
         return self.get_dialect().identifier_preparer.quote
 
     def get_df(  # pylint: disable=too-many-locals
@@ -404,7 +418,7 @@ class PlaidProject(
         indent: bool = True,
         latest_partition: bool = False,
         cols: Optional[List[Dict[str, Any]]] = None,
-    ):
+    ) -> str:
         """Generates a ``select *`` statement in the proper dialect"""
         eng = self.get_sqla_engine(schema=schema, source=utils.QuerySource.SQL_LAB)
         return self.db_engine_spec.select_star(
@@ -435,7 +449,10 @@ class PlaidProject(
         attribute_in_key="id",
     )
     def get_all_table_names_in_database(
-        self, cache: bool = False, cache_timeout: Optional[bool] = None, force=False
+        self,
+        cache: bool = False,
+        cache_timeout: Optional[bool] = None,
+        force: bool = False,
     ) -> List[utils.DatasourceName]:
         """Parameters need to be passed as keyword arguments."""
         if not self.allow_multi_schema_metadata_fetch:
@@ -546,7 +563,7 @@ class PlaidProject(
 
     @classmethod
     def get_db_engine_spec_for_backend(
-        cls, backend
+        cls, backend: str
     ) -> Type[db_engine_specs.BaseEngineSpec]:
         return db_engine_specs.engines.get(backend, db_engine_specs.BaseEngineSpec)
 
@@ -564,7 +581,7 @@ class PlaidProject(
     def get_extra(self) -> Dict[str, Any]:
         return self.db_engine_spec.get_extra_params(self)
 
-    def get_encrypted_extra(self):
+    def get_encrypted_extra(self) -> Dict[str, Any]:
         encrypted_extra = {}
         if self.encrypted_extra:
             try:
@@ -608,7 +625,13 @@ class PlaidProject(
     def get_schema_access_for_csv_upload(  # pylint: disable=invalid-name
         self,
     ) -> List[str]:
-        return self.get_extra().get("schemas_allowed_for_csv_upload", [])
+        allowed_databases = self.get_extra().get("schemas_allowed_for_csv_upload", [])
+        if hasattr(g, "user"):
+            extra_allowed_databases = config["ALLOWED_USER_CSV_SCHEMA_FUNC"](
+                self, g.user
+            )
+            allowed_databases += extra_allowed_databases
+        return sorted(set(allowed_databases))
 
     @property
     def sqlalchemy_uri_decrypted(self) -> str:
@@ -655,7 +678,7 @@ class PlaidColumn(Model, BaseColumn):
     expression = Column(Text)
     python_date_format = Column(String(255))
 
-    export_fields = (
+    export_fields = [
         "table_id",
         "column_name",
         "verbose_name",
@@ -667,7 +690,7 @@ class PlaidColumn(Model, BaseColumn):
         "expression",
         "description",
         "python_date_format",
-    )
+    ]
 
     update_from_object_fields = [s for s in export_fields if s not in ("table_id",)]
     export_parent = "table"
@@ -761,8 +784,8 @@ class PlaidColumn(Model, BaseColumn):
         return self.table.make_sqla_column_compatible(time_expr, label)
 
     @classmethod
-    def import_obj(cls, i_column):
-        def lookup_obj(lookup_column):
+    def import_obj(cls, i_column: "PlaidColumn") -> "PlaidColumn":
+        def lookup_obj(lookup_column: PlaidColumn) -> PlaidColumn:
             return (
                 db.session.query(PlaidColumn)
                 .filter(
@@ -864,8 +887,8 @@ class PlaidMetric(Model, BaseMetric):
         return self.perm
 
     @classmethod
-    def import_obj(cls, i_metric):
-        def lookup_obj(lookup_metric):
+    def import_obj(cls, i_metric: "PlaidMetric") -> "PlaidMetric":
+        def lookup_obj(lookup_metric: PlaidMetric) -> PlaidMetric:
             return (
                 db.session.query(PlaidMetric)
                 .filter(
@@ -900,7 +923,7 @@ class PlaidTable(Model, BaseDatasource):
     __tablename__ = "plaid_tables"
     __table_args__ = (UniqueConstraint("project_id", "table_name"),)
 
-    table_name = Column(String(250))
+    table_name = Column(String(250), nullable=False)
     base_table_name = Column(String(250))
     main_dttm_col = Column(String(250))
     project_id = Column(String(250), ForeignKey("plaid_projects.uuid"), nullable=False)
@@ -965,7 +988,7 @@ class PlaidTable(Model, BaseDatasource):
         sqla_col._df_label_expected = label_expected
         return sqla_col
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.name
 
     @property
@@ -1051,14 +1074,14 @@ class PlaidTable(Model, BaseDatasource):
         )
 
     @property
-    def dttm_cols(self) -> List:
+    def dttm_cols(self) -> List[str]:
         l = [c.column_name for c in self.columns if c.is_dttm]
         if self.main_dttm_col and self.main_dttm_col not in l:
             l.append(self.main_dttm_col)
         return l
 
     @property
-    def num_cols(self) -> List:
+    def num_cols(self) -> List[str]:
         return [c.column_name for c in self.columns if c.is_numeric]
 
     @property
@@ -1080,7 +1103,7 @@ class PlaidTable(Model, BaseDatasource):
     def sql_url(self) -> str:
         return self.project.sql_url + "?table_name=" + str(self.table_name)
 
-    def external_metadata(self):
+    def external_metadata(self) -> List[Dict[str, str]]:
         cols = self.project.get_columns(self.table_name, schema=self.schema)
         for col in cols:
             try:
@@ -1097,7 +1120,7 @@ class PlaidTable(Model, BaseDatasource):
         }
 
     @property
-    def select_star(self) -> str:
+    def select_star(self) -> Optional[str]:
         # show_cols and latest_partition set to false to avoid
         # the expensive cost of inspecting the DB
         return self.project.select_star(
@@ -1117,9 +1140,10 @@ class PlaidTable(Model, BaseDatasource):
             d["main_dttm_col"] = self.main_dttm_col
             d["fetch_values_predicate"] = self.fetch_values_predicate
             d["template_params"] = self.template_params
+            d["is_sqllab_view"] = self.is_sqllab_view
         return d
 
-    def values_for_column(self, column_name: str, limit: int = 10000) -> List:
+    def values_for_column(self, column_name: str, limit: int = 10000) -> List[Any]:
         """Runs query against sqla to retrieve some
         sample values for the given column.
         """
@@ -1156,10 +1180,10 @@ class PlaidTable(Model, BaseDatasource):
             sql = SQL_QUERY_MUTATOR(sql, username, security_manager, self.project)
         return sql
 
-    def get_template_processor(self, **kwargs):
+    def get_template_processor(self, **kwargs: Any) -> BaseTemplateProcessor:
         return get_template_processor(table=self, database=self.project, **kwargs)
 
-    def get_query_str_extended(self, query_obj: Dict[str, Any]) -> QueryStringExtended:
+    def get_query_str_extended(self, query_obj: QueryObjectDict) -> QueryStringExtended:
         sqlaq = self.get_sqla_query(**query_obj)
         sql = self.project.compile_sqla_query(sqlaq.sqla_query)
         logger.info(sql)
@@ -1169,18 +1193,20 @@ class PlaidTable(Model, BaseDatasource):
             labels_expected=sqlaq.labels_expected, sql=sql, prequeries=sqlaq.prequeries
         )
 
-    def get_query_str(self, query_obj: Dict[str, Any]) -> str:
+    def get_query_str(self, query_obj: QueryObjectDict) -> str:
         query_str_ext = self.get_query_str_extended(query_obj)
         all_queries = query_str_ext.prequeries + [query_str_ext.sql]
         return ";\n\n".join(all_queries) + ";"
 
-    def get_sqla_table(self):
+    def get_sqla_table(self) -> table:
         tbl = table(self.table_name)
         if self.schema:
             tbl.schema = self.schema
         return tbl
 
-    def get_from_clause(self, template_processor=None):
+    def get_from_clause(
+        self, template_processor: Optional[BaseTemplateProcessor] = None
+    ) -> Union[table, TextAsFrom]:
         # Supporting arbitrary SQL statements in place of tables
         if self.sql:
             from_sql = self.sql
@@ -1217,7 +1243,9 @@ class PlaidTable(Model, BaseDatasource):
 
         return self.make_sqla_column_compatible(sqla_metric, label)
 
-    def _get_sqla_row_level_filters(self, template_processor) -> List[str]:
+    def _get_sqla_row_level_filters(
+        self, template_processor: BaseTemplateProcessor
+    ) -> List[str]:
         """
         Return the appropriate row level security filters for this table and the current user.
 
@@ -1232,22 +1260,22 @@ class PlaidTable(Model, BaseDatasource):
 
     def get_sqla_query(  # sqla
         self,
-        metrics,
-        granularity,
-        from_dttm,
-        to_dttm,
-        columns=None,
-        groupby=None,
-        filter=None,
-        is_timeseries=True,
-        timeseries_limit=15,
-        timeseries_limit_metric=None,
-        row_limit=None,
-        inner_from_dttm=None,
-        inner_to_dttm=None,
-        orderby=None,
-        extras=None,
-        order_desc=True,
+        metrics: List[Metric],
+        granularity: str,
+        from_dttm: datetime,
+        to_dttm: datetime,
+        columns: Optional[List[str]] = None,
+        groupby: Optional[List[str]] = None,
+        filter: Optional[List[Dict[str, Any]]] = None,
+        is_timeseries: bool = True,
+        timeseries_limit: int = 15,
+        timeseries_limit_metric: Optional[Metric] = None,
+        row_limit: Optional[int] = None,
+        inner_from_dttm: Optional[datetime] = None,
+        inner_to_dttm: Optional[datetime] = None,
+        orderby: Optional[List[Tuple[ColumnElement, bool]]] = None,
+        extras: Optional[Dict[str, Any]] = None,
+        order_desc: bool = True,
     ) -> PlaidQuery:
         """Querying any sqla table from this common interface"""
         template_kwargs = {
@@ -1295,8 +1323,9 @@ class PlaidTable(Model, BaseDatasource):
         metrics_exprs: List[ColumnElement] = []
         for m in metrics:
             if utils.is_adhoc_metric(m):
+                assert isinstance(m, dict)
                 metrics_exprs.append(self.adhoc_metric_to_sqla(m, cols))
-            elif m in metrics_dict:
+            elif isinstance(m, str) and m in metrics_dict:
                 metrics_exprs.append(metrics_dict[m].get_sqla_col())
             else:
                 raise Exception(_("Metric '%(metric)s' does not exist", metric=m))
@@ -1311,7 +1340,9 @@ class PlaidTable(Model, BaseDatasource):
 
         if (is_sip_38 and metrics and columns) or (not is_sip_38 and groupby):
             # dedup columns while preserving order
-            groupby = list(dict.fromkeys(columns if is_sip_38 else groupby))
+            columns_ = columns if is_sip_38 else groupby
+            assert columns_
+            groupby = list(dict.fromkeys(columns_))
 
             select_exprs = []
             for s in groupby:
@@ -1332,6 +1363,7 @@ class PlaidTable(Model, BaseDatasource):
                 )
             metrics_exprs = []
 
+        assert extras is not None
         time_range_endpoints = extras.get("time_range_endpoints")
         groupby_exprs_with_timestamp = OrderedDict(groupby_exprs_sans_timestamp.items())
         if granularity:
@@ -1375,7 +1407,8 @@ class PlaidTable(Model, BaseDatasource):
 
         where_clause_and = []
         having_clause_and: List = []
-        for flt in filter:
+
+        for flt in filter:  # type: ignore
             if not all([flt.get(s) for s in ["col", "op"]]):
                 continue
             col = flt["col"]
@@ -1426,8 +1459,8 @@ class PlaidTable(Model, BaseDatasource):
                         raise Exception(
                             _("Invalid filter operation type: %(op)s", op=op)
                         )
-
-        where_clause_and += self._get_sqla_row_level_filters(template_processor)
+        if config["ENABLE_ROW_LEVEL_SECURITY"]:
+            where_clause_and += self._get_sqla_row_level_filters(template_processor)
         if extras:
             where = extras.get("where")
             if where:
@@ -1559,12 +1592,20 @@ class PlaidTable(Model, BaseDatasource):
             prequeries=prequeries,
         )
 
-    def _get_timeseries_orderby(self, timeseries_limit_metric, metrics_dict, cols):
+    def _get_timeseries_orderby(
+        self,
+        timeseries_limit_metric: Metric,
+        metrics_dict: Dict[str, PlaidMetric],
+        cols: Dict[str, Column],
+    ) -> Optional[Column]:
         if utils.is_adhoc_metric(timeseries_limit_metric):
+            assert isinstance(timeseries_limit_metric, dict)
             ob = self.adhoc_metric_to_sqla(timeseries_limit_metric, cols)
-        elif timeseries_limit_metric in metrics_dict:
-            timeseries_limit_metric = metrics_dict.get(timeseries_limit_metric)
-            ob = timeseries_limit_metric.get_sqla_col()
+        elif (
+            isinstance(timeseries_limit_metric, str)
+            and timeseries_limit_metric in metrics_dict
+        ):
+            ob = metrics_dict[timeseries_limit_metric].get_sqla_col()
         else:
             raise Exception(
                 _("Metric '%(metric)s' does not exist", metric=timeseries_limit_metric)
@@ -1584,12 +1625,12 @@ class PlaidTable(Model, BaseDatasource):
 
         return or_(*groups)
 
-    def query(self, query_obj: Dict[str, Any]) -> QueryResult:
+    def query(self, query_obj: QueryObjectDict) -> QueryResult:
         qry_start_dttm = datetime.now()
         query_str_ext = self.get_query_str_extended(query_obj)
         sql = query_str_ext.sql
         status = utils.QueryStatus.SUCCESS
-        error_message = None
+        errors = None
 
         def mutator(df: pd.DataFrame) -> None:
             """
@@ -1616,22 +1657,22 @@ class PlaidTable(Model, BaseDatasource):
         except Exception as ex:
             df = pd.DataFrame()
             status = utils.QueryStatus.FAILED
-            logger.exception(f"Query {sql} on schema {self.schema} failed")
+            logger.warning(f"Query {sql} on schema {self.schema} failed", exc_info=True)
             db_engine_spec = self.project.db_engine_spec
-            error_message = db_engine_spec.extract_error_message(ex)
+            errors = db_engine_spec.extract_errors(ex)
 
         return QueryResult(
             status=status,
             df=df,
             duration=datetime.now() - qry_start_dttm,
             query=sql,
-            error_message=error_message,
+            errors=errors,
         )
 
     def get_sqla_table_object(self) -> Table:
         return self.project.get_table(self.table_name, schema=self.schema)
 
-    def fetch_metadata(self, commit=True) -> None:
+    def fetch_metadata(self, commit: bool = True) -> None:
         """Fetches the metadata for the table and merges it in"""
         try:
             table = self.get_sqla_table_object()
@@ -1702,7 +1743,9 @@ class PlaidTable(Model, BaseDatasource):
             db.session.commit()
 
     @classmethod
-    def import_obj(cls, i_datasource, import_time=None) -> int:
+    def import_obj(
+        cls, i_datasource: "PlaidTable", import_time: Optional[int] = None
+    ) -> int:
         """Imports the datasource from the object to the database.
 
          Metrics and columns and datasource will be overrided if exists.
@@ -1710,7 +1753,7 @@ class PlaidTable(Model, BaseDatasource):
          superset instances. Audit metadata isn't copies over.
         """
 
-        def lookup_sqlatable(table):
+        def lookup_sqlatable(table: "PlaidTable") -> "PlaidTable":
             return (
                 db.session.query(PlaidTable)
                 .join(PlaidProject)
@@ -1722,7 +1765,7 @@ class PlaidTable(Model, BaseDatasource):
                 .first()
             )
 
-        def lookup_project(table):
+        def lookup_project(table: PlaidTable) -> PlaidProject:
             try:
                 return (
                     db.session.query(PlaidProject)
@@ -1743,7 +1786,11 @@ class PlaidTable(Model, BaseDatasource):
 
     @classmethod
     def query_datasources_by_name(
-        cls, session: Session, database: PlaidProject, datasource_name: str, schema=None
+        cls,
+        session: Session,
+        database: PlaidProject,
+        datasource_name: str,
+        schema: Optional[str] = None,
     ) -> List["PlaidTable"]:
         query = (
             session.query(cls)
@@ -1755,10 +1802,10 @@ class PlaidTable(Model, BaseDatasource):
         return query.all()
 
     @staticmethod
-    def default_query(qry) -> Query:
+    def default_query(qry: Query) -> Query:
         return qry.filter_by(is_sqllab_view=False)
 
-    def has_extra_cache_key_calls(self, query_obj: Dict[str, Any]) -> bool:
+    def has_extra_cache_key_calls(self, query_obj: QueryObjectDict) -> bool:
         """
         Detects the presence of calls to `ExtraCache` methods in items in query_obj that
         can be templated. If any are present, the query must be evaluated to extract
@@ -1784,7 +1831,7 @@ class PlaidTable(Model, BaseDatasource):
                 return True
         return False
 
-    def get_extra_cache_keys(self, query_obj: Dict[str, Any]) -> List[Hashable]:
+    def get_extra_cache_keys(self, query_obj: QueryObjectDict) -> List[Hashable]:
         """
         The cache key of a SqlaTable needs to consider any keys added by the parent
         class and any keys added via `ExtraCache`.
@@ -1801,3 +1848,30 @@ class PlaidTable(Model, BaseDatasource):
 
 sa.event.listen(PlaidTable, "after_insert", security_manager.set_perm)
 sa.event.listen(PlaidTable, "after_update", security_manager.set_perm)
+
+
+# RLSFilterRoles = Table(
+#     "rls_filter_roles",
+#     metadata,
+#     Column("id", Integer, primary_key=True),
+#     Column("role_id", Integer, ForeignKey("ab_role.id"), nullable=False),
+#     Column("rls_filter_id", Integer, ForeignKey("row_level_security_filters.id")),
+# )
+
+
+# class RowLevelSecurityFilter(Model, AuditMixinNullable):
+#     """
+#     Custom where clauses attached to Tables and Roles.
+#     """
+
+#     __tablename__ = "row_level_security_filters"
+#     id = Column(Integer, primary_key=True)
+#     roles = relationship(
+#         security_manager.role_model,
+#         secondary=RLSFilterRoles,
+#         backref="row_level_security_filters",
+#     )
+
+#     table_id = Column(Integer, ForeignKey("tables.id"), nullable=False)
+#     table = relationship(SqlaTable, backref="row_level_security_filters")
+#     clause = Column(Text, nullable=False)
