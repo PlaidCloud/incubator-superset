@@ -9,6 +9,11 @@ metadata:
 spec:
   replicas: 1
   minReadySeconds: 10
+  selector:
+    matchLabels:
+      app: plaid
+      plaid: superset-events
+      release: {{ .Release.Name }}
   template:
     metadata:
       name: superset
