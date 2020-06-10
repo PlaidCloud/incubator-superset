@@ -78,6 +78,7 @@ python-geohash==0.8.5     # via apache-superset (setup.py)
 python3-openid==3.1.0     # via flask-openid
 pytz==2020.1              # via babel, celery, flask-babel, pandas
 pyyaml==5.3.1             # via apache-superset (setup.py), apispec
+redis==3.5.1
 requests==2.23.0
 retry==0.9.2              # via apache-superset (setup.py)
 selenium==3.141.0         # via apache-superset (setup.py)
