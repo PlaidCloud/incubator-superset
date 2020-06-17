@@ -18,6 +18,8 @@
 """Views used by the SqlAlchemy connector"""
 import logging
 import inspect
+import re
+from typing import List, Union
 
 from flask import flash, Markup, redirect, request, redirect, Response
 from flask_appbuilder import CompactCRUDMixin, expose
@@ -26,14 +28,16 @@ from flask_appbuilder.baseviews import expose, expose_api
 from flask_appbuilder.fieldwidgets import Select2Widget
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.security.decorators import has_access, has_access_api
-from flask_babel import gettext as __
-from flask_babel import lazy_gettext as _
+from flask_babel import gettext as __, lazy_gettext as _
 from wtforms.ext.sqlalchemy.fields import QuerySelectField
+from wtforms.validators import Regexp
 import json
 from sqlalchemy import MetaData
 
-from superset import appbuilder, db, security_manager
+from superset import app, appbuilder, db, security_manager
 from superset.connectors.base.views import DatasourceModelView
+from superset.constants import RouteMethod
+from superset.typing import FlaskResponse
 from superset.exceptions import SupersetException
 from superset.utils import core as utils
 from superset.views.base import (
