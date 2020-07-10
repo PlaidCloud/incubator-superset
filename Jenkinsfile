@@ -123,7 +123,8 @@ podTemplate(label: 'superset',
                 package_helm_chart --repo-url=https://$user:$pass@github.com/PlaidCloud/k8s.git --chart-name=$chart_name
                 
                 # Tell argo which image version to use.
-                argocd app set $argo_app -p spec.image="$image_name:$image_label"
+                argocd app set $argo_app -p spec.image="$image_name/production:$image_label"
+                argocd app set $argo_app-events -p superset_events.image="$image_name/events:$image_label"
               """
             }
           }
