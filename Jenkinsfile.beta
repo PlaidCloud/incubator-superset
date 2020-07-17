@@ -10,15 +10,22 @@ def image_label = ""
 @Field
 def branch = ""
 
-podTemplate(label: 'superset',
+@Field
+def chart_name = "superset"
+
+@Field
+def argo_app = "beta-superset"
+
+podTemplate(label: 'superset-beta',
   containers: [
     containerTemplate(name: 'docker', image: 'docker:18.09.9', ttyEnabled: true, command: 'cat'),
-    containerTemplate(name: 'kubectl', image: "lachlanevenson/k8s-kubectl:v1.15.9", ttyEnabled: true, command: 'cat')
+    containerTemplate(name: 'argocd', image: "gcr.io/plaidcloud-build/tools/argocd:latest", ttyEnabled: true, command: 'cat', alwaysPullImage: true, workingDir: '/home/jenkins/agent')
   ],
-  serviceAccount: 'jenkins'
+  serviceAccount: 'jenkins',
+  imagePullSecrets: ['gcr-key']
 )
 {
-  node(label: 'superset') {
+  node(label: 'superset-beta') {
     properties([
       parameters([
         booleanParam(name: 'no_cache', defaultValue: false, description: 'Adds --no-cache flag to docker build command(s).')
@@ -66,13 +73,18 @@ podTemplate(label: 'superset',
         }
       }
     }
-    container('kubectl') {
-      withCredentials([file(credentialsId: 'prod-kube-config', variable: 'KUBECONFIG')]) {
-        stage("Deploy superset to Kubernetes") {
-          sh "kubectl -n beta set image deployment/beta-superset superset=${image_name}/production:${image_label} --record"
-        }
-        stage("Deploy superset-events to Kubernetes") {
-          sh "kubectl -n beta set image deployment/beta-superset-events superset=${image_name}/events:${image_label} --record"
+    container('argocd') {
+      stage("Deploy to Kubernetes") {
+        withCredentials([usernamePassword(credentialsId: 'plaid-machine-user', usernameVariable: 'user', passwordVariable: 'pass')]) {
+          withCredentials([string(credentialsId: 'argocd-token', variable: 'ARGOCD_AUTH_TOKEN')]) {
+            sh """#!/bin/bash
+              export ARGOCD_SERVER=deploy.plaidcloud.io
+              
+              # Verify, lint, check versions, package, and push helm chart, along with copying chart changes to k8s repo for argo.
+              check_helm_chart --repo-path=$env.WORKSPACE --chart-name=$chart_name
+              package_helm_chart --repo-url=https://$user:$pass@github.com/PlaidCloud/k8s.git --chart-name=$chart_name --argo-app=$argo_app --image=$image_name:$image_label
+            """
+          }
         }
       }
     }

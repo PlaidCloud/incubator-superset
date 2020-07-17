@@ -1,8 +1,9 @@
 devMode: false
+
 superset:
-  image: plaidcloud/superset:latest
+  image: gcr.io/plaidcloud-build/superset/production:latest
   pullPolicy: Always
-  imagePullSecret: dockerhub-key
+  imagePullSecret: gcr-key
   port: 80
   targetPort: 8088
   annotations: {}
@@ -13,16 +14,16 @@ superset:
       value: "8088"
 
 node:
-  image: plaidcloud/superset:latest
+  image: gcr.io/plaidcloud-build/superset/node:latest
   pullPolicy: Always
-  imagePullSecret: dockerhub-key
+  imagePullSecret: gcr-key
   port: 80
   targetPort: 9000
 
 superset_events:
-  image: plaidcloud/superset-events:latest
+  image: gcr.io/plaidcloud-build/superset/events:latest
   pullPolicy: Always
-  imagePullSecret: dockerhub-key
+  imagePullSecret: gcr-key
   annotations: {}
   env:
     - name: SUPERSET_ENV
@@ -34,7 +35,8 @@ ingress:
   enabled: true
   annotations: {}
   #   kubernetes.io/ingress.class: nginx
-  hostname: "plaidcloud.io"
+  hostnames:
+  - "plaidcloud.io"
   tls: true
   tlsSecret: ingress-cert
 
@@ -50,26 +52,26 @@ mapbox:
   apiKey: "pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ"
 
 oidc:
-  baseUrl: "https://plaidcloud.com/"
+  baseUrl: "https://plaidcloud.io/"
   cookieName: "_session_id"
   clientId: ""
   clientSecret: ""
-  authEndpoint: https://plaidcloud.com/oauth/authorize
-  tokenEndpoint: https://plaidcloud.com/oauth/token
-  jwksEndpoint: https://plaidcloud.com/oauth/jwks
+  authEndpoint: https://plaidcloud.io/oauth/authorize
+  tokenEndpoint: https://plaidcloud.io/oauth/token
+  jwksEndpoint: https://plaidcloud.io/oauth/jwks
   redirectUris:
-  - https://viz.plaidcloud.com/oidc_callback
+  - https://viz.plaidcloud.io/oidc_callback
   
 
 redis:
-  host: "redis-ha.default"
+  host: "redis-master"
   port: 26379
   group: "superset"
-  cache_db: 0
-  table_db: 1
+  cache_db: 14
+  table_db: 15
 
 rabbitmq:
-  host: "rabbitmq-ha.default"
+  host: "rabbitmq-rabbitmq-ha"
   port: 5672
   username: "event_user"
   password: "event password"
