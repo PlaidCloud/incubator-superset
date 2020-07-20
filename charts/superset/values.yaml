@@ -36,8 +36,7 @@ ingress:
   enabled: true
   annotations: {}
   #   kubernetes.io/ingress.class: nginx
-  hostnames:
-  - "plaidcloud.io"
+  hostname: "plaidcloud.io"
   tls: true
   tlsSecret: ingress-cert
 

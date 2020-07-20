@@ -1,7 +1,7 @@
 apiVersion: v2
 name: superset
 description: Deploys superset along with the proprietary superset-events service.
-version: 1.2.0
+version: 1.2.1
 keywords:
   - superset
   - plaid
