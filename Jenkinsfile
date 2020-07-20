@@ -119,8 +119,8 @@ podTemplate(label: 'superset',
                 export ARGOCD_SERVER=deploy.plaidcloud.io
 
                 # Verify, lint, check versions, package, and push helm chart, along with copying chart changes to k8s repo for argo.
-                check_helm_chart --repo-path=$env.WORKSPACE --chart-name=$chart_name
-                package_helm_chart --repo-url=https://$user:$pass@github.com/PlaidCloud/k8s.git --chart-name=$chart_name
+                check_helm_chart --repo-path=$env.WORKSPACE --chart-name=$chart_name --branch=develop
+                package_helm_chart --repo-url=https://$user:$pass@github.com/PlaidCloud/k8s.git --chart-name=$chart_name --branch=develop
                 
                 # Tell argo which image version to use.
                 argocd app set $argo_app -p spec.image="$image_name/production:$image_label"
@@ -132,7 +132,7 @@ podTemplate(label: 'superset',
       } else {
         stage('Process Helm Chart Changes') {
           // This script will lint, check for version increment, and dry-run an install.
-          sh "check_helm_chart --repo-path=$env.WORKSPACE --chart-name=$chart_name"
+          sh "check_helm_chart --repo-path=$env.WORKSPACE --chart-name=$chart_name --branch=develop"
         }
       }
     }

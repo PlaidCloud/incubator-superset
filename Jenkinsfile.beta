@@ -81,8 +81,8 @@ podTemplate(label: 'superset-beta',
               export ARGOCD_SERVER=deploy.plaidcloud.io
               
               # Verify, lint, check versions, package, and push helm chart, along with copying chart changes to k8s repo for argo.
-              check_helm_chart --repo-path=$env.WORKSPACE --chart-name=$chart_name
-              package_helm_chart --repo-url=https://$user:$pass@github.com/PlaidCloud/k8s.git --chart-name=$chart_name --argo-app=$argo_app --image=$image_name:$image_label
+              check_helm_chart --repo-path=$env.WORKSPACE --chart-name=$chart_name --branch=develop
+              package_helm_chart --repo-url=https://$user:$pass@github.com/PlaidCloud/k8s.git --chart-name=$chart_name --argo-app=$argo_app --image=$image_name:$image_label --branch=develop
             """
           }
         }
