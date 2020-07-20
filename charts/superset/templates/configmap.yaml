@@ -57,31 +57,34 @@ data:
   
     # Uncomment to setup an App icon
     APP_ICON = '/static/assets/images/plaidcloud.png'
-  
+    {{- if .Values.redis.enabled }}
     CACHE_CONFIG: CacheConfig = {
-        'CACHE_TYPE': '{{ .Values.devMode | ternary "redis" "redissentinel" }}',
-        {{- if .Values.devMode }}
-        'CACHE_REDIS_HOST': '{{ .Values.redis.host }}',
-        'CACHE_REDIS_PORT': {{ .Values.redis.port }},
-        {{- else }}
+        {{- if .Values.redis.group }}
+        'CACHE_TYPE': 'redissentinel',
         'CACHE_REDIS_SENTINELS': [("{{ .Values.redis.host }}", {{ .Values.redis.port }})],
         'CACHE_REDIS_SENTINEL_MASTER': "{{ .Values.redis.group }}",
+        {{- else }}
+        'CACHE_TYPE': 'redis',
+        'CACHE_REDIS_HOST': '{{ .Values.redis.host }}',
+        'CACHE_REDIS_PORT': {{ .Values.redis.port }},
         {{- end }}
         'CACHE_REDIS_DB': {{ .Values.redis.cache_db }},
     }
     
     TABLE_NAMES_CACHE_CONFIG: CacheConfig = {
-        'CACHE_TYPE': '{{ .Values.devMode | ternary "redis" "redissentinel" }}',
-        {{- if .Values.devMode }}
-        'CACHE_REDIS_HOST': '{{ .Values.redis.host }}',
-        'CACHE_REDIS_PORT': {{ .Values.redis.port }},
-        {{- else }}
+        {{- if .Values.redis.group }}
+        'CACHE_TYPE': 'redissentinel',
         'CACHE_REDIS_SENTINELS': [("{{ .Values.redis.host }}", {{ .Values.redis.port }})],
         'CACHE_REDIS_SENTINEL_MASTER': "{{ .Values.redis.group }}",
+        {{- else }}
+        'CACHE_TYPE': 'redis',
+        'CACHE_REDIS_HOST': '{{ .Values.redis.host }}',
+        'CACHE_REDIS_PORT': {{ .Values.redis.port }},
         {{- end }}
         'CACHE_REDIS_DB': {{ .Values.redis.table_db }},
     }
-  
+    {{- end }}
+
     # Disable Druid. We don't use it.
     DRUID_IS_ACTIVE = False
   
