@@ -1,6 +1,7 @@
 devMode: false
 
-superset:
+spec:
+  replicas: 1
   image: gcr.io/plaidcloud-build/superset/production:latest
   pullPolicy: Always
   imagePullSecret: gcr-key
@@ -62,8 +63,8 @@ oidc:
   redirectUris:
   - https://viz.plaidcloud.io/oidc_callback
   
-
 redis:
+  enabled: true
   host: "redis-master"
   port: 26379
   group: "superset"
