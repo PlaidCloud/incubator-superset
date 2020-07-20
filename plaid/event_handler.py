@@ -399,11 +399,18 @@ class EventHandler():
     def _handle_user_event(self, event_type, data, **kwargs):
         plaid_role = security_manager.find_role("Plaid")
 
+        def _get_user(event_data):
+            return security_manager.get_session.query(
+                    User
+                ).join(
+                    (PlaidUserMap, User.id == PlaidGroupMap.user_id),
+                ).filter(
+                    PlaidUserMap.plaid_user_id == event_data["id"]
+                ).one()
+
         def add_user(event_data):
             try:
-                user = db.session.query(User).filter(
-                    User.email == event_data["email"],
-                ).one()
+                user = _get_user(event_data)
 
                 log.warning(f"Received a create event for user {user.first_name} {user.last_name} ({user.username}), but the user already exists.")
 
@@ -430,11 +437,14 @@ class EventHandler():
                     role=security_manager.find_role('Plaid')
                 )
 
-                # Map the user's ID to the plaid user's ID.
-                user_map = PlaidUserMap()
-                user_map.user_id = user.id
-                user_map.plaid_user_id = event_data["id"]
-                db.session.add(user_map)
+                try:
+                    # Map the user's ID to the plaid user's ID.
+                    user_map = PlaidUserMap()
+                    user_map.user_id = user.id
+                    user_map.plaid_user_id = event_data["id"]
+                    db.session.add(user_map)
+                except AttributeError:
+                    log.exception(f"Failed to create new user {event_data["name"]} (ID: {event_data["id"]}).")
 
             if plaid_role not in user.roles:
                 user.roles.append(plaid_role)
@@ -449,13 +459,7 @@ class EventHandler():
         def update_user(event_data):
             try:
                 # Look up user by their ID in plaid's DB.
-                user = security_manager.get_session.query(
-                           User
-                       ).join(
-                            (PlaidUserMap, User.id == PlaidGroupMap.user_id),
-                       ).filter(
-                           PlaidUserMap.plaid_user_id == event_data["id"]
-                       ).one()
+                user = _get_user(event_data)
 
                 user.username = event_data["name"]
                 user.first_name = event_data["first_name"]
