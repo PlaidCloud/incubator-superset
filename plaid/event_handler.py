@@ -444,7 +444,7 @@ class EventHandler():
                     user_map.plaid_user_id = event_data["id"]
                     db.session.add(user_map)
                 except AttributeError:
-                    log.exception(f"Failed to create new user {event_data["name"]} (ID: {event_data["id"]}).")
+                    log.exception(f"Failed to create new user {event_data['name']} (ID: {event_data['id']}).")
 
             if plaid_role not in user.roles:
                 user.roles.append(plaid_role)
