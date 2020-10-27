@@ -20,6 +20,7 @@ from flask_babel import lazy_gettext as _
 from marshmallow import fields, Schema, ValidationError
 from marshmallow.validate import Length
 
+get_delete_ids_schema = {"type": "array", "items": {"type": "integer"}}
 get_export_ids_schema = {"type": "array", "items": {"type": "integer"}}
 
 
@@ -52,6 +53,7 @@ class DatasetColumnsPutSchema(Schema):
     python_date_format = fields.String(
         allow_none=True, validate=[Length(1, 255), validate_python_date_format]
     )
+    uuid = fields.String(allow_none=True)
 
 
 class DatasetMetricsPutSchema(Schema):
@@ -87,3 +89,35 @@ class DatasetPutSchema(Schema):
     owners = fields.List(fields.Integer())
     columns = fields.List(fields.Nested(DatasetColumnsPutSchema))
     metrics = fields.List(fields.Nested(DatasetMetricsPutSchema))
+
+
+class DatasetRelatedChart(Schema):
+    id = fields.Integer()
+    slice_name = fields.String()
+    viz_type = fields.String()
+
+
+class DatasetRelatedDashboard(Schema):
+    id = fields.Integer()
+    json_metadata = fields.Dict()
+    slug = fields.String()
+    title = fields.String()
+
+
+class DatasetRelatedCharts(Schema):
+    count = fields.Integer(description="Chart count")
+    result = fields.List(
+        fields.Nested(DatasetRelatedChart), description="A list of dashboards"
+    )
+
+
+class DatasetRelatedDashboards(Schema):
+    count = fields.Integer(description="Dashboard count")
+    result = fields.List(
+        fields.Nested(DatasetRelatedDashboard), description="A list of dashboards"
+    )
+
+
+class DatasetRelatedObjectsResponse(Schema):
+    charts = fields.Nested(DatasetRelatedCharts)
+    dashboards = fields.Nested(DatasetRelatedDashboards)

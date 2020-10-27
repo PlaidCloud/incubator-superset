@@ -32,6 +32,13 @@ describe('FilterIndicatorGroup', () => {
         colorCode: 'badge-1',
         name: column,
         values: ['a', 'b', 'c'],
+        isFilterFieldActive: true,
+        chartId: 1,
+        componentId: 'foo',
+        directPathToFilter: ['foo'],
+        isDateFilter: false,
+        isInstantFilter: false,
+        label: 'foo',
       },
     ],
     setDirectPathToChild: () => {},
@@ -45,6 +52,6 @@ describe('FilterIndicatorGroup', () => {
 
   it('should show indicator group with badge', () => {
     const wrapper = setup();
-    expect(wrapper.find(FilterBadgeIcon)).toHaveLength(1);
+    expect(wrapper.find(FilterBadgeIcon)).toExist();
   });
 });

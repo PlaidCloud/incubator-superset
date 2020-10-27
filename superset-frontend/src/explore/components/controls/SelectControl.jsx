@@ -18,7 +18,7 @@
  */
 import React from 'react';
 import PropTypes from 'prop-types';
-import { t } from '@superset-ui/translation';
+import { t } from '@superset-ui/core';
 import { Select, CreatableSelect, OnPasteSelect } from 'src/components/Select';
 import ControlHeader from 'src/explore/components/ControlHeader';
 
@@ -96,12 +96,14 @@ export default class SelectControl extends React.PureComponent {
     }
   }
 
+  // Beware: This is acting like an on-click instead of an on-change
+  // (firing every time user chooses vs firing only if a new option is chosen).
   onChange(opt) {
     let optionValue = null;
     if (opt) {
       if (this.props.multi) {
         optionValue = [];
-        for (const o of opt) {
+        opt.forEach(o => {
           // select all options
           if (o.meta === true) {
             this.props.onChange(
@@ -112,7 +114,7 @@ export default class SelectControl extends React.PureComponent {
             return;
           }
           optionValue.push(o[this.props.valueKey] || o);
-        }
+        });
       } else if (opt.meta === true) {
         return;
       } else {
@@ -137,7 +139,6 @@ export default class SelectControl extends React.PureComponent {
     } else if (props.choices) {
       // Accepts different formats of input
       options = props.choices.map(c => {
-        let option;
         if (Array.isArray(c)) {
           const [value, label] = c.length > 1 ? c : [c[0], c[0]];
           return { label, [props.valueKey]: value };
@@ -172,7 +173,7 @@ export default class SelectControl extends React.PureComponent {
   }
 
   handleKeyDownForCreate(event) {
-    const key = event.key;
+    const { key } = event;
     if (key === 'Tab' || (this.props.commaChoosesOption && key === ',')) {
       // simulate an Enter event
       if (this.select) {

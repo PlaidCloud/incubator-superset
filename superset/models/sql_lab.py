@@ -17,13 +17,14 @@
 """A collection of ORM sqlalchemy models for SQL Lab"""
 import re
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, List
 
-# pylint: disable=ungrouped-imports
 import simplejson as json
 import sqlalchemy as sqla
 from flask import Markup
 from flask_appbuilder import Model
+from flask_appbuilder.models.decorators import renders
+from humanize import naturaltime
 from sqlalchemy import (
     Boolean,
     Column,
@@ -38,8 +39,9 @@ from sqlalchemy.engine.url import URL
 from sqlalchemy.orm import backref, relationship
 
 from superset import security_manager
-from superset.models.helpers import AuditMixinNullable, ExtraJSONMixin
+from superset.models.helpers import AuditMixinNullable, ExtraJSONMixin, ImportMixin
 from superset.models.tags import QueryUpdater
+from superset.sql_parse import CtasMethod, ParsedQuery, Table
 from superset.utils.core import QueryStatus, user_label
 
 
@@ -72,6 +74,7 @@ class Query(Model, ExtraJSONMixin):
     limit = Column(Integer)
     select_as_cta = Column(Boolean)
     select_as_cta_used = Column(Boolean, default=False)
+    ctas_method = Column(String(16), default=CtasMethod.TABLE)
 
     progress = Column(Integer, default=0)  # 1..100
     # # of rows in the result set or rows modified.
@@ -111,6 +114,7 @@ class Query(Model, ExtraJSONMixin):
             "errorMessage": self.error_message,
             "executedSql": self.executed_sql,
             "id": self.client_id,
+            "queryId": self.id,
             "limit": self.limit,
             "progress": self.progress,
             "rows": self.rows,
@@ -148,8 +152,17 @@ class Query(Model, ExtraJSONMixin):
     def username(self) -> str:
         return self.user.username
 
+    def raise_for_access(self) -> None:
+        """
+        Raise an exception if the user cannot access the resource.
 
-class SavedQuery(Model, AuditMixinNullable, ExtraJSONMixin):
+        :raises SupersetSecurityException: If the user cannot access the resource
+        """
+
+        security_manager.raise_for_access(query=self)
+
+
+class SavedQuery(Model, AuditMixinNullable, ExtraJSONMixin, ImportMixin):
     """ORM model for SQL query"""
 
     __tablename__ = "saved_query"
@@ -170,6 +183,20 @@ class SavedQuery(Model, AuditMixinNullable, ExtraJSONMixin):
         foreign_keys=[db_id],
         backref=backref("saved_queries", cascade="all, delete-orphan"),
     )
+    rows = Column(Integer, nullable=True)
+    last_run = Column(DateTime, nullable=True)
+
+    export_parent = "database"
+    export_fields = [
+        "db_id",
+        "schema",
+        "label",
+        "description",
+        "sql",
+    ]
+
+    def __repr__(self) -> str:
+        return str(self.label)
 
     @property
     def pop_tab_link(self) -> Markup:
@@ -191,6 +218,22 @@ class SavedQuery(Model, AuditMixinNullable, ExtraJSONMixin):
 
     def url(self) -> str:
         return "/superset/sqllab?savedQueryId={0}".format(self.id)
+
+    @property
+    def sql_tables(self) -> List[Table]:
+        return list(ParsedQuery(self.sql).tables)
+
+    @property
+    def last_run_humanized(self) -> str:
+        return naturaltime(datetime.now() - self.changed_on)
+
+    @property
+    def _last_run_delta_humanized(self) -> str:
+        return naturaltime(datetime.now() - self.changed_on)
+
+    @renders("changed_on")
+    def last_run_delta_humanized(self) -> str:
+        return self._last_run_delta_humanized
 
 
 class TabState(Model, AuditMixinNullable, ExtraJSONMixin):

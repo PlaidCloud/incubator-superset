@@ -21,11 +21,11 @@ from flask_babel import lazy_gettext as _
 from sqlalchemy import MetaData
 
 from superset import app, security_manager
+from superset.databases.filters import DatabaseFilter
 from superset.exceptions import SupersetException
 from superset.models.core import Database
 from superset.security.analytics_db_safety import check_sqlalchemy_uri
 from superset.utils import core as utils
-from superset.views.database.filters import DatabaseFilter
 
 
 class DatabaseMixin:
@@ -37,10 +37,8 @@ class DatabaseMixin:
     list_columns = [
         "database_name",
         "backend",
-        "allow_run_async",
-        "allow_dml",
-        "allow_csv_upload",
         "expose_in_sqllab",
+        "allow_run_async",
         "creator",
         "modified",
     ]
@@ -60,6 +58,7 @@ class DatabaseMixin:
         "allow_run_async",
         "allow_csv_upload",
         "allow_ctas",
+        "allow_cvas",
         "allow_dml",
         "force_ctas_schema",
         "impersonate_user",
@@ -111,6 +110,7 @@ class DatabaseMixin:
             "for more information."
         ),
         "allow_ctas": _("Allow CREATE TABLE AS option in SQL Lab"),
+        "allow_cvas": _("Allow CREATE VIEW AS option in SQL Lab"),
         "allow_dml": _(
             "Allow users to run non-SELECT statements "
             "(UPDATE, DELETE, CREATE, ...) "
@@ -142,7 +142,9 @@ class DatabaseMixin:
             "If database flavor does not support schema or any schema is allowed "
             "to be accessed, just leave the list empty<br/>"
             "4. the ``version`` field is a string specifying the this db's version. "
-            "This should be used with Presto DBs so that the syntax is correct",
+            "This should be used with Presto DBs so that the syntax is correct<br/>"
+            "5. The ``allows_virtual_table_explore`` field is a boolean specifying "
+            "whether or not the Explore button in SQL Lab results is shown.",
             True,
         ),
         "encrypted_extra": utils.markdown(
@@ -182,6 +184,7 @@ class DatabaseMixin:
     label_columns = {
         "expose_in_sqllab": _("Expose in SQL Lab"),
         "allow_ctas": _("Allow CREATE TABLE AS"),
+        "allow_cvas": _("Allow CREATE VIEW AS"),
         "allow_dml": _("Allow DML"),
         "force_ctas_schema": _("CTAS Schema"),
         "database_name": _("Database"),
@@ -192,7 +195,7 @@ class DatabaseMixin:
         "extra": _("Extra"),
         "encrypted_extra": _("Secure Extra"),
         "server_cert": _("Root certificate"),
-        "allow_run_async": _("Asynchronous Query Execution"),
+        "allow_run_async": _("Async Execution"),
         "impersonate_user": _("Impersonate the logged on user"),
         "allow_csv_upload": _("Allow Csv Upload"),
         "modified": _("Modified"),
@@ -237,7 +240,7 @@ class DatabaseMixin:
             extra = database.get_extra()
         except Exception as ex:
             raise Exception(
-                _("Extra field cannot be decoded by JSON. %{msg}s", msg=str(ex))
+                _("Extra field cannot be decoded by JSON. %(msg)s", msg=str(ex))
             )
 
         # this will check whether 'metadata_params' is configured correctly
@@ -261,5 +264,5 @@ class DatabaseMixin:
             database.get_encrypted_extra()
         except Exception as ex:
             raise Exception(
-                _("Extra field cannot be decoded by JSON. %{msg}s", msg=str(ex))
+                _("Extra field cannot be decoded by JSON. %(msg)s", msg=str(ex))
             )

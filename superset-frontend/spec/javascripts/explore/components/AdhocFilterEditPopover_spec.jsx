@@ -20,7 +20,8 @@
 import React from 'react';
 import sinon from 'sinon';
 import { shallow } from 'enzyme';
-import { Button, Popover, Tab, Tabs } from 'react-bootstrap';
+import { Tab, Tabs } from 'react-bootstrap';
+import Button from 'src/components/Button';
 
 import AdhocFilter, {
   EXPRESSION_TYPES,
@@ -80,8 +81,7 @@ function setup(overrides) {
 describe('AdhocFilterEditPopover', () => {
   it('renders simple tab content by default', () => {
     const { wrapper } = setup();
-    expect(wrapper.find(Popover)).toHaveLength(1);
-    expect(wrapper.find(Tabs)).toHaveLength(1);
+    expect(wrapper.find(Tabs)).toExist();
     expect(wrapper.find(Tab)).toHaveLength(2);
     expect(wrapper.find(Button)).toHaveLength(2);
     expect(wrapper.find(AdhocFilterEditPopoverSimpleTabContent)).toHaveLength(
@@ -91,11 +91,10 @@ describe('AdhocFilterEditPopover', () => {
 
   it('renders sql tab content when the adhoc filter expressionType is sql', () => {
     const { wrapper } = setup({ adhocFilter: sqlAdhocFilter });
-    expect(wrapper.find(Popover)).toHaveLength(1);
-    expect(wrapper.find(Tabs)).toHaveLength(1);
+    expect(wrapper.find(Tabs)).toExist();
     expect(wrapper.find(Tab)).toHaveLength(2);
     expect(wrapper.find(Button)).toHaveLength(2);
-    expect(wrapper.find(AdhocFilterEditPopoverSqlTabContent)).toHaveLength(1);
+    expect(wrapper.find(AdhocFilterEditPopoverSqlTabContent)).toExist();
   });
 
   it('overwrites the adhocFilter in state with onAdhocFilterChange', () => {
@@ -106,20 +105,20 @@ describe('AdhocFilterEditPopover', () => {
 
   it('prevents saving if the filter is invalid', () => {
     const { wrapper } = setup();
-    expect(wrapper.find(Button).find({ disabled: true })).toHaveLength(0);
+    expect(wrapper.find(Button).find({ disabled: true })).not.toExist();
     wrapper
       .instance()
       .onAdhocFilterChange(simpleAdhocFilter.duplicateWith({ operator: null }));
-    expect(wrapper.find(Button).find({ disabled: true })).toHaveLength(1);
+    expect(wrapper.find(Button).find({ disabled: true })).toExist();
     wrapper.instance().onAdhocFilterChange(sqlAdhocFilter);
-    expect(wrapper.find(Button).find({ disabled: true })).toHaveLength(0);
+    expect(wrapper.find(Button).find({ disabled: true })).not.toExist();
   });
 
   it('highlights save if changes are present', () => {
     const { wrapper } = setup();
-    expect(wrapper.find(Button).find({ bsStyle: 'primary' })).toHaveLength(0);
+    expect(wrapper.find(Button).find({ buttonStyle: 'primary' })).not.toExist();
     wrapper.instance().onAdhocFilterChange(sqlAdhocFilter);
-    expect(wrapper.find(Button).find({ bsStyle: 'primary' })).toHaveLength(1);
+    expect(wrapper.find(Button).find({ buttonStyle: 'primary' })).toExist();
   });
 
   it('will initiate a drag when clicked', () => {
@@ -127,9 +126,9 @@ describe('AdhocFilterEditPopover', () => {
     wrapper.instance().onDragDown = sinon.spy();
     wrapper.instance().forceUpdate();
 
-    expect(wrapper.find('i.glyphicon-resize-full')).toHaveLength(1);
+    expect(wrapper.find('i.fa-expand')).toExist();
     expect(wrapper.instance().onDragDown.calledOnce).toBe(false);
-    wrapper.find('i.glyphicon-resize-full').simulate('mouseDown', {});
+    wrapper.find('i.fa-expand').simulate('mouseDown', {});
     expect(wrapper.instance().onDragDown.calledOnce).toBe(true);
   });
 });

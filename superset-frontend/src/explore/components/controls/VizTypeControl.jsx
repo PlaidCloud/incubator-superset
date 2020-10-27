@@ -19,7 +19,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import {
-  Label,
   Row,
   Col,
   FormControl,
@@ -27,9 +26,9 @@ import {
   OverlayTrigger,
   Tooltip,
 } from 'react-bootstrap';
-import { t } from '@superset-ui/translation';
-import { getChartMetadataRegistry } from '@superset-ui/chart';
+import { t, getChartMetadataRegistry } from '@superset-ui/core';
 
+import Label from 'src/components/Label';
 import ControlHeader from '../ControlHeader';
 import './VizTypeControl.less';
 
@@ -39,16 +38,17 @@ const propTypes = {
   name: PropTypes.string.isRequired,
   onChange: PropTypes.func,
   value: PropTypes.string.isRequired,
+  labelBsStyle: PropTypes.string,
 };
 
 const defaultProps = {
   onChange: () => {},
+  labelBsStyle: 'default',
 };
 
 const registry = getChartMetadataRegistry();
 
 const IMAGE_PER_ROW = 6;
-const LABEL_STYLE = { cursor: 'pointer' };
 const DEFAULT_ORDER = [
   'line',
   'big_number',
@@ -74,7 +74,6 @@ const DEFAULT_ORDER = [
   'line_multi',
   'treemap',
   'box_plot',
-  'separator',
   'sunburst',
   'sankey',
   'word_cloud',
@@ -85,7 +84,6 @@ const DEFAULT_ORDER = [
   'bubble',
   'deck_geojson',
   'horizon',
-  'markup',
   'deck_multi',
   'compare',
   'partition',
@@ -95,7 +93,6 @@ const DEFAULT_ORDER = [
   'world_map',
   'paired_ttest',
   'para',
-  'iframe',
   'country_map',
 ];
 
@@ -124,7 +121,7 @@ export default class VizTypeControl extends React.PureComponent {
   }
 
   toggleModal() {
-    this.setState({ showModal: !this.state.showModal });
+    this.setState(prevState => ({ showModal: !prevState.showModal }));
   }
 
   changeSearch(event) {
@@ -144,6 +141,8 @@ export default class VizTypeControl extends React.PureComponent {
 
     return (
       <div
+        role="button"
+        tabIndex={0}
         className={`viztype-selector-container ${isSelected ? 'selected' : ''}`}
         onClick={this.onChange.bind(this, key)}
       >
@@ -153,14 +152,16 @@ export default class VizTypeControl extends React.PureComponent {
           className={`viztype-selector ${isSelected ? 'selected' : ''}`}
           src={type.thumbnail}
         />
-        <div className="viztype-label">{type.name}</div>
+        <div className="viztype-label" data-test="viztype-label">
+          {type.name}
+        </div>
       </div>
     );
   }
 
   render() {
     const { filter, showModal } = this.state;
-    const { value } = this.props;
+    const { value, labelBsStyle } = this.props;
 
     const filterString = filter.toLowerCase();
     const filteredTypes = DEFAULT_ORDER.filter(type => registry.has(type))
@@ -176,7 +177,7 @@ export default class VizTypeControl extends React.PureComponent {
     const rows = [];
     for (let i = 0; i <= filteredTypes.length; i += IMAGE_PER_ROW) {
       rows.push(
-        <Row key={`row-${i}`}>
+        <Row data-test="viz-row" key={`row-${i}`}>
           {filteredTypes.slice(i, i + IMAGE_PER_ROW).map(entry => (
             <Col md={12 / IMAGE_PER_ROW} key={`grid-col-${entry.key}`}>
               {this.renderItem(entry)}
@@ -198,7 +199,7 @@ export default class VizTypeControl extends React.PureComponent {
           }
         >
           <>
-            <Label onClick={this.toggleModal} style={LABEL_STYLE}>
+            <Label onClick={this.toggleModal} bsStyle={labelBsStyle}>
               {registry.has(value) ? registry.get(value).name : `${value}`}
             </Label>
             {!registry.has(value) && (
@@ -214,7 +215,7 @@ export default class VizTypeControl extends React.PureComponent {
           onHide={this.toggleModal}
           onEnter={this.focusSearch}
           onExit={this.setSearchRef}
-          bsSize="lg"
+          bsSize="large"
         >
           <Modal.Header closeButton>
             <Modal.Title>{t('Select a visualization type')}</Modal.Title>

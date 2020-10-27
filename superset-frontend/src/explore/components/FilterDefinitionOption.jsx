@@ -18,9 +18,8 @@
  */
 import React from 'react';
 import PropTypes from 'prop-types';
-import { ColumnOption } from '@superset-ui/control-utils';
+import { ColumnOption, ColumnTypeLabel } from '@superset-ui/chart-controls';
 
-import ColumnTypeLabel from '../../components/ColumnTypeLabel';
 import AdhocMetricStaticOption from './AdhocMetricStaticOption';
 import columnType from '../propTypes/columnType';
 import adhocMetricType from '../propTypes/adhocMetricType';
@@ -41,9 +40,11 @@ export default function FilterDefinitionOption({ option }) {
         <span className="option-label">{option.saved_metric_name}</span>
       </div>
     );
-  } else if (option.column_name) {
+  }
+  if (option.column_name) {
     return <ColumnOption column={option} showType />;
-  } else if (option.label) {
+  }
+  if (option.label) {
     return <AdhocMetricStaticOption adhocMetric={option} showType />;
   }
 }

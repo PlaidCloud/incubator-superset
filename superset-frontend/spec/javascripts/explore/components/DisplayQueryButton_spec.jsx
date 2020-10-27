@@ -20,6 +20,8 @@ import React from 'react';
 import { mount } from 'enzyme';
 import ModalTrigger from 'src/components/ModalTrigger';
 import { DisplayQueryButton } from 'src/explore/components/DisplayQueryButton';
+import { MenuItem } from 'react-bootstrap';
+import { supersetTheme, ThemeProvider } from '@superset-ui/core';
 
 describe('DisplayQueryButton', () => {
   const defaultProps = {
@@ -33,6 +35,7 @@ describe('DisplayQueryButton', () => {
     latestQueryFormData: {
       datasource: '1__table',
     },
+    chartHeight: '30px',
   };
 
   it('is valid', () => {
@@ -41,7 +44,13 @@ describe('DisplayQueryButton', () => {
     );
   });
   it('renders a dropdown', () => {
-    const wrapper = mount(<DisplayQueryButton {...defaultProps} />);
+    const wrapper = mount(<DisplayQueryButton {...defaultProps} />, {
+      wrappingComponent: ThemeProvider,
+      wrappingComponentProps: {
+        theme: supersetTheme,
+      },
+    });
     expect(wrapper.find(ModalTrigger)).toHaveLength(3);
+    expect(wrapper.find(MenuItem)).toHaveLength(5);
   });
 });

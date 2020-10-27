@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { SyntheticEvent, MutableRefObject } from 'react';
+import React, { SyntheticEvent, MutableRefObject, ComponentType } from 'react';
 import { merge } from 'lodash';
 import BasicSelect, {
   OptionTypeBase,
@@ -30,6 +30,7 @@ import BasicSelect, {
 import Async from 'react-select/async';
 import Creatable from 'react-select/creatable';
 import AsyncCreatable from 'react-select/async-creatable';
+import { withAsyncPaginate } from 'react-select-async-paginate';
 
 import { SelectComponents } from 'react-select/src/components';
 import {
@@ -38,6 +39,7 @@ import {
   SortableContainerProps,
 } from 'react-sortable-hoc';
 import arrayMove from 'array-move';
+import { Props as SelectProps } from 'react-select/src/Select';
 import {
   WindowedSelectComponentType,
   WindowedSelectProps,
@@ -92,9 +94,11 @@ export type SupersetStyledSelectProps<
 
 function styled<
   OptionType extends OptionTypeBase,
-  SelectComponentType extends WindowedSelectComponentType<
+  SelectComponentType extends
+    | WindowedSelectComponentType<OptionType>
+    | ComponentType<SelectProps<OptionType>> = WindowedSelectComponentType<
     OptionType
-  > = WindowedSelectComponentType<OptionType>
+  >
 >(SelectComponent: SelectComponentType) {
   type SelectProps = SupersetStyledSelectProps<OptionType>;
   type Components = SelectComponents<OptionType>;
@@ -220,8 +224,11 @@ function styled<
     // Handle onPaste event
     if (onPaste) {
       const Input = components.Input || defaultComponents.Input;
-      // @ts-ignore (needed for passing `onPaste`)
-      components.Input = props => <Input {...props} onPaste={onPaste} />;
+      components.Input = props => (
+        <div onPaste={onPaste}>
+          <Input {...props} />
+        </div>
+      );
     }
     // for CreaTable
     if (SelectComponent === WindowedCreatableSelect) {
@@ -247,7 +254,6 @@ function styled<
         selectRef.current = stateManager;
       }
     };
-
     return (
       <MaybeSortableSelect
         ref={setRef}
@@ -286,4 +292,9 @@ export const Select = styled(WindowedSelect);
 export const AsyncSelect = styled(WindowedAsyncSelect);
 export const CreatableSelect = styled(WindowedCreatableSelect);
 export const AsyncCreatableSelect = styled(WindowedAsyncCreatableSelect);
+export const PaginatedSelect = withAsyncPaginate(
+  styled<OptionTypeBase, ComponentType<SelectProps<OptionTypeBase>>>(
+    BasicSelect,
+  ),
+);
 export default Select;

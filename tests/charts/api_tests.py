@@ -14,34 +14,48 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+# isort:skip_file
 """Unit tests for Superset"""
 import json
 from typing import List, Optional
+from datetime import datetime
+from io import BytesIO
+from unittest import mock
+from zipfile import is_zipfile
 
+import humanize
 import prison
+import pytest
+from sqlalchemy import and_
 from sqlalchemy.sql import func
 
-import tests.test_app
+from superset.connectors.sqla.models import SqlaTable
+from superset.utils.core import get_example_database
+from tests.fixtures.unicode_dashboard import load_unicode_dashboard_with_slice
+from tests.test_app import app
 from superset.connectors.connector_registry import ConnectorRegistry
 from superset.extensions import db, security_manager
+from superset.models.core import FavStar
 from superset.models.dashboard import Dashboard
 from superset.models.slice import Slice
+from superset.utils import core as utils
 from tests.base_api_tests import ApiOwnersTestCaseMixin
 from tests.base_tests import SupersetTestCase
 from tests.fixtures.query_context import get_query_context
 
+CHART_DATA_URI = "api/v1/chart/data"
+CHARTS_FIXTURE_COUNT = 10
 
-class ChartApiTests(SupersetTestCase, ApiOwnersTestCaseMixin):
+
+class TestChartApi(SupersetTestCase, ApiOwnersTestCaseMixin):
     resource_name = "chart"
-
-    def __init__(self, *args, **kwargs):
-        super(ChartApiTests, self).__init__(*args, **kwargs)
 
     def insert_chart(
         self,
         slice_name: str,
         owners: List[int],
         datasource_id: int,
+        created_by=None,
         datasource_type: str = "table",
         description: Optional[str] = None,
         viz_type: Optional[str] = None,
@@ -56,19 +70,44 @@ class ChartApiTests(SupersetTestCase, ApiOwnersTestCaseMixin):
             datasource_type, datasource_id, db.session
         )
         slice = Slice(
-            slice_name=slice_name,
+            cache_timeout=cache_timeout,
+            created_by=created_by,
             datasource_id=datasource.id,
             datasource_name=datasource.name,
             datasource_type=datasource.type,
-            owners=obj_owners,
             description=description,
-            viz_type=viz_type,
+            owners=obj_owners,
             params=params,
-            cache_timeout=cache_timeout,
+            slice_name=slice_name,
+            viz_type=viz_type,
         )
         db.session.add(slice)
         db.session.commit()
         return slice
+
+    @pytest.fixture()
+    def create_charts(self):
+        with self.create_app().app_context():
+            charts = []
+            admin = self.get_user("admin")
+            for cx in range(CHARTS_FIXTURE_COUNT - 1):
+                charts.append(self.insert_chart(f"name{cx}", [admin.id], 1))
+            fav_charts = []
+            for cx in range(round(CHARTS_FIXTURE_COUNT / 2)):
+                fav_star = FavStar(
+                    user_id=admin.id, class_name="slice", obj_id=charts[cx].id
+                )
+                db.session.add(fav_star)
+                db.session.commit()
+                fav_charts.append(fav_star)
+            yield charts
+
+            # rollback changes
+            for chart in charts:
+                db.session.delete(chart)
+            for fav_chart in fav_charts:
+                db.session.delete(fav_chart)
+            db.session.commit()
 
     def test_delete_chart(self):
         """
@@ -87,12 +126,12 @@ class ChartApiTests(SupersetTestCase, ApiOwnersTestCaseMixin):
         """
         Chart API: Test delete bulk
         """
-        admin_id = self.get_user("admin").id
+        admin = self.get_user("admin")
         chart_count = 4
         chart_ids = list()
         for chart_name_index in range(chart_count):
             chart_ids.append(
-                self.insert_chart(f"title{chart_name_index}", [admin_id], 1).id
+                self.insert_chart(f"title{chart_name_index}", [admin.id], 1, admin).id
             )
         self.login(username="admin")
         argument = chart_ids
@@ -336,7 +375,8 @@ class ChartApiTests(SupersetTestCase, ApiOwnersTestCaseMixin):
         self.assertEqual(rv.status_code, 400)
         response = json.loads(rv.data.decode("utf-8"))
         self.assertEqual(
-            response, {"message": {"datasource_type": ["Not a valid choice."]}}
+            response,
+            {"message": {"datasource_type": ["Must be one of: druid, table, view."]}},
         )
         chart_data = {
             "slice_name": "title1",
@@ -358,15 +398,16 @@ class ChartApiTests(SupersetTestCase, ApiOwnersTestCaseMixin):
         admin = self.get_user("admin")
         gamma = self.get_user("gamma")
 
-        chart_id = self.insert_chart("title", [admin.id], 1).id
+        chart_id = self.insert_chart("title", [admin.id], 1, admin).id
+        birth_names_table_id = SupersetTestCase.get_table_by_name("birth_names").id
         chart_data = {
             "slice_name": "title1_changed",
             "description": "description1",
             "owners": [gamma.id],
             "viz_type": "viz_type1",
-            "params": "{'a': 1}",
+            "params": """{"a": 1}""",
             "cache_timeout": 1000,
-            "datasource_id": 1,
+            "datasource_id": birth_names_table_id,
             "datasource_type": "table",
             "dashboards": [1],
         }
@@ -376,14 +417,15 @@ class ChartApiTests(SupersetTestCase, ApiOwnersTestCaseMixin):
         self.assertEqual(rv.status_code, 200)
         model = db.session.query(Slice).get(chart_id)
         related_dashboard = db.session.query(Dashboard).get(1)
+        self.assertEqual(model.created_by, admin)
         self.assertEqual(model.slice_name, "title1_changed")
         self.assertEqual(model.description, "description1")
         self.assertIn(admin, model.owners)
         self.assertIn(gamma, model.owners)
         self.assertEqual(model.viz_type, "viz_type1")
-        self.assertEqual(model.params, "{'a': 1}")
+        self.assertEqual(model.params, """{"a": 1}""")
         self.assertEqual(model.cache_timeout, 1000)
-        self.assertEqual(model.datasource_id, 1)
+        self.assertEqual(model.datasource_id, birth_names_table_id)
         self.assertEqual(model.datasource_type, "table")
         self.assertEqual(model.datasource_name, "birth_names")
         self.assertIn(related_dashboard, model.dashboards)
@@ -442,7 +484,8 @@ class ChartApiTests(SupersetTestCase, ApiOwnersTestCaseMixin):
         self.assertEqual(rv.status_code, 400)
         response = json.loads(rv.data.decode("utf-8"))
         self.assertEqual(
-            response, {"message": {"datasource_type": ["Not a valid choice."]}}
+            response,
+            {"message": {"datasource_type": ["Must be one of: druid, table, view."]}},
         )
         chart_data = {"datasource_id": 0, "datasource_type": "table"}
         uri = f"api/v1/chart/{chart.id}"
@@ -506,7 +549,7 @@ class ChartApiTests(SupersetTestCase, ApiOwnersTestCaseMixin):
 
     def test_get_chart_not_found(self):
         """
-         Chart API: Test get chart not found
+        Chart API: Test get chart not found
         """
         chart_id = 1000
         self.login(username="admin")
@@ -516,7 +559,7 @@ class ChartApiTests(SupersetTestCase, ApiOwnersTestCaseMixin):
 
     def test_get_chart_no_data_access(self):
         """
-         Chart API: Test get chart without data access
+        Chart API: Test get chart without data access
         """
         self.login(username="gamma")
         chart_no_access = (
@@ -528,6 +571,7 @@ class ChartApiTests(SupersetTestCase, ApiOwnersTestCaseMixin):
         rv = self.client.get(uri)
         self.assertEqual(rv.status_code, 404)
 
+    @pytest.mark.usefixtures("load_unicode_dashboard_with_slice")
     def test_get_charts(self):
         """
         Chart API: Test get charts
@@ -538,6 +582,34 @@ class ChartApiTests(SupersetTestCase, ApiOwnersTestCaseMixin):
         self.assertEqual(rv.status_code, 200)
         data = json.loads(rv.data.decode("utf-8"))
         self.assertEqual(data["count"], 33)
+
+    def test_get_charts_changed_on(self):
+        """
+        Dashboard API: Test get charts changed on
+        """
+        admin = self.get_user("admin")
+        start_changed_on = datetime.now()
+        chart = self.insert_chart("foo_a", [admin.id], 1, description="ZY_bar")
+
+        self.login(username="admin")
+
+        arguments = {
+            "order_column": "changed_on_delta_humanized",
+            "order_direction": "desc",
+        }
+        uri = f"api/v1/chart/?q={prison.dumps(arguments)}"
+
+        rv = self.get_assert_metric(uri, "get_list")
+        self.assertEqual(rv.status_code, 200)
+        data = json.loads(rv.data.decode("utf-8"))
+        self.assertEqual(
+            data["result"][0]["changed_on_delta_humanized"],
+            humanize.naturaltime(datetime.now() - start_changed_on),
+        )
+
+        # rollback changes
+        db.session.delete(chart)
+        db.session.commit()
 
     def test_get_charts_filter(self):
         """
@@ -551,44 +623,105 @@ class ChartApiTests(SupersetTestCase, ApiOwnersTestCaseMixin):
         data = json.loads(rv.data.decode("utf-8"))
         self.assertEqual(data["count"], 5)
 
+    @pytest.fixture()
+    def load_charts(self):
+        with app.app_context():
+            admin = self.get_user("admin")
+            energy_table = (
+                db.session.query(SqlaTable)
+                .filter_by(table_name="energy_usage")
+                .one_or_none()
+            )
+            energy_table_id = 1
+            if energy_table:
+                energy_table_id = energy_table.id
+            chart1 = self.insert_chart(
+                "foo_a", [admin.id], energy_table_id, description="ZY_bar"
+            )
+            chart2 = self.insert_chart(
+                "zy_foo", [admin.id], energy_table_id, description="desc1"
+            )
+            chart3 = self.insert_chart(
+                "foo_b", [admin.id], energy_table_id, description="desc1zy_"
+            )
+            chart4 = self.insert_chart(
+                "foo_c", [admin.id], energy_table_id, viz_type="viz_zy_"
+            )
+            chart5 = self.insert_chart(
+                "bar", [admin.id], energy_table_id, description="foo"
+            )
+
+            yield
+            # rollback changes
+            db.session.delete(chart1)
+            db.session.delete(chart2)
+            db.session.delete(chart3)
+            db.session.delete(chart4)
+            db.session.delete(chart5)
+            db.session.commit()
+
+    @pytest.mark.usefixtures("load_charts")
     def test_get_charts_custom_filter(self):
         """
         Chart API: Test get charts custom filter
         """
-        admin = self.get_user("admin")
-        chart1 = self.insert_chart("foo_a", [admin.id], 1, description="ZY_bar")
-        chart2 = self.insert_chart("zy_foo", [admin.id], 1, description="desc1")
-        chart3 = self.insert_chart("foo_b", [admin.id], 1, description="desc1zy_")
-        chart4 = self.insert_chart("bar", [admin.id], 1, description="foo")
 
         arguments = {
-            "filters": [
-                {"col": "slice_name", "opr": "name_or_description", "value": "zy_"}
-            ],
+            "filters": [{"col": "slice_name", "opr": "chart_all_text", "value": "zy_"}],
             "order_column": "slice_name",
             "order_direction": "asc",
             "keys": ["none"],
-            "columns": ["slice_name", "description"],
+            "columns": ["slice_name", "description", "viz_type"],
         }
         self.login(username="admin")
         uri = f"api/v1/chart/?q={prison.dumps(arguments)}"
         rv = self.get_assert_metric(uri, "get_list")
         self.assertEqual(rv.status_code, 200)
         data = json.loads(rv.data.decode("utf-8"))
-        self.assertEqual(data["count"], 3)
+        self.assertEqual(data["count"], 4)
 
         expected_response = [
-            {"description": "ZY_bar", "slice_name": "foo_a",},
-            {"description": "desc1zy_", "slice_name": "foo_b",},
-            {"description": "desc1", "slice_name": "zy_foo",},
+            {"description": "ZY_bar", "slice_name": "foo_a", "viz_type": None},
+            {"description": "desc1zy_", "slice_name": "foo_b", "viz_type": None},
+            {"description": None, "slice_name": "foo_c", "viz_type": "viz_zy_"},
+            {"description": "desc1", "slice_name": "zy_foo", "viz_type": None},
         ]
         for index, item in enumerate(data["result"]):
             self.assertEqual(
                 item["description"], expected_response[index]["description"]
             )
             self.assertEqual(item["slice_name"], expected_response[index]["slice_name"])
+            self.assertEqual(item["viz_type"], expected_response[index]["viz_type"])
 
-        self.logout()
+    @pytest.mark.usefixtures("load_charts")
+    def test_admin_gets_filtered_energy_slices(self):
+        # test filtering on datasource_name
+        arguments = {
+            "filters": [
+                {"col": "slice_name", "opr": "chart_all_text", "value": "energy",}
+            ],
+            "keys": ["none"],
+            "columns": ["slice_name"],
+        }
+        self.login(username="admin")
+
+        uri = f"api/v1/chart/?q={prison.dumps(arguments)}"
+        rv = self.get_assert_metric(uri, "get_list")
+        self.assertEqual(rv.status_code, 200)
+        data = json.loads(rv.data.decode("utf-8"))
+        self.assertEqual(data["count"], 8)
+
+    @pytest.mark.usefixtures("load_charts")
+    def test_user_gets_none_filtered_energy_slices(self):
+        # test filtering on datasource_name
+        arguments = {
+            "filters": [
+                {"col": "slice_name", "opr": "chart_all_text", "value": "energy",}
+            ],
+            "keys": ["none"],
+            "columns": ["slice_name"],
+        }
+
         self.login(username="gamma")
         uri = f"api/v1/chart/?q={prison.dumps(arguments)}"
         rv = self.get_assert_metric(uri, "get_list")
@@ -596,13 +729,54 @@ class ChartApiTests(SupersetTestCase, ApiOwnersTestCaseMixin):
         data = json.loads(rv.data.decode("utf-8"))
         self.assertEqual(data["count"], 0)
 
-        # rollback changes
-        db.session.delete(chart1)
-        db.session.delete(chart2)
-        db.session.delete(chart3)
-        db.session.delete(chart4)
-        db.session.commit()
+    @pytest.mark.usefixtures("create_charts")
+    def test_get_charts_favorite_filter(self):
+        """
+        Chart API: Test get charts favorite filter
+        """
+        admin = self.get_user("admin")
+        users_favorite_query = db.session.query(FavStar.obj_id).filter(
+            and_(FavStar.user_id == admin.id, FavStar.class_name == "slice")
+        )
+        expected_models = (
+            db.session.query(Slice)
+            .filter(and_(Slice.id.in_(users_favorite_query)))
+            .order_by(Slice.slice_name.asc())
+            .all()
+        )
 
+        arguments = {
+            "filters": [{"col": "id", "opr": "chart_is_fav", "value": True}],
+            "order_column": "slice_name",
+            "order_direction": "asc",
+            "keys": ["none"],
+            "columns": ["slice_name"],
+        }
+        self.login(username="admin")
+        uri = f"api/v1/chart/?q={prison.dumps(arguments)}"
+        rv = self.client.get(uri)
+        data = json.loads(rv.data.decode("utf-8"))
+        assert rv.status_code == 200
+        assert len(expected_models) == data["count"]
+
+        for i, expected_model in enumerate(expected_models):
+            assert expected_model.slice_name == data["result"][i]["slice_name"]
+
+        # Test not favorite charts
+        expected_models = (
+            db.session.query(Slice)
+            .filter(and_(~Slice.id.in_(users_favorite_query)))
+            .order_by(Slice.slice_name.asc())
+            .all()
+        )
+        arguments["filters"][0]["value"] = False
+        uri = f"api/v1/chart/?q={prison.dumps(arguments)}"
+        rv = self.client.get(uri)
+        data = json.loads(rv.data.decode("utf-8"))
+        assert rv.status_code == 200
+        assert len(expected_models) == data["count"]
+
+    @pytest.mark.usefixtures("load_unicode_dashboard_with_slice")
     def test_get_charts_page(self):
         """
         Chart API: Test get charts filter
@@ -634,32 +808,233 @@ class ChartApiTests(SupersetTestCase, ApiOwnersTestCaseMixin):
         data = json.loads(rv.data.decode("utf-8"))
         self.assertEqual(data["count"], 0)
 
-    def test_chart_data(self):
+    def test_chart_data_simple(self):
         """
-        Query API: Test chart data query
+        Chart data API: Test chart data query
         """
         self.login(username="admin")
         table = self.get_table_by_name("birth_names")
-        payload = get_query_context(table.name, table.id, table.type)
-        uri = "api/v1/chart/data"
-        rv = self.post_assert_metric(uri, payload, "data")
+        request_payload = get_query_context(table.name, table.id, table.type)
+        rv = self.post_assert_metric(CHART_DATA_URI, request_payload, "data")
         self.assertEqual(rv.status_code, 200)
         data = json.loads(rv.data.decode("utf-8"))
-        self.assertEqual(data["result"][0]["rowcount"], 100)
+        self.assertEqual(data["result"][0]["rowcount"], 45)
+
+    def test_chart_data_limit_offset(self):
+        """
+        Chart data API: Test chart data query with limit and offset
+        """
+        self.login(username="admin")
+        table = self.get_table_by_name("birth_names")
+        request_payload = get_query_context(table.name, table.id, table.type)
+        request_payload["queries"][0]["row_limit"] = 5
+        request_payload["queries"][0]["row_offset"] = 0
+        request_payload["queries"][0]["orderby"] = [["name", True]]
+        rv = self.post_assert_metric(CHART_DATA_URI, request_payload, "data")
+        response_payload = json.loads(rv.data.decode("utf-8"))
+        result = response_payload["result"][0]
+        self.assertEqual(result["rowcount"], 5)
+
+        # TODO: fix offset for presto DB
+        if get_example_database().backend == "presto":
+            return
+
+        # ensure that offset works properly
+        offset = 2
+        expected_name = result["data"][offset]["name"]
+        request_payload["queries"][0]["row_offset"] = offset
+        rv = self.post_assert_metric(CHART_DATA_URI, request_payload, "data")
+        response_payload = json.loads(rv.data.decode("utf-8"))
+        result = response_payload["result"][0]
+        self.assertEqual(result["rowcount"], 5)
+        self.assertEqual(result["data"][0]["name"], expected_name)
+
+    @mock.patch(
+        "superset.common.query_object.config", {**app.config, "ROW_LIMIT": 7},
+    )
+    def test_chart_data_default_row_limit(self):
+        """
+        Chart data API: Ensure row count doesn't exceed default limit
+        """
+        self.login(username="admin")
+        table = self.get_table_by_name("birth_names")
+        request_payload = get_query_context(table.name, table.id, table.type)
+        del request_payload["queries"][0]["row_limit"]
+        rv = self.post_assert_metric(CHART_DATA_URI, request_payload, "data")
+        response_payload = json.loads(rv.data.decode("utf-8"))
+        result = response_payload["result"][0]
+        self.assertEqual(result["rowcount"], 7)
+
+    @mock.patch(
+        "superset.common.query_context.config", {**app.config, "SAMPLES_ROW_LIMIT": 5},
+    )
+    def test_chart_data_default_sample_limit(self):
+        """
+        Chart data API: Ensure sample response row count doesn't exceed default limit
+        """
+        self.login(username="admin")
+        table = self.get_table_by_name("birth_names")
+        request_payload = get_query_context(table.name, table.id, table.type)
+        request_payload["result_type"] = utils.ChartDataResultType.SAMPLES
+        request_payload["queries"][0]["row_limit"] = 10
+        rv = self.post_assert_metric(CHART_DATA_URI, request_payload, "data")
+        response_payload = json.loads(rv.data.decode("utf-8"))
+        result = response_payload["result"][0]
+        self.assertEqual(result["rowcount"], 5)
+
+    def test_chart_data_incorrect_result_type(self):
+        """
+        Chart data API: Test chart data with unsupported result type
+        """
+        self.login(username="admin")
+        table = self.get_table_by_name("birth_names")
+        request_payload = get_query_context(table.name, table.id, table.type)
+        request_payload["result_type"] = "qwerty"
+        rv = self.post_assert_metric(CHART_DATA_URI, request_payload, "data")
+        self.assertEqual(rv.status_code, 400)
+
+    def test_chart_data_incorrect_result_format(self):
+        """
+        Chart data API: Test chart data with unsupported result format
+        """
+        self.login(username="admin")
+        table = self.get_table_by_name("birth_names")
+        request_payload = get_query_context(table.name, table.id, table.type)
+        request_payload["result_format"] = "qwerty"
+        rv = self.post_assert_metric(CHART_DATA_URI, request_payload, "data")
+        self.assertEqual(rv.status_code, 400)
+
+    def test_chart_data_query_result_type(self):
+        """
+        Chart data API: Test chart data with query result format
+        """
+        self.login(username="admin")
+        table = self.get_table_by_name("birth_names")
+        request_payload = get_query_context(table.name, table.id, table.type)
+        request_payload["result_type"] = utils.ChartDataResultType.QUERY
+        rv = self.post_assert_metric(CHART_DATA_URI, request_payload, "data")
+        self.assertEqual(rv.status_code, 200)
+
+    def test_chart_data_csv_result_format(self):
+        """
+        Chart data API: Test chart data with CSV result format
+        """
+        self.login(username="admin")
+        table = self.get_table_by_name("birth_names")
+        request_payload = get_query_context(table.name, table.id, table.type)
+        request_payload["result_format"] = "csv"
+        rv = self.post_assert_metric(CHART_DATA_URI, request_payload, "data")
+        self.assertEqual(rv.status_code, 200)
+
+    def test_chart_data_mixed_case_filter_op(self):
+        """
+        Chart data API: Ensure mixed case filter operator generates valid result
+        """
+        self.login(username="admin")
+        table = self.get_table_by_name("birth_names")
+        request_payload = get_query_context(table.name, table.id, table.type)
+        request_payload["queries"][0]["filters"][0]["op"] = "In"
+        request_payload["queries"][0]["row_limit"] = 10
+        rv = self.post_assert_metric(CHART_DATA_URI, request_payload, "data")
+        response_payload = json.loads(rv.data.decode("utf-8"))
+        result = response_payload["result"][0]
+        self.assertEqual(result["rowcount"], 10)
+
+    def test_chart_data_prophet(self):
+        """
+        Chart data API: Ensure prophet post transformation works
+        """
+        pytest.importorskip("fbprophet")
+        self.login(username="admin")
+        table = self.get_table_by_name("birth_names")
+        request_payload = get_query_context(table.name, table.id, table.type)
+        time_grain = "P1Y"
+        request_payload["queries"][0]["is_timeseries"] = True
+        request_payload["queries"][0]["groupby"] = []
+        request_payload["queries"][0]["extras"] = {"time_grain_sqla": time_grain}
+        request_payload["queries"][0]["granularity"] = "ds"
+        request_payload["queries"][0]["post_processing"] = [
+            {
+                "operation": "prophet",
+                "options": {
+                    "time_grain": time_grain,
+                    "periods": 3,
+                    "confidence_interval": 0.9,
+                },
+            }
+        ]
+        rv = self.post_assert_metric(CHART_DATA_URI, request_payload, "data")
+        self.assertEqual(rv.status_code, 200)
+        response_payload = json.loads(rv.data.decode("utf-8"))
+        result = response_payload["result"][0]
+        row = result["data"][0]
+        self.assertIn("__timestamp", row)
+        self.assertIn("sum__num", row)
+        self.assertIn("sum__num__yhat", row)
+        self.assertIn("sum__num__yhat_upper", row)
+        self.assertIn("sum__num__yhat_lower", row)
+        self.assertEqual(result["rowcount"], 47)
+
+    def test_chart_data_query_missing_filter(self):
+        """
+        Chart data API: Ensure filter referencing missing column is ignored
+        """
+        self.login(username="admin")
+        table = self.get_table_by_name("birth_names")
+        request_payload = get_query_context(table.name, table.id, table.type)
+        request_payload["queries"][0]["filters"] = [
+            {"col": "non_existent_filter", "op": "==", "val": "foo"},
+        ]
+        request_payload["result_type"] = utils.ChartDataResultType.QUERY
+        rv = self.post_assert_metric(CHART_DATA_URI, request_payload, "data")
+        self.assertEqual(rv.status_code, 200)
+        response_payload = json.loads(rv.data.decode("utf-8"))
+        assert "non_existent_filter" not in response_payload["result"][0]["query"]
+
+    def test_chart_data_no_data(self):
+        """
+        Chart data API: Test chart data with empty result
+        """
+        self.login(username="admin")
+        table = self.get_table_by_name("birth_names")
+        request_payload = get_query_context(table.name, table.id, table.type)
+        request_payload["queries"][0]["filters"] = [
+            {"col": "gender", "op": "==", "val": "foo"}
+        ]
+        rv = self.post_assert_metric(CHART_DATA_URI, request_payload, "data")
+        self.assertEqual(rv.status_code, 200)
+        response_payload = json.loads(rv.data.decode("utf-8"))
+        result = response_payload["result"][0]
+        self.assertEqual(result["rowcount"], 0)
+        self.assertEqual(result["data"], [])
+
+    def test_chart_data_incorrect_request(self):
+        """
+        Chart data API: Test chart data with invalid SQL
+        """
+        self.login(username="admin")
+        table = self.get_table_by_name("birth_names")
+        request_payload = get_query_context(table.name, table.id, table.type)
+        request_payload["queries"][0]["filters"] = []
+        # erroneus WHERE-clause
+        request_payload["queries"][0]["extras"]["where"] = "(gender abc def)"
+        rv = self.post_assert_metric(CHART_DATA_URI, request_payload, "data")
+        self.assertEqual(rv.status_code, 400)
 
     def test_chart_data_with_invalid_datasource(self):
-        """Query API: Test chart data query with invalid schema
+        """
+        Chart data API: Test chart data query with invalid schema
         """
         self.login(username="admin")
         table = self.get_table_by_name("birth_names")
         payload = get_query_context(table.name, table.id, table.type)
         payload["datasource"] = "abc"
-        uri = "api/v1/chart/data"
-        rv = self.post_assert_metric(uri, payload, "data")
+        rv = self.post_assert_metric(CHART_DATA_URI, payload, "data")
         self.assertEqual(rv.status_code, 400)
 
     def test_chart_data_with_invalid_enum_value(self):
-        """Query API: Test chart data query with invalid enum value
+        """
+        Chart data API: Test chart data query with invalid enum value
         """
         self.login(username="admin")
         table = self.get_table_by_name("birth_names")
@@ -668,28 +1043,76 @@ class ChartApiTests(SupersetTestCase, ApiOwnersTestCaseMixin):
             "abc",
             "EXCLUSIVE",
         ]
-        uri = "api/v1/chart/data"
-        rv = self.client.post(uri, json=payload)
+        rv = self.client.post(CHART_DATA_URI, json=payload)
         self.assertEqual(rv.status_code, 400)
 
     def test_query_exec_not_allowed(self):
         """
-        Query API: Test chart data query not allowed
+        Chart data API: Test chart data query not allowed
         """
         self.login(username="gamma")
         table = self.get_table_by_name("birth_names")
         payload = get_query_context(table.name, table.id, table.type)
-        uri = "api/v1/chart/data"
-        rv = self.post_assert_metric(uri, payload, "data")
+        rv = self.post_assert_metric(CHART_DATA_URI, payload, "data")
         self.assertEqual(rv.status_code, 401)
 
-    def test_datasources(self):
+    def test_chart_data_jinja_filter_request(self):
         """
-            Chart API: Test get datasources
+        Chart data API: Ensure request referencing filters via jinja renders a correct query
         """
         self.login(username="admin")
-        uri = "api/v1/chart/datasources"
+        table = self.get_table_by_name("birth_names")
+        request_payload = get_query_context(table.name, table.id, table.type)
+        request_payload["result_type"] = utils.ChartDataResultType.QUERY
+        request_payload["queries"][0]["filters"] = [
+            {"col": "gender", "op": "==", "val": "boy"}
+        ]
+        request_payload["queries"][0]["extras"][
+            "where"
+        ] = "('boy' = '{{ filter_values('gender', 'xyz' )[0] }}')"
+        rv = self.post_assert_metric(CHART_DATA_URI, request_payload, "data")
+        response_payload = json.loads(rv.data.decode("utf-8"))
+        result = response_payload["result"][0]["query"]
+        if get_example_database().backend != "presto":
+            assert "('boy' = 'boy')" in result
+
+    def test_export_chart(self):
+        """
+        Chart API: Test export dataset
+        """
+        example_chart = db.session.query(Slice).all()[0]
+        argument = [example_chart.id]
+        uri = f"api/v1/chart/export/?q={prison.dumps(argument)}"
+
+        self.login(username="admin")
+        rv = self.get_assert_metric(uri, "export")
+
+        assert rv.status_code == 200
+
+        buf = BytesIO(rv.data)
+        assert is_zipfile(buf)
+
+    def test_export_chart_not_found(self):
+        """
+        Dataset API: Test export dataset not found
+        """
+        # Just one does not exist and we get 404
+        argument = [-1, 1]
+        uri = f"api/v1/chart/export/?q={prison.dumps(argument)}"
+        self.login(username="admin")
+        rv = self.get_assert_metric(uri, "export")
+
+        assert rv.status_code == 404
+
+    def test_export_chart_gamma(self):
+        """
+        Dataset API: Test export dataset has gamma
+        """
+        example_chart = db.session.query(Slice).all()[0]
+        argument = [example_chart.id]
+        uri = f"api/v1/chart/export/?q={prison.dumps(argument)}"
+
+        self.login(username="gamma")
         rv = self.client.get(uri)
-        self.assertEqual(rv.status_code, 200)
-        data = json.loads(rv.data.decode("utf-8"))
-        self.assertEqual(data["count"], 6)
+
+        assert rv.status_code == 404

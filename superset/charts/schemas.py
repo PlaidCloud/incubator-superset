@@ -14,23 +14,38 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from typing import Any, Dict, Union
+from typing import Any, Dict
 
-from marshmallow import fields, post_load, Schema, validate, ValidationError
-from marshmallow.validate import Length
+from flask_babel import gettext as _
+from marshmallow import fields, post_load, Schema, validate
+from marshmallow.validate import Length, Range
 
 from superset.common.query_context import QueryContext
-from superset.exceptions import SupersetException
-from superset.utils import core as utils
+from superset.utils import schema as utils
+from superset.utils.core import FilterOperator
 
 #
 # RISON/JSON schemas for query parameters
 #
 get_delete_ids_schema = {"type": "array", "items": {"type": "integer"}}
+
+width_height_schema = {
+    "type": "array",
+    "items": {"type": "integer"},
+}
 thumbnail_query_schema = {
     "type": "object",
     "properties": {"force": {"type": "boolean"}},
 }
+screenshot_query_schema = {
+    "type": "object",
+    "properties": {
+        "force": {"type": "boolean"},
+        "window_size": width_height_schema,
+        "thumb_size": width_height_schema,
+    },
+}
+get_export_ids_schema = {"type": "array", "items": {"type": "integer"}}
 
 #
 # Column schema descriptions
@@ -56,6 +71,10 @@ datasource_id_description = (
     "The id of the dataset/datasource this new chart will use. "
     "A complete datasource identification needs `datasouce_id` "
     "and `datasource_type`."
+)
+datasource_uid_description = (
+    "The uid of the dataset/datasource this new chart will use. "
+    "A complete datasource identification needs `datasouce_uid` "
 )
 datasource_type_description = (
     "The type of dataset/datasource identified on `datasource_id`."
@@ -84,14 +103,26 @@ openapi_spec_methods_override = {
         "get": {"description": "Get a list of all possible owners for a chart."}
     },
 }
-""" Overrides GET methods OpenApi descriptions """
 
 
-def validate_json(value: Union[bytes, bytearray, str]) -> None:
-    try:
-        utils.validate_json(value)
-    except SupersetException:
-        raise ValidationError("JSON not valid")
+TIME_GRAINS = (
+    "PT1S",
+    "PT1M",
+    "PT5M",
+    "PT10M",
+    "PT15M",
+    "PT0.5H",
+    "PT1H",
+    "P1D",
+    "P1W",
+    "P1M",
+    "P0.25Y",
+    "P1Y",
+    "1969-12-28T00:00:00Z/P1W",  # Week starting Sunday
+    "1969-12-29T00:00:00Z/P1W",  # Week starting Monday
+    "P1W/1970-01-03T00:00:00Z",  # Week ending Saturday
+    "P1W/1970-01-04T00:00:00Z",  # Week ending Sunday
+)
 
 
 class ChartPostSchema(Schema):
@@ -110,7 +141,7 @@ class ChartPostSchema(Schema):
     )
     owners = fields.List(fields.Integer(description=owners_description))
     params = fields.String(
-        description=params_description, allow_none=True, validate=validate_json
+        description=params_description, allow_none=True, validate=utils.validate_json
     )
     cache_timeout = fields.Integer(
         description=cache_timeout_description, allow_none=True
@@ -156,6 +187,27 @@ class ChartPutSchema(Schema):
         allow_none=True,
     )
     dashboards = fields.List(fields.Integer(description=dashboards_description))
+
+
+class ChartGetDatasourceObjectDataResponseSchema(Schema):
+    datasource_id = fields.Integer(description="The datasource identifier")
+    datasource_type = fields.Integer(description="The datasource type")
+
+
+class ChartGetDatasourceObjectResponseSchema(Schema):
+    label = fields.String(description="The name of the datasource")
+    value = fields.Nested(ChartGetDatasourceObjectDataResponseSchema)
+
+
+class ChartGetDatasourceResponseSchema(Schema):
+    count = fields.Integer(description="The total number of datasources")
+    result = fields.Nested(ChartGetDatasourceObjectResponseSchema)
+
+
+class ChartCacheScreenshotResponseSchema(Schema):
+    cache_key = fields.String(description="The cache key")
+    chart_url = fields.String(description="The url to render the chart")
+    image_url = fields.String(description="The url to fetch the screenshot")
 
 
 class ChartDataColumnSchema(Schema):
@@ -233,8 +285,7 @@ class ChartDataAggregateConfigField(fields.Dict):
 
 
 class ChartDataPostProcessingOperationOptionsSchema(Schema):
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
+    pass
 
 
 class ChartDataAggregateOptionsSchema(ChartDataPostProcessingOperationOptionsSchema):
@@ -383,6 +434,75 @@ class ChartDataSortOptionsSchema(ChartDataPostProcessingOperationOptionsSchema):
     aggregates = ChartDataAggregateConfigField()
 
 
+class ChartDataContributionOptionsSchema(ChartDataPostProcessingOperationOptionsSchema):
+    """
+    Contribution operation config.
+    """
+
+    orientation = fields.String(
+        description="Should cell values be calculated across the row or column.",
+        required=True,
+        validate=validate.OneOf(choices=("row", "column",)),
+        example="row",
+    )
+
+
+class ChartDataProphetOptionsSchema(ChartDataPostProcessingOperationOptionsSchema):
+    """
+    Prophet operation config.
+    """
+
+    time_grain = fields.String(
+        description="Time grain used to specify time period increments in prediction. "
+        "Supports [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601#Durations) "
+        "durations.",
+        validate=validate.OneOf(choices=TIME_GRAINS),
+        example="P1D",
+        required=True,
+    )
+    periods = fields.Integer(
+        descrption="Time periods (in units of `time_grain`) to predict into the future",
+        min=1,
+        example=7,
+        required=True,
+    )
+    confidence_interval = fields.Float(
+        description="Width of predicted confidence interval",
+        validate=[
+            Range(
+                min=0,
+                max=1,
+                min_inclusive=False,
+                max_inclusive=False,
+                error=_("`confidence_interval` must be between 0 and 1 (exclusive)"),
+            )
+        ],
+        example=0.8,
+        required=True,
+    )
+    yearly_seasonality = fields.Raw(
+        # TODO: add correct union type once supported by Marshmallow
+        description="Should yearly seasonality be applied. "
+        "An integer value will specify Fourier order of seasonality, `None` will "
+        "automatically detect seasonality.",
+        example=False,
+    )
+    weekly_seasonality = fields.Raw(
+        # TODO: add correct union type once supported by Marshmallow
+        description="Should weekly seasonality be applied. "
+        "An integer value will specify Fourier order of seasonality, `None` will "
+        "automatically detect seasonality.",
+        example=False,
+    )
+    monthly_seasonality = fields.Raw(
+        # TODO: add correct union type once supported by Marshmallow
+        description="Should monthly seasonality be applied. "
+        "An integer value will specify Fourier order of seasonality, `None` will "
+        "automatically detect seasonality.",
+        example=False,
+    )
+
+
 class ChartDataPivotOptionsSchema(ChartDataPostProcessingOperationOptionsSchema):
     """
     Pivot operation config.
@@ -402,8 +522,6 @@ class ChartDataPivotOptionsSchema(ChartDataPostProcessingOperationOptionsSchema)
         fields.String(
             allow_none=False, description="Columns to group by on the table columns",
         ),
-        minLength=1,
-        required=True,
     )
     metric_fill_value = fields.Number(
         description="Value to replace missing values with in aggregate calculations.",
@@ -490,11 +608,13 @@ class ChartDataPostProcessingOperationSchema(Schema):
         validate=validate.OneOf(
             choices=(
                 "aggregate",
+                "contribution",
                 "cum",
                 "geodetic_parse",
                 "geohash_decode",
                 "geohash_encode",
                 "pivot",
+                "prophet",
                 "rolling",
                 "select",
                 "sort",
@@ -527,8 +647,8 @@ class ChartDataFilterSchema(Schema):
     )
     op = fields.String(  # pylint: disable=invalid-name
         description="The comparison operator.",
-        validate=validate.OneOf(
-            choices=[filter_op.value for filter_op in utils.FilterOperator]
+        validate=utils.OneOfCaseInsensitive(
+            choices=[filter_op.value for filter_op in FilterOperator]
         ),
         required=True,
         example="IN",
@@ -544,7 +664,7 @@ class ChartDataExtrasSchema(Schema):
 
     time_range_endpoints = fields.List(
         fields.String(
-            validate=validate.OneOf(choices=("INCLUSIVE", "EXCLUSIVE")),
+            validate=validate.OneOf(choices=("unknown", "inclusive", "exclusive")),
             description="A list with two values, stating if start/end should be "
             "inclusive/exclusive.",
         )
@@ -574,31 +694,14 @@ class ChartDataExtrasSchema(Schema):
         description="To what level of granularity should the temporal column be "
         "aggregated. Supports "
         "[ISO 8601](https://en.wikipedia.org/wiki/ISO_8601#Durations) durations.",
-        validate=validate.OneOf(
-            choices=(
-                "PT1S",
-                "PT1M",
-                "PT5M",
-                "PT10M",
-                "PT15M",
-                "PT0.5H",
-                "PT1H",
-                "P1D",
-                "P1W",
-                "P1M",
-                "P0.25Y",
-                "P1Y",
-                "1969-12-28T00:00:00Z/P1W",  # Week starting Sunday
-                "1969-12-29T00:00:00Z/P1W",  # Week starting Monday
-                "P1W/1970-01-03T00:00:00Z",  # Week ending Saturday
-                "P1W/1970-01-04T00:00:00Z",  # Week ending Sunday
-            ),
-        ),
+        validate=validate.OneOf(choices=TIME_GRAINS),
         example="P1D",
+        allow_none=True,
     )
     druid_time_origin = fields.String(
         description="Starting point for time grain counting on legacy Druid "
         "datasources. Used to change e.g. Monday/Sunday first-day-of-week.",
+        allow_none=True,
     )
 
 
@@ -616,6 +719,7 @@ class ChartDataQueryObjectSchema(Schema):
     )
     groupby = fields.List(
         fields.String(description="Columns by which to group the query.",),
+        allow_none=True,
     )
     metrics = fields.List(
         fields.Raw(),
@@ -625,7 +729,7 @@ class ChartDataQueryObjectSchema(Schema):
         "`ChartDataAdhocMetricSchema` for the structure of ad-hoc metrics.",
     )
     post_processing = fields.List(
-        fields.Nested(ChartDataPostProcessingOperationSchema),
+        fields.Nested(ChartDataPostProcessingOperationSchema, allow_none=True),
         description="Post processing operations to be applied to the result set. "
         "Operations are applied to the result set in sequential order.",
     )
@@ -661,18 +765,38 @@ class ChartDataQueryObjectSchema(Schema):
     timeseries_limit = fields.Integer(
         description="Maximum row count for timeseries queries. Default: `0`",
     )
+    timeseries_limit_metric = fields.Raw(
+        description="Metric used to limit timeseries queries by.", allow_none=True,
+    )
     row_limit = fields.Integer(
         description='Maximum row count. Default: `config["ROW_LIMIT"]`',
+        validate=[
+            Range(min=1, error=_("`row_limit` must be greater than or equal to 1"))
+        ],
+    )
+    row_offset = fields.Integer(
+        description="Number of rows to skip. Default: `0`",
+        validate=[
+            Range(min=0, error=_("`row_offset` must be greater than or equal to 0"))
+        ],
     )
     order_desc = fields.Boolean(
         description="Reverse order. Default: `false`", required=False
     )
-    extras = fields.Nested(ChartDataExtrasSchema, required=False)
-    columns = fields.List(fields.String(), description="",)
+    extras = fields.Nested(
+        ChartDataExtrasSchema,
+        description="Extra parameters to add to the query.",
+        required=False,
+    )
+    columns = fields.List(
+        fields.String(),
+        description="Columns which to select in the query.",
+        allow_none=True,
+    )
     orderby = fields.List(
         fields.List(fields.Raw()),
         description="Expects a list of lists where the first element is the column "
-        "name which to sort by, and the second element is a boolean ",
+        "name which to sort by, and the second element is a boolean.",
         example=[["my_col_1", False], ["my_col_2", True]],
     )
     where = fields.String(
@@ -687,10 +811,10 @@ class ChartDataQueryObjectSchema(Schema):
         deprecated=True,
     )
     having_filters = fields.List(
-        fields.Dict(),
+        fields.Nested(ChartDataFilterSchema),
         description="HAVING filters to be added to legacy Druid datasource queries. "
         "This field is deprecated and should be passed to `extras` "
-        "as `filters_druid`.",
+        "as `having_druid`.",
         deprecated=True,
     )
 
@@ -720,13 +844,13 @@ class ChartDataQueryContextSchema(Schema):
         validate=validate.OneOf(choices=("json", "csv")),
     )
 
-    # pylint: disable=no-self-use
+    # pylint: disable=no-self-use,unused-argument
     @post_load
-    def make_query_context(self, data: Dict[str, Any]) -> QueryContext:
+    def make_query_context(self, data: Dict[str, Any], **kwargs: Any) -> QueryContext:
         query_context = QueryContext(**data)
         return query_context
 
-    # pylint: enable=no-self-use
+    # pylint: enable=no-self-use,unused-argument
 
 
 class ChartDataResponseResult(Schema):
@@ -780,7 +904,7 @@ class ChartDataResponseSchema(Schema):
     )
 
 
-CHART_DATA_SCHEMAS = (
+CHART_SCHEMAS = (
     ChartDataQueryContextSchema,
     ChartDataResponseSchema,
     # TODO: These should optimally be included in the QueryContext schema as an `anyOf`
@@ -788,6 +912,7 @@ CHART_DATA_SCHEMAS = (
     #  by Marshmallow<3, this is not currently possible.
     ChartDataAdhocMetricSchema,
     ChartDataAggregateOptionsSchema,
+    ChartDataContributionOptionsSchema,
     ChartDataPivotOptionsSchema,
     ChartDataRollingOptionsSchema,
     ChartDataSelectOptionsSchema,
@@ -795,4 +920,6 @@ CHART_DATA_SCHEMAS = (
     ChartDataGeohashDecodeOptionsSchema,
     ChartDataGeohashEncodeOptionsSchema,
     ChartDataGeodeticParseOptionsSchema,
+    ChartGetDatasourceResponseSchema,
+    ChartCacheScreenshotResponseSchema,
 )

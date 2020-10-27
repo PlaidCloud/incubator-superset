@@ -15,12 +15,16 @@
 # specific language governing permissions and limitations
 # under the License.
 import logging
+from datetime import datetime
+from io import BytesIO
 from typing import Any, Dict
+from zipfile import ZipFile
 
-from flask import g, make_response, redirect, request, Response, url_for
+from flask import g, make_response, redirect, request, Response, send_file, url_for
 from flask_appbuilder.api import expose, protect, rison, safe
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_babel import ngettext
+from marshmallow import ValidationError
 from werkzeug.wrappers import Response as WerkzeugResponse
 from werkzeug.wsgi import FileWrapper
 
@@ -38,8 +42,13 @@ from superset.dashboards.commands.exceptions import (
     DashboardNotFoundError,
     DashboardUpdateFailedError,
 )
+from superset.dashboards.commands.export import ExportDashboardsCommand
 from superset.dashboards.commands.update import UpdateDashboardCommand
-from superset.dashboards.filters import DashboardFilter, DashboardTitleOrSlugFilter
+from superset.dashboards.filters import (
+    DashboardFavoriteFilter,
+    DashboardFilter,
+    DashboardTitleOrSlugFilter,
+)
 from superset.dashboards.schemas import (
     DashboardPostSchema,
     DashboardPutSchema,
@@ -51,6 +60,7 @@ from superset.dashboards.schemas import (
 from superset.models.dashboard import Dashboard
 from superset.tasks.thumbnails import cache_dashboard_thumbnail
 from superset.utils.screenshots import DashboardScreenshot
+from superset.utils.urls import get_url_path
 from superset.views.base import generate_download_headers
 from superset.views.base_api import (
     BaseSupersetModelRestApi,
@@ -94,7 +104,6 @@ class DashboardRestApi(BaseSupersetModelRestApi):
         "table_names",
         "thumbnail_url",
     ]
-    order_columns = ["dashboard_title", "changed_on", "published", "changed_by_fk"]
     list_columns = [
         "id",
         "published",
@@ -110,14 +119,27 @@ class DashboardRestApi(BaseSupersetModelRestApi):
         "changed_by.id",
         "changed_by_name",
         "changed_by_url",
-        "changed_on",
+        "changed_on_utc",
+        "changed_on_delta_humanized",
+        "created_by.first_name",
+        "created_by.id",
+        "created_by.last_name",
         "dashboard_title",
         "owners.id",
         "owners.username",
         "owners.first_name",
         "owners.last_name",
     ]
-    edit_columns = [
+    list_select_columns = list_columns + ["changed_on", "changed_by_fk"]
+    order_columns = [
+        "changed_by.first_name",
+        "changed_on_delta_humanized",
+        "created_by.first_name",
+        "dashboard_title",
+        "published",
+    ]
+
+    add_columns = [
         "dashboard_title",
         "slug",
         "owners",
@@ -126,9 +148,20 @@ class DashboardRestApi(BaseSupersetModelRestApi):
         "json_metadata",
         "published",
     ]
-    search_columns = ("dashboard_title", "slug", "owners", "published")
-    search_filters = {"dashboard_title": [DashboardTitleOrSlugFilter]}
-    add_columns = edit_columns
+    edit_columns = add_columns
+
+    search_columns = (
+        "created_by",
+        "dashboard_title",
+        "id",
+        "owners",
+        "published",
+        "slug",
+    )
+    search_filters = {
+        "dashboard_title": [DashboardTitleOrSlugFilter],
+        "id": [DashboardFavoriteFilter],
+    }
     base_order = ("changed_on", "desc")
 
     add_model_schema = DashboardPostSchema()
@@ -136,16 +169,22 @@ class DashboardRestApi(BaseSupersetModelRestApi):
 
     base_filters = [["slice", DashboardFilter, lambda: []]]
 
-    openapi_spec_tag = "Dashboards"
     order_rel_fields = {
         "slices": ("slice_name", "asc"),
         "owners": ("first_name", "asc"),
     }
     related_field_filters = {
-        "owners": RelatedFieldFilter("first_name", FilterRelatedOwners)
+        "owners": RelatedFieldFilter("first_name", FilterRelatedOwners),
+        "created_by": RelatedFieldFilter("first_name", FilterRelatedOwners),
     }
-    allowed_rel_fields = {"owners"}
+    allowed_rel_fields = {"owners", "created_by"}
 
+    openapi_spec_tag = "Dashboards"
+    apispec_parameter_schemas = {
+        "get_delete_ids_schema": get_delete_ids_schema,
+        "get_export_ids_schema": get_export_ids_schema,
+        "thumbnail_query_schema": thumbnail_query_schema,
+    }
     openapi_spec_methods = openapi_spec_methods_override
     """ Overrides GET methods OpenApi descriptions """
 
@@ -196,26 +235,27 @@ class DashboardRestApi(BaseSupersetModelRestApi):
         """
         if not request.is_json:
             return self.response_400(message="Request is not JSON")
-        item = self.add_model_schema.load(request.json)
-        # This validates custom Schema with custom validations
-        if item.errors:
-            return self.response_400(message=item.errors)
         try:
-            new_model = CreateDashboardCommand(g.user, item.data).run()
-            return self.response(201, id=new_model.id, result=item.data)
+            item = self.add_model_schema.load(request.json)
+        # This validates custom Schema with custom validations
+        except ValidationError as error:
+            return self.response_400(message=error.messages)
+        try:
+            new_model = CreateDashboardCommand(g.user, item).run()
+            return self.response(201, id=new_model.id, result=item)
         except DashboardInvalidError as ex:
             return self.response_422(message=ex.normalized_messages())
         except DashboardCreateFailedError as ex:
-            logger.error(f"Error creating model {self.__class__.__name__}: {ex}")
+            logger.error(
+                "Error creating model %s: %s", self.__class__.__name__, str(ex)
+            )
             return self.response_422(message=str(ex))
 
     @expose("/<pk>", methods=["PUT"])
     @protect()
     @safe
     @statsd_metrics
-    def put(  # pylint: disable=too-many-return-statements, arguments-differ
-        self, pk: int
-    ) -> Response:
+    def put(self, pk: int) -> Response:
         """Changes a Dashboard
         ---
         put:
@@ -260,28 +300,32 @@ class DashboardRestApi(BaseSupersetModelRestApi):
         """
         if not request.is_json:
             return self.response_400(message="Request is not JSON")
-        item = self.edit_model_schema.load(request.json)
-        # This validates custom Schema with custom validations
-        if item.errors:
-            return self.response_400(message=item.errors)
         try:
-            changed_model = UpdateDashboardCommand(g.user, pk, item.data).run()
-            return self.response(200, id=changed_model.id, result=item.data)
+            item = self.edit_model_schema.load(request.json)
+        # This validates custom Schema with custom validations
+        except ValidationError as error:
+            return self.response_400(message=error.messages)
+        try:
+            changed_model = UpdateDashboardCommand(g.user, pk, item).run()
+            response = self.response(200, id=changed_model.id, result=item)
         except DashboardNotFoundError:
-            return self.response_404()
+            response = self.response_404()
         except DashboardForbiddenError:
-            return self.response_403()
+            response = self.response_403()
         except DashboardInvalidError as ex:
             return self.response_422(message=ex.normalized_messages())
         except DashboardUpdateFailedError as ex:
-            logger.error(f"Error updating model {self.__class__.__name__}: {ex}")
-            return self.response_422(message=str(ex))
+            logger.error(
+                "Error updating model %s: %s", self.__class__.__name__, str(ex)
+            )
+            response = self.response_422(message=str(ex))
+        return response
 
     @expose("/<pk>", methods=["DELETE"])
     @protect()
     @safe
     @statsd_metrics
-    def delete(self, pk: int) -> Response:  # pylint: disable=arguments-differ
+    def delete(self, pk: int) -> Response:
         """Deletes a Dashboard
         ---
         delete:
@@ -321,7 +365,9 @@ class DashboardRestApi(BaseSupersetModelRestApi):
         except DashboardForbiddenError:
             return self.response_403()
         except DashboardDeleteFailedError as ex:
-            logger.error(f"Error deleting model {self.__class__.__name__}: {ex}")
+            logger.error(
+                "Error deleting model %s: %s", self.__class__.__name__, str(ex)
+            )
             return self.response_422(message=str(ex))
 
     @expose("/", methods=["DELETE"])
@@ -329,9 +375,7 @@ class DashboardRestApi(BaseSupersetModelRestApi):
     @safe
     @statsd_metrics
     @rison(get_delete_ids_schema)
-    def bulk_delete(
-        self, **kwargs: Any
-    ) -> Response:  # pylint: disable=arguments-differ
+    def bulk_delete(self, **kwargs: Any) -> Response:
         """Delete bulk Dashboards
         ---
         delete:
@@ -343,9 +387,7 @@ class DashboardRestApi(BaseSupersetModelRestApi):
             content:
               application/json:
                 schema:
-                  type: array
-                  items:
-                    type: integer
+                  $ref: '#/components/schemas/get_delete_ids_schema'
           responses:
             200:
               description: Dashboard bulk delete
@@ -373,8 +415,8 @@ class DashboardRestApi(BaseSupersetModelRestApi):
             return self.response(
                 200,
                 message=ngettext(
-                    f"Deleted %(num)d dashboard",
-                    f"Deleted %(num)d dashboards",
+                    "Deleted %(num)d dashboard",
+                    "Deleted %(num)d dashboards",
                     num=len(item_ids),
                 ),
             )
@@ -402,9 +444,7 @@ class DashboardRestApi(BaseSupersetModelRestApi):
             content:
               application/json:
                 schema:
-                  type: array
-                  items:
-                    type: integer
+                  $ref: '#/components/schemas/get_export_ids_schema'
           responses:
             200:
               description: Dashboard export
@@ -423,8 +463,34 @@ class DashboardRestApi(BaseSupersetModelRestApi):
             500:
               $ref: '#/components/responses/500'
         """
+        requested_ids = kwargs["rison"]
+
+        if is_feature_enabled("VERSIONED_EXPORT"):
+            timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
+            root = f"dashboard_export_{timestamp}"
+            filename = f"{root}.zip"
+
+            buf = BytesIO()
+            with ZipFile(buf, "w") as bundle:
+                try:
+                    for file_name, file_content in ExportDashboardsCommand(
+                        requested_ids
+                    ).run():
+                        with bundle.open(f"{root}/{file_name}", "w") as fp:
+                            fp.write(file_content.encode())
+                except DashboardNotFoundError:
+                    return self.response_404()
+            buf.seek(0)
+
+            return send_file(
+                buf,
+                mimetype="application/zip",
+                as_attachment=True,
+                attachment_filename=filename,
+            )
+
         query = self.datamodel.session.query(Dashboard).filter(
-            Dashboard.id.in_(kwargs["rison"])
+            Dashboard.id.in_(requested_ids)
         )
         query = self._base_filters.apply_all(query)
         ids = [item.id for item in query.all()]
@@ -464,11 +530,7 @@ class DashboardRestApi(BaseSupersetModelRestApi):
             content:
               application/json:
                 schema:
-                  type: object
-                  properties:
-                    force:
-                      type: boolean
-                      default: false
+                  $ref: '#/components/schemas/thumbnail_query_schema'
           responses:
             200:
               description: Dashboard thumbnail image
@@ -498,15 +560,21 @@ class DashboardRestApi(BaseSupersetModelRestApi):
         dashboard = self.datamodel.get(pk, self._base_filters)
         if not dashboard:
             return self.response_404()
+
+        dashboard_url = get_url_path(
+            "Superset.dashboard", dashboard_id_or_slug=dashboard.id
+        )
         # If force, request a screenshot from the workers
         if kwargs["rison"].get("force", False):
-            cache_dashboard_thumbnail.delay(dashboard.id, force=True)
+            cache_dashboard_thumbnail.delay(dashboard_url, dashboard.digest, force=True)
             return self.response(202, message="OK Async")
         # fetch the dashboard screenshot using the current user and cache if set
-        screenshot = DashboardScreenshot(pk).get_from_cache(cache=thumbnail_cache)
+        screenshot = DashboardScreenshot(
+            dashboard_url, dashboard.digest
+        ).get_from_cache(cache=thumbnail_cache)
         # If the screenshot does not exist, request one from the workers
         if not screenshot:
-            cache_dashboard_thumbnail.delay(dashboard.id, force=True)
+            cache_dashboard_thumbnail.delay(dashboard_url, dashboard.digest, force=True)
             return self.response(202, message="OK Async")
         # If digests
         if dashboard.digest != digest:

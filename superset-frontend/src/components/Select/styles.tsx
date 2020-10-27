@@ -17,8 +17,8 @@
  * under the License.
  */
 import React, { CSSProperties } from 'react';
-import { css, SerializedStyles } from '@emotion/core';
-import { supersetTheme } from '@superset-ui/style';
+import { css, SerializedStyles, ClassNames } from '@emotion/core';
+import { supersetTheme } from '@superset-ui/core';
 import {
   Styles,
   Theme,
@@ -245,18 +245,18 @@ const { ClearIndicator, DropdownIndicator, Option } = defaultComponents;
 
 export const DEFAULT_COMPONENTS: SelectComponentsConfig<any> = {
   Option: ({ children, innerProps, data, ...props }) => (
-    <Option
-      {...props}
-      data={data}
-      innerProps={{
-        ...innerProps,
-        // `@types/react-select` didn't define `style` for `innerProps`
-        // @ts-ignore
-        style: data && data.style ? data.style : null,
-      }}
-    >
-      {children}
-    </Option>
+    <ClassNames>
+      {({ css }) => (
+        <Option
+          {...props}
+          data={data}
+          className={css(data && data.style ? data.style : null)}
+          innerProps={innerProps}
+        >
+          {children}
+        </Option>
+      )}
+    </ClassNames>
   ),
   ClearIndicator: props => (
     <ClearIndicator {...props}>

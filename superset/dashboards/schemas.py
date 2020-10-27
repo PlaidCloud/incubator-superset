@@ -18,7 +18,7 @@ import json
 import re
 from typing import Any, Dict, Union
 
-from marshmallow import fields, pre_load, Schema
+from marshmallow import fields, post_load, Schema
 from marshmallow.validate import Length, ValidationError
 
 from superset.exceptions import SupersetException
@@ -75,7 +75,6 @@ openapi_spec_methods_override = {
         "get": {"description": "Get a list of all possible owners for a dashboard."}
     },
 }
-""" Overrides GET methods OpenApi descriptions """
 
 
 def validate_json(value: Union[bytes, bytearray, str]) -> None:
@@ -92,7 +91,7 @@ def validate_json_metadata(value: Union[bytes, bytearray, str]) -> None:
         value_obj = json.loads(value)
     except json.decoder.JSONDecodeError:
         raise ValidationError("JSON not valid")
-    errors = DashboardJSONMetadataSchema(strict=True).validate(value_obj, partial=False)
+    errors = DashboardJSONMetadataSchema().validate(value_obj, partial=False)
     if errors:
         raise ValidationError(errors)
 
@@ -105,17 +104,21 @@ class DashboardJSONMetadataSchema(Schema):
     default_filters = fields.Str()
     stagger_refresh = fields.Boolean()
     stagger_time = fields.Integer()
-    color_scheme = fields.Str()
+    color_scheme = fields.Str(allow_none=True)
     label_colors = fields.Dict()
 
 
 class BaseDashboardSchema(Schema):
-    @pre_load
-    def pre_load(self, data: Dict[str, Any]) -> None:  # pylint: disable=no-self-use
+    # pylint: disable=no-self-use,unused-argument
+    @post_load
+    def post_load(self, data: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
         if data.get("slug"):
             data["slug"] = data["slug"].strip()
             data["slug"] = data["slug"].replace(" ", "-")
             data["slug"] = re.sub(r"[^\w\-]+", "", data["slug"])
+        return data
+
+    # pylint: disable=no-self-use,unused-argument
 
 
 class DashboardPostSchema(BaseDashboardSchema):
@@ -133,7 +136,7 @@ class DashboardPostSchema(BaseDashboardSchema):
     )
     css = fields.String()
     json_metadata = fields.String(
-        description=json_metadata_description, validate=validate_json_metadata
+        description=json_metadata_description, validate=validate_json_metadata,
     )
     published = fields.Boolean(description=published_description)
 

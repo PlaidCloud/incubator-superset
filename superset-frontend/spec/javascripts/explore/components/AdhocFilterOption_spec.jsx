@@ -19,9 +19,10 @@
 /* eslint-disable no-unused-expressions */
 import React from 'react';
 import sinon from 'sinon';
-import { shallow } from 'enzyme';
-import { Label, OverlayTrigger } from 'react-bootstrap';
+import { styledShallow as shallow } from 'spec/helpers/theming';
+import Popover from 'src/common/components/Popover';
 
+import Label from 'src/components/Label';
 import AdhocFilter, {
   EXPRESSION_TYPES,
   CLAUSES,
@@ -45,22 +46,22 @@ function setup(overrides) {
     datasource: {},
     ...overrides,
   };
-  const wrapper = shallow(<AdhocFilterOption {...props} />);
+  const wrapper = shallow(<AdhocFilterOption {...props} />).dive();
   return { wrapper };
 }
 
 describe('AdhocFilterOption', () => {
   it('renders an overlay trigger wrapper for the label', () => {
     const { wrapper } = setup();
-    const overlay = wrapper.find(OverlayTrigger);
+    const overlay = wrapper.find(Popover);
     expect(overlay).toHaveLength(1);
-    expect(overlay.props().defaultOverlayShown).toBe(false);
-    expect(wrapper.find(Label)).toHaveLength(1);
+    expect(overlay.props().defaultVisible).toBe(false);
+    expect(wrapper.find(Label)).toExist();
   });
   it('should open new filter popup by default', () => {
     const { wrapper } = setup({
       adhocFilter: simpleAdhocFilter.duplicateWith({ isNew: true }),
     });
-    expect(wrapper.find(OverlayTrigger).props().defaultOverlayShown).toBe(true);
+    expect(wrapper.find(Popover).props().defaultVisible).toBe(true);
   });
 });

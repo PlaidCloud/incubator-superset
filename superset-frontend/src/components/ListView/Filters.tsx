@@ -16,40 +16,43 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { useState, useRef } from 'react';
-import styled from '@superset-ui/style';
-import { withTheme } from 'emotion-theming';
+import React, { useState, ReactNode } from 'react';
+import { styled, withTheme, SupersetThemeProps } from '@superset-ui/core';
 
 import {
   Select,
-  AsyncSelect,
+  PaginatedSelect,
   PartialThemeConfig,
-  PartialStylesConfig,
 } from 'src/components/Select';
+
 import SearchInput from 'src/components/SearchInput';
 import {
   Filter,
-  Filters,
   FilterValue,
+  Filters,
   InternalFilter,
   SelectOption,
 } from './types';
+import { filterSelectStyles } from './utils';
 
 interface BaseFilter {
-  Header: string;
+  Header: ReactNode;
   initialValue: any;
 }
 interface SelectFilterProps extends BaseFilter {
-  name?: string;
-  onSelect: (selected: any) => any;
-  selects: Filter['selects'];
   emptyLabel?: string;
   fetchSelects?: Filter['fetchSelects'];
+  name?: string;
+  onSelect: (selected: any) => any;
+  paginate?: boolean;
+  selects: Filter['selects'];
+  theme: SupersetThemeProps['theme'];
 }
 
 const FilterContainer = styled.div`
   display: inline-flex;
   margin-right: 2em;
+  font-size: ${({ theme }) => theme.typography.sizes.s}px;
 `;
 
 const FilterTitle = styled.label`
@@ -58,48 +61,32 @@ const FilterTitle = styled.label`
   margin: 0 0.4em 0 0;
 `;
 
-const filterSelectTheme: PartialThemeConfig = {
-  spacing: {
-    baseUnit: 2,
-    minWidth: '5em',
-  },
-};
-
-const filterSelectStyles: PartialStylesConfig = {
-  container: (provider, { getValue }) => ({
-    ...provider,
-    // dynamic width based on label string length
-    minWidth: `${Math.min(
-      12,
-      Math.max(5, 3 + getValue()[0].label.length / 2),
-    )}em`,
-  }),
-  control: provider => ({
-    ...provider,
-    borderWidth: 0,
-    boxShadow: 'none',
-  }),
-};
-
 const CLEAR_SELECT_FILTER_VALUE = 'CLEAR_SELECT_FILTER_VALUE';
 
 function SelectFilter({
   Header,
-  selects = [],
   emptyLabel = 'None',
+  fetchSelects,
   initialValue,
   onSelect,
-  fetchSelects,
+  paginate = false,
+  selects = [],
+  theme,
 }: SelectFilterProps) {
+  const filterSelectTheme: PartialThemeConfig = {
+    spacing: {
+      baseUnit: 2,
+      fontSize: theme.typography.sizes.s,
+      minWidth: '5em',
+    },
+  };
+
   const clearFilterSelect = {
     label: emptyLabel,
     value: CLEAR_SELECT_FILTER_VALUE,
   };
 
   const options = [clearFilterSelect, ...selects];
-  const optionsCache: React.MutableRefObject<SelectOption[] | null> = useRef(
-    null,
-  );
 
   const [selectedOption, setSelectedOption] = useState(clearFilterSelect);
   const onChange = (selected: SelectOption | null) => {
@@ -109,40 +96,58 @@ function SelectFilter({
     );
     setSelectedOption(selected);
   };
-  const fetchAndFormatSelects = async (inputValue: string) => {
-    // only include clear filter when filter value exists
-    let result = inputValue ? [] : [clearFilterSelect];
-    // only call fetch once
-    // TODO: allow real async search with `inputValue`
-    if (optionsCache.current) return optionsCache.current;
+
+  const fetchAndFormatSelects = async (
+    inputValue: string,
+    loadedOptions: SelectOption[],
+    { page }: { page: number },
+  ) => {
+    // only include clear filter when filter value does not exist
+    let result = inputValue || page > 0 ? [] : [clearFilterSelect];
+    let hasMore = paginate;
     if (fetchSelects) {
-      const selectValues = await fetchSelects();
+      const selectValues = await fetchSelects(inputValue, page);
       // update matching option at initial load
+      if (!selectValues.length) {
+        hasMore = false;
+      }
+      result = [...result, ...selectValues];
+
       const matchingOption = result.find(x => x.value === initialValue);
+
       if (matchingOption) {
         setSelectedOption(matchingOption);
       }
-      result = [...result, ...selectValues];
     }
-    optionsCache.current = result;
-    return result;
+    return {
+      options: result,
+      hasMore,
+      additional: {
+        page: page + 1,
+      },
+    };
   };
 
   return (
     <FilterContainer>
-      <FilterTitle>{Header}</FilterTitle>
+      <FilterTitle>{Header}:</FilterTitle>
       {fetchSelects ? (
-        <AsyncSelect
+        <PaginatedSelect
           data-test="filters-select"
+          defaultOptions
           themeConfig={filterSelectTheme}
           stylesConfig={filterSelectStyles}
+          // @ts-ignore
           value={selectedOption}
+          // @ts-ignore
           onChange={onChange}
+          // @ts-ignore
           loadOptions={fetchAndFormatSelects}
-          defaultOptions
           placeholder={emptyLabel}
-          loadingMessage={() => 'Loading...'}
           clearable={false}
+          additional={{
+            page: 0,
+          }}
         />
       ) : (
         <Select
@@ -158,13 +163,20 @@ function SelectFilter({
     </FilterContainer>
   );
 }
+const StyledSelectFilter = withTheme(SelectFilter);
 
 interface SearchHeaderProps extends BaseFilter {
   Header: string;
   onSubmit: (val: string) => void;
+  name: string;
 }
 
-function SearchFilter({ Header, initialValue, onSubmit }: SearchHeaderProps) {
+function SearchFilter({
+  Header,
+  name,
+  initialValue,
+  onSubmit,
+}: SearchHeaderProps) {
   const [value, setValue] = useState(initialValue || '');
   const handleSubmit = () => onSubmit(value);
   const onClear = () => {
@@ -177,6 +189,7 @@ function SearchFilter({ Header, initialValue, onSubmit }: SearchHeaderProps) {
       <SearchInput
         data-test="filters-search"
         placeholder={Header}
+        name={name}
         value={value}
         onChange={e => {
           setValue(e.currentTarget.value);
@@ -195,7 +208,8 @@ interface UIFiltersProps {
 }
 
 const FilterWrapper = styled.div`
-  padding: 24px 16px 8px;
+  display: inline-block;
+  padding: 0 0 ${({ theme }) => theme.gridUnit * 8}px;
 `;
 
 function UIFilters({
@@ -207,31 +221,41 @@ function UIFilters({
     <FilterWrapper>
       {filters.map(
         (
-          { Header, id, input, selects, unfilteredLabel, fetchSelects },
+          {
+            Header,
+            fetchSelects,
+            id,
+            input,
+            paginate,
+            selects,
+            unfilteredLabel,
+          },
           index,
         ) => {
           const initialValue =
             internalFilters[index] && internalFilters[index].value;
           if (input === 'select') {
             return (
-              <SelectFilter
+              <StyledSelectFilter
+                Header={Header}
+                emptyLabel={unfilteredLabel}
+                fetchSelects={fetchSelects}
+                initialValue={initialValue}
                 key={id}
                 name={id}
-                Header={Header}
-                selects={selects}
-                emptyLabel={unfilteredLabel}
-                initialValue={initialValue}
-                fetchSelects={fetchSelects}
                 onSelect={(value: any) => updateFilterValue(index, value)}
+                paginate={paginate}
+                selects={selects}
               />
             );
           }
-          if (input === 'search') {
+          if (input === 'search' && typeof Header === 'string') {
             return (
               <SearchFilter
-                key={id}
                 Header={Header}
                 initialValue={initialValue}
+                key={id}
+                name={id}
                 onSubmit={(value: string) => updateFilterValue(index, value)}
               />
             );

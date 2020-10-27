@@ -17,7 +17,9 @@
 import json
 import logging
 from copy import copy
-from typing import Any, Dict, List, Optional, Set, TYPE_CHECKING
+from functools import partial
+from json.decoder import JSONDecodeError
+from typing import Any, Callable, Dict, List, Optional, Set, Union
 from urllib import parse
 
 import sqlalchemy as sqla
@@ -39,10 +41,22 @@ from sqlalchemy import (
 from sqlalchemy.engine.base import Connection
 from sqlalchemy.orm import relationship, sessionmaker, subqueryload
 from sqlalchemy.orm.mapper import Mapper
+from sqlalchemy.orm.session import object_session
+from sqlalchemy.sql import join, select
 
-from superset import app, ConnectorRegistry, db, is_feature_enabled, security_manager
+from superset import (
+    app,
+    cache,
+    ConnectorRegistry,
+    db,
+    is_feature_enabled,
+    security_manager,
+)
+from superset.connectors.base.models import BaseDatasource
+from superset.connectors.druid.models import DruidColumn, DruidMetric
+from superset.connectors.sqla.models import SqlMetric, TableColumn
 from superset.models.helpers import AuditMixinNullable, ImportMixin
-from superset.models.slice import Slice as Slice
+from superset.models.slice import Slice
 from superset.models.tags import DashboardUpdater
 from superset.models.user_attributes import UserAttribute
 from superset.tasks.thumbnails import cache_dashboard_thumbnail
@@ -51,18 +65,17 @@ from superset.utils.dashboard_filter_scopes_converter import (
     convert_filter_scopes,
     copy_filter_scopes,
 )
-
-if TYPE_CHECKING:
-    # pylint: disable=unused-import
-    from superset.connectors.base.models import BaseDatasource
+from superset.utils.decorators import debounce
+from superset.utils.urls import get_url_path
 
 metadata = Model.metadata  # pylint: disable=no-member
 config = app.config
 logger = logging.getLogger(__name__)
 
 
-def copy_dashboard(mapper: Mapper, connection: Connection, target: "Dashboard") -> None:
-    # pylint: disable=unused-argument
+def copy_dashboard(
+    _mapper: Mapper, connection: Connection, target: "Dashboard"
+) -> None:
     dashboard_id = config["DASHBOARD_TEMPLATE_ID"]
     if dashboard_id is None:
         return
@@ -129,7 +142,7 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
     css = Column(Text)
     json_metadata = Column(Text)
     slug = Column(String(255), unique=True)
-    slices = relationship("Slice", secondary=dashboard_slices, backref="dashboards")
+    slices = relationship(Slice, secondary=dashboard_slices, backref="dashboards")
     owners = relationship(security_manager.user_model, secondary=dashboard_user)
     published = Column(Boolean, default=False)
 
@@ -143,7 +156,7 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
     ]
 
     def __repr__(self) -> str:
-        return self.dashboard_title or str(self.id)
+        return f"Dashboard<{self.id or self.slug}>"
 
     @property
     def table_names(self) -> str:
@@ -152,6 +165,7 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
 
     @property
     def url(self) -> str:
+        url = f"/superset/dashboard/{self.slug or self.id}/"
         if self.json_metadata:
             # add default_filters to the preselect_filters of dashboard
             json_metadata = json.loads(self.json_metadata)
@@ -164,16 +178,21 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
                         return "/superset/dashboard/{}/?preselect_filters={}".format(
                             self.slug or self.id, filters
                         )
-                except Exception:  # pylint: disable=broad-except
-                    pass
-        return f"/superset/dashboard/{self.slug or self.id}/"
+                except (TypeError, JSONDecodeError) as exc:
+                    logger.error(
+                        "Unable to parse json for url: %r. Returning default url.",
+                        exc,
+                        exc_info=True,
+                    )
+                    return url
+        return url
 
     @property
-    def datasources(self) -> Set[Optional["BaseDatasource"]]:
+    def datasources(self) -> Set[BaseDatasource]:
         return {slc.datasource for slc in self.slices}
 
     @property
-    def charts(self) -> List[Optional["BaseDatasource"]]:
+    def charts(self) -> List[BaseDatasource]:
         return [slc.chart for slc in self.slices]
 
     @property
@@ -190,7 +209,7 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
     @property
     def digest(self) -> str:
         """
-            Returns a MD5 HEX digest that makes this dashboard unique
+        Returns a MD5 HEX digest that makes this dashboard unique
         """
         unique_string = f"{self.position_json}.{self.css}.{self.json_metadata}"
         return utils.md5_hex(unique_string)
@@ -198,8 +217,8 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
     @property
     def thumbnail_url(self) -> str:
         """
-            Returns a thumbnail URL with a HEX digest. We want to avoid browser cache
-            if the dashboard has changed
+        Returns a thumbnail URL with a HEX digest. We want to avoid browser cache
+        if the dashboard has changed
         """
         return f"/api/v1/dashboard/{self.id}/thumbnail/{self.digest}/"
 
@@ -229,6 +248,30 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
             "slug": self.slug,
             "slices": [slc.data for slc in self.slices],
             "position_json": positions,
+            "last_modified_time": self.changed_on.replace(microsecond=0).timestamp(),
+        }
+
+    @cache.memoize(
+        # manage cache version manually
+        make_name=lambda fname: f"{fname}-v2.1",
+        timeout=config["DASHBOARD_CACHE_TIMEOUT"],
+        unless=lambda: not is_feature_enabled("DASHBOARD_CACHE"),
+    )
+    def full_data(self) -> Dict[str, Any]:
+        """Bootstrap data for rendering the dashboard page."""
+        slices = self.slices
+        datasource_slices = utils.indexed(slices, "datasource")
+        return {
+            # dashboard metadata
+            "dashboard": self.data,
+            # slices metadata
+            "slices": [slc.data for slc in slices],
+            # datasource metadata
+            "datasources": {
+                # Filter out unneeded fields from the datasource payload
+                datasource.uid: datasource.data_for_slices(slices)
+                for datasource, slices in datasource_slices.items()
+            },
         }
 
     @property  # type: ignore
@@ -240,29 +283,65 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
         self.json_metadata = value
 
     @property
-    def position(self) -> Dict:
+    def position(self) -> Dict[str, Any]:
         if self.position_json:
             return json.loads(self.position_json)
         return {}
 
+    def update_thumbnail(self) -> None:
+        url = get_url_path("Superset.dashboard", dashboard_id_or_slug=self.id)
+        cache_dashboard_thumbnail.delay(url, self.digest, force=True)
+
+    @debounce(0.1)
+    def clear_cache(self) -> None:
+        cache.delete_memoized(Dashboard.full_data, self)
+
     @classmethod
-    def import_obj(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
-        cls, dashboard_to_import: "Dashboard", import_time: Optional[int] = None
+    @debounce(0.1)
+    def clear_cache_for_slice(cls, slice_id: int) -> None:
+        filter_query = select([dashboard_slices.c.dashboard_id], distinct=True).where(
+            dashboard_slices.c.slice_id == slice_id
+        )
+        for (dashboard_id,) in db.engine.execute(filter_query):
+            cls(id=dashboard_id).clear_cache()
+
+    @classmethod
+    @debounce(0.1)
+    def clear_cache_for_datasource(cls, datasource_id: int) -> None:
+        filter_query = select(
+            [dashboard_slices.c.dashboard_id], distinct=True,
+        ).select_from(
+            join(
+                dashboard_slices,
+                Slice,
+                (Slice.id == dashboard_slices.c.slice_id)
+                & (Slice.datasource_id == datasource_id),
+            )
+        )
+        for (dashboard_id,) in db.engine.execute(filter_query):
+            cls(id=dashboard_id).clear_cache()
+
+    @classmethod
+    def import_obj(
+        # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+        cls,
+        dashboard_to_import: "Dashboard",
+        import_time: Optional[int] = None,
     ) -> int:
         """Imports the dashboard from the object to the database.
 
-         Once dashboard is imported, json_metadata field is extended and stores
-         remote_id and import_time. It helps to decide if the dashboard has to
-         be overridden or just copies over. Slices that belong to this
-         dashboard will be wired to existing tables. This function can be used
-         to import/export dashboards between multiple superset instances.
-         Audit metadata isn't copied over.
+        Once dashboard is imported, json_metadata field is extended and stores
+        remote_id and import_time. It helps to decide if the dashboard has to
+        be overridden or just copies over. Slices that belong to this
+        dashboard will be wired to existing tables. This function can be used
+        to import/export dashboards between multiple superset instances.
+        Audit metadata isn't copied over.
         """
 
         def alter_positions(
             dashboard: Dashboard, old_to_new_slc_id_dict: Dict[int, int]
         ) -> None:
-            """ Updates slice_ids in the position json.
+            """Updates slice_ids in the position json.
 
             Sample position_json data:
             {
@@ -311,11 +390,15 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
         # copy slices object as Slice.import_slice will mutate the slice
         # and will remove the existing dashboard - slice association
         slices = copy(dashboard_to_import.slices)
+
+        # Clearing the slug to avoid conflicts
+        dashboard_to_import.slug = None
+
         old_json_metadata = json.loads(dashboard_to_import.json_metadata or "{}")
         old_to_new_slc_id_dict: Dict[int, int] = {}
         new_timed_refresh_immune_slices = []
         new_expanded_slices = {}
-        new_filter_scopes: Dict[str, Dict] = {}
+        new_filter_scopes = {}
         i_params_dict = dashboard_to_import.params_dict
         remote_id_slice_map = {
             slc.params_dict["remote_id"]: slc
@@ -332,8 +415,8 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
             new_slc_id = Slice.import_obj(slc, remote_slc, import_time=import_time)
             old_to_new_slc_id_dict[slc.id] = new_slc_id
             # update json metadata that deals with slice ids
-            new_slc_id_str = "{}".format(new_slc_id)
-            old_slc_id_str = "{}".format(slc.id)
+            new_slc_id_str = str(new_slc_id)
+            old_slc_id_str = str(slc.id)
             if (
                 "timed_refresh_immune_slices" in i_params_dict
                 and old_slc_id_str in i_params_dict["timed_refresh_immune_slices"]
@@ -351,7 +434,7 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
         # are converted to filter_scopes
         # but dashboard create from import may still have old dashboard filter metadata
         # here we convert them to new filter_scopes metadata first
-        filter_scopes: Dict = {}
+        filter_scopes = {}
         if (
             "filter_immune_slices" in i_params_dict
             or "filter_immune_slice_fields" in i_params_dict
@@ -415,7 +498,7 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
 
     @classmethod
     def export_dashboards(  # pylint: disable=too-many-locals
-        cls, dashboard_ids: List
+        cls, dashboard_ids: List[int]
     ) -> str:
         copied_dashboards = []
         datasource_ids = set()
@@ -473,11 +556,7 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
         )
 
 
-def event_after_dashboard_changed(  # pylint: disable=unused-argument
-    mapper: Mapper, connection: Connection, target: Dashboard
-) -> None:
-    cache_dashboard_thumbnail.delay(target.id, force=True)
-
+OnDashboardChange = Callable[[Mapper, Connection, Dashboard], Any]
 
 # events for updating tags
 if is_feature_enabled("TAGGING_SYSTEM"):
@@ -485,8 +564,45 @@ if is_feature_enabled("TAGGING_SYSTEM"):
     sqla.event.listen(Dashboard, "after_update", DashboardUpdater.after_update)
     sqla.event.listen(Dashboard, "after_delete", DashboardUpdater.after_delete)
 
-
-# events for updating tags
 if is_feature_enabled("THUMBNAILS_SQLA_LISTENERS"):
-    sqla.event.listen(Dashboard, "after_insert", event_after_dashboard_changed)
-    sqla.event.listen(Dashboard, "after_update", event_after_dashboard_changed)
+    update_thumbnail: OnDashboardChange = lambda _, __, dash: dash.update_thumbnail()
+    sqla.event.listen(Dashboard, "after_insert", update_thumbnail)
+    sqla.event.listen(Dashboard, "after_update", update_thumbnail)
+
+if is_feature_enabled("DASHBOARD_CACHE"):
+
+    def clear_dashboard_cache(
+        _mapper: Mapper,
+        _connection: Connection,
+        obj: Union[Slice, BaseDatasource, Dashboard],
+        check_modified: bool = True,
+    ) -> None:
+        if check_modified and not object_session(obj).is_modified(obj):
+            # needed for avoiding excessive cache purging when duplicating a dashboard
+            return
+        if isinstance(obj, Dashboard):
+            obj.clear_cache()
+        elif isinstance(obj, Slice):
+            Dashboard.clear_cache_for_slice(slice_id=obj.id)
+        elif isinstance(obj, BaseDatasource):
+            Dashboard.clear_cache_for_datasource(datasource_id=obj.id)
+        elif isinstance(obj, (SqlMetric, TableColumn)):
+            Dashboard.clear_cache_for_datasource(datasource_id=obj.table_id)
+        elif isinstance(obj, (DruidMetric, DruidColumn)):
+            Dashboard.clear_cache_for_datasource(datasource_id=obj.datasource_id)
+
+    sqla.event.listen(Dashboard, "after_update", clear_dashboard_cache)
+    sqla.event.listen(
+        Dashboard, "after_delete", partial(clear_dashboard_cache, check_modified=False)
+    )
+    sqla.event.listen(Slice, "after_update", clear_dashboard_cache)
+    sqla.event.listen(Slice, "after_delete", clear_dashboard_cache)
+    sqla.event.listen(
+        BaseDatasource, "after_update", clear_dashboard_cache, propagate=True
+    )
+    # also clear cache on column/metric updates since updates to these will not
+    # trigger update events for BaseDatasource.
+    sqla.event.listen(SqlMetric, "after_update", clear_dashboard_cache)
+    sqla.event.listen(TableColumn, "after_update", clear_dashboard_cache)
+    sqla.event.listen(DruidMetric, "after_update", clear_dashboard_cache)
+    sqla.event.listen(DruidColumn, "after_update", clear_dashboard_cache)

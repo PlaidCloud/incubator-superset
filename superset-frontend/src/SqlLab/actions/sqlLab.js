@@ -18,8 +18,7 @@
  */
 import shortid from 'shortid';
 import JSONbig from 'json-bigint';
-import { t } from '@superset-ui/translation';
-import { SupersetClient } from '@superset-ui/connection';
+import { t, SupersetClient } from '@superset-ui/core';
 import invert from 'lodash/invert';
 import mapKeys from 'lodash/mapKeys';
 import { isFeatureEnabled, FeatureFlag } from 'src/featureFlags';
@@ -96,6 +95,12 @@ export const addInfoToast = addInfoToastAction;
 export const addSuccessToast = addSuccessToastAction;
 export const addDangerToast = addDangerToastAction;
 export const addWarningToast = addWarningToastAction;
+
+export const CtasEnum = {
+  TABLE: 'TABLE',
+  VIEW: 'VIEW',
+};
+const ERR_MSG_CANT_LOAD_QUERY = t("The query couldn't be loaded");
 
 // a map of SavedQuery field names to the different names used client-side,
 // because for now making the names consistent is too complicated
@@ -265,7 +270,7 @@ export function querySuccess(query, results) {
   };
 }
 
-export function queryFailed(query, msg, link) {
+export function queryFailed(query, msg, link, errors) {
   return function (dispatch) {
     const sync =
       !query.isDataPreview &&
@@ -277,7 +282,7 @@ export function queryFailed(query, msg, link) {
         : Promise.resolve();
 
     return sync
-      .then(() => dispatch({ type: QUERY_FAILED, query, msg, link }))
+      .then(() => dispatch({ type: QUERY_FAILED, query, msg, link, errors }))
       .catch(() =>
         dispatch(
           addDangerToast(
@@ -326,7 +331,9 @@ export function fetchQueryResults(query, displayLimit) {
             error.statusText ||
             t('Failed at retrieving results');
 
-          return dispatch(queryFailed(query, message, error.link));
+          return dispatch(
+            queryFailed(query, message, error.link, error.errors),
+          );
         }),
       );
   };
@@ -344,8 +351,9 @@ export function runQuery(query) {
       sql: query.sql,
       sql_editor_id: query.sqlEditorId,
       tab: query.tab,
-      tmp_table_name: query.tempTableName,
+      tmp_table_name: query.tempTable,
       select_as_cta: query.ctas,
+      ctas_method: query.ctas_method,
       templateParams: query.templateParams,
       queryLimit: query.queryLimit,
       expand_data: true,
@@ -369,7 +377,7 @@ export function runQuery(query) {
           if (message.includes('CSRF token')) {
             message = t(COMMON_ERR_MESSAGES.SESSION_TIMED_OUT);
           }
-          dispatch(queryFailed(query, message, error.link));
+          dispatch(queryFailed(query, message, error.link, error.errors));
         }),
       );
   };
@@ -419,7 +427,7 @@ export function postStopQuery(query) {
       .then(() => dispatch(addSuccessToast(t('Query was stopped.'))))
       .catch(() =>
         dispatch(
-          addDangerToast(t('Failed at stopping query. ') + `'${query.id}'`),
+          addDangerToast(`${t('Failed at stopping query. ')}'${query.id}'`),
         ),
       );
   };
@@ -1176,7 +1184,7 @@ export function popStoredQuery(urlId) {
           }),
         ),
       )
-      .catch(() => dispatch(addDangerToast(t("The query couldn't be loaded"))));
+      .catch(() => dispatch(addDangerToast(ERR_MSG_CANT_LOAD_QUERY)));
   };
 }
 export function popSavedQuery(saveQueryId) {
@@ -1191,7 +1199,26 @@ export function popSavedQuery(saveQueryId) {
         };
         return dispatch(addQueryEditor(queryEditorProps));
       })
-      .catch(() => dispatch(addDangerToast(t("The query couldn't be loaded"))));
+      .catch(() => dispatch(addDangerToast(ERR_MSG_CANT_LOAD_QUERY)));
+  };
+}
+export function popQuery(queryId) {
+  return function (dispatch) {
+    return SupersetClient.get({
+      endpoint: `/api/v1/query/${queryId}`,
+    })
+      .then(({ json }) => {
+        const queryData = json.result;
+        const queryEditorProps = {
+          dbId: queryData.database.id,
+          schema: queryData.schema,
+          sql: queryData.sql,
+          title: `Copy of ${queryData.tab_name}`,
+          autorun: false,
+        };
+        return dispatch(addQueryEditor(queryEditorProps));
+      })
+      .catch(() => dispatch(addDangerToast(ERR_MSG_CANT_LOAD_QUERY)));
   };
 }
 export function popDatasourceQuery(datasourceKey, sql) {
@@ -1202,7 +1229,7 @@ export function popDatasourceQuery(datasourceKey, sql) {
       .then(({ json }) =>
         dispatch(
           addQueryEditor({
-            title: 'Query ' + json.name,
+            title: `Query ${json.name}`,
             dbId: json.database.id,
             schema: json.schema,
             autorun: sql !== undefined,

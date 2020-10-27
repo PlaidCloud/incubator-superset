@@ -16,32 +16,24 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Button,
   Modal,
   Row,
   Col,
   FormControl,
   FormGroup,
-  // @ts-ignore
+  FormControlProps,
 } from 'react-bootstrap';
-// @ts-ignore
+import Button from 'src/components/Button';
 import Dialog from 'react-bootstrap-dialog';
 import { OptionsType } from 'react-select/src/types';
 import { AsyncSelect } from 'src/components/Select';
 import rison from 'rison';
-import { t } from '@superset-ui/translation';
-import { SupersetClient, Json } from '@superset-ui/connection';
-import Chart from 'src/types/Chart';
+import { t, SupersetClient } from '@superset-ui/core';
+import Chart, { Slice } from 'src/types/Chart';
+import FormLabel from 'src/components/FormLabel';
 import getClientErrorObject from '../../utils/getClientErrorObject';
-
-export type Slice = {
-  slice_id: number;
-  slice_name: string;
-  description: string | null;
-  cache_timeout: number | null;
-};
 
 type InternalProps = {
   slice: Slice;
@@ -59,21 +51,6 @@ export type WrapperProps = InternalProps & {
   animation?: boolean; // for the modal
 };
 
-export default function PropertiesModalWrapper({
-  show,
-  onHide,
-  animation,
-  slice,
-  onSave,
-}: WrapperProps) {
-  // The wrapper is a separate component so that hooks only run when the modal opens
-  return (
-    <Modal show={show} onHide={onHide} animation={animation} bsSize="large">
-      <PropertiesModal slice={slice} onHide={onHide} onSave={onSave} />
-    </Modal>
-  );
-}
-
 function PropertiesModal({ slice, onHide, onSave }: InternalProps) {
   const [submitting, setSubmitting] = useState(false);
   const errorDialog = useRef<any>(null);
@@ -86,46 +63,55 @@ function PropertiesModal({ slice, onHide, onSave }: InternalProps) {
   );
   const [owners, setOwners] = useState<OptionsType<OwnerOption> | null>(null);
 
-  function showError({ error, statusText }: any) {
+  function showError({ error, statusText, message }: any) {
+    let errorText = error || statusText || t('An error has occurred');
+    if (message === 'Forbidden') {
+      errorText = t('You do not have permission to edit this chart');
+    }
     errorDialog.current.show({
       title: 'Error',
       bsSize: 'medium',
       bsStyle: 'danger',
       actions: [Dialog.DefaultAction('Ok', () => {}, 'btn-danger')],
-      body: error || statusText || t('An error has occurred'),
+      body: errorText,
     });
   }
 
-  async function fetchChartData() {
-    try {
-      const response = await SupersetClient.get({
-        endpoint: `/api/v1/chart/${slice.slice_id}`,
-      });
-      const chart = (response.json as Json).result;
-      setOwners(
-        chart.owners.map((owner: any) => ({
-          value: owner.id,
-          label: `${owner.first_name} ${owner.last_name}`,
-        })),
-      );
-    } catch (response) {
-      const clientError = await getClientErrorObject(response);
-      showError(clientError);
-    }
-  }
+  const fetchChartData = useCallback(
+    async function fetchChartData() {
+      try {
+        const response = await SupersetClient.get({
+          endpoint: `/api/v1/chart/${slice.slice_id}`,
+        });
+        const chart = response.json.result;
+        setOwners(
+          chart.owners.map((owner: any) => ({
+            value: owner.id,
+            label: `${owner.first_name} ${owner.last_name}`,
+          })),
+        );
+      } catch (response) {
+        const clientError = await getClientErrorObject(response);
+        showError(clientError);
+      }
+    },
+    [slice.slice_id],
+  );
 
   // get the owners of this slice
   useEffect(() => {
     fetchChartData();
-  }, []);
+  }, [fetchChartData]);
 
   const loadOptions = (input = '') => {
-    const query = rison.encode({ filter: input });
+    const query = rison.encode({
+      filter: input,
+    });
     return SupersetClient.get({
       endpoint: `/api/v1/chart/related/owners?q=${query}`,
     }).then(
       response => {
-        const { result } = response.json as Json;
+        const { result } = response.json;
         return result.map((item: any) => ({
           value: item.value,
           label: item.text,
@@ -158,7 +144,7 @@ function PropertiesModal({ slice, onHide, onSave }: InternalProps) {
       });
       // update the redux state
       const updatedChart = {
-        ...(res.json as Json).result,
+        ...res.json.result,
         id: slice.slice_id,
       };
       onSave(updatedChart);
@@ -172,7 +158,7 @@ function PropertiesModal({ slice, onHide, onSave }: InternalProps) {
 
   return (
     <form onSubmit={onSubmit}>
-      <Modal.Header closeButton>
+      <Modal.Header data-test="properties-edit-modal" closeButton>
         <Modal.Title>Edit Chart Properties</Modal.Title>
       </Modal.Header>
       <Modal.Body>
@@ -180,33 +166,32 @@ function PropertiesModal({ slice, onHide, onSave }: InternalProps) {
           <Col md={6}>
             <h3>{t('Basic Information')}</h3>
             <FormGroup>
-              <label className="control-label" htmlFor="name">
+              <FormLabel htmlFor="name" required>
                 {t('Name')}
-              </label>
+              </FormLabel>
               <FormControl
                 name="name"
+                data-test="properties-modal-name-input"
                 type="text"
                 bsSize="sm"
                 value={name}
-                // @ts-ignore
-                onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-                  setName(event.target.value)
-                }
+                onChange={(
+                  event: React.FormEvent<FormControl & FormControlProps>,
+                ) => setName((event.currentTarget?.value as string) ?? '')}
               />
             </FormGroup>
             <FormGroup>
-              <label className="control-label" htmlFor="description">
-                {t('Description')}
-              </label>
+              <FormLabel htmlFor="description">{t('Description')}</FormLabel>
               <FormControl
                 name="description"
                 type="text"
                 componentClass="textarea"
                 bsSize="sm"
                 value={description}
-                // @ts-ignore
-                onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-                  setDescription(event.target.value)
+                onChange={(
+                  event: React.FormEvent<FormControl & FormControlProps>,
+                ) =>
+                  setDescription((event.currentTarget?.value as string) ?? '')
                 }
                 style={{ maxWidth: '100%' }}
               />
@@ -220,30 +205,29 @@ function PropertiesModal({ slice, onHide, onSave }: InternalProps) {
           <Col md={6}>
             <h3>{t('Configuration')}</h3>
             <FormGroup>
-              <label className="control-label" htmlFor="cacheTimeout">
-                {t('Cache Timeout')}
-              </label>
+              <FormLabel htmlFor="cacheTimeout">{t('Cache Timeout')}</FormLabel>
               <FormControl
                 name="cacheTimeout"
                 type="text"
                 bsSize="sm"
                 value={cacheTimeout}
-                // @ts-ignore
-                onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-                  setCacheTimeout(event.target.value.replace(/[^0-9]/, ''))
-                }
+                onChange={(
+                  event: React.FormEvent<FormControl & FormControlProps>,
+                ) => {
+                  const targetValue =
+                    (event.currentTarget?.value as string) ?? '';
+                  setCacheTimeout(targetValue.replace(/[^0-9]/, ''));
+                }}
               />
               <p className="help-block">
                 {t(
-                  'Duration (in seconds) of the caching timeout for this chart. Note this defaults to the datasource/table timeout if undefined.',
+                  "Duration (in seconds) of the caching timeout for this chart. Note this defaults to the dataset's timeout if undefined.",
                 )}
               </p>
             </FormGroup>
             <h3 style={{ marginTop: '1em' }}>{t('Access')}</h3>
             <FormGroup>
-              <label className="control-label" htmlFor="owners">
-                {t('Owners')}
-              </label>
+              <FormLabel htmlFor="owners">{t('Owners')}</FormLabel>
               <AsyncSelect
                 isMulti
                 name="owners"
@@ -266,19 +250,41 @@ function PropertiesModal({ slice, onHide, onSave }: InternalProps) {
       </Modal.Body>
       <Modal.Footer>
         <Button
+          data-test="properties-modal-cancel-button"
+          type="button"
+          buttonSize="sm"
+          onClick={onHide}
+          cta
+        >
+          {t('Cancel')}
+        </Button>
+        <Button
+          data-test="properties-modal-save-button"
           type="submit"
-          bsSize="sm"
-          bsStyle="primary"
-          className="m-r-5"
-          disabled={!owners || submitting}
+          buttonSize="sm"
+          buttonStyle="primary"
+          disabled={!owners || submitting || !name}
+          cta
         >
           {t('Save')}
-        </Button>
-        <Button type="button" bsSize="sm" onClick={onHide}>
-          {t('Cancel')}
         </Button>
         <Dialog ref={errorDialog} />
       </Modal.Footer>
     </form>
+  );
+}
+
+export default function PropertiesModalWrapper({
+  show,
+  onHide,
+  animation,
+  slice,
+  onSave,
+}: WrapperProps) {
+  // The wrapper is a separate component so that hooks only run when the modal opens
+  return (
+    <Modal show={show} onHide={onHide} animation={animation} bsSize="large">
+      <PropertiesModal slice={slice} onHide={onHide} onSave={onSave} />
+    </Modal>
   );
 }

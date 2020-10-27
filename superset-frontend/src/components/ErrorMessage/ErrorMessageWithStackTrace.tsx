@@ -16,56 +16,64 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { useState } from 'react';
-// @ts-ignore
-import { Alert, Collapse } from 'react-bootstrap';
+import React from 'react';
+import { t } from '@superset-ui/core';
+
 import getErrorMessageComponentRegistry from './getErrorMessageComponentRegistry';
-import { SupersetError } from './types';
+import { SupersetError, ErrorSource } from './types';
+import ErrorAlert from './ErrorAlert';
+
+const DEFAULT_TITLE = t('Unexpected Error');
 
 type Props = {
+  title?: string;
   error?: SupersetError;
   link?: string;
-  message: string;
+  subtitle?: React.ReactNode;
+  copyText?: string;
   stackTrace?: string;
+  source?: ErrorSource;
 };
 
 export default function ErrorMessageWithStackTrace({
+  title = DEFAULT_TITLE,
   error,
-  message,
+  subtitle,
+  copyText,
   link,
   stackTrace,
+  source,
 }: Props) {
-  const [showStackTrace, setShowStackTrace] = useState(false);
-
   // Check if a custom error message component was registered for this message
   if (error) {
     const ErrorMessageComponent = getErrorMessageComponentRegistry().get(
       error.error_type,
     );
     if (ErrorMessageComponent) {
-      return <ErrorMessageComponent error={error} />;
+      return <ErrorMessageComponent error={error} source={source} />;
     }
   }
 
-  // Fallback to the default error message renderer
   return (
-    <div className={`stack-trace-container${stackTrace ? ' has-trace' : ''}`}>
-      <Alert
-        bsStyle="warning"
-        onClick={() => setShowStackTrace(!showStackTrace)}
-      >
-        {message}
-        {link && (
-          <a href={link} target="_blank" rel="noopener noreferrer">
-            (Request Access)
-          </a>
-        )}
-      </Alert>
-      {stackTrace && (
-        <Collapse in={showStackTrace}>
-          <pre>{stackTrace}</pre>
-        </Collapse>
-      )}
-    </div>
+    <ErrorAlert
+      level="warning"
+      title={title}
+      subtitle={subtitle}
+      copyText={copyText}
+      source={source}
+      body={
+        link || stackTrace ? (
+          <>
+            {link && (
+              <a href={link} target="_blank" rel="noopener noreferrer">
+                (Request Access)
+              </a>
+            )}
+            <br />
+            {stackTrace && <pre>{stackTrace}</pre>}
+          </>
+        ) : undefined
+      }
+    />
   );
 }

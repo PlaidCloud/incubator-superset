@@ -17,21 +17,19 @@
 """Defines the templating context for SQL Lab"""
 import inspect
 import re
-from typing import Any, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, cast, List, Optional, Tuple, TYPE_CHECKING
 
 from flask import g, request
 from jinja2.sandbox import SandboxedEnvironment
 
 from superset import jinja_base_context
-from superset.extensions import jinja_context_manager
+from superset.extensions import feature_flag_manager, jinja_context_manager
 from superset.utils.core import convert_legacy_filters_into_adhoc, merge_extra_filters
 
 if TYPE_CHECKING:
-    from superset.connectors.sqla.models import (  # pylint: disable=unused-import
-        SqlaTable,
-    )
-    from superset.models.core import Database  # pylint: disable=unused-import
-    from superset.models.sql_lab import Query  # pylint: disable=unused-import
+    from superset.connectors.sqla.models import SqlaTable
+    from superset.models.core import Database
+    from superset.models.sql_lab import Query
 
 
 def filter_values(column: str, default: Optional[str] = None) -> List[str]:
@@ -207,23 +205,23 @@ class BaseTemplateProcessor:  # pylint: disable=too-few-public-methods
 
     def __init__(
         self,
-        database: Optional["Database"] = None,
+        database: "Database",
         query: Optional["Query"] = None,
         table: Optional["SqlaTable"] = None,
         extra_cache_keys: Optional[List[Any]] = None,
         **kwargs: Any,
     ) -> None:
-        self.database = database
-        self.query = query
-        self.schema = None
+        self._database = database
+        self._query = query
+        self._schema = None
         if query and query.schema:
-            self.schema = query.schema
+            self._schema = query.schema
         elif table:
-            self.schema = table.schema
+            self._schema = table.schema
 
         extra_cache = ExtraCache(extra_cache_keys)
 
-        self.context = {
+        self._context = {
             "url_param": extra_cache.url_param,
             "current_user_id": extra_cache.current_user_id,
             "current_username": extra_cache.current_username,
@@ -231,11 +229,11 @@ class BaseTemplateProcessor:  # pylint: disable=too-few-public-methods
             "filter_values": filter_values,
             "form_data": {},
         }
-        self.context.update(kwargs)
-        self.context.update(jinja_base_context)
+        self._context.update(kwargs)
+        self._context.update(jinja_base_context)
         if self.engine:
-            self.context[self.engine] = self
-        self.env = SandboxedEnvironment()
+            self._context[self.engine] = self
+        self._env = SandboxedEnvironment()
 
     def process_template(self, sql: str, **kwargs: Any) -> str:
         """Processes a sql template
@@ -244,9 +242,19 @@ class BaseTemplateProcessor:  # pylint: disable=too-few-public-methods
         >>> process_template(sql)
         "SELECT '2017-01-01T00:00:00'"
         """
-        template = self.env.from_string(sql)
-        kwargs.update(self.context)
+        template = self._env.from_string(sql)
+        kwargs.update(self._context)
         return template.render(kwargs)
+
+
+class NoOpTemplateProcessor(
+    BaseTemplateProcessor
+):  # pylint: disable=too-few-public-methods
+    def process_template(self, sql: str, **kwargs: Any) -> str:
+        """
+        Makes processing a template a noop
+        """
+        return sql
 
 
 class PrestoTemplateProcessor(BaseTemplateProcessor):
@@ -266,7 +274,7 @@ class PrestoTemplateProcessor(BaseTemplateProcessor):
             schema, table_name = table_name.split(".")
         return table_name, schema
 
-    def first_latest_partition(self, table_name: str) -> str:
+    def first_latest_partition(self, table_name: str) -> Optional[str]:
         """
         Gets the first value in the array of all latest partitions
 
@@ -275,9 +283,10 @@ class PrestoTemplateProcessor(BaseTemplateProcessor):
         :raises IndexError: If no partition exists
         """
 
-        return self.latest_partitions(table_name)[0]
+        latest_partitions = self.latest_partitions(table_name)
+        return latest_partitions[0] if latest_partitions else None
 
-    def latest_partitions(self, table_name: str) -> List[str]:
+    def latest_partitions(self, table_name: str) -> Optional[List[str]]:
         """
         Gets the array of all latest partitions
 
@@ -285,17 +294,22 @@ class PrestoTemplateProcessor(BaseTemplateProcessor):
         :return: the latest partition array
         """
 
-        table_name, schema = self._schema_table(table_name, self.schema)
-        assert self.database
-        return self.database.db_engine_spec.latest_partition(  # type: ignore
-            table_name, schema, self.database
+        from superset.db_engine_specs.presto import PrestoEngineSpec
+
+        table_name, schema = self._schema_table(table_name, self._schema)
+        return cast(PrestoEngineSpec, self._database.db_engine_spec).latest_partition(
+            table_name, schema, self._database
         )[1]
 
-    def latest_sub_partition(self, table_name, **kwargs):
-        table_name, schema = self._schema_table(table_name, self.schema)
-        assert self.database
-        return self.database.db_engine_spec.latest_sub_partition(
-            table_name=table_name, schema=schema, database=self.database, **kwargs
+    def latest_sub_partition(self, table_name: str, **kwargs: Any) -> Any:
+        table_name, schema = self._schema_table(table_name, self._schema)
+
+        from superset.db_engine_specs.presto import PrestoEngineSpec
+
+        return cast(
+            PrestoEngineSpec, self._database.db_engine_spec
+        ).latest_sub_partition(
+            table_name=table_name, schema=schema, database=self._database, **kwargs
         )
 
     latest_partition = first_latest_partition
@@ -320,7 +334,10 @@ def get_template_processor(
     query: Optional["Query"] = None,
     **kwargs: Any,
 ) -> BaseTemplateProcessor:
-    template_processor = template_processors.get(
-        database.backend, BaseTemplateProcessor
-    )
+    if feature_flag_manager.is_feature_enabled("ENABLE_TEMPLATE_PROCESSING"):
+        template_processor = template_processors.get(
+            database.backend, BaseTemplateProcessor
+        )
+    else:
+        template_processor = NoOpTemplateProcessor
     return template_processor(database=database, table=table, query=query, **kwargs)

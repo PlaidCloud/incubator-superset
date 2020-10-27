@@ -18,30 +18,49 @@
  */
 import React from 'react';
 import PropTypes from 'prop-types';
-import { Row, Col, Button, Modal, FormControl } from 'react-bootstrap';
+import { Row, Col, Modal, FormControl } from 'react-bootstrap';
+import Button from 'src/components/Button';
 import Dialog from 'react-bootstrap-dialog';
 import { AsyncSelect } from 'src/components/Select';
-import AceEditor from 'react-ace';
 import rison from 'rison';
-import { t } from '@superset-ui/translation';
-import { SupersetClient } from '@superset-ui/connection';
-import '../stylesheets/buttons.less';
+import {
+  styled,
+  t,
+  SupersetClient,
+  getCategoricalSchemeRegistry,
+} from '@superset-ui/core';
 
+import FormLabel from 'src/components/FormLabel';
+import { JsonEditor } from 'src/components/AsyncAceEditor';
+
+import ColorSchemeControlWrapper from 'src/dashboard/components/ColorSchemeControlWrapper';
 import getClientErrorObject from '../../utils/getClientErrorObject';
 import withToasts from '../../messageToasts/enhancers/withToasts';
+import '../stylesheets/buttons.less';
+
+const StyledJsonEditor = styled(JsonEditor)`
+  border-radius: ${({ theme }) => theme.borderRadius}px;
+  border: 1px solid ${({ theme }) => theme.colors.secondary.light2};
+`;
 
 const propTypes = {
   dashboardId: PropTypes.number.isRequired,
-  show: PropTypes.bool.isRequired,
+  show: PropTypes.bool,
   onHide: PropTypes.func,
-  onDashboardSave: PropTypes.func,
+  colorScheme: PropTypes.string,
+  setColorSchemeAndUnsavedChanges: PropTypes.func,
+  onSubmit: PropTypes.func,
   addSuccessToast: PropTypes.func.isRequired,
+  onlyApply: PropTypes.bool,
 };
 
 const defaultProps = {
   onHide: () => {},
-  onDashboardSave: () => {},
+  setColorSchemeAndUnsavedChanges: () => {},
+  onSubmit: () => {},
   show: false,
+  colorScheme: undefined,
+  onlyApply: false,
 };
 
 class PropertiesModal extends React.PureComponent {
@@ -54,6 +73,7 @@ class PropertiesModal extends React.PureComponent {
         slug: '',
         owners: [],
         json_metadata: '',
+        colorScheme: props.colorScheme,
       },
       isDashboardLoaded: false,
       isAdvancedOpen: false,
@@ -61,14 +81,47 @@ class PropertiesModal extends React.PureComponent {
     this.onChange = this.onChange.bind(this);
     this.onMetadataChange = this.onMetadataChange.bind(this);
     this.onOwnersChange = this.onOwnersChange.bind(this);
-    this.save = this.save.bind(this);
+    this.submit = this.submit.bind(this);
     this.toggleAdvanced = this.toggleAdvanced.bind(this);
     this.loadOwnerOptions = this.loadOwnerOptions.bind(this);
     this.handleErrorResponse = this.handleErrorResponse.bind(this);
+    this.onColorSchemeChange = this.onColorSchemeChange.bind(this);
   }
 
   componentDidMount() {
     this.fetchDashboardDetails();
+    JsonEditor.preload();
+  }
+
+  onColorSchemeChange(value, { updateMetadata = true } = {}) {
+    // check that color_scheme is valid
+    const colorChoices = getCategoricalSchemeRegistry().keys();
+    const { json_metadata: jsonMetadata } = this.state.values;
+    const jsonMetadataObj = jsonMetadata?.length
+      ? JSON.parse(jsonMetadata)
+      : {};
+
+    if (!colorChoices.includes(value)) {
+      this.dialog.show({
+        title: 'Error',
+        bsSize: 'medium',
+        bsStyle: 'danger',
+        actions: [Dialog.DefaultAction('Ok', () => {}, 'btn-danger')],
+        body: t('A valid color scheme is required'),
+      });
+      throw new Error('A valid color scheme is required');
+    }
+
+    // update metadata to match selection
+    if (
+      updateMetadata &&
+      Object.keys(jsonMetadataObj).includes('color_scheme')
+    ) {
+      jsonMetadataObj.color_scheme = value;
+      this.onMetadataChange(JSON.stringify(jsonMetadataObj));
+    }
+
+    this.updateFormState('colorScheme', value);
   }
 
   onOwnersChange(value) {
@@ -93,6 +146,10 @@ class PropertiesModal extends React.PureComponent {
       endpoint: `/api/v1/dashboard/${this.props.dashboardId}`,
     }).then(response => {
       const dashboard = response.json.result;
+      const jsonMetadataObj = dashboard.json_metadata?.length
+        ? JSON.parse(dashboard.json_metadata)
+        : {};
+
       this.setState(state => ({
         isDashboardLoaded: true,
         values: {
@@ -100,6 +157,7 @@ class PropertiesModal extends React.PureComponent {
           dashboard_title: dashboard.dashboard_title || '',
           slug: dashboard.slug || '',
           json_metadata: dashboard.json_metadata || '',
+          colorScheme: jsonMetadataObj.color_scheme,
         },
       }));
       const initialSelectedOwners = dashboard.owners.map(owner => ({
@@ -144,50 +202,99 @@ class PropertiesModal extends React.PureComponent {
   }
 
   async handleErrorResponse(response) {
-    const { error, statusText } = await getClientErrorObject(response);
+    const { error, statusText, message } = await getClientErrorObject(response);
+    let errorText = error || statusText || t('An error has occurred');
+
+    if (typeof message === 'object' && message.json_metadata) {
+      errorText = message.json_metadata;
+    } else if (typeof message === 'string') {
+      errorText = message;
+
+      if (message === 'Forbidden') {
+        errorText = t('You do not have permission to edit this dashboard');
+      }
+    }
+
     this.dialog.show({
       title: 'Error',
       bsSize: 'medium',
       bsStyle: 'danger',
       actions: [Dialog.DefaultAction('Ok', () => {}, 'btn-danger')],
-      body: error || statusText || t('An error has occurred'),
+      body: errorText,
     });
   }
 
-  save(e) {
+  submit(e) {
     e.preventDefault();
     e.stopPropagation();
-    const { values } = this.state;
-    const owners = values.owners.map(o => o.value);
+    const {
+      values: {
+        json_metadata: jsonMetadata,
+        slug,
+        dashboard_title: dashboardTitle,
+        colorScheme,
+        owners: ownersValue,
+      },
+    } = this.state;
+    const { onlyApply } = this.props;
+    const owners = ownersValue.map(o => o.value);
+    let metadataColorScheme;
 
-    SupersetClient.put({
-      endpoint: `/api/v1/dashboard/${this.props.dashboardId}`,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        dashboard_title: values.dashboard_title,
-        slug: values.slug || null,
-        json_metadata: values.json_metadata || null,
-        owners,
-      }),
-    }).then(({ json }) => {
-      this.props.addSuccessToast(t('The dashboard has been saved'));
-      this.props.onDashboardSave({
+    // update color scheme to match metadata
+    if (jsonMetadata?.length) {
+      const { color_scheme: metadataColorScheme } = JSON.parse(jsonMetadata);
+      if (metadataColorScheme) {
+        this.onColorSchemeChange(metadataColorScheme, {
+          updateMetadata: false,
+        });
+      }
+    }
+
+    if (onlyApply) {
+      this.props.onSubmit({
         id: this.props.dashboardId,
-        title: json.result.dashboard_title,
-        slug: json.result.slug,
-        jsonMetadata: json.result.json_metadata,
-        ownerIds: json.result.owners,
+        title: dashboardTitle,
+        slug,
+        jsonMetadata,
+        ownerIds: owners,
+        colorScheme: metadataColorScheme || colorScheme,
       });
       this.props.onHide();
-    }, this.handleErrorResponse);
+    } else {
+      SupersetClient.put({
+        endpoint: `/api/v1/dashboard/${this.props.dashboardId}`,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dashboard_title: dashboardTitle,
+          slug: slug || null,
+          json_metadata: jsonMetadata || null,
+          owners,
+        }),
+      }).then(({ json: { result } }) => {
+        this.props.addSuccessToast(t('The dashboard has been saved'));
+        this.props.onSubmit({
+          id: this.props.dashboardId,
+          title: result.dashboard_title,
+          slug: result.slug,
+          jsonMetadata: result.json_metadata,
+          ownerIds: result.owners,
+          colorScheme: metadataColorScheme || colorScheme,
+        });
+        this.props.onHide();
+      }, this.handleErrorResponse);
+    }
   }
 
   render() {
-    const { values, isDashboardLoaded, isAdvancedOpen } = this.state;
+    const { values, isDashboardLoaded, isAdvancedOpen, errors } = this.state;
+    const { onHide, onlyApply } = this.props;
+
+    const saveLabel = onlyApply ? t('Apply') : t('Save');
+
     return (
       <Modal show={this.props.show} onHide={this.props.onHide} bsSize="lg">
-        <form onSubmit={this.save}>
-          <Modal.Header closeButton>
+        <form onSubmit={this.submit}>
+          <Modal.Header closeButton data-test="dashboard-properties-modal">
             <Modal.Title>
               <div>
                 <span className="float-left">{t('Dashboard Properties')}</span>
@@ -202,10 +309,9 @@ class PropertiesModal extends React.PureComponent {
             </Row>
             <Row>
               <Col md={6}>
-                <label className="control-label" htmlFor="embed-height">
-                  {t('Title')}
-                </label>
+                <FormLabel htmlFor="embed-height">{t('Title')}</FormLabel>
                 <FormControl
+                  data-test="dashboard-title-input"
                   name="dashboard_title"
                   type="text"
                   bsSize="sm"
@@ -215,9 +321,7 @@ class PropertiesModal extends React.PureComponent {
                 />
               </Col>
               <Col md={6}>
-                <label className="control-label" htmlFor="embed-height">
-                  {t('URL Slug')}
-                </label>
+                <FormLabel htmlFor="embed-height">{t('URL Slug')}</FormLabel>
                 <FormControl
                   name="slug"
                   type="text"
@@ -234,9 +338,7 @@ class PropertiesModal extends React.PureComponent {
             <Row>
               <Col md={6}>
                 <h3 style={{ marginTop: '1em' }}>{t('Access')}</h3>
-                <label className="control-label" htmlFor="owners">
-                  {t('Owners')}
-                </label>
+                <FormLabel htmlFor="owners">{t('Owners')}</FormLabel>
                 <AsyncSelect
                   name="owners"
                   isMulti
@@ -254,15 +356,18 @@ class PropertiesModal extends React.PureComponent {
                   )}
                 </p>
               </Col>
+              <Col md={6}>
+                <h3 style={{ marginTop: '1em' }}>{t('Colors')}</h3>
+                <ColorSchemeControlWrapper
+                  onChange={this.onColorSchemeChange}
+                  colorScheme={values.colorScheme}
+                />
+              </Col>
             </Row>
             <Row>
               <Col md={12}>
                 <h3 style={{ marginTop: '1em' }}>
-                  <button
-                    type="button"
-                    className="text-button"
-                    onClick={this.toggleAdvanced}
-                  >
+                  <Button buttonStyle="link" onClick={this.toggleAdvanced}>
                     <i
                       className={`fa fa-angle-${
                         isAdvancedOpen ? 'down' : 'right'
@@ -270,23 +375,23 @@ class PropertiesModal extends React.PureComponent {
                       style={{ minWidth: '1em' }}
                     />
                     {t('Advanced')}
-                  </button>
+                  </Button>
                 </h3>
                 {isAdvancedOpen && (
                   <>
-                    <label className="control-label" htmlFor="json_metadata">
+                    <FormLabel htmlFor="json_metadata">
                       {t('JSON Metadata')}
-                    </label>
-                    <AceEditor
-                      mode="json"
+                    </FormLabel>
+                    <StyledJsonEditor
+                      showLoadingForImport
                       name="json_metadata"
                       defaultValue={this.defaultMetadataValue}
                       value={values.json_metadata}
                       onChange={this.onMetadataChange}
-                      theme="textmate"
                       tabSize={2}
                       width="100%"
                       height="200px"
+                      wrapEnabled
                     />
                     <p className="help-block">
                       {t(
@@ -301,16 +406,23 @@ class PropertiesModal extends React.PureComponent {
           <Modal.Footer>
             <span className="float-right">
               <Button
-                type="submit"
-                bsSize="sm"
-                bsStyle="primary"
-                className="m-r-5"
-                disabled={this.state.errors.length > 0}
+                type="button"
+                buttonSize="sm"
+                onClick={onHide}
+                data-test="properties-modal-cancel-button"
+                cta
               >
-                {t('Save')}
-              </Button>
-              <Button type="button" bsSize="sm" onClick={this.props.onHide}>
                 {t('Cancel')}
+              </Button>
+              <Button
+                type="submit"
+                buttonSize="sm"
+                buttonStyle="primary"
+                className="m-r-5"
+                disabled={errors.length > 0}
+                cta
+              >
+                {saveLabel}
               </Button>
               <Dialog
                 ref={ref => {

@@ -14,7 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-# pylint: disable=C,R,W
 import json
 import logging
 import time
@@ -22,9 +21,12 @@ from datetime import datetime
 from io import BytesIO
 from typing import Any, Dict, Optional
 
+from flask_babel import lazy_gettext as _
 from sqlalchemy.orm import Session
 
 from superset.connectors.connector_registry import ConnectorRegistry
+from superset.connectors.sqla.models import SqlaTable, SqlMetric, TableColumn
+from superset.exceptions import DashboardImportException
 from superset.models.dashboard import Dashboard
 from superset.models.slice import Slice
 
@@ -62,15 +64,19 @@ def decode_dashboards(o: Dict[str, Any]) -> Any:
 
 
 def import_dashboards(
-    session: Session, data_stream: BytesIO, import_time: Optional[int] = None
+    session: Session,
+    data_stream: BytesIO,
+    database_id: Optional[int] = None,
+    import_time: Optional[int] = None,
 ) -> None:
     """Imports dashboards from a stream to databases"""
     current_tt = int(time.time())
     import_time = current_tt if import_time is None else import_time
     data = json.loads(data_stream.read(), object_hook=decode_dashboards)
-    # TODO: import DRUID datasources
+    if not data:
+        raise DashboardImportException(_("No data in file"))
     for table in data["datasources"]:
-        type(table).import_obj(table, import_time=import_time)
+        type(table).import_obj(table, database_id, import_time=import_time)
     session.commit()
     for dashboard in data["dashboards"]:
         Dashboard.import_obj(dashboard, import_time=import_time)

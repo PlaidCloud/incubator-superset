@@ -17,12 +17,12 @@
  * under the License.
  */
 /* eslint camelcase: 0 */
-import { t } from '@superset-ui/translation';
-import { SupersetClient } from '@superset-ui/connection';
+import { t, SupersetClient } from '@superset-ui/core';
+import rison from 'rison';
 
-import { addDangerToast } from '../../messageToasts/actions';
-import { getDatasourceParameter } from '../../modules/utils';
-import getClientErrorObject from '../../utils/getClientErrorObject';
+import { addDangerToast } from 'src/messageToasts/actions';
+import { getDatasourceParameter } from 'src/modules/utils';
+import getClientErrorObject from 'src/utils/getClientErrorObject';
 
 export const SET_ALL_SLICES = 'SET_ALL_SLICES';
 export function setAllSlices(slices) {
@@ -39,6 +39,7 @@ export function fetchAllSlicesFailed(error) {
   return { type: FETCH_ALL_SLICES_FAILED, payload: { error } };
 }
 
+const FETCH_SLICES_PAGE_SIZE = 200;
 export function fetchAllSlices(userId) {
   return (dispatch, getState) => {
     const { sliceEntities } = getState();
@@ -46,13 +47,33 @@ export function fetchAllSlices(userId) {
       dispatch(fetchAllSlicesStarted());
 
       return SupersetClient.get({
-        endpoint: `/sliceasync/api/read?_flt_0_created_by=${userId}`,
+        endpoint: `/api/v1/chart/?q=${rison.encode({
+          columns: [
+            'changed_on_humanized',
+            'changed_on',
+            'datasource_id',
+            'datasource_type',
+            'datasource_link',
+            'datasource_name_text',
+            'description_markeddown',
+            'description',
+            'edit_url',
+            'id',
+            'modified',
+            'params',
+            'slice_name',
+            'slice_url',
+            'viz_type',
+          ],
+          filters: [{ col: 'owners', opr: 'rel_m_m', value: userId }],
+          page_size: FETCH_SLICES_PAGE_SIZE,
+        })}`,
       })
         .then(({ json }) => {
           const slices = {};
           json.result.forEach(slice => {
             let form_data = JSON.parse(slice.params);
-            let datasource = form_data.datasource;
+            let { datasource } = form_data;
             if (!datasource) {
               datasource = getDatasourceParameter(
                 slice.datasource_id,
@@ -84,19 +105,21 @@ export function fetchAllSlices(userId) {
 
           return dispatch(setAllSlices(slices));
         })
-        .catch(errorResponse =>
-          getClientErrorObject(errorResponse).then(({ error }) => {
-            dispatch(
-              fetchAllSlicesFailed(
-                error || t('Could not fetch all saved charts'),
-              ),
-            );
-            dispatch(
-              addDangerToast(
-                t('Sorry there was an error fetching saved charts: ') + error,
-              ),
-            );
-          }),
+        .catch(
+          errorResponse =>
+            console.log(errorResponse) ||
+            getClientErrorObject(errorResponse).then(({ error }) => {
+              dispatch(
+                fetchAllSlicesFailed(
+                  error || t('Could not fetch all saved charts'),
+                ),
+              );
+              dispatch(
+                addDangerToast(
+                  t('Sorry there was an error fetching saved charts: ') + error,
+                ),
+              );
+            }),
         );
     }
 

@@ -18,10 +18,11 @@
  */
 import React from 'react';
 import PropTypes from 'prop-types';
-import { Label, OverlayTrigger } from 'react-bootstrap';
-import { t } from '@superset-ui/translation';
-import { InfoTooltipWithTrigger } from '@superset-ui/control-utils';
+import Popover from 'src/common/components/Popover';
+import { t, withTheme } from '@superset-ui/core';
+import { InfoTooltipWithTrigger } from '@superset-ui/chart-controls';
 
+import Label from 'src/components/Label';
 import AdhocFilterEditPopover from './AdhocFilterEditPopover';
 import AdhocFilter from '../AdhocFilter';
 import columnType from '../propTypes/columnType';
@@ -40,14 +41,14 @@ const propTypes = {
   datasource: PropTypes.object,
   partitionColumn: PropTypes.string,
 };
-
-export default class AdhocFilterOption extends React.PureComponent {
+class AdhocFilterOption extends React.PureComponent {
   constructor(props) {
     super(props);
     this.closeFilterEditOverlay = this.closeFilterEditOverlay.bind(this);
     this.onPopoverResize = this.onPopoverResize.bind(this);
     this.onOverlayEntered = this.onOverlayEntered.bind(this);
     this.onOverlayExited = this.onOverlayExited.bind(this);
+    this.handleVisibleChange = this.handleVisibleChange.bind(this);
     this.state = { overlayShown: false };
   }
 
@@ -68,12 +69,20 @@ export default class AdhocFilterOption extends React.PureComponent {
   }
 
   closeFilterEditOverlay() {
-    this.refs.overlay.hide();
+    this.setState({ overlayShown: false });
+  }
+
+  handleVisibleChange(visible) {
+    if (visible) {
+      this.onOverlayEntered();
+    } else {
+      this.onOverlayExited();
+    }
   }
 
   render() {
     const { adhocFilter } = this.props;
-    const overlay = (
+    const content = (
       <AdhocFilterEditPopover
         onResize={this.onPopoverResize}
         adhocFilter={adhocFilter}
@@ -85,7 +94,7 @@ export default class AdhocFilterOption extends React.PureComponent {
       />
     );
     return (
-      <div onMouseDownCapture={e => e.stopPropagation()}>
+      <div role="button" tabIndex={0} onMouseDown={e => e.stopPropagation()}>
         {adhocFilter.isExtra && (
           <InfoTooltipWithTrigger
             icon="exclamation-triangle"
@@ -97,27 +106,29 @@ export default class AdhocFilterOption extends React.PureComponent {
               `)}
           />
         )}
-        <OverlayTrigger
-          ref="overlay"
+        <Popover
           placement="right"
           trigger="click"
           disabled
-          overlay={overlay}
-          rootClose
-          shouldUpdatePosition
-          defaultOverlayShown={adhocFilter.isNew}
-          onEntered={this.onOverlayEntered}
-          onExited={this.onOverlayExited}
+          content={content}
+          defaultVisible={adhocFilter.isNew}
+          visible={this.state.overlayShown}
+          onVisibleChange={this.handleVisibleChange}
         >
           <Label className="option-label adhoc-option adhoc-filter-option">
             {adhocFilter.getDefaultLabel()}
             <i
-              className={`glyphicon glyphicon-triangle-right adhoc-label-arrow`}
+              className={`fa fa-caret-${
+                this.state.overlayShown ? 'left' : 'right'
+              } adhoc-label-arrow`}
             />
           </Label>
-        </OverlayTrigger>
+        </Popover>
       </div>
     );
   }
 }
+
+export default withTheme(AdhocFilterOption);
+
 AdhocFilterOption.propTypes = propTypes;

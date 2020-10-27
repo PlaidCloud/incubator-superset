@@ -16,13 +16,9 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { t } from '@superset-ui/translation';
-import {
-  validateNonEmpty,
-  legacyValidateInteger,
-} from '@superset-ui/validator';
-import { formatSelectOptions } from '../../modules/utils';
-import { columnChoices } from '../controls';
+import { t, validateNonEmpty, legacyValidateInteger } from '@superset-ui/core';
+import { formatSelectOptions } from 'src/modules/utils';
+import { columnChoices } from 'src/explore/controls';
 import {
   filterNulls,
   jsColumns,
@@ -39,7 +35,6 @@ import {
 } from './Shared_DeckGL';
 
 export default {
-  requiresTime: true,
   controlPanelSections: [
     {
       label: t('Query'),

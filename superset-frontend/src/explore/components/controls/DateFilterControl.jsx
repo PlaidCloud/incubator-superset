@@ -19,26 +19,29 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import {
-  Button,
   DropdownButton,
   FormControl,
   FormGroup,
-  Glyphicon,
   InputGroup,
-  Label,
   MenuItem,
   OverlayTrigger,
-  Popover,
   Radio,
   Tab,
   Tabs,
   Tooltip,
 } from 'react-bootstrap';
+import Popover from 'src/common/components/Popover';
+import Button from 'src/components/Button';
 import Datetime from 'react-datetime';
 import 'react-datetime/css/react-datetime.css';
 import moment from 'moment';
-import { t } from '@superset-ui/translation';
+import { t, styled, withTheme } from '@superset-ui/core';
 
+import {
+  buildTimeRangeString,
+  formatTimeRange,
+} from 'src/explore/dateFilterUtils';
+import Label from 'src/components/Label';
 import './DateFilterControl.less';
 import ControlHeader from '../ControlHeader';
 import PopoverSection from '../../../components/PopoverSection';
@@ -83,8 +86,8 @@ const DEFAULT_SINCE = moment()
 const DEFAULT_UNTIL = moment().utc().startOf('day').format(MOMENT_FORMAT);
 const SEPARATOR = ' : ';
 const FREEFORM_TOOLTIP = t(
-  'Superset supports smart date parsing. Strings like `last sunday` or ' +
-    '`last october` can be used.',
+  'Superset supports smart date parsing. Strings like `3 weeks ago`, `last sunday`, or ' +
+    '`2 weeks from now` can be used.',
 );
 
 const DATE_FILTER_POPOVER_STYLE = { width: '250px' };
@@ -124,17 +127,24 @@ function getStateFromSeparator(value) {
 }
 
 function getStateFromCommonTimeFrame(value) {
-  const units = value.split(' ')[1] + 's';
+  const units = `${value.split(' ')[1]}s`;
+  let sinceMoment;
+
+  if (value === 'No filter') {
+    sinceMoment = '';
+  } else if (units === 'years') {
+    sinceMoment = moment().utc().startOf(units).subtract(1, units);
+  } else {
+    sinceMoment = moment().utc().startOf('day').subtract(1, units);
+  }
+
   return {
     tab: TABS.DEFAULTS,
     type: TYPES.DEFAULTS,
     common: value,
-    since: moment()
-      .utc()
-      .startOf('day')
-      .subtract(1, units)
-      .format(MOMENT_FORMAT),
-    until: moment().utc().startOf('day').format(MOMENT_FORMAT),
+    since: sinceMoment === '' ? '' : sinceMoment.format(MOMENT_FORMAT),
+    until:
+      sinceMoment === '' ? '' : sinceMoment.add(1, units).format(MOMENT_FORMAT),
   };
 }
 
@@ -165,7 +175,13 @@ function getStateFromCustomRange(value) {
   };
 }
 
-export default class DateFilterControl extends React.Component {
+const Styles = styled.div`
+  .radio {
+    margin: ${({ theme }) => theme.gridUnit}px 0;
+  }
+`;
+
+class DateFilterControl extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
@@ -190,9 +206,11 @@ export default class DateFilterControl extends React.Component {
       showUntilCalendar: false,
       sinceViewMode: 'days',
       untilViewMode: 'days',
+
+      popoverVisible: false,
     };
 
-    const value = props.value;
+    const { value } = props;
     if (value.indexOf(SEPARATOR) >= 0) {
       this.state = { ...this.state, ...getStateFromSeparator(value) };
     } else if (COMMON_TIME_FRAMES.indexOf(value) >= 0) {
@@ -203,7 +221,6 @@ export default class DateFilterControl extends React.Component {
 
     this.close = this.close.bind(this);
     this.handleClick = this.handleClick.bind(this);
-    this.handleClickTrigger = this.handleClickTrigger.bind(this);
     this.isValidSince = this.isValidSince.bind(this);
     this.isValidUntil = this.isValidUntil.bind(this);
     this.onEnter = this.onEnter.bind(this);
@@ -214,6 +231,7 @@ export default class DateFilterControl extends React.Component {
     this.setTypeCustomStartEnd = this.setTypeCustomStartEnd.bind(this);
     this.toggleCalendar = this.toggleCalendar.bind(this);
     this.changeTab = this.changeTab.bind(this);
+    this.handleVisibleChange = this.handleVisibleChange.bind(this);
   }
 
   componentDidMount() {
@@ -223,11 +241,13 @@ export default class DateFilterControl extends React.Component {
   componentWillUnmount() {
     document.removeEventListener('click', this.handleClick);
   }
+
   onEnter(event) {
     if (event.key === 'Enter') {
       this.close();
     }
   }
+
   setCustomRange(key, value) {
     const updatedState = { ...this.state, [key]: value };
     const combinedValue = [
@@ -237,22 +257,25 @@ export default class DateFilterControl extends React.Component {
     ].join(' ');
     this.setState(getStateFromCustomRange(combinedValue));
   }
+
   setCustomStartEnd(key, value) {
     const closeCalendar =
       (key === 'since' && this.state.sinceViewMode === 'days') ||
       (key === 'until' && this.state.untilViewMode === 'days');
-    this.setState({
+    this.setState(prevState => ({
       type: TYPES.CUSTOM_START_END,
       [key]: typeof value === 'string' ? value : value.format(MOMENT_FORMAT),
-      showSinceCalendar: this.state.showSinceCalendar && !closeCalendar,
-      showUntilCalendar: this.state.showUntilCalendar && !closeCalendar,
-      sinceViewMode: closeCalendar ? 'days' : this.state.sinceViewMode,
-      untilViewMode: closeCalendar ? 'days' : this.state.untilViewMode,
-    });
+      showSinceCalendar: prevState.showSinceCalendar && !closeCalendar,
+      showUntilCalendar: prevState.showUntilCalendar && !closeCalendar,
+      sinceViewMode: closeCalendar ? 'days' : prevState.sinceViewMode,
+      untilViewMode: closeCalendar ? 'days' : prevState.untilViewMode,
+    }));
   }
+
   setTypeCustomRange() {
     this.setState({ type: TYPES.CUSTOM_RANGE });
   }
+
   setTypeCustomStartEnd() {
     this.setState({ type: TYPES.CUSTOM_START_END });
   }
@@ -267,7 +290,7 @@ export default class DateFilterControl extends React.Component {
   }
 
   handleClick(e) {
-    const target = e.target;
+    const { target } = e;
     // switch to `TYPES.CUSTOM_START_END` when the calendar is clicked
     if (this.startEndSectionRef && this.startEndSectionRef.contains(target)) {
       this.setTypeCustomStartEnd();
@@ -279,17 +302,6 @@ export default class DateFilterControl extends React.Component {
       if (this.popoverContainer && !this.popoverContainer.contains(target)) {
         this.props.onCloseDateFilterControl();
       }
-    }
-  }
-
-  handleClickTrigger() {
-    // when user clicks OverlayTrigger,
-    // popoverContainer component will be created after handleClickTrigger
-    // and before handleClick handler
-    if (!this.popoverContainer) {
-      this.props.onOpenDateFilterControl();
-    } else {
-      this.props.onCloseDateFilterControl();
     }
   }
 
@@ -307,21 +319,27 @@ export default class DateFilterControl extends React.Component {
     }
     this.props.onCloseDateFilterControl();
     this.props.onChange(val);
-    this.refs.trigger.hide();
-    this.setState({ showSinceCalendar: false, showUntilCalendar: false });
+    this.setState({
+      showSinceCalendar: false,
+      showUntilCalendar: false,
+      popoverVisible: false,
+    });
   }
+
   isValidSince(date) {
     return (
       !isValidMoment(this.state.until) ||
       date <= moment(this.state.until, MOMENT_FORMAT)
     );
   }
+
   isValidUntil(date) {
     return (
       !isValidMoment(this.state.since) ||
       date >= moment(this.state.since, MOMENT_FORMAT)
     );
   }
+
   toggleCalendar(key) {
     const nextState = {};
     if (key === 'showSinceCalendar') {
@@ -337,10 +355,20 @@ export default class DateFilterControl extends React.Component {
     }
     this.setState(nextState);
   }
+
+  handleVisibleChange(visible) {
+    if (visible) {
+      this.props.onOpenDateFilterControl();
+    } else {
+      this.props.onCloseDateFilterControl();
+    }
+    this.setState({ popoverVisible: visible });
+  }
+
   renderInput(props, key) {
     return (
       <FormGroup>
-        <InputGroup>
+        <InputGroup bsSize="small">
           <FormControl
             {...props}
             type="text"
@@ -350,13 +378,14 @@ export default class DateFilterControl extends React.Component {
           />
           <InputGroup.Button onClick={() => this.toggleCalendar(key)}>
             <Button>
-              <Glyphicon glyph="calendar" style={{ padding: 3 }} />
+              <i className="fa fa-calendar" />
             </Button>
           </InputGroup.Button>
         </InputGroup>
       </FormGroup>
     );
   }
+
   renderPopover() {
     const grainOptions = TIME_GRAIN_OPTIONS.map(grain => (
       <MenuItem
@@ -364,230 +393,229 @@ export default class DateFilterControl extends React.Component {
         key={grain}
         eventKey={grain}
         active={grain === this.state.grain}
+        fullWidth={false}
       >
         {grain}
       </MenuItem>
     ));
     const timeFrames = COMMON_TIME_FRAMES.map(timeFrame => {
       const nextState = getStateFromCommonTimeFrame(timeFrame);
-      const endpoints = this.props.endpoints;
+      const timeRange = buildTimeRangeString(nextState.since, nextState.until);
+
       return (
-        <OverlayTrigger
-          key={timeFrame}
-          placement="left"
-          overlay={
-            <Tooltip id={`tooltip-${timeFrame}`}>
-              {nextState.since} {endpoints && `(${endpoints[0]})`}
-              <br />
-              {nextState.until} {endpoints && `(${endpoints[1]})`}
-            </Tooltip>
-          }
-        >
-          <div>
-            <Radio
-              key={timeFrame.replace(' ', '').toLowerCase()}
-              checked={this.state.common === timeFrame}
-              onChange={() => this.setState(nextState)}
-            >
-              {timeFrame}
-            </Radio>
-          </div>
-        </OverlayTrigger>
+        <Styles key={timeFrame}>
+          <OverlayTrigger
+            key={timeFrame}
+            placement="right"
+            overlay={
+              <Tooltip id={`tooltip-${timeFrame}`}>
+                {formatTimeRange(timeRange, this.props.endpoints)}
+              </Tooltip>
+            }
+          >
+            <div style={{ display: 'inline-block' }}>
+              <Radio
+                key={timeFrame.replace(' ', '').toLowerCase()}
+                checked={this.state.common === timeFrame}
+                onChange={() => this.setState(nextState)}
+              >
+                {timeFrame}
+              </Radio>
+            </div>
+          </OverlayTrigger>
+        </Styles>
       );
     });
     return (
-      <Popover id="filter-popover" placement="top" positionTop={0}>
-        <div
-          style={DATE_FILTER_POPOVER_STYLE}
-          ref={ref => {
-            this.popoverContainer = ref;
-          }}
+      <div
+        id="filter-popover"
+        style={DATE_FILTER_POPOVER_STYLE}
+        ref={ref => {
+          this.popoverContainer = ref;
+        }}
+      >
+        <Tabs
+          defaultActiveKey={this.state.tab === TABS.DEFAULTS ? 1 : 2}
+          id="type"
+          className="time-filter-tabs"
+          onSelect={this.changeTab}
         >
-          <Tabs
-            defaultActiveKey={this.state.tab === TABS.DEFAULTS ? 1 : 2}
-            id="type"
-            className="time-filter-tabs"
-            onSelect={this.changeTab}
-          >
-            <Tab eventKey={1} title="Defaults">
-              <FormGroup>{timeFrames}</FormGroup>
-            </Tab>
-            <Tab eventKey={2} title="Custom">
-              <FormGroup>
-                <PopoverSection
-                  title="Relative to today"
-                  isSelected={this.state.type === TYPES.CUSTOM_RANGE}
-                  onSelect={this.setTypeCustomRange}
+          <Tab eventKey={1} title="Defaults">
+            <FormGroup>{timeFrames}</FormGroup>
+          </Tab>
+          <Tab eventKey={2} title="Custom">
+            <FormGroup>
+              <PopoverSection
+                title="Relative to today"
+                isSelected={this.state.type === TYPES.CUSTOM_RANGE}
+                onSelect={this.setTypeCustomRange}
+              >
+                <div
+                  className="clearfix centered"
+                  style={{ marginTop: '12px' }}
                 >
                   <div
-                    className="clearfix centered"
-                    style={{ marginTop: '12px' }}
+                    style={{ width: '60px', marginTop: '-4px' }}
+                    className="input-inline"
                   >
-                    <div
-                      style={{ width: '60px', marginTop: '-4px' }}
-                      className="input-inline"
+                    <DropdownButton
+                      bsSize="small"
+                      componentClass={InputGroup.Button}
+                      id="input-dropdown-rel"
+                      title={this.state.rel}
+                      onFocus={this.setTypeCustomRange}
                     >
-                      <DropdownButton
-                        bsSize="small"
-                        componentClass={InputGroup.Button}
-                        id="input-dropdown-rel"
-                        title={this.state.rel}
-                        onFocus={this.setTypeCustomRange}
+                      <MenuItem
+                        onSelect={value => this.setCustomRange('rel', value)}
+                        key={RELATIVE_TIME_OPTIONS.LAST}
+                        eventKey={RELATIVE_TIME_OPTIONS.LAST}
+                        active={this.state.rel === RELATIVE_TIME_OPTIONS.LAST}
                       >
-                        <MenuItem
-                          onSelect={value => this.setCustomRange('rel', value)}
-                          key={RELATIVE_TIME_OPTIONS.LAST}
-                          eventKey={RELATIVE_TIME_OPTIONS.LAST}
-                          active={this.state.rel === RELATIVE_TIME_OPTIONS.LAST}
-                        >
-                          Last
-                        </MenuItem>
-                        <MenuItem
-                          onSelect={value => this.setCustomRange('rel', value)}
-                          key={RELATIVE_TIME_OPTIONS.NEXT}
-                          eventKey={RELATIVE_TIME_OPTIONS.NEXT}
-                          active={this.state.rel === RELATIVE_TIME_OPTIONS.NEXT}
-                        >
-                          Next
-                        </MenuItem>
-                      </DropdownButton>
-                    </div>
-                    <div
-                      style={{ width: '60px', marginTop: '-4px' }}
-                      className="input-inline"
+                        Last
+                      </MenuItem>
+                      <MenuItem
+                        onSelect={value => this.setCustomRange('rel', value)}
+                        key={RELATIVE_TIME_OPTIONS.NEXT}
+                        eventKey={RELATIVE_TIME_OPTIONS.NEXT}
+                        active={this.state.rel === RELATIVE_TIME_OPTIONS.NEXT}
+                      >
+                        Next
+                      </MenuItem>
+                    </DropdownButton>
+                  </div>
+                  <div
+                    style={{ width: '60px', marginTop: '-4px' }}
+                    className="input-inline m-l-5 m-r-3"
+                  >
+                    <FormControl
+                      bsSize="small"
+                      type="text"
+                      onChange={event =>
+                        this.setCustomRange('num', event.target.value)
+                      }
+                      onFocus={this.setTypeCustomRange}
+                      onKeyPress={this.onEnter}
+                      value={this.state.num}
+                      style={{ height: '30px' }}
+                    />
+                  </div>
+                  <div
+                    style={{ width: '90px', marginTop: '-4px' }}
+                    className="input-inline"
+                  >
+                    <DropdownButton
+                      bsSize="small"
+                      componentClass={InputGroup.Button}
+                      id="input-dropdown-grain"
+                      title={this.state.grain}
+                      onFocus={this.setTypeCustomRange}
                     >
-                      <FormControl
-                        bsSize="small"
-                        type="text"
-                        onChange={event =>
-                          this.setCustomRange('num', event.target.value)
+                      {grainOptions}
+                    </DropdownButton>
+                  </div>
+                </div>
+              </PopoverSection>
+              <PopoverSection
+                title="Start / end"
+                isSelected={this.state.type === TYPES.CUSTOM_START_END}
+                onSelect={this.setTypeCustomStartEnd}
+                info={FREEFORM_TOOLTIP}
+              >
+                <div
+                  ref={ref => {
+                    this.startEndSectionRef = ref;
+                  }}
+                >
+                  <InputGroup data-test="date-input-group">
+                    <div style={{ margin: '5px 0' }}>
+                      <Datetime
+                        inputProps={{ 'data-test': 'date-from-input' }}
+                        value={this.state.since}
+                        defaultValue={this.state.since}
+                        viewDate={this.state.since}
+                        onChange={value =>
+                          this.setCustomStartEnd('since', value)
                         }
-                        onFocus={this.setTypeCustomRange}
-                        onKeyPress={this.onEnter}
-                        value={this.state.num}
-                        style={{ height: '30px' }}
+                        isValidDate={this.isValidSince}
+                        onClick={this.setTypeCustomStartEnd}
+                        renderInput={props =>
+                          this.renderInput(props, 'showSinceCalendar')
+                        }
+                        open={this.state.showSinceCalendar}
+                        viewMode={this.state.sinceViewMode}
+                        onViewModeChange={sinceViewMode =>
+                          this.setState({ sinceViewMode })
+                        }
                       />
                     </div>
-                    <div
-                      style={{ width: '90px', marginTop: '-4px' }}
-                      className="input-inline"
-                    >
-                      <DropdownButton
-                        bsSize="small"
-                        componentClass={InputGroup.Button}
-                        id="input-dropdown-grain"
-                        title={this.state.grain}
-                        onFocus={this.setTypeCustomRange}
-                      >
-                        {grainOptions}
-                      </DropdownButton>
+                    <div style={{ margin: '5px 0' }}>
+                      <Datetime
+                        inputProps={{ 'data-test': 'date-to-input' }}
+                        value={this.state.until}
+                        defaultValue={this.state.until}
+                        viewDate={this.state.until}
+                        onChange={value =>
+                          this.setCustomStartEnd('until', value)
+                        }
+                        isValidDate={this.isValidUntil}
+                        onClick={this.setTypeCustomStartEnd}
+                        renderInput={props =>
+                          this.renderInput(props, 'showUntilCalendar')
+                        }
+                        open={this.state.showUntilCalendar}
+                        viewMode={this.state.untilViewMode}
+                        onViewModeChange={untilViewMode =>
+                          this.setState({ untilViewMode })
+                        }
+                      />
                     </div>
-                  </div>
-                </PopoverSection>
-                <PopoverSection
-                  title="Start / end"
-                  isSelected={this.state.type === TYPES.CUSTOM_START_END}
-                  onSelect={this.setTypeCustomStartEnd}
-                  info={FREEFORM_TOOLTIP}
-                >
-                  <div
-                    ref={ref => {
-                      this.startEndSectionRef = ref;
-                    }}
-                  >
-                    <InputGroup>
-                      <div style={{ margin: '5px 0' }}>
-                        <Datetime
-                          value={this.state.since}
-                          defaultValue={this.state.since}
-                          viewDate={this.state.since}
-                          onChange={value =>
-                            this.setCustomStartEnd('since', value)
-                          }
-                          isValidDate={this.isValidSince}
-                          onClick={this.setTypeCustomStartEnd}
-                          renderInput={props =>
-                            this.renderInput(props, 'showSinceCalendar')
-                          }
-                          open={this.state.showSinceCalendar}
-                          viewMode={this.state.sinceViewMode}
-                          onViewModeChange={sinceViewMode =>
-                            this.setState({ sinceViewMode })
-                          }
-                        />
-                      </div>
-                      <div style={{ margin: '5px 0' }}>
-                        <Datetime
-                          value={this.state.until}
-                          defaultValue={this.state.until}
-                          viewDate={this.state.until}
-                          onChange={value =>
-                            this.setCustomStartEnd('until', value)
-                          }
-                          isValidDate={this.isValidUntil}
-                          onClick={this.setTypeCustomStartEnd}
-                          renderInput={props =>
-                            this.renderInput(props, 'showUntilCalendar')
-                          }
-                          open={this.state.showUntilCalendar}
-                          viewMode={this.state.untilViewMode}
-                          onViewModeChange={untilViewMode =>
-                            this.setState({ untilViewMode })
-                          }
-                        />
-                      </div>
-                    </InputGroup>
-                  </div>
-                </PopoverSection>
-              </FormGroup>
-            </Tab>
-          </Tabs>
-          <div className="clearfix">
-            <Button
-              bsSize="small"
-              className="float-right ok"
-              bsStyle="primary"
-              onClick={this.close}
-            >
-              Ok
-            </Button>
-          </div>
+                  </InputGroup>
+                </div>
+              </PopoverSection>
+            </FormGroup>
+          </Tab>
+        </Tabs>
+        <div className="clearfix">
+          <Button
+            data-test="date-ok-button"
+            buttonSize="small"
+            className="float-right ok"
+            buttonStyle="primary"
+            onClick={this.close}
+          >
+            Ok
+          </Button>
         </div>
-      </Popover>
+      </div>
     );
   }
+
   render() {
-    let value = this.props.value || defaultProps.value;
-    const endpoints = this.props.endpoints;
-    value = value
-      .split(SEPARATOR)
-      .map(
-        (v, idx, values) =>
-          (v.replace('T00:00:00', '') || (idx === 0 ? '-∞' : '∞')) +
-          (endpoints && values.length > 1 ? ` (${endpoints[idx]})` : ''),
-      )
-      .join(SEPARATOR);
+    const timeRange = this.props.value || defaultProps.value;
     return (
       <div>
         <ControlHeader {...this.props} />
-        <OverlayTrigger
-          animation={this.props.animation}
-          container={document.body}
+        <Popover
           trigger="click"
-          rootClose
-          ref="trigger"
           placement="right"
-          overlay={this.renderPopover()}
-          onClick={this.handleClickTrigger}
+          content={this.renderPopover()}
+          visible={this.state.popoverVisible}
+          onVisibleChange={this.handleVisibleChange}
         >
-          <Label name="popover-trigger" style={{ cursor: 'pointer' }}>
-            {value}
+          <Label
+            name="popover-trigger"
+            className="pointer"
+            data-test="popover-trigger"
+          >
+            {formatTimeRange(timeRange, this.props.endpoints)}
           </Label>
-        </OverlayTrigger>
+        </Popover>
       </div>
     );
   }
 }
+
+export default withTheme(DateFilterControl);
 
 DateFilterControl.propTypes = propTypes;
 DateFilterControl.defaultProps = defaultProps;

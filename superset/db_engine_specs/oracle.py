@@ -15,13 +15,15 @@
 # specific language governing permissions and limitations
 # under the License.
 from datetime import datetime
-from typing import Optional
+from typing import Any, List, Optional, Tuple
 
 from superset.db_engine_specs.base import BaseEngineSpec, LimitMethod
+from superset.utils import core as utils
 
 
 class OracleEngineSpec(BaseEngineSpec):
     engine = "oracle"
+    engine_name = "Oracle"
     limit_method = LimitMethod.WRAP_SQL
     force_column_alias_quotes = True
     max_column_name_length = 30
@@ -41,12 +43,14 @@ class OracleEngineSpec(BaseEngineSpec):
     @classmethod
     def convert_dttm(cls, target_type: str, dttm: datetime) -> Optional[str]:
         tt = target_type.upper()
-        if tt == "DATE":
+        if tt == utils.TemporalType.DATE:
             return f"TO_DATE('{dttm.date().isoformat()}', 'YYYY-MM-DD')"
-        if tt == "DATETIME":
-            return f"""TO_DATE('{dttm.isoformat(timespec="seconds")}', 'YYYY-MM-DD"T"HH24:MI:SS')"""  # pylint: disable=line-too-long
-        if tt == "TIMESTAMP":
-            return f"""TO_TIMESTAMP('{dttm.isoformat(timespec="microseconds")}', 'YYYY-MM-DD"T"HH24:MI:SS.ff6')"""  # pylint: disable=line-too-long
+        if tt == utils.TemporalType.DATETIME:
+            datetime_formatted = dttm.isoformat(timespec="seconds")
+            return f"""TO_DATE('{datetime_formatted}', 'YYYY-MM-DD"T"HH24:MI:SS')"""
+        if tt == utils.TemporalType.TIMESTAMP:
+            return f"""TO_TIMESTAMP('{dttm
+                .isoformat(timespec="microseconds")}', 'YYYY-MM-DD"T"HH24:MI:SS.ff6')"""
         return None
 
     @classmethod
@@ -56,3 +60,16 @@ class OracleEngineSpec(BaseEngineSpec):
     @classmethod
     def epoch_ms_to_dttm(cls) -> str:
         return "TO_DATE('1970-01-01','YYYY-MM-DD')+(1/24/60/60/1000)*{col}"
+
+    @classmethod
+    def fetch_data(
+        cls, cursor: Any, limit: Optional[int] = None
+    ) -> List[Tuple[Any, ...]]:
+        """
+        :param cursor: Cursor instance
+        :param limit: Maximum number of rows to be returned by the cursor
+        :return: Result of query
+        """
+        if not cursor.description:
+            return []
+        return super().fetch_data(cursor, limit)

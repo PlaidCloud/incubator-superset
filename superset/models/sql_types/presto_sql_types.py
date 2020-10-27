@@ -14,9 +14,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from typing import Any, Optional, Type
+from typing import Any, Dict, List, Optional, Type
 
-from sqlalchemy import types
 from sqlalchemy.sql.sqltypes import Integer
 from sqlalchemy.sql.type_api import TypeEngine
 from sqlalchemy.sql.visitors import Visitable
@@ -29,7 +28,8 @@ class TinyInteger(Integer):
     A type for tiny ``int`` integers.
     """
 
-    def python_type(self) -> Type:
+    @property
+    def python_type(self) -> Type[int]:
         return int
 
     @classmethod
@@ -42,7 +42,8 @@ class Interval(TypeEngine):
     A type for intervals.
     """
 
-    def python_type(self) -> Optional[Type]:
+    @property
+    def python_type(self) -> Optional[Type[Any]]:
         return None
 
     @classmethod
@@ -55,7 +56,8 @@ class Array(TypeEngine):
     A type for arrays.
     """
 
-    def python_type(self) -> Optional[Type]:
+    @property
+    def python_type(self) -> Optional[Type[List[Any]]]:
         return list
 
     @classmethod
@@ -68,7 +70,8 @@ class Map(TypeEngine):
     A type for maps.
     """
 
-    def python_type(self) -> Optional[Type]:
+    @property
+    def python_type(self) -> Optional[Type[Dict[Any, Any]]]:
         return dict
 
     @classmethod
@@ -81,32 +84,10 @@ class Row(TypeEngine):
     A type for rows.
     """
 
-    def python_type(self) -> Optional[Type]:
+    @property
+    def python_type(self) -> Optional[Type[Any]]:
         return None
 
     @classmethod
     def _compiler_dispatch(cls, _visitor: Visitable, **_kw: Any) -> str:
         return "ROW"
-
-
-type_map = {
-    "boolean": types.Boolean,
-    "tinyint": TinyInteger,
-    "smallint": types.SmallInteger,
-    "integer": types.Integer,
-    "bigint": types.BigInteger,
-    "real": types.Float,
-    "double": types.Float,
-    "decimal": types.DECIMAL,
-    "varchar": types.String,
-    "char": types.CHAR,
-    "varbinary": types.VARBINARY,
-    "JSON": types.JSON,
-    "date": types.DATE,
-    "time": types.Time,
-    "timestamp": types.TIMESTAMP,
-    "interval": Interval,
-    "array": Array,
-    "map": Map,
-    "row": Row,
-}

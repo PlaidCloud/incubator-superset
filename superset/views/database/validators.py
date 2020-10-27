@@ -36,11 +36,15 @@ def sqlalchemy_uri_validator(
         make_url(uri.strip())
     except (ArgumentError, AttributeError):
         raise exception(
-            _(
-                "Invalid connection string, a valid string usually follows:"
-                "'DRIVER://USER:PASSWORD@DB-HOST/DATABASE-NAME'"
-                "<p>Example:'postgresql://user:password@your-postgres-db/database'</p>"
-            )
+            [
+                _(
+                    "Invalid connection string, a valid string usually follows:"
+                    "'DRIVER://USER:PASSWORD@DB-HOST/DATABASE-NAME'"
+                    "<p>"
+                    "Example:'postgresql://user:password@your-postgres-db/database'"
+                    "</p>"
+                )
+            ]
         )
 
 
@@ -50,7 +54,4 @@ def schema_allows_csv_upload(database: Database, schema: Optional[str]) -> bool:
     schemas = database.get_schema_access_for_csv_upload()
     if schemas:
         return schema in schemas
-    return (
-        security_manager.database_access(database)
-        or security_manager.all_datasource_access()
-    )
+    return security_manager.can_access_database(database)

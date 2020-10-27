@@ -18,6 +18,7 @@
 """Unit tests for Sql Lab"""
 import json
 from datetime import datetime, timedelta
+from parameterized import parameterized
 from random import random
 from unittest import mock
 
@@ -27,22 +28,25 @@ import tests.test_app
 from superset import db, security_manager
 from superset.connectors.sqla.models import SqlaTable
 from superset.db_engine_specs import BaseEngineSpec
-from superset.models.sql_lab import Query
+from superset.models.sql_lab import Query, SavedQuery
 from superset.result_set import SupersetResultSet
-from superset.utils.core import datetime_to_epoch, get_example_database
+from superset.sql_parse import CtasMethod
+from superset.utils.core import (
+    datetime_to_epoch,
+    get_example_database,
+    get_main_database,
+)
 
 from .base_tests import SupersetTestCase
+from .conftest import CTAS_SCHEMA_NAME
 
 QUERY_1 = "SELECT * FROM birth_names LIMIT 1"
 QUERY_2 = "SELECT * FROM NO_TABLE"
 QUERY_3 = "SELECT * FROM birth_names LIMIT 10"
 
 
-class SqlLabTests(SupersetTestCase):
+class TestSqlLab(SupersetTestCase):
     """Testings for Sql Lab"""
-
-    def __init__(self, *args, **kwargs):
-        super(SqlLabTests, self).__init__(*args, **kwargs)
 
     def run_some_queries(self):
         db.session.query(Query).delete()
@@ -67,38 +71,76 @@ class SqlLabTests(SupersetTestCase):
         data = self.run_sql("SELECT * FROM unexistant_table", "2")
         self.assertLess(0, len(data["error"]))
 
-    @mock.patch(
-        "superset.views.core.get_cta_schema_name",
-        lambda d, u, s, sql: f"{u.username}_database",
-    )
-    def test_sql_json_cta_dynamic_db(self):
-        main_db = get_example_database()
-        if main_db.backend == "sqlite":
+    def test_sql_json_to_saved_query_info(self):
+        """
+        SQLLab: Test SQLLab query execution info propagation to saved queries
+        """
+        from freezegun import freeze_time
+
+        self.login("admin")
+
+        sql_statement = "SELECT * FROM birth_names LIMIT 10"
+        examples_db_id = get_example_database().id
+        saved_query = SavedQuery(db_id=examples_db_id, sql=sql_statement)
+        db.session.add(saved_query)
+        db.session.commit()
+
+        with freeze_time("2020-01-01T00:00:00Z"):
+            self.run_sql(sql_statement, "1")
+            saved_query_ = (
+                db.session.query(SavedQuery)
+                .filter(
+                    SavedQuery.db_id == examples_db_id, SavedQuery.sql == sql_statement
+                )
+                .one_or_none()
+            )
+            assert saved_query_.rows is not None
+            assert saved_query_.last_run == datetime.now()
+
+            # Rollback changes
+            db.session.delete(saved_query_)
+            db.session.commit()
+
+    @parameterized.expand([CtasMethod.TABLE, CtasMethod.VIEW])
+    def test_sql_json_cta_dynamic_db(self, ctas_method):
+        examples_db = get_example_database()
+        if examples_db.backend == "sqlite":
             # sqlite doesn't support database creation
             return
 
-        old_allow_ctas = main_db.allow_ctas
-        main_db.allow_ctas = True  # enable cta
+        with mock.patch(
+            "superset.views.core.get_cta_schema_name",
+            lambda d, u, s, sql: f"{u.username}_database",
+        ):
+            old_allow_ctas = examples_db.allow_ctas
+            examples_db.allow_ctas = True  # enable cta
 
-        self.login("admin")
-        self.run_sql(
-            "SELECT * FROM birth_names",
-            "1",
-            database_name="examples",
-            tmp_table_name="test_target",
-            select_as_cta=True,
-        )
+            self.login("admin")
+            tmp_table_name = f"test_target_{ctas_method.lower()}"
+            self.run_sql(
+                "SELECT * FROM birth_names",
+                "1",
+                database_name="examples",
+                tmp_table_name=tmp_table_name,
+                select_as_cta=True,
+                ctas_method=ctas_method,
+            )
 
-        # assertions
-        data = db.session.execute("SELECT * FROM admin_database.test_target").fetchall()
-        self.assertEqual(
-            75691, len(data)
-        )  # SQL_MAX_ROW not applied due to the SQLLAB_CTAS_NO_LIMIT set to True
+            # assertions
+            db.session.commit()
+            examples_db = get_example_database()
+            engine = examples_db.get_sqla_engine()
+            data = engine.execute(
+                f"SELECT * FROM admin_database.{tmp_table_name}"
+            ).fetchall()
+            self.assertEqual(
+                100, len(data)
+            )  # SQL_MAX_ROW not applied due to the SQLLAB_CTAS_NO_LIMIT set to True
 
-        # cleanup
-        db.session.execute("DROP TABLE admin_database.test_target")
-        main_db.allow_ctas = old_allow_ctas
-        db.session.commit()
+            # cleanup
+            engine.execute(f"DROP {ctas_method} admin_database.{tmp_table_name}")
+            examples_db.allow_ctas = old_allow_ctas
+            db.session.commit()
 
     def test_multi_sql(self):
         self.login("admin")
@@ -139,7 +181,7 @@ class SqlLabTests(SupersetTestCase):
             return
 
         sqllab_test_db_schema_permission_view = security_manager.add_permission_view_menu(
-            "schema_access", f"[{examples_db.name}].[sqllab_test_db]"
+            "schema_access", f"[{examples_db.name}].[{CTAS_SCHEMA_NAME}]"
         )
         schema_perm_role = security_manager.add_role("SchemaPermission")
         security_manager.add_permission_role(
@@ -149,20 +191,20 @@ class SqlLabTests(SupersetTestCase):
             "SchemaUser", ["SchemaPermission", "Gamma", "sql_lab"]
         )
 
-        db.session.execute(
-            "CREATE TABLE IF NOT EXISTS sqllab_test_db.test_table AS SELECT 1 as c1, 2 as c2"
+        examples_db.get_sqla_engine().execute(
+            f"CREATE TABLE IF NOT EXISTS {CTAS_SCHEMA_NAME}.test_table AS SELECT 1 as c1, 2 as c2"
         )
 
         data = self.run_sql(
-            "SELECT * FROM sqllab_test_db.test_table", "3", user_name="SchemaUser"
+            f"SELECT * FROM {CTAS_SCHEMA_NAME}.test_table", "3", user_name="SchemaUser"
         )
         self.assertEqual(1, len(data["data"]))
 
         data = self.run_sql(
-            "SELECT * FROM sqllab_test_db.test_table",
+            f"SELECT * FROM {CTAS_SCHEMA_NAME}.test_table",
             "4",
             user_name="SchemaUser",
-            schema="sqllab_test_db",
+            schema=CTAS_SCHEMA_NAME,
         )
         self.assertEqual(1, len(data["data"]))
 
@@ -172,12 +214,14 @@ class SqlLabTests(SupersetTestCase):
                 "SELECT * FROM test_table",
                 "5",
                 user_name="SchemaUser",
-                schema="sqllab_test_db",
+                schema=CTAS_SCHEMA_NAME,
             )
             self.assertEqual(1, len(data["data"]))
 
         db.session.query(Query).delete()
-        db.session.execute("DROP TABLE IF EXISTS sqllab_test_db.test_table")
+        get_example_database().get_sqla_engine().execute(
+            f"DROP TABLE IF EXISTS {CTAS_SCHEMA_NAME}.test_table"
+        )
         db.session.commit()
 
     def test_queries_endpoint(self):
@@ -191,6 +235,8 @@ class SqlLabTests(SupersetTestCase):
         # Admin sees queries
         self.login("admin")
         data = self.get_json_resp("/superset/queries/0")
+        self.assertEqual(2, len(data))
+        data = self.get_json_resp("/superset/queries/0.0")
         self.assertEqual(2, len(data))
 
         # Run 2 more queries
@@ -210,7 +256,7 @@ class SqlLabTests(SupersetTestCase):
         db.session.commit()
 
         data = self.get_json_resp(
-            "/superset/queries/{}".format(int(datetime_to_epoch(now)) - 1000)
+            "/superset/queries/{}".format(float(datetime_to_epoch(now)) - 1000)
         )
         self.assertEqual(1, len(data))
 
@@ -365,11 +411,48 @@ class SqlLabTests(SupersetTestCase):
         table_id = resp["table_id"]
         table = db.session.query(SqlaTable).filter_by(id=table_id).one()
         self.assertEqual([owner.username for owner in table.owners], ["admin"])
+        view_menu = security_manager.find_view_menu(table.get_perm())
+        assert view_menu is not None
+
+        # Cleanup
+        db.session.delete(table)
+        db.session.commit()
+
+    def test_sqllab_viz_bad_payload(self):
+        self.login("admin")
+        payload = {
+            "chartType": "dist_bar",
+            "schema": "superset",
+            "columns": [
+                {"is_date": False, "type": "STRING", "name": f"viz_type_{random()}"},
+                {"is_date": False, "type": "OBJECT", "name": f"ccount_{random()}"},
+            ],
+            "sql": """\
+                SELECT *
+                FROM birth_names
+                LIMIT 10""",
+        }
+        data = {"data": json.dumps(payload)}
+        url = "/superset/sqllab_viz/"
+        response = self.client.post(url, data=data, follow_redirects=True)
+        assert response.status_code == 400
 
     def test_sqllab_table_viz(self):
         self.login("admin")
-        examples_dbid = get_example_database().id
-        payload = {"datasourceName": "ab_role", "columns": [], "dbId": examples_dbid}
+        examples_db = get_example_database()
+        examples_db.get_sqla_engine().execute(
+            "DROP TABLE IF EXISTS test_sqllab_table_viz"
+        )
+        examples_db.get_sqla_engine().execute(
+            "CREATE TABLE test_sqllab_table_viz AS SELECT 2 as col"
+        )
+        examples_dbid = examples_db.id
+
+        payload = {
+            "datasourceName": "test_sqllab_table_viz",
+            "columns": [],
+            "dbId": examples_dbid,
+        }
 
         data = {"data": json.dumps(payload)}
         resp = self.get_json_resp("/superset/get_or_create_table/", data=data)
@@ -380,6 +463,9 @@ class SqlLabTests(SupersetTestCase):
         table = db.session.query(SqlaTable).filter_by(id=table_id).one()
         self.assertEqual([owner.username for owner in table.owners], ["admin"])
         db.session.delete(table)
+        get_example_database().get_sqla_engine().execute(
+            "DROP TABLE test_sqllab_table_viz"
+        )
         db.session.commit()
 
     def test_sql_limit(self):
@@ -404,26 +490,26 @@ class SqlLabTests(SupersetTestCase):
         )
         self.assertEqual(len(data["data"]), test_limit)
 
-    def test_queryview_filter(self) -> None:
+    def test_query_api_filter(self) -> None:
         """
-        Test queryview api without can_only_access_owned_queries perm added to
+        Test query api without can_only_access_owned_queries perm added to
         Admin and make sure all queries show up.
         """
         self.run_some_queries()
         self.login(username="admin")
 
-        url = "/queryview/api/read"
+        url = "/api/v1/query/"
         data = self.get_json_resp(url)
         admin = security_manager.find_user("admin")
         gamma_sqllab = security_manager.find_user("gamma_sqllab")
         self.assertEqual(3, len(data["result"]))
-        user_queries = [result.get("username") for result in data["result"]]
+        user_queries = [result.get("user").get("username") for result in data["result"]]
         assert admin.username in user_queries
         assert gamma_sqllab.username in user_queries
 
-    def test_queryview_can_access_all_queries(self) -> None:
+    def test_query_api_can_access_all_queries(self) -> None:
         """
-        Test queryview api with can_access_all_queries perm added to
+        Test query api with can_access_all_queries perm added to
         gamma and make sure all queries show up.
         """
         session = db.session
@@ -441,7 +527,7 @@ class SqlLabTests(SupersetTestCase):
         # Test search_queries for Admin user
         self.run_some_queries()
         self.login("gamma_sqllab")
-        url = "/queryview/api/read"
+        url = "/api/v1/query/"
         data = self.get_json_resp(url)
         self.assertEqual(3, len(data["result"]))
 
@@ -455,16 +541,16 @@ class SqlLabTests(SupersetTestCase):
 
         session.commit()
 
-    def test_queryview_admin_can_access_all_queries(self) -> None:
+    def test_query_admin_can_access_all_queries(self) -> None:
         """
-        Test queryview api with all_query_access perm added to
+        Test query api with all_query_access perm added to
         Admin and make sure only Admin queries show up. This is the default
         """
         # Test search_queries for Admin user
         self.run_some_queries()
         self.login("admin")
 
-        url = "/queryview/api/read"
+        url = "/api/v1/query/"
         data = self.get_json_resp(url)
         admin = security_manager.find_user("admin")
         self.assertEqual(3, len(data["result"]))
@@ -472,6 +558,8 @@ class SqlLabTests(SupersetTestCase):
     def test_api_database(self):
         self.login("admin")
         self.create_fake_db()
+        get_example_database()
+        get_main_database()
 
         arguments = {
             "keys": [],
@@ -482,8 +570,9 @@ class SqlLabTests(SupersetTestCase):
             "page_size": -1,
         }
         url = f"api/v1/database/?q={prison.dumps(arguments)}"
+
         self.assertEqual(
-            {"examples", "fake_db_100"},
+            {"examples", "fake_db_100", "main"},
             {r.get("database_name") for r in self.get_json_resp(url)["result"]},
         )
         self.delete_fake_db()

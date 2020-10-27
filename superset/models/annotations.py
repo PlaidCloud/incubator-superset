@@ -34,7 +34,7 @@ class AnnotationLayer(Model, AuditMixinNullable):
     descr = Column(Text)
 
     def __repr__(self) -> str:
-        return self.name
+        return str(self.name)
 
 
 class Annotation(Model, AuditMixinNullable):
@@ -63,3 +63,6 @@ class Annotation(Model, AuditMixinNullable):
             "long_descr": self.long_descr,
             "layer": self.layer.name if self.layer else None,
         }
+
+    def __repr__(self) -> str:
+        return str(self.short_descr)

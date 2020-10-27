@@ -18,9 +18,11 @@
  */
 import React from 'react';
 import PropTypes from 'prop-types';
-import { Label, OverlayTrigger } from 'react-bootstrap';
-import { thresholdScott } from 'd3-array';
+import { withTheme } from '@superset-ui/core';
 
+import Popover from 'src/common/components/Popover';
+import Label from 'src/components/Label';
+import AdhocMetricEditPopoverTitle from 'src/explore/components/AdhocMetricEditPopoverTitle';
 import AdhocMetricEditPopover from './AdhocMetricEditPopover';
 import AdhocMetric from '../AdhocMetric';
 import columnType from '../propTypes/columnType';
@@ -33,15 +35,31 @@ const propTypes = {
   datasourceType: PropTypes.string,
 };
 
-export default class AdhocMetricOption extends React.PureComponent {
+class AdhocMetricOption extends React.PureComponent {
   constructor(props) {
     super(props);
     this.closeMetricEditOverlay = this.closeMetricEditOverlay.bind(this);
     this.onOverlayEntered = this.onOverlayEntered.bind(this);
-    this.onOverlayExited = this.onOverlayExited.bind(this);
     this.onPopoverResize = this.onPopoverResize.bind(this);
-    this.state = { overlayShown: false };
-    this.overlay = null;
+    this.handleVisibleChange = this.handleVisibleChange.bind(this);
+    this.onLabelChange = this.onLabelChange.bind(this);
+    this.state = {
+      overlayShown: false,
+      title: {
+        label: props.adhocMetric.label,
+        hasCustomLabel: props.adhocMetric.hasCustomLabel,
+      },
+    };
+  }
+
+  onLabelChange(e) {
+    const label = e.target.value;
+    this.setState({
+      title: {
+        label,
+        hasCustomLabel: true,
+      },
+    });
   }
 
   onPopoverResize() {
@@ -53,15 +71,25 @@ export default class AdhocMetricOption extends React.PureComponent {
     // once the overlay has been opened, the metric/filter will never be
     // considered new again.
     this.props.adhocMetric.isNew = false;
-    this.setState({ overlayShown: false });
-  }
-
-  onOverlayExited() {
-    this.setState({ overlayShown: false });
+    this.setState({
+      overlayShown: true,
+      title: {
+        label: this.props.adhocMetric.label,
+        hasCustomLabel: this.props.adhocMetric.hasCustomLabel,
+      },
+    });
   }
 
   closeMetricEditOverlay() {
-    this.overlay.hide();
+    this.setState({ overlayShown: false });
+  }
+
+  handleVisibleChange(visible) {
+    if (visible) {
+      this.onOverlayEntered();
+    } else {
+      this.closeMetricEditOverlay();
+    }
   }
 
   render() {
@@ -70,6 +98,7 @@ export default class AdhocMetricOption extends React.PureComponent {
       <AdhocMetricEditPopover
         onResize={this.onPopoverResize}
         adhocMetric={adhocMetric}
+        title={this.state.title}
         onChange={this.props.onMetricEdit}
         onClose={this.closeMetricEditOverlay}
         columns={this.props.columns}
@@ -77,34 +106,47 @@ export default class AdhocMetricOption extends React.PureComponent {
       />
     );
 
+    const popoverTitle = (
+      <AdhocMetricEditPopoverTitle
+        title={this.state.title}
+        defaultLabel={adhocMetric.label}
+        onChange={this.onLabelChange}
+      />
+    );
+
     return (
       <div
         className="metric-option"
-        onMouseDownCapture={e => e.stopPropagation()}
+        data-test="metric-option"
+        role="button"
+        tabIndex={0}
+        onMouseDown={e => e.stopPropagation()}
+        onKeyDown={e => e.stopPropagation()}
       >
-        <OverlayTrigger
-          ref={ref => {
-            this.overlay = ref;
-          }}
+        <Popover
           placement="right"
           trigger="click"
           disabled
-          overlay={overlayContent}
-          rootClose
-          shouldUpdatePosition
-          defaultOverlayShown={adhocMetric.isNew}
-          onEntered={this.onOverlayEntered}
-          onExited={this.onOverlayExited}
+          content={overlayContent}
+          defaultVisible={adhocMetric.isNew}
+          onVisibleChange={this.handleVisibleChange}
+          visible={this.state.overlayShown}
+          title={popoverTitle}
         >
-          <Label className="option-label adhoc-option">
+          <Label className="option-label adhoc-option" data-test="option-label">
             {adhocMetric.label}
             <i
-              className={`glyphicon glyphicon-triangle-right adhoc-label-arrow`}
+              className={`fa fa-caret-${
+                this.state.overlayShown ? 'left' : 'right'
+              } adhoc-label-arrow`}
             />
           </Label>
-        </OverlayTrigger>
+        </Popover>
       </div>
     );
   }
 }
+
+export default withTheme(AdhocMetricOption);
+
 AdhocMetricOption.propTypes = propTypes;

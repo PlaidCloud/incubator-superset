@@ -19,7 +19,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import { Panel } from 'react-bootstrap';
-import { InfoTooltipWithTrigger } from '@superset-ui/control-utils';
+import { InfoTooltipWithTrigger } from '@superset-ui/chart-controls';
 
 const propTypes = {
   label: PropTypes.string,
@@ -42,16 +42,25 @@ export default class ControlPanelSection extends React.Component {
     this.state = { expanded: this.props.startExpanded };
     this.toggleExpand = this.toggleExpand.bind(this);
   }
+
   toggleExpand() {
-    this.setState({ expanded: !this.state.expanded });
+    this.setState(prevState => ({ expanded: !prevState.expanded }));
   }
+
   renderHeader() {
     const { label, description, hasErrors } = this.props;
     return (
       label && (
         <div>
           <span>
-            <span onClick={this.toggleExpand}>{label}</span>{' '}
+            <span
+              data-test="clickable-control-panel-section-title"
+              role="button"
+              tabIndex={0}
+              onClick={this.toggleExpand}
+            >
+              {label}
+            </span>{' '}
             {description && (
               <InfoTooltipWithTrigger label={label} tooltip={description} />
             )}
@@ -64,6 +73,9 @@ export default class ControlPanelSection extends React.Component {
             )}
           </span>
           <i
+            role="button"
+            aria-label="Toggle expand"
+            tabIndex={0}
             className={`float-right fa-lg text-primary expander fa fa-angle-${
               this.state.expanded ? 'up' : 'down'
             }`}

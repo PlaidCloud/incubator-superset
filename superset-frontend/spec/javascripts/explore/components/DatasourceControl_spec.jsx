@@ -20,14 +20,14 @@ import React from 'react';
 import sinon from 'sinon';
 import configureStore from 'redux-mock-store';
 import { shallow } from 'enzyme';
-import { MenuItem } from 'react-bootstrap';
+import { Menu } from 'src/common/components';
 import DatasourceModal from 'src/datasource/DatasourceModal';
 import ChangeDatasourceModal from 'src/datasource/ChangeDatasourceModal';
 import DatasourceControl from 'src/explore/components/controls/DatasourceControl';
 
 const defaultProps = {
   name: 'datasource',
-  label: 'Datasource',
+  label: 'Dataset',
   value: '1__table',
   datasource: {
     name: 'birth_names',
@@ -40,6 +40,9 @@ const defaultProps = {
       backend: 'mysql',
       name: 'main',
     },
+  },
+  actions: {
+    setDatasource: sinon.spy(),
   },
   onChange: sinon.spy(),
 };
@@ -57,29 +60,35 @@ describe('DatasourceControl', () => {
     });
   }
 
-  it('renders a Modal', () => {
+  it('should not render Modal', () => {
     const wrapper = setup();
-    expect(wrapper.find(DatasourceModal)).toHaveLength(1);
+    expect(wrapper.find(DatasourceModal)).toHaveLength(0);
   });
 
-  it('renders a ChangeDatasourceModal', () => {
+  it('should not render ChangeDatasourceModal', () => {
     const wrapper = setup();
-    expect(wrapper.find(ChangeDatasourceModal)).toHaveLength(1);
+    expect(wrapper.find(ChangeDatasourceModal)).toHaveLength(0);
   });
 
   it('show or hide Edit Datasource option', () => {
     let wrapper = setup();
-    expect(wrapper.find('#datasource_menu')).toHaveLength(1);
-    expect(wrapper.find('#datasource_menu').dive().find(MenuItem)).toHaveLength(
-      2,
+    expect(wrapper.find('[data-test="datasource-menu"]')).toExist();
+    let menuWrapper = shallow(
+      <div>
+        {wrapper.find('[data-test="datasource-menu"]').prop('overlay')}
+      </div>,
     );
+    expect(menuWrapper.find(Menu.Item)).toHaveLength(3);
 
     wrapper = setup({
-      onDatasourceSave: () => {},
+      isEditable: false,
     });
-    expect(wrapper.find('#datasource_menu')).toHaveLength(1);
-    expect(wrapper.find('#datasource_menu').dive().find(MenuItem)).toHaveLength(
-      3,
+    expect(wrapper.find('[data-test="datasource-menu"]')).toExist();
+    menuWrapper = shallow(
+      <div>
+        {wrapper.find('[data-test="datasource-menu"]').prop('overlay')}
+      </div>,
     );
+    expect(menuWrapper.find(Menu.Item)).toHaveLength(2);
   });
 });

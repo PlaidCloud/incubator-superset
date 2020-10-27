@@ -20,13 +20,14 @@
 import React from 'react';
 import sinon from 'sinon';
 import { shallow } from 'enzyme';
-import { OverlayTrigger } from 'react-bootstrap';
 
+import Popover from 'src/common/components/Popover';
 import FilterBoxItemControl from 'src/explore/components/controls/FilterBoxItemControl';
 import FormRow from 'src/components/FormRow';
 import datasources from '../../../fixtures/mockDatasource';
 
 const defaultProps = {
+  label: 'some label',
   datasource: datasources['7__table'],
   onChange: sinon.spy(),
 };
@@ -44,13 +45,16 @@ describe('FilterBoxItemControl', () => {
     inst = wrapper.instance();
   });
 
-  it('renders an OverlayTrigger', () => {
-    expect(wrapper.find(OverlayTrigger)).toHaveLength(1);
+  it('renders a Popover', () => {
+    expect(wrapper.find(Popover)).toExist();
   });
 
   it('renderForms does the job', () => {
     const popover = shallow(inst.renderForm());
-    expect(popover.find(FormRow)).toHaveLength(7);
+    expect(popover.find(FormRow)).toHaveLength(8);
+    expect(popover.find(FormRow).get(1).props.control.props.value).toEqual(
+      'some label',
+    );
   });
 
   it('convert type for single value filter_box', () => {

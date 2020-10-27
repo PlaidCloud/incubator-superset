@@ -20,13 +20,11 @@ from typing import List, Optional, TYPE_CHECKING
 from sqlalchemy.exc import SQLAlchemyError
 
 from superset.charts.filters import ChartFilter
-from superset.connectors.connector_registry import ConnectorRegistry
 from superset.dao.base import BaseDAO
 from superset.extensions import db
 from superset.models.slice import Slice
 
 if TYPE_CHECKING:
-    # pylint: disable=unused-import
     from superset.connectors.base.models import BaseDatasource
 
 logger = logging.getLogger(__name__)
@@ -58,5 +56,13 @@ class ChartDAO(BaseDAO):
             raise ex
 
     @staticmethod
-    def fetch_all_datasources() -> List["BaseDatasource"]:
-        return ConnectorRegistry.get_all_datasources(db.session)
+    def save(slc: Slice, commit: bool = True) -> None:
+        db.session.add(slc)
+        if commit:
+            db.session.commit()
+
+    @staticmethod
+    def overwrite(slc: Slice, commit: bool = True) -> None:
+        db.session.merge(slc)
+        if commit:
+            db.session.commit()

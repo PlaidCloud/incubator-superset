@@ -15,10 +15,11 @@
 # specific language governing permissions and limitations
 # under the License.
 # pylint: disable=too-few-public-methods,invalid-name
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from dataclasses import dataclass
+from flask_babel import gettext as _
 
 
 class SupersetErrorType(str, Enum):
@@ -35,6 +36,8 @@ class SupersetErrorType(str, Enum):
 
     # DB Engine errors
     GENERIC_DB_ENGINE_ERROR = "GENERIC_DB_ENGINE_ERROR"
+    COLUMN_DOES_NOT_EXIST_ERROR = "COLUMN_DOES_NOT_EXIST_ERROR"
+    TABLE_DOES_NOT_EXIST_ERROR = "TABLE_DOES_NOT_EXIST_ERROR"
 
     # Viz errors
     VIZ_GET_DF_ERROR = "VIZ_GET_DF_ERROR"
@@ -45,6 +48,59 @@ class SupersetErrorType(str, Enum):
     TABLE_SECURITY_ACCESS_ERROR = "TABLE_SECURITY_ACCESS_ERROR"
     DATASOURCE_SECURITY_ACCESS_ERROR = "DATASOURCE_SECURITY_ACCESS_ERROR"
     MISSING_OWNERSHIP_ERROR = "MISSING_OWNERSHIP_ERROR"
+
+    # Other errors
+    BACKEND_TIMEOUT_ERROR = "BACKEND_TIMEOUT_ERROR"
+
+
+ERROR_TYPES_TO_ISSUE_CODES_MAPPING = {
+    SupersetErrorType.BACKEND_TIMEOUT_ERROR: [
+        {
+            "code": 1000,
+            "message": _("Issue 1000 - The datasource is too large to query."),
+        },
+        {
+            "code": 1001,
+            "message": _("Issue 1001 - The database is under an unusual load."),
+        },
+    ],
+    SupersetErrorType.GENERIC_DB_ENGINE_ERROR: [
+        {
+            "code": 1002,
+            "message": _("Issue 1002 - The database returned an unexpected error."),
+        }
+    ],
+    SupersetErrorType.COLUMN_DOES_NOT_EXIST_ERROR: [
+        {
+            "code": 1003,
+            "message": _(
+                "Issue 1003 - There is a syntax error in the SQL query. "
+                "Perhaps there was a misspelling or a typo."
+            ),
+        },
+        {
+            "code": 1004,
+            "message": _(
+                "Issue 1004 - The column was deleted or renamed in the database."
+            ),
+        },
+    ],
+    SupersetErrorType.TABLE_DOES_NOT_EXIST_ERROR: [
+        {
+            "code": 1003,
+            "message": _(
+                "Issue 1003 - There is a syntax error in the SQL query. "
+                "Perhaps there was a misspelling or a typo."
+            ),
+        },
+        {
+            "code": 1005,
+            "message": _(
+                "Issue 1005 - The table was deleted or renamed in the database."
+            ),
+        },
+    ],
+}
 
 
 class ErrorLevel(str, Enum):
@@ -69,3 +125,13 @@ class SupersetError:
     error_type: SupersetErrorType
     level: ErrorLevel
     extra: Optional[Dict[str, Any]] = None
+
+    def __post_init__(self) -> None:
+        """
+        Mutates the extra params with user facing error codes that map to backend
+        errors.
+        """
+        issue_codes = ERROR_TYPES_TO_ISSUE_CODES_MAPPING.get(self.error_type)
+        if issue_codes:
+            self.extra = self.extra or {}
+            self.extra.update({"issue_codes": issue_codes})

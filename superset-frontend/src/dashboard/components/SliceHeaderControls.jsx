@@ -20,9 +20,9 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import moment from 'moment';
 import { Dropdown, MenuItem } from 'react-bootstrap';
-import { t } from '@superset-ui/translation';
+import { t } from '@superset-ui/core';
 import URLShortLinkModal from '../../components/URLShortLinkModal';
-import downloadAsImage from '../util/downloadAsImage';
+import downloadAsImage from '../../utils/downloadAsImage';
 import getDashboardUrl from '../util/getDashboardUrl';
 import { getActiveFilters } from '../util/activeDashboardFilters';
 
@@ -78,6 +78,8 @@ class SliceHeaderControls extends React.PureComponent {
       this.props.slice.slice_id,
     );
 
+    this.handleToggleFullSize = this.handleToggleFullSize.bind(this);
+
     this.state = {
       showControls: false,
     };
@@ -101,9 +103,13 @@ class SliceHeaderControls extends React.PureComponent {
   }
 
   toggleControls() {
-    this.setState({
-      showControls: !this.state.showControls,
-    });
+    this.setState(prevState => ({
+      showControls: !prevState.showControls,
+    }));
+  }
+
+  handleToggleFullSize() {
+    this.props.handleToggleFullSize();
   }
 
   render() {
@@ -114,13 +120,14 @@ class SliceHeaderControls extends React.PureComponent {
       updatedDttm,
       componentId,
       addDangerToast,
+      isFullSize,
     } = this.props;
     const cachedWhen = moment.utc(cachedDttm).fromNow();
     const updatedWhen = updatedDttm ? moment.utc(updatedDttm).fromNow() : '';
     const refreshTooltip = isCached
       ? t('Cached %s', cachedWhen)
       : (updatedWhen && t('Fetched %s', updatedWhen)) || '';
-
+    const resizeLabel = isFullSize ? t('Minimize') : t('Maximize');
     return (
       <Dropdown
         id={`slice_${slice.slice_id}-controls`}
@@ -139,7 +146,12 @@ class SliceHeaderControls extends React.PureComponent {
             disabled={this.props.chartStatus === 'loading'}
           >
             {t('Force refresh')}
-            <div className="refresh-tooltip">{refreshTooltip}</div>
+            <div
+              className="refresh-tooltip"
+              data-test="dashboard-slice-refresh-tooltip"
+            >
+              {refreshTooltip}
+            </div>
           </MenuItem>
 
           <MenuItem divider />
@@ -150,9 +162,9 @@ class SliceHeaderControls extends React.PureComponent {
             </MenuItem>
           )}
 
-          {this.props.sliceCanEdit && (
-            <MenuItem href={slice.edit_url} target="_blank">
-              {t('Edit chart metadata')}
+          {this.props.supersetCanExplore && (
+            <MenuItem onClick={this.exploreChart}>
+              {t('Explore chart')}
             </MenuItem>
           )}
 
@@ -160,11 +172,7 @@ class SliceHeaderControls extends React.PureComponent {
             <MenuItem onClick={this.exportCSV}>{t('Export CSV')}</MenuItem>
           )}
 
-          {this.props.supersetCanExplore && (
-            <MenuItem onClick={this.exploreChart}>
-              {t('Explore chart')}
-            </MenuItem>
-          )}
+          <MenuItem onClick={this.handleToggleFullSize}>{resizeLabel}</MenuItem>
 
           <URLShortLinkModal
             url={getDashboardUrl(

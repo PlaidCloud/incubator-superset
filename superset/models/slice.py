@@ -34,14 +34,14 @@ from superset.models.helpers import AuditMixinNullable, ImportMixin
 from superset.models.tags import ChartUpdater
 from superset.tasks.thumbnails import cache_chart_thumbnail
 from superset.utils import core as utils
+from superset.utils.urls import get_url_path
 
 if is_feature_enabled("SIP_38_VIZ_REARCHITECTURE"):
-    from superset.viz_sip38 import BaseViz, viz_types  # type: ignore
+    from superset.viz_sip38 import BaseViz, viz_types
 else:
     from superset.viz import BaseViz, viz_types  # type: ignore
 
 if TYPE_CHECKING:
-    # pylint: disable=unused-import
     from superset.connectors.base.models import BaseDatasource
 
 metadata = Model.metadata  # pylint: disable=no-member
@@ -140,9 +140,14 @@ class Slice(
     def datasource_name_text(self) -> Optional[str]:
         # pylint: disable=no-member
         if self.table:
+            if self.table.schema:
+                return f"{self.table.schema}.{self.table.table_name}"
             return self.table.table_name
-        datasource = self.datasource
-        return datasource.name if datasource else None
+        if self.datasource:
+            if self.datasource.schema:
+                return f"{self.datasource.schema}.{self.datasource.name}"
+            return self.datasource.name
+        return None
 
     @property
     def datasource_edit_url(self) -> Optional[str]:
@@ -154,10 +159,12 @@ class Slice(
 
     @property  # type: ignore
     @utils.memoized
-    def viz(self) -> BaseViz:
+    def viz(self) -> Optional[BaseViz]:
         form_data = json.loads(self.params)
-        viz_class = viz_types[self.viz_type]
-        return viz_class(datasource=self.datasource, form_data=form_data)
+        viz_class = viz_types.get(self.viz_type)
+        if viz_class:
+            return viz_class(datasource=self.datasource, form_data=form_data)
+        return None
 
     @property
     def description_markeddown(self) -> str:
@@ -169,38 +176,42 @@ class Slice(
         data: Dict[str, Any] = {}
         self.token = ""
         try:
-            data = self.viz.data
-            self.token = data.get("token")  # type: ignore
+            viz = self.viz
+            data = viz.data if viz else self.form_data
+            self.token = utils.get_form_data_token(data)
         except Exception as ex:  # pylint: disable=broad-except
             logger.exception(ex)
             data["error"] = str(ex)
         return {
             "cache_timeout": self.cache_timeout,
+            "changed_on": self.changed_on.isoformat(),
+            "changed_on_humanized": self.changed_on_humanized,
             "datasource": self.datasource_name,
             "description": self.description,
             "description_markeddown": self.description_markeddown,
             "edit_url": self.edit_url,
             "form_data": self.form_data,
+            "modified": self.modified(),
+            "owners": [
+                f"{owner.first_name} {owner.last_name}" for owner in self.owners
+            ],
             "slice_id": self.id,
             "slice_name": self.slice_name,
             "slice_url": self.slice_url,
-            "modified": self.modified(),
-            "changed_on_humanized": self.changed_on_humanized,
-            "changed_on": self.changed_on.isoformat(),
         }
 
     @property
     def digest(self) -> str:
         """
-            Returns a MD5 HEX digest that makes this dashboard unique
+        Returns a MD5 HEX digest that makes this dashboard unique
         """
         return utils.md5_hex(self.params)
 
     @property
     def thumbnail_url(self) -> str:
         """
-            Returns a thumbnail URL with a HEX digest. We want to avoid browser cache
-            if the dashboard has changed
+        Returns a thumbnail URL with a HEX digest. We want to avoid browser cache
+        if the dashboard has changed
         """
         return f"/api/v1/chart/{self.id}/thumbnail/{self.digest}/"
 
@@ -265,7 +276,7 @@ class Slice(
 
     @property
     def changed_by_url(self) -> str:
-        return f"/superset/profile/{self.created_by.username}"  # type: ignore
+        return f"/superset/profile/{self.changed_by.username}"  # type: ignore
 
     @property
     def icons(self) -> str:
@@ -326,8 +337,7 @@ class Slice(
         return f"/superset/explore/?form_data=%7B%22slice_id%22%3A%20{self.id}%7D"
 
 
-def set_related_perm(mapper: Mapper, connection: Connection, target: Slice) -> None:
-    # pylint: disable=unused-argument
+def set_related_perm(_mapper: Mapper, _connection: Connection, target: Slice) -> None:
     src_class = target.cls_model
     id_ = target.datasource_id
     if id_:
@@ -337,10 +347,11 @@ def set_related_perm(mapper: Mapper, connection: Connection, target: Slice) -> N
             target.schema_perm = ds.schema_perm
 
 
-def event_after_chart_changed(  # pylint: disable=unused-argument
-    mapper: Mapper, connection: Connection, target: Slice
+def event_after_chart_changed(
+    _mapper: Mapper, _connection: Connection, target: Slice
 ) -> None:
-    cache_chart_thumbnail.delay(target.id, force=True)
+    url = get_url_path("Superset.slice", slice_id=target.id, standalone="true")
+    cache_chart_thumbnail.delay(url, target.digest, force=True)
 
 
 sqla.event.listen(Slice, "before_insert", set_related_perm)

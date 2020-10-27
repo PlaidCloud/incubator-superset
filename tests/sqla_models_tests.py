@@ -17,17 +17,20 @@
 # isort:skip_file
 from typing import Any, Dict, NamedTuple, List, Tuple, Union
 from unittest.mock import patch
+import pytest
 
 import tests.test_app
+from superset import db
 from superset.connectors.sqla.models import SqlaTable, TableColumn
 from superset.db_engine_specs.druid import DruidEngineSpec
+from superset.exceptions import QueryObjectValidationError
 from superset.models.core import Database
 from superset.utils.core import DbColumnType, get_example_database, FilterOperator
 
 from .base_tests import SupersetTestCase
 
 
-class DatabaseModelTestCase(SupersetTestCase):
+class TestDatabaseModel(SupersetTestCase):
     def test_is_time_druid_time_col(self):
         """Druid has a special __time column"""
 
@@ -40,6 +43,18 @@ class DatabaseModelTestCase(SupersetTestCase):
 
         col = TableColumn(column_name="__not_time", type="INTEGER", table=tbl)
         self.assertEqual(col.is_temporal, False)
+
+    def test_temporal_varchar(self):
+        """Ensure a column with is_dttm set to true evaluates to is_temporal == True"""
+
+        database = get_example_database()
+        tbl = SqlaTable(table_name="test_tbl", database=database)
+        col = TableColumn(column_name="ds", type="VARCHAR", table=tbl)
+        # by default, VARCHAR should not be assumed to be temporal
+        assert col.is_temporal is False
+        # changing to `is_dttm = True`, calling `is_temporal` should return True
+        col.is_dttm = True
+        assert col.is_temporal is True
 
     def test_db_column_types(self):
         test_cases: Dict[str, DbColumnType] = {
@@ -84,48 +99,53 @@ class DatabaseModelTestCase(SupersetTestCase):
         }
 
         # Table with Jinja callable.
-        table = SqlaTable(
+        table1 = SqlaTable(
             table_name="test_has_extra_cache_keys_table",
             sql="SELECT '{{ current_username() }}' as user",
             database=get_example_database(),
         )
 
         query_obj = dict(**base_query_obj, extras={})
-        extra_cache_keys = table.get_extra_cache_keys(query_obj)
-        self.assertTrue(table.has_extra_cache_key_calls(query_obj))
-        self.assertListEqual(extra_cache_keys, ["abc"])
+        extra_cache_keys = table1.get_extra_cache_keys(query_obj)
+        self.assertTrue(table1.has_extra_cache_key_calls(query_obj))
+        assert extra_cache_keys == ["abc"]
 
         # Table with Jinja callable disabled.
-        table = SqlaTable(
+        table2 = SqlaTable(
             table_name="test_has_extra_cache_keys_disabled_table",
             sql="SELECT '{{ current_username(False) }}' as user",
             database=get_example_database(),
         )
         query_obj = dict(**base_query_obj, extras={})
-        extra_cache_keys = table.get_extra_cache_keys(query_obj)
-        self.assertTrue(table.has_extra_cache_key_calls(query_obj))
+        extra_cache_keys = table2.get_extra_cache_keys(query_obj)
+        self.assertTrue(table2.has_extra_cache_key_calls(query_obj))
         self.assertListEqual(extra_cache_keys, [])
 
         # Table with no Jinja callable.
         query = "SELECT 'abc' as user"
-        table = SqlaTable(
+        table3 = SqlaTable(
             table_name="test_has_no_extra_cache_keys_table",
             sql=query,
             database=get_example_database(),
         )
 
         query_obj = dict(**base_query_obj, extras={"where": "(user != 'abc')"})
-        extra_cache_keys = table.get_extra_cache_keys(query_obj)
-        self.assertFalse(table.has_extra_cache_key_calls(query_obj))
+        extra_cache_keys = table3.get_extra_cache_keys(query_obj)
+        self.assertFalse(table3.has_extra_cache_key_calls(query_obj))
         self.assertListEqual(extra_cache_keys, [])
 
         # With Jinja callable in SQL expression.
         query_obj = dict(
             **base_query_obj, extras={"where": "(user != '{{ current_username() }}')"}
         )
-        extra_cache_keys = table.get_extra_cache_keys(query_obj)
-        self.assertTrue(table.has_extra_cache_key_calls(query_obj))
-        self.assertListEqual(extra_cache_keys, ["abc"])
+        extra_cache_keys = table3.get_extra_cache_keys(query_obj)
+        self.assertTrue(table3.has_extra_cache_key_calls(query_obj))
+        assert extra_cache_keys == ["abc"]
+
+        # Cleanup
+        for table in [table1, table2, table3]:
+            db.session.delete(table)
+        db.session.commit()
 
     def test_where_operators(self):
         class FilterTestCase(NamedTuple):
@@ -162,3 +182,68 @@ class DatabaseModelTestCase(SupersetTestCase):
             sqla_query = table.get_sqla_query(**query_obj)
             sql = table.database.compile_sqla_query(sqla_query.sqla_query)
             self.assertIn(filter_.expected, sql)
+
+    def test_incorrect_jinja_syntax_raises_correct_exception(self):
+        query_obj = {
+            "granularity": None,
+            "from_dttm": None,
+            "to_dttm": None,
+            "groupby": ["user"],
+            "metrics": [],
+            "is_timeseries": False,
+            "filter": [],
+            "extras": {},
+        }
+
+        # Table with Jinja callable.
+        table = SqlaTable(
+            table_name="test_table",
+            sql="SELECT '{{ abcd xyz + 1 ASDF }}' as user",
+            database=get_example_database(),
+        )
+        # TODO(villebro): make it work with presto
+        if get_example_database().backend != "presto":
+            with pytest.raises(QueryObjectValidationError):
+                table.get_sqla_query(**query_obj)
+
+    def test_multiple_sql_statements_raises_exception(self):
+        base_query_obj = {
+            "granularity": None,
+            "from_dttm": None,
+            "to_dttm": None,
+            "groupby": ["grp"],
+            "metrics": [],
+            "is_timeseries": False,
+            "filter": [],
+        }
+
+        table = SqlaTable(
+            table_name="test_has_extra_cache_keys_table",
+            sql="SELECT 'foo' as grp, 1 as num; SELECT 'bar' as grp, 2 as num",
+            database=get_example_database(),
+        )
+
+        query_obj = dict(**base_query_obj, extras={})
+        with pytest.raises(QueryObjectValidationError):
+            table.get_sqla_query(**query_obj)
+
+    def test_dml_statement_raises_exception(self):
+        base_query_obj = {
+            "granularity": None,
+            "from_dttm": None,
+            "to_dttm": None,
+            "groupby": ["grp"],
+            "metrics": [],
+            "is_timeseries": False,
+            "filter": [],
+        }
+
+        table = SqlaTable(
+            table_name="test_has_extra_cache_keys_table",
+            sql="DELETE FROM foo",
+            database=get_example_database(),
+        )
+
+        query_obj = dict(**base_query_obj, extras={})
+        with pytest.raises(QueryObjectValidationError):
+            table.get_sqla_query(**query_obj)

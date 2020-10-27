@@ -41,8 +41,8 @@ from .helpers import (
 )
 
 
-def load_world_bank_health_n_pop(  # pylint: disable=too-many-locals
-    only_metadata: bool = False, force: bool = False
+def load_world_bank_health_n_pop(  # pylint: disable=too-many-locals, too-many-statements
+    only_metadata: bool = False, force: bool = False, sample: bool = False,
 ) -> None:
     """Loads the world bank health dataset, slices and a dashboard"""
     tbl_name = "wb_health_population"
@@ -53,18 +53,26 @@ def load_world_bank_health_n_pop(  # pylint: disable=too-many-locals
         data = get_example_data("countries.json.gz")
         pdf = pd.read_json(data)
         pdf.columns = [col.replace(".", "_") for col in pdf.columns]
-        pdf.year = pd.to_datetime(pdf.year)
+        if database.backend == "presto":
+            pdf.year = pd.to_datetime(pdf.year)
+            pdf.year = pdf.year.dt.strftime("%Y-%m-%d %H:%M%:%S")
+        else:
+            pdf.year = pd.to_datetime(pdf.year)
+        pdf = pdf.head(100) if sample else pdf
+
         pdf.to_sql(
             tbl_name,
             database.get_sqla_engine(),
             if_exists="replace",
             chunksize=50,
             dtype={
-                "year": DateTime(),
+                # TODO(bkyryliuk): use TIMESTAMP type for presto
+                "year": DateTime if database.backend != "presto" else String(255),
                 "country_code": String(3),
                 "country_name": String(255),
                 "region": String(255),
             },
+            method="multi",
             index=False,
         )
 
@@ -121,6 +129,7 @@ def load_world_bank_health_n_pop(  # pylint: disable=too-many-locals
         "since": "2014-01-01",
         "until": "2014-01-02",
         "time_range": "2014-01-01 : 2014-01-02",
+        "time_range_endpoints": ["inclusive", "exclusive"],
         "markup_type": "markdown",
         "country_fieldtype": "cca3",
         "entity": "country_code",
@@ -145,7 +154,7 @@ def load_world_bank_health_n_pop(  # pylint: disable=too-many-locals
                         "column": "region",
                         "key": "2s98dfu",
                         "metric": "sum__SP_POP_TOTL",
-                        "multiple": True,
+                        "multiple": False,
                     },
                     {
                         "asc": False,
@@ -265,7 +274,7 @@ def load_world_bank_health_n_pop(  # pylint: disable=too-many-locals
                 viz_type="sunburst",
                 groupby=["region", "country_name"],
                 since="2011-01-01",
-                until="2011-01-01",
+                until="2011-01-02",
                 metric=metric,
                 secondary_metric=secondary_metric,
             ),
@@ -322,7 +331,7 @@ def load_world_bank_health_n_pop(  # pylint: disable=too-many-locals
             params=get_slice_json(
                 defaults,
                 since="2011-01-01",
-                until="2011-01-01",
+                until="2012-01-01",
                 viz_type="para",
                 limit=100,
                 metrics=["sum__SP_POP_TOTL", "sum__SP_RUR_TOTL_ZS", "sum__SH_DYN_AIDS"],

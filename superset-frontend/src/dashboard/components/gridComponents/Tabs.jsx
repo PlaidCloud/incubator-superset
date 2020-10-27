@@ -47,8 +47,11 @@ const propTypes = {
   renderTabContent: PropTypes.bool, // whether to render tabs + content or just tabs
   editMode: PropTypes.bool.isRequired,
   renderHoverMenu: PropTypes.bool,
-  logEvent: PropTypes.func.isRequired,
   directPathToChild: PropTypes.arrayOf(PropTypes.string),
+
+  // actions (from DashboardComponent.jsx)
+  logEvent: PropTypes.func.isRequired,
+  setMountedTab: PropTypes.func.isRequired,
 
   // grid related
   availableColumnCount: PropTypes.number,
@@ -66,7 +69,6 @@ const propTypes = {
 };
 
 const defaultProps = {
-  children: null,
   renderTabContent: true,
   renderHoverMenu: true,
   availableColumnCount: 0,
@@ -127,7 +129,7 @@ class Tabs extends React.PureComponent {
 
   handleClickTab(tabIndex, ev) {
     if (ev) {
-      const target = ev.target;
+      const { target } = ev;
       // special handler for clicking on anchor link icon (or whitespace nearby):
       // will show short link popover but do not change tab
       if (target && target.classList.contains('short-link-trigger')) {
@@ -150,12 +152,13 @@ class Tabs extends React.PureComponent {
         },
       });
     } else if (tabIndex !== this.state.tabIndex) {
+      const pathToTabIndex = getDirectPathToTabIndex(component, tabIndex);
+      const targetTabId = pathToTabIndex[pathToTabIndex.length - 1];
       this.props.logEvent(LOG_ACTIONS_SELECT_DASHBOARD_TAB, {
-        tab_id: component.id,
+        target_id: targetTabId,
         index: tabIndex,
       });
 
-      const pathToTabIndex = getDirectPathToTabIndex(component, tabIndex);
       this.props.onChangeTab({ pathToTabIndex });
     }
   }
@@ -223,7 +226,10 @@ class Tabs extends React.PureComponent {
           dropIndicatorProps: tabsDropIndicatorProps,
           dragSourceRef: tabsDragSourceRef,
         }) => (
-          <div className="dashboard-component dashboard-component-tabs">
+          <div
+            className="dashboard-component dashboard-component-tabs"
+            data-test="dashboard-component-tabs"
+          >
             {editMode && renderHoverMenu && (
               <HoverMenu innerRef={tabsDragSourceRef} position="left">
                 <DragHandle position="left" />
@@ -238,6 +244,7 @@ class Tabs extends React.PureComponent {
               animation
               mountOnEnter
               unmountOnExit={false}
+              data-test="nav-list"
             >
               {tabIds.map((tabId, tabIndex) => (
                 // react-bootstrap doesn't render a Tab if we move this to its own Tab.jsx so we
@@ -259,6 +266,12 @@ class Tabs extends React.PureComponent {
                       onDeleteTab={this.handleDeleteTab}
                     />
                   }
+                  onEntering={() => {
+                    // Entering current tab, DOM is visible and has dimension
+                    if (renderTabContent) {
+                      this.props.setMountedTab(tabId);
+                    }
+                  }}
                 >
                   {renderTabContent && (
                     <DashboardComponent

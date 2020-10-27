@@ -18,12 +18,21 @@
  */
 /* eslint-disable no-unused-expressions */
 import React from 'react';
+import { OverlayTrigger, Tab, Tabs, Radio } from 'react-bootstrap';
 import sinon from 'sinon';
-import { shallow } from 'enzyme';
-import { Button, Label } from 'react-bootstrap';
+import { styledMount as mount } from 'spec/helpers/theming';
 
+import Popover from 'src/common/components/Popover';
+import Label from 'src/components/Label';
 import DateFilterControl from 'src/explore/components/controls/DateFilterControl';
 import ControlHeader from 'src/explore/components/ControlHeader';
+
+// Mock moment.js to use a specific date
+jest.mock('moment', () => {
+  const testDate = new Date('2020-09-07');
+
+  return () => jest.requireActual('moment')(testDate);
+});
 
 const defaultProps = {
   animation: false,
@@ -37,43 +46,89 @@ describe('DateFilterControl', () => {
   let wrapper;
 
   beforeEach(() => {
-    wrapper = shallow(<DateFilterControl {...defaultProps} />);
+    wrapper = mount(<DateFilterControl {...defaultProps} />);
+  });
+
+  it('renders', () => {
+    expect(wrapper.find(DateFilterControl)).toExist();
   });
 
   it('renders a ControlHeader', () => {
     const controlHeader = wrapper.find(ControlHeader);
     expect(controlHeader).toHaveLength(1);
   });
-  it('renders 3 Buttons', () => {
-    const label = wrapper.find(Label).first();
-    label.simulate('click');
-    setTimeout(() => {
-      expect(wrapper.find(Button)).toHaveLength(3);
-    }, 10);
+
+  it('renders an Popover', () => {
+    expect(wrapper.find(Popover)).toExist();
   });
-  it('loads the right state', () => {
-    const label = wrapper.find(Label).first();
+
+  it('calls open/close methods on trigger click', () => {
+    const open = jest.fn();
+    const close = jest.fn();
+    const props = {
+      ...defaultProps,
+      onOpenDateFilterControl: open,
+      onCloseDateFilterControl: close,
+    };
+    const testWrapper = mount(<DateFilterControl {...props} />);
+    const label = testWrapper.find(Label).first();
+
     label.simulate('click');
-    setTimeout(() => {
-      expect(wrapper.state().num).toBe('90');
-    }, 10);
+    expect(open).toBeCalled();
+    expect(close).not.toBeCalled();
+    label.simulate('click');
+    expect(close).toBeCalled();
   });
-  it('renders 2 dimmed sections', () => {
-    const label = wrapper.find(Label).first();
-    label.simulate('click');
-    setTimeout(() => {
-      expect(wrapper.find(Button)).toHaveLength(3);
-    }, 10);
+
+  it('renders two tabs in popover', () => {
+    const popoverContent = wrapper.find(Popover).first().props().content;
+    const popoverContentWrapper = mount(popoverContent);
+
+    expect(popoverContentWrapper.find(Tabs)).toExist();
+    expect(popoverContentWrapper.find(Tab)).toHaveLength(2);
   });
-  it('opens and closes', () => {
-    const label = wrapper.find(Label).first();
-    label.simulate('click');
-    setTimeout(() => {
-      expect(wrapper.find('.popover')).toHaveLength(1);
-      expect(wrapper.find('.ok')).first().simulate('click');
-      setTimeout(() => {
-        expect(wrapper.find('.popover')).toHaveLength(0);
-      }, 10);
-    }, 10);
+
+  it('renders default time options', () => {
+    const popoverContent = wrapper.find(Popover).first().props().content;
+    const popoverContentWrapper = mount(popoverContent);
+    const defaultTab = popoverContentWrapper.find(Tab).first();
+
+    expect(defaultTab.find(Radio)).toExist();
+    expect(defaultTab.find(Radio)).toHaveLength(6);
+  });
+
+  it('renders tooltips over timeframe options', () => {
+    const popoverContent = wrapper.find(Popover).first().props().content;
+    const popoverContentWrapper = mount(popoverContent);
+    const defaultTab = popoverContentWrapper.find(Tab).first();
+    const radioTrigger = defaultTab.find(OverlayTrigger);
+
+    expect(radioTrigger).toExist();
+    expect(radioTrigger).toHaveLength(6);
+  });
+
+  it('renders the correct time range in tooltip', () => {
+    const popoverContent = wrapper.find(Popover).first().props().content;
+    const popoverContentWrapper = mount(popoverContent);
+    const defaultTab = popoverContentWrapper.find(Tab).first();
+    const triggers = defaultTab.find(OverlayTrigger);
+
+    const expectedLabels = {
+      'Last day': '2020-09-06 < col < 2020-09-07',
+      'Last week': '2020-08-31 < col < 2020-09-07',
+      'Last month': '2020-08-07 < col < 2020-09-07',
+      'Last quarter': '2020-06-07 < col < 2020-09-07',
+      'Last year': '2019-01-01 < col < 2020-01-01',
+      'No filter': '-∞ < col < ∞',
+    };
+
+    triggers.forEach(trigger => {
+      const { props } = trigger.props().overlay;
+      const label = props.id.split('tooltip-')[1];
+
+      expect(trigger.props().overlay.props.children).toEqual(
+        expectedLabels[label],
+      );
+    });
   });
 });

@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from flask_appbuilder.models.sqla import Model
 from flask_appbuilder.security.sqla.models import User
@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 class CreateDatasetCommand(BaseCommand):
-    def __init__(self, user: User, data: Dict):
+    def __init__(self, user: User, data: Dict[str, Any]):
         self._actor = user
         self._properties = data.copy()
 
@@ -67,14 +67,14 @@ class CreateDatasetCommand(BaseCommand):
         return dataset
 
     def validate(self) -> None:
-        exceptions = list()
+        exceptions: List[ValidationError] = list()
         database_id = self._properties["database"]
         table_name = self._properties["table_name"]
-        schema = self._properties.get("schema", "")
+        schema = self._properties.get("schema", None)
         owner_ids: Optional[List[int]] = self._properties.get("owners")
 
         # Validate uniqueness
-        if not DatasetDAO.validate_uniqueness(database_id, table_name):
+        if not DatasetDAO.validate_uniqueness(database_id, schema, table_name):
             exceptions.append(DatasetExistsValidationError(table_name))
 
         # Validate/Populate database

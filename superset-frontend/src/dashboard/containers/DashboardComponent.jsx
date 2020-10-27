@@ -21,6 +21,8 @@ import PropTypes from 'prop-types';
 import { bindActionCreators } from 'redux';
 import { connect } from 'react-redux';
 
+import { logEvent } from 'src/logger/actions';
+import { addDangerToast } from 'src/messageToasts/actions';
 import ComponentLookup from '../components/gridComponents';
 import getDetailedComponentWidth from '../util/getDetailedComponentWidth';
 import { getActiveFilters } from '../util/activeDashboardFilters';
@@ -33,9 +35,7 @@ import {
   updateComponents,
   handleComponentDrop,
 } from '../actions/dashboardLayout';
-import { setDirectPathToChild } from '../actions/dashboardState';
-import { logEvent } from '../../logger/actions';
-import { addDangerToast } from '../../messageToasts/actions';
+import { setDirectPathToChild, setMountedTab } from '../actions/dashboardState';
 
 const propTypes = {
   component: componentShape.isRequired,
@@ -48,6 +48,7 @@ const propTypes = {
   directPathToChild: PropTypes.arrayOf(PropTypes.string),
   directPathLastUpdated: PropTypes.number,
   dashboardId: PropTypes.number.isRequired,
+  isComponentVisible: PropTypes.bool,
 };
 
 const defaultProps = {
@@ -106,6 +107,7 @@ function mapDispatchToProps(dispatch) {
       updateComponents,
       handleComponentDrop,
       setDirectPathToChild,
+      setMountedTab,
       logEvent,
     },
     dispatch,

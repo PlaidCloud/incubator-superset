@@ -19,7 +19,7 @@
 import React from 'react';
 import { shallow } from 'enzyme';
 import { Panel } from 'react-bootstrap';
-import { InfoTooltipWithTrigger } from '@superset-ui/control-utils';
+import { InfoTooltipWithTrigger } from '@superset-ui/chart-controls';
 import ControlPanelSection from 'src/explore/components/ControlPanelSection';
 
 const defaultProps = {
@@ -43,7 +43,7 @@ describe('ControlPanelSection', () => {
 
   it('renders a Panel component', () => {
     wrapper = shallow(<ControlPanelSection {...defaultProps} />);
-    expect(wrapper.find(Panel)).toHaveLength(1);
+    expect(wrapper.find(Panel)).toExist();
   });
 
   describe('with optional props', () => {

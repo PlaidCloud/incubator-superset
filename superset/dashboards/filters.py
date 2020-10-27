@@ -25,6 +25,7 @@ from superset.models.core import FavStar
 from superset.models.dashboard import Dashboard
 from superset.models.slice import Slice
 from superset.views.base import BaseFilter, get_user_roles
+from superset.views.base_api import BaseFavoriteFilter
 
 
 class DashboardTitleOrSlugFilter(BaseFilter):  # pylint: disable=too-few-public-methods
@@ -41,6 +42,18 @@ class DashboardTitleOrSlugFilter(BaseFilter):  # pylint: disable=too-few-public-
                 Dashboard.slug.ilike(ilike_value),
             )
         )
+
+
+class DashboardFavoriteFilter(
+    BaseFavoriteFilter
+):  # pylint: disable=too-few-public-methods
+    """
+    Custom filter for the GET list that filters all dashboards that a user has favored
+    """
+
+    arg_name = "dashboard_is_fav"
+    class_name = "Dashboard"
+    model = Dashboard
 
 
 class DashboardFilter(BaseFilter):  # pylint: disable=too-few-public-methods
@@ -62,7 +75,6 @@ class DashboardFilter(BaseFilter):  # pylint: disable=too-few-public-methods
 
         datasource_perms = security_manager.user_view_menu_names("datasource_access")
         schema_perms = security_manager.user_view_menu_names("schema_access")
-        all_datasource_access = security_manager.all_datasource_access()
         published_dash_query = (
             db.session.query(Dashboard.id)
             .join(Dashboard.slices)
@@ -72,7 +84,7 @@ class DashboardFilter(BaseFilter):  # pylint: disable=too-few-public-methods
                     or_(
                         Slice.perm.in_(datasource_perms),
                         Slice.schema_perm.in_(schema_perms),
-                        all_datasource_access,
+                        security_manager.can_access_all_datasources(),
                     ),
                 )
             )

@@ -19,18 +19,20 @@ import re
 from datetime import datetime
 from typing import Any, List, Optional, Tuple, TYPE_CHECKING
 
-from sqlalchemy.types import String, TypeEngine, UnicodeText
+from sqlalchemy.types import String, UnicodeText
 
 from superset.db_engine_specs.base import BaseEngineSpec, LimitMethod
+from superset.utils import core as utils
 
 if TYPE_CHECKING:
-    from superset.models.core import Database  # pylint: disable=unused-import
+    from superset.models.core import Database
 
 logger = logging.getLogger(__name__)
 
 
 class MssqlEngineSpec(BaseEngineSpec):
     engine = "mssql"
+    engine_name = "Microsoft SQL"
     limit_method = LimitMethod.WRAP_SQL
     max_column_name_length = 128
 
@@ -57,31 +59,28 @@ class MssqlEngineSpec(BaseEngineSpec):
     @classmethod
     def convert_dttm(cls, target_type: str, dttm: datetime) -> Optional[str]:
         tt = target_type.upper()
-        if tt == "DATE":
+        if tt == utils.TemporalType.DATE:
             return f"CONVERT(DATE, '{dttm.date().isoformat()}', 23)"
-        if tt == "DATETIME":
-            return f"""CONVERT(DATETIME, '{dttm.isoformat(timespec="milliseconds")}', 126)"""  # pylint: disable=line-too-long
-        if tt == "SMALLDATETIME":
-            return f"""CONVERT(SMALLDATETIME, '{dttm.isoformat(sep=" ", timespec="seconds")}', 20)"""  # pylint: disable=line-too-long
+        if tt == utils.TemporalType.DATETIME:
+            datetime_formatted = dttm.isoformat(timespec="milliseconds")
+            return f"""CONVERT(DATETIME, '{datetime_formatted}', 126)"""
+        if tt == utils.TemporalType.SMALLDATETIME:
+            datetime_formatted = dttm.isoformat(sep=" ", timespec="seconds")
+            return f"""CONVERT(SMALLDATETIME, '{datetime_formatted}', 20)"""
         return None
 
     @classmethod
-    def fetch_data(cls, cursor: Any, limit: int) -> List[Tuple]:
+    def fetch_data(
+        cls, cursor: Any, limit: Optional[int] = None
+    ) -> List[Tuple[Any, ...]]:
         data = super().fetch_data(cursor, limit)
         # Lists of `pyodbc.Row` need to be unpacked further
         return cls.pyodbc_rows_to_tuples(data)
 
-    column_types = (
-        (String(), re.compile(r"^(?<!N)((VAR){0,1}CHAR|TEXT|STRING)", re.IGNORECASE)),
-        (UnicodeText(), re.compile(r"^N((VAR){0,1}CHAR|TEXT)", re.IGNORECASE)),
+    column_type_mappings = (
+        (re.compile(r"^N((VAR)?CHAR|TEXT)", re.IGNORECASE), UnicodeText()),
+        (re.compile(r"^((VAR)?CHAR|TEXT|STRING)", re.IGNORECASE), String()),
     )
-
-    @classmethod
-    def get_sqla_column_type(cls, type_: str) -> Optional[TypeEngine]:
-        for sqla_type, regex in cls.column_types:
-            if regex.match(type_):
-                return sqla_type
-        return None
 
     @classmethod
     def extract_error_message(cls, ex: Exception) -> str:

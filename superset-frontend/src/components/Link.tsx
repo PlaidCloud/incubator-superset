@@ -17,7 +17,6 @@
  * under the License.
  */
 import React, { ReactNode } from 'react';
-// @ts-ignore
 import { OverlayTrigger, Tooltip } from 'react-bootstrap';
 
 interface Props {
@@ -44,7 +43,7 @@ const Link = ({
       href={href}
       onClick={onClick}
       style={style}
-      className={'Link ' + className}
+      className={`Link ${className}`}
     >
       {children}
     </a>

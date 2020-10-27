@@ -22,10 +22,10 @@ from sqlalchemy import column
 
 from superset.db_engine_specs.base import BaseEngineSpec
 from superset.db_engine_specs.bigquery import BigQueryEngineSpec
-from tests.db_engine_specs.base_tests import DbEngineSpecTestCase
+from tests.db_engine_specs.base_tests import TestDbEngineSpec
 
 
-class BigQueryTestCase(DbEngineSpecTestCase):
+class TestBigQueryDbEngineSpec(TestDbEngineSpec):
     def test_bigquery_sqla_column_label(self):
         """
         DB Eng Specs (bigquery): Test column label
@@ -121,6 +121,27 @@ class BigQueryTestCase(DbEngineSpecTestCase):
             database, "some_table", "some_schema"
         )
         self.assertEqual(result, expected_result)
+
+    def test_normalize_indexes(self):
+        """
+        DB Eng Specs (bigquery): Test extra table metadata
+        """
+        indexes = [{"name": "partition", "column_names": [None], "unique": False}]
+        normalized_idx = BigQueryEngineSpec.normalize_indexes(indexes)
+        self.assertEqual(normalized_idx, [])
+
+        indexes = [{"name": "partition", "column_names": ["dttm"], "unique": False}]
+        normalized_idx = BigQueryEngineSpec.normalize_indexes(indexes)
+        self.assertEqual(normalized_idx, indexes)
+
+        indexes = [
+            {"name": "partition", "column_names": ["dttm", None], "unique": False}
+        ]
+        normalized_idx = BigQueryEngineSpec.normalize_indexes(indexes)
+        self.assertEqual(
+            normalized_idx,
+            [{"name": "partition", "column_names": ["dttm"], "unique": False}],
+        )
 
     def test_df_to_sql(self):
         """

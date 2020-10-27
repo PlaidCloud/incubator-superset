@@ -16,11 +16,20 @@
 # under the License.
 # isort:skip_file
 """Unit tests for Superset cache warmup"""
+import datetime
 import json
 from unittest.mock import MagicMock
 
-import tests.test_app
+from sqlalchemy import String, Date, Float
+
+import pytest
+import pandas as pd
+
+from superset.models.slice import Slice
+from superset.utils.core import get_example_database
+
 from superset import db
+
 from superset.models.core import Log
 from superset.models.tags import get_tag, ObjectTypes, TaggedObject, TagTypes
 from superset.tasks.cache import (
@@ -30,6 +39,8 @@ from superset.tasks.cache import (
 )
 
 from .base_tests import SupersetTestCase
+from .dashboard_utils import create_dashboard, create_slice, create_table_for_dashboard
+from .fixtures.unicode_dashboard import load_unicode_dashboard_with_slice
 
 URL_PREFIX = "http://0.0.0.0:8081"
 
@@ -50,10 +61,7 @@ mock_positions = {
 }
 
 
-class CacheWarmUpTests(SupersetTestCase):
-    def __init__(self, *args, **kwargs):
-        super(CacheWarmUpTests, self).__init__(*args, **kwargs)
-
+class TestCacheWarmUp(SupersetTestCase):
     def test_get_form_data_chart_only(self):
         chart_id = 1
         result = get_form_data(chart_id, None)
@@ -171,7 +179,7 @@ class CacheWarmUpTests(SupersetTestCase):
             "slice_id": chart_id,
             "extra_filters": [
                 {"col": "name", "op": "in", "val": ["Alice", "Bob"]},
-                {"col": "__time_range", "op": "in", "val": "100 years ago : today"},
+                {"col": "__time_range", "op": "==", "val": "100 years ago : today"},
             ],
         }
         self.assertEqual(result, expected)
@@ -196,6 +204,7 @@ class CacheWarmUpTests(SupersetTestCase):
                 db.session.delete(o)
             db.session.commit()
 
+    @pytest.mark.usefixtures("load_unicode_dashboard_with_slice")
     def test_dashboard_tags(self):
         tag1 = get_tag("tag1", db.session, TagTypes.custom)
         # delete first to make test idempotent
