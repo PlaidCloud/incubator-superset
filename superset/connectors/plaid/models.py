@@ -22,6 +22,7 @@ from contextlib import closing
 from copy import copy, deepcopy
 import re
 from collections import OrderedDict
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Dict, Hashable, List, NamedTuple, Optional, Set, Tuple, Type, Union
 
@@ -115,6 +116,7 @@ class MetadataResult:
     added: List[str] = field(default_factory=list)
     removed: List[str] = field(default_factory=list)
     modified: List[str] = field(default_factory=list)
+
 
 class PlaidProject(
     Model, AuditMixinNullable, ImportMixin

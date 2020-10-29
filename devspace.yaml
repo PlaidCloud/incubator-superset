@@ -39,6 +39,10 @@ deployments:
         pass: superset
         port: 5432
         user: superset
+      ingress:
+        annotations:
+          kubernetes.io/ingress.class: nginx
+        hostname: ${DEV_NAMESPACE}-viz.plaidcloud.io
       mapbox:
         apiKey: pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ
       node:
@@ -56,7 +60,7 @@ deployments:
         port: 6379
         cache_db: 14
         table_db: 15
-      superset:
+      spec:
         env:
         - name: SUPERSET_ENV
           value: development
@@ -109,3 +113,8 @@ dev:
     localSubPath: ./plaid
     containerPath: /plaid
     disableDownload: true
+vars:
+- name: DEV_NAMESPACE
+  question: Whats your dev namespace name? This can be changed later with `devspace
+    set var DEV_NAMESPACE=<new-namespace>`
+  source: input

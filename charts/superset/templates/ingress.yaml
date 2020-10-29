@@ -19,11 +19,7 @@ spec:
     secretName: {{ .Values.ingress.tlsSecret }}
   {{- end }}
   rules:
-  {{- if .Values.devMode }}
-  - host: {{ .Release.Namespace }}.plaidcloud.io
-  {{- else }}
   - host: {{ .Values.ingress.hostname }}
-  {{- end }}
     http:
       paths:
       - path: /

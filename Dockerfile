@@ -52,8 +52,8 @@ ENV BUILD_CMD=${NPM_BUILD_CMD}
 # NPM ci first, as to NOT invalidate previous steps except for when package.json changes
 RUN mkdir -p /app/superset-frontend
 RUN mkdir -p /app/superset/assets
-COPY ./superset-frontend/package* /app/superset-frontend/
 COPY ./docker/frontend-mem-nag.sh /
+COPY ./superset-frontend/package* /app/superset-frontend/
 RUN /frontend-mem-nag.sh \
         && cd /app/superset-frontend \
         && npm ci
@@ -82,7 +82,7 @@ ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     FLASK_ENV=development \
     FLASK_APP="superset.app:create_app()" \
-    PYTHONPATH="/app:/plaid:/etc/superset" \
+    PYTHONPATH="/app/pythonpath:/plaid:/etc/superset" \
     SUPERSET_HOME="/app/superset_home"
 
 

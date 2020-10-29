@@ -13,7 +13,7 @@ steps:
         -t gcr.io/plaidcloud-build/superset/py:$TAG_NAME \
         --cache-from gcr.io/plaidcloud-build/superset/py:$(cat tmp/py) \
         --target=superset-py \
-        --build-arg PY_VER=3.6.9 \
+        --build-arg PY_VER=3.7.9 \
         .
 
       (docker pull "gcr.io/plaidcloud-build/superset/node:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/node) ||
@@ -24,7 +24,7 @@ steps:
         --cache-from gcr.io/plaidcloud-build/superset/py:$(cat tmp/py) \
         --cache-from gcr.io/plaidcloud-build/superset/node:$(cat tmp/node) \
         --target=superset-node \
-        --build-arg PY_VER=3.6.9 \
+        --build-arg PY_VER=3.7.9 \
         .
 substitutions:
   _LAST_TAG: "latest"
