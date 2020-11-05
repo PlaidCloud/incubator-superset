@@ -8,111 +8,133 @@ images:
         command: ./deploy
         args:
         - dev
-  events:
-    image: gcr.io/plaidcloud-build/superset/events
-    preferSyncOverRebuild: true
-    build:
-      custom:
-        command: ./deploy
-        args:
-        - events
-  frontend:
-    image: gcr.io/plaidcloud-build/superset/node
-    preferSyncOverRebuild: true
-    build:
-      custom:
-        command: ./deploy
-        args:
-        - node
+  # events:
+  #   image: gcr.io/plaidcloud-build/superset/events
+  #   preferSyncOverRebuild: true
+  #   build:
+  #     custom:
+  #       command: ./deploy
+  #       args:
+  #       - events
+  # frontend:
+  #   image: gcr.io/plaidcloud-build/superset/node
+  #   preferSyncOverRebuild: true
+  #   build:
+  #     custom:
+  #       command: ./deploy
+  #       args:
+  #       - node
 deployments:
 - name: superset
   helm:
     chart:
-      name: ./charts/superset
+      name: ./helm/superset
       version: v0.0.1
     values:
-      devMode: true
-      database:
-        greenplumHost: postgres-postgresql
-        host: postgres-postgresql
-        name: superset
-        pass: superset
-        port: 5432
-        user: superset
+      # devMode: true
+      # database:
+      #   greenplumHost: postgres-postgresql
+      #   host: postgres-postgresql
+      #   name: superset
+      #   pass: superset
+      #   port: 5432
+      #   user: superset
+      image:
+        repository: gcr.io/plaidcloud-build/superset/dev
+        tag: latest
+        pullPolicy: IfNotPresent
+        pullSecret: gcr-key
       ingress:
+        enabled: true
         annotations:
           kubernetes.io/ingress.class: nginx
-        hostname: ${DEV_NAMESPACE}-viz.plaidcloud.io
-      mapbox:
-        apiKey: pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ
-      node:
-        image: gcr.io/plaidcloud-build/superset/node
-      rabbitmq:
-        host: rabbitmq-rabbitmq-ha
-        password: cocoa puffs
-        port: 5672
-        queue: events
-        username: event_user
-        vhost: events
-      redis:
-        group: ""
-        host: redis-master
-        port: 6379
-        cache_db: 14
-        table_db: 15
-      spec:
-        env:
-        - name: SUPERSET_ENV
-          value: development
-        - name: SUPERSET_PORT
-          value: "8088"
-        - name: FLASK_APP
-          value: superset.app:create_app()
-        - name: FLASK_ENV
-          value: development
-        - name: PYTHONPATH
-          value: /app:/plaid:/etc/superset
-        image: gcr.io/plaidcloud-build/superset/dev
-        imagePullSecret: gcr-key
-      superset_events:
-        env:
-        - name: SUPERSET_ENV
-          value: development
-        - name: HEADLESS
-          value: "true"
-        image: gcr.io/plaidcloud-build/superset/events
-        imagePullSecret: gcr-key
-        pullPolicy: Always
+        hosts: 
+         - ${DEV_NAMESPACE}-viz.plaidcloud.io
+        tls:
+         - secretName: ingress-cert
+           hosts:
+            - ${DEV_NAMESPACE}-viz.plaidcloud.io
+      oidc:
+        enabled: true
+        baseUrl: "https://${DEV_NAMESPACE}.plaidcloud.io/"
+        cookieName: "_session_id"
+        clientId: "GMJCvjkqe01vr6gk5ZW9yirE"
+        clientSecret: "xdWRa49Uh7n7nm1jTh273ilCVitvNJ4TqHSm12J3sHTyVuwY"
+        authEndpoint: https://${DEV_NAMESPACE}.plaidcloud.io/oauth/authorize
+        tokenEndpoint: https://${DEV_NAMESPACE}.plaidcloud.io/oauth/token
+        jwksEndpoint: https://${DEV_NAMESPACE}.plaidcloud.io/oauth/jwks
+        redirectUris:
+        - https://${DEV_NAMESPACE}-viz.plaidcloud.io/oidc_callback
+      # mapbox:
+      #   apiKey: pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ
+      # node:
+      #   image: gcr.io/plaidcloud-build/superset/node
+      # rabbitmq:
+      #   host: rabbitmq-rabbitmq-ha
+      #   password: cocoa puffs
+      #   port: 5672
+      #   queue: events
+      #   username: event_user
+      #   vhost: events
+      # redis:
+      #   group: ""
+      #   host: redis-master
+      #   port: 6379
+      #   cache_db: 14
+      #   table_db: 15
+      # spec:
+      #   env:
+      #   - name: SUPERSET_ENV
+      #     value: development
+      #   - name: SUPERSET_PORT
+      #     value: "8088"
+      #   - name: FLASK_APP
+      #     value: superset.app:create_app()
+      #   - name: FLASK_ENV
+      #     value: development
+      #   - name: PYTHONPATH
+      #     value: /app:/plaid:/etc/superset
+      #   image: gcr.io/plaidcloud-build/superset/dev
+      #   imagePullSecret: gcr-key
+      # superset_events:
+      #   env:
+      #   - name: SUPERSET_ENV
+      #     value: development
+      #   - name: HEADLESS
+      #     value: "true"
+      #   image: gcr.io/plaidcloud-build/superset/events
+      #   imagePullSecret: gcr-key
+      #   pullPolicy: Always
 dev:
   sync:
   - imageName: gcr.io/plaidcloud-build/superset/dev
     labelSelector:
-      plaid: superset
+      app: superset
     containerName: superset
     localSubPath: ./superset
     containerPath: /app/superset
     disableDownload: true
   - imageName: gcr.io/plaidcloud-build/superset/dev
     labelSelector:
-      plaid: superset
+      app: superset
     containerName: superset
     localSubPath: ./plaid
     containerPath: /plaid/plaid
     disableDownload: true
-  - imageName: gcr.io/plaidcloud-build/superset/node
-    labelSelector:
-      plaid: superset
-    containerName: node
-    localSubPath: ./superset-frontend/src
-    containerPath: /app/superset-frontend/src
-    disableDownload: true
-  - imageName: gcr.io/plaidcloud-build/superset/events
-    labelSelector:
-      plaid: superset-events
-    containerName: superset
-    localSubPath: ./plaid
-    containerPath: /plaid
-    disableDownload: true
+  # - imageName: gcr.io/plaidcloud-build/superset/node
+  #   labelSelector:
+  #     app: superset
+  #   containerName: node
+  #   localSubPath: ./superset-frontend/src
+  #   containerPath: /app/superset-frontend/src
+  #   disableDownload: true
+  # - imageName: gcr.io/plaidcloud-build/superset/events
+  #   labelSelector:
+  #     app: superset-events
+  #   containerName: superset
+  #   localSubPath: ./plaid
+  #   containerPath: /plaid
+  #   disableDownload: true
 vars:
 - name: DEV_NAMESPACE
   question: Whats your dev namespace name? This can be changed later with `devspace

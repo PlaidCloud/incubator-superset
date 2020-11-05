@@ -32,7 +32,7 @@ spec:
       {{- end }}
       containers:
       - name: {{ template "superset.name" . }}-init-db
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        image: "{{ .Values.image.repository }}"
         {{ if .Values.extraEnv }}
         env:
           {{- range $key, $value := .Values.extraEnv }}

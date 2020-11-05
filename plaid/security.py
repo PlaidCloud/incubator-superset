@@ -36,9 +36,9 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
     def __init__(self, appbuilder):
         super(PlaidSecurityManager, self).__init__(appbuilder)
-        engine = self.get_session.get_bind(mapper=None, clause=None)
-        metadata = MetaData(bind=engine, reflect=True)
-        self.plaiduser_user = metadata.tables['plaiduser_user']
+        # engine = self.get_session.get_bind(mapper=None, clause=None)
+        # metadata = MetaData(bind=engine, reflect=True)
+        # self.plaiduser_user = metadata.tables['plaiduser_user']
         if self.auth_type == AUTH_OID:
             oidc_params = self.appbuilder.app.config.get("OIDC_PARAMS")
             self.oauth = OAuth(app=appbuilder.get_app)
@@ -131,14 +131,14 @@ class PlaidSecurityManager(SupersetSecurityManager):
         )
 
 
-    def get_user_by_plaid_id(self, plaid_id):
-        mapping = self.get_session.query(
-                self.plaiduser_user
-            ).filter_by(
-                plaid_user_id=plaid_id
-            ).one()
+    # def get_user_by_plaid_id(self, plaid_id):
+    #     mapping = self.get_session.query(
+    #             self.plaiduser_user
+    #         ).filter_by(
+    #             plaid_user_id=plaid_id
+    #         ).one()
 
-        return self.get_user_by_id(mapping.user_id)
+    #     return self.get_user_by_id(mapping.user_id)
 
 
     def add_user_to_project(self, user, project_id):

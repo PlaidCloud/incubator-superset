@@ -43,7 +43,7 @@ spec:
       {{- end }}
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.repository }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: {{  tpl (toJson .Values.supersetNode.command) . }}
           env:
@@ -68,6 +68,10 @@ spec:
               protocol: TCP
           resources:
 {{ toYaml .Values.resources | indent 12 }}
+    {{- if .Values.image.pullSecret }}
+      imagePullSecrets:
+      - name: {{ .Values.image.pullSecret }}
+    {{- end }}
     {{- with .Values.nodeSelector }}
       nodeSelector:
 {{ toYaml . | indent 8 }}

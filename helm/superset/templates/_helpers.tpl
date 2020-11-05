@@ -58,42 +58,618 @@ pip install {{ range .Values.additionalRequirements }}{{ . }} {{ end }}
 
 {{- define "superset-config" }}
 import os
-from cachelib.redis import RedisCache
+import ssl
+from collections import OrderedDict
+from flask_appbuilder.security.manager import AUTH_DB, AUTH_OID
+from plaid.security import PlaidSecurityManager
+from plaid_permissions import PLAID_BASE_PERMISSIONS
+from superset.typing import CacheConfig
 
-def env(key, default=None):
-    return os.getenv(key, default)
 
-MAPBOX_API_KEY = env('MAPBOX_API_KEY', '')
-CACHE_CONFIG = {
-      'CACHE_TYPE': 'redis',
-      'CACHE_DEFAULT_TIMEOUT': 300,
-      'CACHE_KEY_PREFIX': 'superset_',
-      'CACHE_REDIS_HOST': env('REDIS_HOST'),
-      'CACHE_REDIS_PORT': env('REDIS_PORT'),
-      'CACHE_REDIS_DB': 1,
-      'CACHE_REDIS_URL': f"redis://{env('REDIS_HOST')}:{env('REDIS_PORT')}/1"
+ssl._create_default_https_context = ssl._create_unverified_context
+
+basedir = os.path.abspath(os.path.dirname(__file__))
+#ROW_LIMIT = 5000
+#SUPERSET_WORKERS = 4
+
+# I created a mapbox account under garrett.bates@tartansolutions.com
+MAPBOX_API_KEY = '{{ .Values.mapbox.apiKey }}'
+
+HOSTNAME = '{{ .Values.ingress.hostname }}'
+PLAID_HOST = '{{ .Values.ingress.hostname }}'
+PLAID_DATABASE_HOST = '{{ .Values.greenplum.host }}'
+SCHEME = 'https'
+SQLALCHEMY_DATABASE_URI = 'postgresql://{{ .Values.postgresql.postgresqlUsername }}:{{ .Values.postgresql.postgresqlPassword }}@{{ template "superset.fullname" . }}-postgresql:{{ .Values.postgresql.service.port }}/{{ .Values.postgresql.postgresqlDatabase }}'
+PUBLIC_ROLE_LIKE_PLAID = False
+ADMIN_ENABLED = True
+SESSION_EXPIRATION = 600
+
+ENABLE_CORS = False
+PREFERRED_URL_SCHEME = 'https'
+
+# Use our security manager for plaid user management.
+CUSTOM_SECURITY_MANAGER = PlaidSecurityManager #noqa
+
+# Uncomment to setup Your App name
+APP_NAME = 'PlaidCloud'
+
+# Uncomment to setup an App icon
+APP_ICON = '/static/assets/images/plaidcloud.png'
+{{- if .Values.redis.enabled }}
+CACHE_CONFIG: CacheConfig = {
+    {{- if .Values.redis.group }}
+    'CACHE_TYPE': 'redissentinel',
+    'CACHE_REDIS_SENTINELS': [("{{ .Values.redis.host }}", {{ .Values.redis.port }})],
+    'CACHE_REDIS_SENTINEL_MASTER': "{{ .Values.redis.group }}",
+    {{- else }}
+    'CACHE_TYPE': 'redis',
+    'CACHE_REDIS_HOST': '{{ template "superset.fullname" . }}-redis-headless',
+    'CACHE_REDIS_PORT': 6379,
+    {{- end }}
+    'CACHE_REDIS_DB': 0,
 }
 
-SQLALCHEMY_DATABASE_URI = f"postgresql+psycopg2://{env('DB_USER')}:{env('DB_PASS')}@{env('DB_HOST')}:{env('DB_PORT')}/{env('DB_NAME')}"
-SQLALCHEMY_TRACK_MODIFICATIONS = True
-SECRET_KEY = env('SECRET_KEY', 'thisISaSECRET_1234')
+TABLE_NAMES_CACHE_CONFIG: CacheConfig = {
+    {{- if .Values.redis.group }}
+    'CACHE_TYPE': 'redissentinel',
+    'CACHE_REDIS_SENTINELS': [("{{ .Values.redis.host }}", {{ .Values.redis.port }})],
+    'CACHE_REDIS_SENTINEL_MASTER': "{{ .Values.redis.group }}",
+    {{- else }}
+    'CACHE_TYPE': 'redis',
+    'CACHE_REDIS_HOST': '{{ template "superset.fullname" . }}-redis-headless',
+    'CACHE_REDIS_PORT': 6379,
+    {{- end }}
+    'CACHE_REDIS_DB': 1,
+}
+{{- end }}
 
-# Flask-WTF flag for CSRF
-WTF_CSRF_ENABLED = True
-# Add endpoints that need to be exempt from CSRF protection
-WTF_CSRF_EXEMPT_LIST = []
-# A CSRF token that expires in 1 year
-WTF_CSRF_TIME_LIMIT = 60 * 60 * 24 * 365
-class CeleryConfig(object):
-  BROKER_URL = f"redis://{env('REDIS_HOST')}:{env('REDIS_PORT')}/0"
-  CELERY_IMPORTS = ('superset.sql_lab', )
-  CELERY_RESULT_BACKEND = f"redis://{env('REDIS_HOST')}:{env('REDIS_PORT')}/0"
-  CELERY_ANNOTATIONS = {'tasks.add': {'rate_limit': '10/s'}}
+# Disable Druid. We don't use it.
+DRUID_IS_ACTIVE = False
 
-CELERY_CONFIG = CeleryConfig
-RESULTS_BACKEND = RedisCache(
-      host=env('REDIS_HOST'),
-      port=env('REDIS_PORT'),
-      key_prefix='superset_results'
-)
+HIDE_SCHEMA_NAMES = True
+
+# HTTP_HEADERS = {
+#     'X-Frame-Options': 'SAMEORIGIN',
+#     'Cache-Control': 'no-cache, no-store, must-revalidate',
+# }
+
+# ADDITIONAL_MODULE_DS_MAP = OrderedDict(
+#   [
+#     ("superset.connectors.plaid.models", ["PlaidTable"]),
+#   ]
+# )
+
+DISABLED_CACHE_URIS = [
+    '/superset/welcome',
+    '/login',
+    '/logout',
+    '/token',
+    '/oauth_authorized',
+]
+
+# Load FAB views here.
+def import_stuff(app):
+    from flask import request
+
+    @app.after_request
+    def after_request(response):
+        location = response.headers.get('Location')
+        if location and location.startswith('http://'):
+            response.headers.set('Location', location.replace('http://', 'https://', 1))
+        if any(request.path.startswith(u) for u in DISABLED_CACHE_URIS):
+            response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+        return response
+
+FLASK_APP_MUTATOR = import_stuff
+
+CSRF_ENABLED = True
+
+# We don't want users to be able to register through UI. PlaidSecurityManager
+# will register a user automatically if they can connect via oauth.
+AUTH_USER_REGISTRATION = False
+
+# If users can register for an account (see above setting), this would be their default role.
+#AUTH_USER_REGISTRATION_ROLE = "Public"
+{{- if .Values.oidc.enabled }}
+AUTH_TYPE = AUTH_OID
+OIDC_PARAMS = {
+    "client_id": "{{ .Values.oidc.clientId }}",
+    "client_secret": "{{ .Values.oidc.clientSecret }}",
+    "token_url": "{{ .Values.oidc.tokenEndpoint }}",
+    # token_params: {},
+    "auth_url": "{{ .Values.oidc.authEndpoint }}",
+    "auth_params": {
+        "prompt": "none",
+    },
+    "base_url": "{{ .Values.oidc.baseUrl }}",
+    "jwks_uri": "{{ .Values.oidc.jwksEndpoint }}",
+    "client_kwargs": {
+        'scope': 'openid profile',
+        'token_endpoint_auth_method': 'client_secret_post',
+    },
+}
+{{- end }}
+{{- end }}
+
+{{- define "superset-permissions" }}
+PLAID_BASE_PERMISSIONS = {
+    'can_activate': {
+        'TabStateView',
+    },
+    'can_add': {
+        'AnnotationLayerModelView',
+        'AnnotationModelView',
+        'CssTemplateAsyncModelView',
+        'CssTemplateModelView',
+        'DashboardAddView',
+        'DashboardModelView',
+        'DashboardModelViewAsync',
+        #'DatabaseAsync',
+        #'DatabaseTablesAsync',
+        #'DatabaseView',
+        #'LogModelView',
+        #'PlaidMetricInlineView',
+        #'PlaidTableModelView',
+        'QueryView',
+        #'RoleModelView',
+        'SavedQueryView',
+        'SavedQueryViewApi',
+        'SliceAddView',
+        'SliceAsync',
+        'SliceModelView',
+        'SqlMetricInlineView',
+        'TableColumnInlineView',
+        #'TableModelView',
+        #'UserDBModelView',
+    },
+    'can_add_slices': {
+        'Superset',
+    },
+    'can_annotation_json': {
+        #'Superset',
+    },
+    'can_approve': {
+        'Superset',
+    },
+    'can_available_domains': {
+        #'Superset',
+    },
+    'can_cache_key_exist': {
+        'Superset',
+    },
+    'can_cached_key': {
+        'Superset',
+    },
+    'can_chart': {
+        #'UserStatsChartView',
+    },
+    'can_checkbox': {
+        'Superset',
+    },
+    'can_copy_dash': {
+        'Superset',
+    },
+    'can_created_dashboards': {
+        'Superset',
+    },
+    'can_created_slices': {
+        'Superset',
+    },
+    'can_csrf_token': {
+        'Superset',
+    },
+    'can_csv': {
+        'Superset',
+    },
+    'can_dashboard': {
+        'Superset',
+    },
+    'can_datasources': {
+        'Superset',
+    },
+    'can_delete': {
+        'AnnotationLayerModelView',
+        'AnnotationModelView',
+        'CssTemplateAsyncModelView',
+        'CssTemplateModelView',
+        'DashboardAddView',
+        'DashboardModelView',
+        'DashboardModelViewAsync',
+        #'DatabaseAsync',
+        #'DatabaseTablesAsync',
+        #'DatabaseView',
+        #'LogModelView',
+        #'PlaidMetricInlineView',
+        #'PlaidTableModelView',
+        'QueryView',
+        #'RoleModelView',
+        'SavedQueryView',
+        'SavedQueryViewApi',
+        'SliceAddView',
+        'SliceAsync',
+        'SliceModelView',
+        'SqlMetricInlineView',
+        'TableColumnInlineView',
+        #'TableModelView',
+        #'TableSchemaView',
+        #'TabStateView',
+        #'TagView',
+        #'UserDBModelView',
+    },
+    'can_delete_query': {
+        #'TabStateView',
+    },
+    'can_download_dashboards': {
+        'DashboardAddView',
+        'DashboardModelView',
+        'DashboardModelViewAsync',
+    },
+    'can_download': {
+        'AnnotationLayerModelView',
+        'AnnotationModelView',
+        'CssTemplateAsyncModelView',
+        'CssTemplateModelView',
+        'DashboardAddView',
+        'DashboardModelView',
+        'DashboardModelViewAsync',
+        #'DatabaseAsync',
+        #'DatabaseTablesAsync',
+        #'DatabaseView',
+        #'LogModelView',
+        #'PlaidMetricInlineView',
+        #'PlaidTableModelView',
+        'QueryView',
+        #'RoleModelView',
+        'SavedQueryView',
+        'SavedQueryViewApi',
+        'SliceAddView',
+        'SliceAsync',
+        'SliceModelView',
+        'SqlMetricInlineView',
+        'TableColumnInlineView',
+        'TableModelView',
+        #'UserDBModelView',
+    },
+    'can_edit': {
+        'AnnotationLayerModelView',
+        'AnnotationModelView',
+        'CssTemplateAsyncModelView',
+        'CssTemplateModelView',
+        'DashboardAddView',
+        'DashboardModelView',
+        'DashboardModelViewAsync',
+        #'DatabaseAsync',
+        #'DatabaseTablesAsync',
+        #'DatabaseView',
+        #'LogModelView',
+        #'PlaidMetricInlineView',
+        #'PlaidTableModelView',
+        'QueryView',
+        #'RoleModelView',
+        'SavedQueryView',
+        'SavedQueryViewApi',
+        'SliceAddView',
+        'SliceAsync',
+        'SliceModelView',
+        'SqlMetricInlineView',
+        'TableColumnInlineView',
+        'TableModelView',
+        #'UserDBModelView',
+    },
+    'can_estimate_query_cost': {
+        #'Superset',
+    },
+    'can_expanded': {
+        #'TableSchemaView',
+    },
+    'can_explore': {
+        'Superset',
+    },
+    'can_explore_json': {
+        'Superset',
+    },
+    'can_explorev2': {
+        'Superset',
+    },
+    'can_external_metadata': {
+        #'Datasource',
+    },
+    'can_extra_table_metadata': {
+        #'Superset',
+    },
+    'can_fave_dashboards_by_username': {
+        'Superset',
+    },
+    'can_fave_dashboards': {
+        'Superset',
+    },
+    'can_fave_slices': {
+        'Superset',
+    },
+    'can_favstar': {
+        'Superset',
+    },
+    'can_fetch_datasource_metadata': {
+        'Superset',
+    },
+    'can_filter': {
+        'Superset',
+    },
+    'can_get': {
+        'Datasource',
+        #'MenuApi',
+        #'OpenApi',
+        'TabStateView',
+        #'TagView',
+    },
+    'can_get_value': {
+        #'KV',
+    },
+    'can_import_dashboards': {
+        'Superset',
+    },
+    'can_list': {
+        'AnnotationLayerModelView',
+        'AnnotationModelView',
+        'CssTemplateAsyncModelView',
+        'CssTemplateModelView',
+        'DashboardAddView',
+        'DashboardModelView',
+        'DashboardModelViewAsync',
+        'DatabaseAsync',
+        'DatabaseTablesAsync',
+        #'DatabaseView',
+        #'LogModelView',
+        #'PermissionModelView',
+        #'PermissionViewModelView',
+        #'PlaidMetricInlineView',
+        #'PlaidTableModelView',
+        'QueryView',
+        #'RoleModelView',
+        'SavedQueryView',
+        'SavedQueryViewApi',
+        'SliceAddView',
+        'SliceAsync',
+        'SliceModelView',
+        'SqlMetricInlineView',
+        'TableColumnInlineView',
+        'TableModelView',
+        #'UserDBModelView',
+        #'ViewMenuModelView',
+    },
+    'can_migrate_query': {
+        #'TabStateView',
+    },
+    'can_my_queries': {
+        #'SqlLab',
+    },
+    'can_new': {
+        'Dashboard',
+    },
+    'can_override_role_permissions': {
+        #'Superset',
+    },
+    'can_post': {
+        #'TableSchemaView',
+        #'TabStateView',
+        #'TagView',
+    },
+    'can_profile': {
+        #'Superset',
+    },
+    'can_publish': {
+        'Superset',
+    },
+    'can_put': {
+        #'TabStateView',
+    },
+    'can_queries': {
+        #'Superset',
+    },
+    'can_query_form_data': {
+        #'Api',
+    },
+    'can_query': {
+        #'Api',
+    },
+    'can_recent_activity': {
+        'Superset',
+    },
+    'can_request_access': {
+        '#Superset'
+    },
+    'can_results': {
+        'Superset',
+    },
+    'can_save_dash': {
+        'Superset',
+    },
+    'can_save': {
+        #'Datasource',
+    },
+    'can_schemas_access_for_csv_upload': {
+        #'Superset',
+    },
+    'can_schemas': {
+        'Superset',
+    },
+    'can_search_queries': {
+        'Superset',
+    },
+    'can_select_star': {
+        'Superset',
+    },
+    'can_shortner': {
+        #'R',
+    },
+    'can_show': {
+        'AnnotationLayerModelView',
+        'AnnotationModelView',
+        'CssTemplateAsyncModelView',
+        'CssTemplateModelView',
+        'DashboardAddView',
+        'DashboardModelView',
+        'DashboardModelViewAsync',
+        'DatabaseAsync',
+        'DatabaseTablesAsync',
+        #'DatabaseView',
+        #'LogModelView',
+        #'PlaidMetricInlineView',
+        #'PlaidTableModelView',
+        'QueryView',
+        #'RoleModelView',
+        'SavedQueryView',
+        'SavedQueryViewApi',
+        'SliceAddView',
+        'SliceAsync',
+        'SliceModelView',
+        'SqlMetricInlineView',
+        #'SwaggerView',
+        'TableColumnInlineView',
+        'TableModelView',
+        #'UserDBModelView',
+    },
+    'can_slice_json': {
+        'Superset',
+    },
+    'can_slice': {
+        'Superset',
+    },
+    'can_slice_query': {
+        'Superset',
+    },
+    'can_sql_json': {
+        'Superset',
+    },
+    'can_sqllab': {
+        #'Superset',
+    },
+    'can_sqllab_viz': {
+        #'Superset',
+    },
+    'can_stop_query': {
+        'Superset',
+    },
+    'can_store': {
+        'KV',
+    },
+    'can_suggestions': {
+        'TagView',
+    },
+    'can_sync_druid_source': {
+        #'Superset',
+    },
+    'can_table': {
+        'Superset',
+    },
+    'can_tables': {
+        'Superset',
+    },
+    'can_tagged_objects': {
+        'TagView',
+    },
+    'can_testconn': {
+        'Superset',
+    },
+    'can_this_form_get': {
+        #'CsvToDatabaseView',
+        #'ResetMyPasswordView',
+        #'ResetPasswordView',
+        #'UserInfoEditView',
+    },
+    'can_this_form_post': {
+        #'CsvToDatabaseView',
+        #'ResetMyPasswordView',
+        #'ResetPasswordView',
+        #'UserInfoEditView',
+    },
+    'can_user_slices': {
+        'Superset',
+    },
+    'can_userinfo': {
+        #'UserDBModelView',
+    },
+    'can_validate_sql_json': {
+        'Superset',
+    },
+    'can_warm_up_cache': {
+        'Superset',
+    },
+    'copyrole': {
+        #'RoleModelView',
+    },
+    'menu_access': {
+        #'Action Log',
+        'Annotation Layers',
+        'Annotations',
+        #'Base Permissions',
+        'Charts',
+        'CSS Templates',
+        'Dashboards',
+        #'Data',
+        #'Databases',
+        'Import Dashboards',
+        #'List Roles',
+        #'List Users',
+        'Manage',
+        #'Permission on Views/Menus',
+        #'Projects',
+        'Queries',
+        'Query Search',
+        'Saved Queries',
+        #'Security',
+        'Sources',
+        'SQL Editor',
+        'SQL Lab',
+        'Tables',
+        #'Upload a CSV',
+        #'User\'s Statistics',
+        #'Views/Menus',
+    },
+    'muldelete': {
+        'AnnotationLayerModelView',
+        'AnnotationModelView',
+        'CssTemplateAsyncModelView',
+        'CssTemplateModelView',
+        'DashboardAddView',
+        'DashboardModelView',
+        'DashboardModelViewAsync',
+        #'DatabaseAsync',
+        #'DatabaseTablesAsync',
+        #'DatabaseView',
+        #'PlaidMetricInlineView',
+        #'PlaidTableModelView',
+        'SavedQueryView',
+        'SavedQueryViewApi',
+        'SliceAddView',
+        'SliceAsync',
+        'SliceModelView',
+        #'TableModelView',
+    },
+    'mulexport': {
+        'DashboardAddView',
+        'DashboardModelView',
+        'DashboardModelViewAsync',
+    },
+    'refresh': {
+        'TableModelView',
+    },
+    'resetmypassword': {
+        #'UserDBModelView',
+    },
+    'resetpasswords': {
+        #'UserDBModelView',
+    },
+    'userinfoedit': {
+        #'UserDBModelView',
+    },
+    'yaml_export': {
+        'DatabaseAsync',
+        'DatabaseTablesAsync',
+        'DatabaseView',
+        'TableModelView',
+        #'PlaidTableModelView',
+        #'PlaidProject',
+    }
+}
 {{- end }}

@@ -14,7 +14,7 @@ log.setLevel('INFO')
 
 def initialize_schema_and_perms():
     # Run this function _before_ processing events.
-    metadata.create_all(bind=db.engine)
+    metadata.create_all(bind=db.engine, extend_existing=True)
     appbuilder.add_permissions(update_perms=True)
     security_manager.create_custom_permissions()
     security_manager.set_role("Admin", security_manager._is_admin_pvm)

@@ -47,6 +47,7 @@ image:
   repository: preset/superset
   tag: latest
   pullPolicy: IfNotPresent
+  pullSecret: gcr-key
 
 service:
   type: NodePort
@@ -135,6 +136,25 @@ init:
     echo "Loading examples..."
     superset load_examples
     {{- end }}
+
+greenplum:
+  host: "192.168.2.206"
+
+mapbox:
+  apiKey: "pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ"
+
+oidc:
+  enabled: true
+  baseUrl: "https://plaidcloud.io/"
+  cookieName: "_session_id"
+  clientId: ""
+  clientSecret: ""
+  authEndpoint: https://plaidcloud.io/oauth/authorize
+  tokenEndpoint: https://plaidcloud.io/oauth/token
+  jwksEndpoint: https://plaidcloud.io/oauth/jwks
+  redirectUris:
+  - https://viz.plaidcloud.io/oidc_callback
+
 ##
 ## Configuration values for the postgresql dependency.
 ## ref: https://github.com/kubernetes/charts/blob/master/stable/postgresql/README.md

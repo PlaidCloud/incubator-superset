@@ -60,46 +60,17 @@ RUN /frontend-mem-nag.sh \
 
 # Next, copy in the rest and let webpack do its thing
 COPY ./superset-frontend /app/superset-frontend
+# This is BY FAR the most expensive step (thanks Terser!)
 RUN cd /app/superset-frontend \
         && npm run ${BUILD_CMD} \
         && rm -rf node_modules
 
 
 ######################################################################
-# Dev image...
-######################################################################
-ARG PY_VER=3.6.9
-FROM python:${PY_VER} AS dev
-
-RUN mkdir -p /app/superset
-COPY ./requirements/*.txt ./docker/requirements-*.txt/ /app/requirements/
-RUN cd /app \
-    && pip install --no-cache -r requirements/docker.txt \
-    && pip install --no-cache -r requirements/requirements-local.txt || true
-
-
-ENV LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8 \
-    FLASK_ENV=development \
-    FLASK_APP="superset.app:create_app()" \
-    PYTHONPATH="/app/pythonpath:/plaid:/etc/superset" \
-    SUPERSET_HOME="/app/superset_home"
-
-
-COPY superset /app/superset
-COPY --from=superset-node /app/superset/static/assets /app/superset/static/assets
-COPY plaid/ /plaid/plaid/
-
-RUN cp /app/superset/bin/superset /usr/local/bin/ && chmod a+x /usr/local/bin/superset
-
-USER root
-
-
-######################################################################
 # Final lean image...
 ######################################################################
 ARG PY_VER=3.7.9
-FROM python:${PY_VER}
+FROM python:${PY_VER} AS lean
 
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
@@ -143,3 +114,16 @@ HEALTHCHECK CMD ["curl", "-f", "http://localhost:8088/health"]
 EXPOSE ${SUPERSET_PORT}
 
 ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
+
+######################################################################
+# Dev image...
+######################################################################
+FROM lean
+
+COPY ./requirements/*.txt ./docker/requirements-*.txt/ /app/requirements/
+
+USER root
+# Cache everything for dev purposes...
+RUN cd /app \
+    && pip install --no-cache -r requirements/docker.txt || true
+USER superset

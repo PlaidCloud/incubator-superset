@@ -15,6 +15,7 @@
 # limitations under the License.
 #
 -r base.in
+Authlib==0.13
 gevent==1.4.0
 pika
 psycopg2-binary==2.8.5

@@ -80,20 +80,20 @@ podTemplate(label: 'superset',
 
               if (branch == 'develop') {
                 stage('Build Image') {
-                  python_version="3.6.9"
+                  python_version="3.7.9"
                   sh "docker pull python:${python_version}"
                   py_image = docker.build("${image_name}/py:latest", "--pull ${docker_args} --cache-from=${image_name}/py:latest --target=superset-py --build-arg PY_VER=${python_version} .")
                   node_image = docker.build("${image_name}/node:latest", "--pull ${docker_args} --cache-from=${image_name}/py:latest --cache-from=${image_name}/node:latest --target=superset-node --build-arg PY_VER=${python_version} .")
-                  dev_image = docker.build("${image_name}/dev:latest", "--pull ${docker_args} --cache-from=${image_name}/py:latest --cache-from=${image_name}/node:latest --cache-from=${image_name}/dev:latest --target=dev --build-arg PY_VER=${python_version} .")
-                  prod_image = docker.build("${image_name}/production:latest", "--pull ${docker_args} --cache-from=${image_name}/py:latest --cache-from=${image_name}/node:latest --cache-from=${image_name}/production:latest --build-arg PY_VER=${python_version} .")
+                  prod_image = docker.build("${image_name}/production:latest", "--pull ${docker_args} --cache-from=${image_name}/py:latest --cache-from=${image_name}/node:latest --cache-from=${image_name}/production:latest --target=lean --build-arg PY_VER=${python_version} .")
+                  dev_image = docker.build("${image_name}/dev:latest", "--pull ${docker_args} --cache-from=${image_name}/py:latest --cache-from=${image_name}/node:latest --cache-from=${image_name}/production:latest --cache-from=${image_name}/dev:latest --build-arg PY_VER=${python_version} .")
                   events_image = docker.build("${image_name}/events:latest", "--build-arg PY_VER=${python_version} --pull ${docker_args} -f Dockerfile.events .")
                 }
 
                 stage('Publish to DockerHub') {
                   py_image.push()
                   node_image.push()
-                  dev_image.push()
                   prod_image.push()
+                  dev_image.push()
                   events_image.push()
                 }
 

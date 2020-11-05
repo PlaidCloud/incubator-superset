@@ -31,7 +31,8 @@ spec:
         image: {{ .Values.spec.image }}
         imagePullPolicy: {{ .Values.spec.pullPolicy }}
         {{- if .Values.devMode }}
-        command: ["flask", "run", "-p", "8088", "--with-threads", "--reload", "--debugger", "--host=0.0.0.0"]
+        command: ["sleep", "infinity"]
+        # command: ["flask", "run", "-p", "8088", "--with-threads", "--reload", "--debugger", "--host=0.0.0.0"]
         {{- end }}
         env:
 {{ .Values.spec.env | toYaml | indent 10 }}

@@ -1,3 +1,4 @@
+import sys
 from urllib.parse import urljoin
 from flask import redirect, url_for
 from flask_appbuilder.security.views import AuthOIDView
@@ -18,7 +19,18 @@ class AuthOIDCView(AuthOIDView):
         oauth = self.appbuilder.sm.oauth
         token = oauth.plaid.authorize_access_token()
         userinfo = oauth.plaid.parse_id_token(token)
-        user = self.appbuilder.sm.get_user_by_plaid_id(plaid_id=int(userinfo['sub']))
+        print(userinfo, file=sys.stderr)
+        user = self.appbuilder.sm.find_user(email=userinfo['email'])
+        if not user:
+            plaid_role = self.appbuilder.sm.find_role("Plaid")
+            user = self.appbuilder.sm.add_user(
+                userinfo['name'],
+                first_name="Garrett",
+                last_name="Bates",
+                email=userinfo["email"],
+                role=plaid_role,
+                password="waaaaaaaa",
+            )
         login_user(user)
         return redirect('/')
 
