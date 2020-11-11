@@ -57,10 +57,10 @@ podTemplate(label: 'superset-beta',
               }
 
               stage('Build Images') {
-                python_version="3.6.9"
+                python_version="3.7.9"
                 sh "docker pull python:${python_version}"
                 image_label = "${branch}-${BUILD_NUMBER}"
-                image = docker.build("${image_name}/production:${image_label}", "--build-arg PY_VER=${python_version} --pull ${docker_args} .")
+                image = docker.build("${image_name}/production:${image_label}", "--build-arg PY_VER=${python_version} --target=lean --pull ${docker_args} .")
                 events_image = docker.build("${image_name}/events:${image_label}", "--build-arg PY_VER=${python_version} --pull ${docker_args} -f Dockerfile.events .")
               }
 
