@@ -30,7 +30,7 @@ class AuthOIDCView(AuthOIDView):
                 last_name=userinfo['family_name'],
                 email=userinfo["email"],
                 role=plaid_role,
-                password=uuid4(),
+                password=str(uuid4()),
             )
         login_user(user)
         return redirect('/')
