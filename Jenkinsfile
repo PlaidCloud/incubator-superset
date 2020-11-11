@@ -131,7 +131,7 @@ podTemplate(label: 'superset',
       } else {
         stage('Process Helm Chart Changes') {
           // This script will lint, check for version increment, and dry-run an install.
-          sh "check_helm_chart --repo-path=$env.WORKSPACE --chart-name=$chart_name --branch=develop"
+          sh "check_helm_chart --repo-path=$env.WORKSPACE --chart-path=helm/$chart_name --branch=develop"
         }
       }
     }
