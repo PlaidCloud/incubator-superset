@@ -1,4 +1,5 @@
 import sys
+from uuid import uuid4
 from urllib.parse import urljoin
 from flask import redirect, url_for
 from flask_appbuilder.security.views import AuthOIDView
@@ -25,11 +26,11 @@ class AuthOIDCView(AuthOIDView):
             plaid_role = self.appbuilder.sm.find_role("Plaid")
             user = self.appbuilder.sm.add_user(
                 userinfo['name'],
-                first_name="Garrett",
-                last_name="Bates",
+                first_name=userinfo['given_name'],
+                last_name=userinfo['family_name'],
                 email=userinfo["email"],
                 role=plaid_role,
-                password="waaaaaaaa",
+                password=uuid4(),
             )
         login_user(user)
         return redirect('/')
