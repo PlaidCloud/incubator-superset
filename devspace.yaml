@@ -44,6 +44,8 @@ deployments:
         tag: latest
         pullPolicy: IfNotPresent
         pullSecret: gcr-key
+      init:
+        loadExamples: true
       ingress:
         enabled: true
         annotations:
