@@ -24,7 +24,6 @@ from typing import Any, Dict, Optional
 from flask_babel import lazy_gettext as _
 from sqlalchemy.orm import Session
 
-from superset.connectors.connector_registry import ConnectorRegistry
 from superset.connectors.sqla.models import SqlaTable, SqlMetric, TableColumn
 from superset.exceptions import DashboardImportException
 from superset.models.dashboard import Dashboard
@@ -33,34 +32,42 @@ from superset.models.slice import Slice
 logger = logging.getLogger(__name__)
 
 
-def load_types():
-    types = {
-        "__Dashboard__": Dashboard,
-        "__Slice__": Slice,
-        # "datetime": lambda dt: datetime.strptime(dt, "%Y-%m-%dT%H:%M:%S"),
-    }
-    for source_type, source_class in ConnectorRegistry.sources.items():
-        types[f"__{source_class.__name__}__"] = source_class
-        types[f"__{source_class.metric_class.__name__}__"] = source_class.metric_class
-        types[f"__{source_class.column_class.__name__}__"] = source_class.column_class
-    return types
-
-
-def decode_dashboards(o: Dict[str, Any]) -> Any:
+def decode_dashboards(  # pylint: disable=too-many-return-statements
+    o: Dict[str, Any]
+) -> Any:
     """
     Function to be passed into json.loads obj_hook parameter
     Recreates the dashboard object from a json representation.
     """
-    import superset.models.core as models
-    decode_types = load_types()
+    from superset.connectors.druid.models import (
+        DruidCluster,
+        DruidColumn,
+        DruidDatasource,
+        DruidMetric,
+    )
 
+    if "__Dashboard__" in o:
+        return Dashboard(**o["__Dashboard__"])
+    if "__Slice__" in o:
+        return Slice(**o["__Slice__"])
+    if "__TableColumn__" in o:
+        return TableColumn(**o["__TableColumn__"])
+    if "__SqlaTable__" in o:
+        return SqlaTable(**o["__SqlaTable__"])
+    if "__SqlMetric__" in o:
+        return SqlMetric(**o["__SqlMetric__"])
+    if "__DruidCluster__" in o:
+        return DruidCluster(**o["__DruidCluster__"])
+    if "__DruidColumn__" in o:
+        return DruidColumn(**o["__DruidColumn__"])
+    if "__DruidDatasource__" in o:
+        return DruidDatasource(**o["__DruidDatasource__"])
+    if "__DruidMetric__" in o:
+        return DruidMetric(**o["__DruidMetric__"])
     if "__datetime__" in o:
         return datetime.strptime(o["__datetime__"], "%Y-%m-%dT%H:%M:%S")
-    elif any(key in decode_types for key in o):
-        key = next(iter(o.keys()))
-        return decode_types[key](**o[key])
-    else:
-        return o
+
+    return o
 
 
 def import_dashboards(
