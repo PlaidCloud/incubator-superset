@@ -163,6 +163,14 @@ oidc:
   redirectUris:
   - https://viz.plaidcloud.io/oidc_callback
 
+rabbitmq:
+  host: rabbitmq-rabbitmq-ha
+  port: 5672
+  queue: events
+  vhost: events
+  username: event_user
+  password: event_password
+
 ##
 ## Configuration values for the postgresql dependency.
 ## ref: https://github.com/kubernetes/charts/blob/master/stable/postgresql/README.md

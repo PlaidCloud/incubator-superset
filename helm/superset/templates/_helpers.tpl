@@ -95,6 +95,17 @@ APP_NAME = 'PlaidCloud'
 
 # Uncomment to setup an App icon
 APP_ICON = '/static/assets/images/plaidcloud.png'
+
+
+RABBITMQ_CONNECTION_INFO = {
+    'host': '{{ .Values.rabbitmq.host }}',
+    'port': '{{ .Values.rabbitmq.port }}',
+    'queue': '{{ .Values.rabbitmq.queue }}',
+    'vhost': '{{ .Values.rabbitmq.vhost }}',
+    'username': '{{ .Values.rabbitmq.username }}',
+    'password': '{{ .Values.rabbitmq.password }}',
+}
+
 {{- if .Values.redis.enabled }}
 CACHE_CONFIG: CacheConfig = {
     {{- if .Values.redis.group }}
