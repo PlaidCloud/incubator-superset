@@ -4,14 +4,18 @@ Plaid Security Class for Superset
 """
 import logging
 import redis
+import uuid
 from sqlalchemy import func, Table, MetaData
 from superset.extensions import cache_manager
 from superset.security import SupersetSecurityManager
+from flask import session
 from flask_appbuilder import Model
 from flask_appbuilder.security.manager import AUTH_OID
 from flask_appbuilder.security.sqla.manager import SecurityManager
 from authlib.integrations.flask_client import OAuth
 from plaid.auth_oidc import AuthOIDCView
+from plaidcloud.rpc.connection.jsonrpc import SimpleRPC
+from typing import Union
 
 __author__ = "Garrett Bates"
 __copyright__ = "© Copyright 2018, Tartan Solutions, Inc"
@@ -87,6 +91,39 @@ class PlaidSecurityManager(SupersetSecurityManager):
         """
         perm = self.get_perms().get(pvm.permission.name)
         return perm and pvm.view_menu.name in perm
+
+
+    def can_access_database(self, database: Union["Database", "DruidCluster"]) -> bool:
+        rpc = SimpleRPC(session["token"]["access_token"], uri="http://plaid/json-rpc", verify_ssl=False)
+        proj = rpc.analyze.project.project(project_id=database.verbose_name)
+        log.info(proj)
+        # TODO: Actually make this evaluate project access
+        return True or super().can_access_database(database)
+
+
+    def can_access_schema(self, datasource: "BaseDatasource") -> bool:
+        return self.can_access_datasource(datasource) or super().can_access_schema(datasource)
+
+
+    def can_access_datasource(self, datasource: "BaseDatasource") -> bool:
+        rpc = SimpleRPC(session["token"]["access_token"], uri="http://plaid/json-rpc", verify_ssl=False)
+        table_id = "{}{}".format("analyzetable_", str(datasource.uuid))
+        table_id_without_dashes = table_id.replace("-", "")
+        log.info(table_id)
+        table = rpc.analyze.table.table(project_id=datasource.schema.replace("report", ""), table_id=table_id)
+        log.info(table)
+        if table["id"] is None:
+            table = rpc.analyze.table.table(project_id=datasource.schema.replace("report", ""), table_id=table_id_without_dashes)            
+            log.info(table)
+        return table.get('id', None) is not None or super().can_access_datasource(datasource)
+
+
+    def table_uuids_for_session(self):
+        rpc = SimpleRPC(session["token"]["access_token"], uri="http://plaid/json-rpc", verify_ssl=False)
+        tables = rpc.analyze.table.published_tables_by_project()
+        table_ids = {str(uuid.UUID(table['id'].replace('analyzetable_', ''))) for table in tables}
+        log.info(table_ids)
+        return table_ids
 
 
     def get_perms(self):

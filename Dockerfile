@@ -126,4 +126,5 @@ USER root
 # Cache everything for dev purposes...
 RUN cd /app \
     && pip install --no-cache -r requirements/docker.txt || true
+RUN pip install docker-entrypoint
 USER superset

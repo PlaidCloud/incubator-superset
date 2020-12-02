@@ -1,7 +1,7 @@
 import sys
 from uuid import uuid4
 from urllib.parse import urljoin
-from flask import redirect, url_for
+from flask import redirect, url_for, session
 from flask_appbuilder.security.views import AuthOIDView
 from flask_appbuilder import expose
 from flask_login import login_user, logout_user
@@ -30,9 +30,10 @@ class AuthOIDCView(AuthOIDView):
                 last_name=userinfo['family_name'],
                 email=userinfo["email"],
                 role=plaid_role,
-                password=str(uuid4()),
+                password=uuid4().bytes,
             )
         login_user(user)
+        session["token"] = token
         return redirect('/')
 
     @expose("/logout/")

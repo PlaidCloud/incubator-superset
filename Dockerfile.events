@@ -1,9 +1,10 @@
-FROM python:3.6 AS build-distribution
+ARG PY_VER=3.7.9
+FROM python:${PY_VER} AS build-distribution
 
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     PATH=/home/superset/superset/bin:$PATH \
-    PYTHONPATH=/etc/superset:/home/superset:/plaid \
+    PYTHONPATH="/app/pythonpath:/etc/superset:/home/superset:/plaid" \
     SUPERSET_HOME="/home/superset"
 
 
@@ -14,18 +15,22 @@ RUN useradd --user-group --no-create-home --no-log-init --shell /bin/bash supers
             build-essential \
             default-libmysqlclient-dev \
             libpq-dev \
+            libsasl2-dev \
         && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /home/superset
 
-COPY ./requirements/*.txt ./docker/requirements-*.txt/ ./
-RUN pip install --upgrade setuptools pip \
-    && pip install --no-cache -r requirements/docker.txt \
-    && pip install --no-cache -r requirements/requirements-local.txt || true
+COPY ./requirements/*.txt ./docker/requirements-*.txt/ ./requirements/
+COPY setup.py setup.cfg README.md MANIFEST.in ./
+COPY superset-frontend/package.json ./superset-frontend/
+RUN mkdir -p superset/static \
+    && touch superset/static/version_info.json \
+    && pip install --no-cache -r requirements/docker.txt
 
-COPY --chown=superset:superset setup.py setup.cfg README.md MANIFEST.in ./
-COPY --chown=superset:superset superset superset
+COPY superset ./superset
+RUN chown -R superset:superset . \
+    && pip install -e .
 
 COPY plaid /plaid/plaid/
-
+RUN pip install docker-entrypoint
 ENTRYPOINT ["python", "/plaid/plaid/event_handler.py"]
