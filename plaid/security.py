@@ -6,6 +6,8 @@ import logging
 import redis
 import uuid
 from sqlalchemy import func, Table, MetaData
+from typing import Union
+from urllib.parse import urljoin
 from superset.extensions import cache_manager
 from superset.security import SupersetSecurityManager
 from flask import session
@@ -15,7 +17,6 @@ from flask_appbuilder.security.sqla.manager import SecurityManager
 from authlib.integrations.flask_client import OAuth
 from plaid.auth_oidc import AuthOIDCView
 from plaidcloud.rpc.connection.jsonrpc import SimpleRPC
-from typing import Union
 
 __author__ = "Garrett Bates"
 __copyright__ = "© Copyright 2018, Tartan Solutions, Inc"
@@ -44,17 +45,17 @@ class PlaidSecurityManager(SupersetSecurityManager):
         # metadata = MetaData(bind=engine, reflect=True)
         # self.plaiduser_user = metadata.tables['plaiduser_user']
         if self.auth_type == AUTH_OID:
-            oidc_params = self.appbuilder.app.config.get("OIDC_PARAMS")
+            self.oidc_params = self.appbuilder.app.config.get("OIDC_PARAMS")
             self.oauth = OAuth(app=appbuilder.get_app)
             self.oauth.register(
                 'plaid',
-                client_id=oidc_params['client_id'],
-                client_secret=oidc_params['client_secret'],
-                access_token_url=oidc_params['token_url'],
-                authorize_url=oidc_params['auth_url'],
-                authorize_params=oidc_params['auth_params'],
-                jwks_uri=oidc_params['jwks_uri'],
-                client_kwargs=oidc_params['client_kwargs'],
+                client_id=self.oidc_params['client_id'],
+                client_secret=self.oidc_params['client_secret'],
+                access_token_url=self.oidc_params['token_url'],
+                authorize_url=self.oidc_params['auth_url'],
+                authorize_params=self.oidc_params['auth_params'],
+                jwks_uri=self.oidc_params['jwks_uri'],
+                client_kwargs=self.oidc_params['client_kwargs'],
             )
         self.authoidview = AuthOIDCView
 
@@ -93,8 +94,11 @@ class PlaidSecurityManager(SupersetSecurityManager):
         return perm and pvm.view_menu.name in perm
 
 
+    def get_rpc(self):
+        return SimpleRPC(session["token"]["access_token"], uri=urljoin(self.oidc_params["base_url"], "json-rpc"), verify_ssl=False)
+
     def can_access_database(self, database: Union["Database", "DruidCluster"]) -> bool:
-        rpc = SimpleRPC(session["token"]["access_token"], uri="http://plaid/json-rpc", verify_ssl=False)
+        rpc = self.get_rpc()
         proj = rpc.analyze.project.project(project_id=database.verbose_name)
         log.info(proj)
         # TODO: Actually make this evaluate project access
@@ -106,7 +110,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
 
     def can_access_datasource(self, datasource: "BaseDatasource") -> bool:
-        rpc = SimpleRPC(session["token"]["access_token"], uri="http://plaid/json-rpc", verify_ssl=False)
+        rpc = self.get_rpc()
         table_id = "{}{}".format("analyzetable_", str(datasource.uuid))
         table_id_without_dashes = table_id.replace("-", "")
         log.info(table_id)
@@ -119,7 +123,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
 
     def table_uuids_for_session(self):
-        rpc = SimpleRPC(session["token"]["access_token"], uri="http://plaid/json-rpc", verify_ssl=False)
+        rpc = self.get_rpc()
         tables = rpc.analyze.table.published_tables_by_project()
         table_ids = {str(uuid.UUID(table['id'].replace('analyzetable_', ''))) for table in tables}
         log.info(table_ids)
