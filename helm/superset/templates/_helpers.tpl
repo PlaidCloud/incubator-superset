@@ -103,7 +103,7 @@ RABBITMQ_CONNECTION_INFO = {
     'port': '{{ .Values.rabbitmq.port }}',
     'queue': '{{ .Values.rabbitmq.queue }}',
     'vhost': '{{ .Values.rabbitmq.vhost }}',
-    'username': '{{ .Values.rabbitmq.username }}'
+    'username': '{{ .Values.rabbitmq.username }}',
     'password': '{{ .Values.rabbitmq.password }}',
 }
 
