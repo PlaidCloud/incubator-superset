@@ -148,6 +148,9 @@ init:
 greenplum:
   host: "192.168.2.206"
 
+rpc:
+  host: plaid
+
 mapbox:
   apiKey: "pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ"
 

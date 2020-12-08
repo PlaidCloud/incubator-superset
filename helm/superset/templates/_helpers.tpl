@@ -78,6 +78,7 @@ MAPBOX_API_KEY = '{{ .Values.mapbox.apiKey }}'
 HOSTNAME = '{{ .Values.ingress.hostname }}'
 PLAID_HOST = '{{ .Values.ingress.hostname }}'
 PLAID_DATABASE_HOST = '{{ .Values.greenplum.host }}'
+PLAID_RPC = '{{ .Values.rpc.host }}'
 SCHEME = 'https'
 SQLALCHEMY_DATABASE_URI = 'postgresql://{{ .Values.postgresql.postgresqlUsername }}:{{ .Values.postgresql.postgresqlPassword }}@{{ template "superset.fullname" . }}-postgresql:{{ .Values.postgresql.service.port }}/{{ .Values.postgresql.postgresqlDatabase }}'
 PUBLIC_ROLE_LIKE_PLAID = False
@@ -102,7 +103,7 @@ RABBITMQ_CONNECTION_INFO = {
     'port': '{{ .Values.rabbitmq.port }}',
     'queue': '{{ .Values.rabbitmq.queue }}',
     'vhost': '{{ .Values.rabbitmq.vhost }}',
-    'username': '{{ .Values.rabbitmq.username }}',
+    'username': '{{ .Values.rabbitmq.username }}'
     'password': '{{ .Values.rabbitmq.password }}',
 }
 
