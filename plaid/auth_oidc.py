@@ -1,6 +1,6 @@
 import sys
 from uuid import uuid4
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from flask import redirect, url_for, session, make_response
 from flask_appbuilder.security.views import AuthOIDView
 from flask_appbuilder import expose
@@ -38,9 +38,11 @@ class AuthOIDCView(AuthOIDView):
 
     @expose("/logout/")
     def logout(self):
+        oauth = self.appbuilder.sm.oauth
+        domain = "{}{}".format('.', urlparse(oauth['base_url']).netloc)
         logout_user()
         base_url = self.appbuilder.app.config["OIDC_PARAMS"]["base_url"]
         response = make_response(redirect('/'))
         # TODO: probably parameterize cookie name, though I suspect it won't change.
-        response.delete_cookie('_session_id', path='/', domain='.plaidcloud.io')
+        response.delete_cookie('_session_id', path='/', domain=domain)
         return response
