@@ -101,8 +101,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         rpc = self.get_rpc()
         proj = rpc.analyze.project.project(project_id=database.verbose_name)
         log.info(proj)
-        # TODO: Actually make this evaluate project access
-        return True or super().can_access_database(database)
+        return proj.get("id", None) is not None or super().can_access_database(database)
 
 
     def can_access_schema(self, datasource: "BaseDatasource") -> bool:

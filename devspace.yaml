@@ -8,6 +8,9 @@ images:
         command: ./deploy
         args:
         - dev
+        - ${DEVSPACE_RANDOM}
+    tags:
+    - ${DEVSPACE_RANDOM}
   events:
     image: gcr.io/plaidcloud-build/superset/events
     preferSyncOverRebuild: true
@@ -16,6 +19,9 @@ images:
         command: ./deploy
         args:
         - events
+        - ${DEVSPACE_RANDOM}
+    tags:
+    - ${DEVSPACE_RANDOM}
   # frontend:
   #   image: gcr.io/plaidcloud-build/superset/node
   #   preferSyncOverRebuild: true
@@ -31,14 +37,6 @@ deployments:
       name: ./helm/superset
       version: v0.0.1
     values:
-      # devMode: true
-      # database:
-      #   greenplumHost: postgres-postgresql
-      #   host: postgres-postgresql
-      #   name: superset
-      #   pass: superset
-      #   port: 5432
-      #   user: superset
       extraEnv:
         FLASK_ENV: "development"
       image:
@@ -56,6 +54,7 @@ deployments:
           - "python"
           - "/plaid/plaid/event_handler.py"
       init:
+        enabled: false
         loadExamples: true
       greenplum:
         host: postgres-postgresql-headless
@@ -91,44 +90,6 @@ deployments:
         - https://${DEV_NAMESPACE}-viz.plaidcloud.io/oidc_callback
       # mapbox:
       #   apiKey: pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ
-      # node:
-      #   image: gcr.io/plaidcloud-build/superset/node
-      # rabbitmq:
-      #   host: rabbitmq-rabbitmq-ha
-      #   password: cocoa puffs
-      #   port: 5672
-      #   queue: events
-      #   username: event_user
-      #   vhost: events
-      # redis:
-      #   group: ""
-      #   host: redis-master
-      #   port: 6379
-      #   cache_db: 14
-      #   table_db: 15
-      # spec:
-      #   env:
-      #   - name: SUPERSET_ENV
-      #     value: development
-      #   - name: SUPERSET_PORT
-      #     value: "8088"
-      #   - name: FLASK_APP
-      #     value: superset.app:create_app()
-      #   - name: FLASK_ENV
-      #     value: development
-      #   - name: PYTHONPATH
-      #     value: /app:/plaid:/etc/superset
-      #   image: gcr.io/plaidcloud-build/superset/dev
-      #   imagePullSecret: gcr-key
-      # superset_events:
-      #   env:
-      #   - name: SUPERSET_ENV
-      #     value: development
-      #   - name: HEADLESS
-      #     value: "true"
-      #   image: gcr.io/plaidcloud-build/superset/events
-      #   imagePullSecret: gcr-key
-      #   pullPolicy: Always
 dev:
   sync:
   - imageName: gcr.io/plaidcloud-build/superset/dev
