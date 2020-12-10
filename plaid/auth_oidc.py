@@ -38,7 +38,7 @@ class AuthOIDCView(AuthOIDView):
 
     @expose("/logout/")
     def logout(self):
-        oauth = self.appbuilder.sm.oidc_params
+        oidc_params = self.appbuilder.sm.oidc_params
         domain = ".".join(urlparse(oidc_params['base_url']).netloc)
         logout_user()
         base_url = self.appbuilder.app.config["OIDC_PARAMS"]["base_url"]
