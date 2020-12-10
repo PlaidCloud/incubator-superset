@@ -95,7 +95,9 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
 
     def get_rpc(self):
-        return SimpleRPC(session["token"]["access_token"], uri=urljoin(self.appbuilder.app.config.get("PLAID_RPC"), "json-rpc"), verify_ssl=False)
+        base_url = "{}{}".format("http://", self.appbuilder.app.config.get("PLAID_RPC"))
+        rpc_url = urljoin(base_url, "json-rpc")
+        return SimpleRPC(session["token"]["access_token"], uri=rpc_url, verify_ssl=False)
 
     def can_access_database(self, database: Union["Database", "DruidCluster"]) -> bool:
         rpc = self.get_rpc()
