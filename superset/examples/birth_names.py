@@ -128,6 +128,7 @@ def load_birth_names(
         obj.metrics.append(SqlMetric(metric_name="sum__num", expression=f"SUM({col})"))
 
     db.session.commit()
+    tbl = obj
 
     slices, _ = create_slices(obj)
     create_dashboard(slices)
