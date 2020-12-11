@@ -119,6 +119,7 @@ class EventHandler():
         except ValueError:
             # Skip this event as it is not recognized.
             self._handle_passthrough(None, None)
+            return
             
         data = info['data']
 
