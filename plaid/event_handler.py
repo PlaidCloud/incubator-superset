@@ -116,27 +116,25 @@ class EventHandler():
         try:
             event_type = EventType(info['event'])
             object_type = PlaidObjectType(info['type'])
+            
+            data = info['data']
+
+            kwargs = {k: v for k, v in info.items() if k not in REQUIRED_FIELDS}
+
+            event_handlers = {
+                # PlaidObjectType.Workspace: self._handle_workspace_event,
+                PlaidObjectType.Project: self._handle_project_event,
+                PlaidObjectType.Table: self._handle_table_event,
+                PlaidObjectType.View: self._handle_view_event,
+                # PlaidObjectType.User: self._handle_user_event,
+            }
+
+            handle_event = event_handlers.get(object_type, self._handle_passthrough)
+
+            handle_event(event_type, data, **kwargs)
         except ValueError:
             # Skip this event as it is not recognized.
             self._handle_passthrough(None, None)
-            return
-            
-        data = info['data']
-
-        kwargs = {k: v for k, v in info.items() if k not in REQUIRED_FIELDS}
-
-        event_handlers = {
-            # PlaidObjectType.Workspace: self._handle_workspace_event,
-            PlaidObjectType.Project: self._handle_project_event,
-            PlaidObjectType.Table: self._handle_table_event,
-            PlaidObjectType.View: self._handle_view_event,
-            # PlaidObjectType.User: self._handle_user_event,
-        }
-
-        handle_event = event_handlers.get(object_type, self._handle_passthrough)
-
-        handle_event(event_type, data, **kwargs)
-
 
     def _handle_workspace_event(self, event_type, data, **kwargs):
         if event_type is EventType.Create:
