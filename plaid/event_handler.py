@@ -113,9 +113,15 @@ class EventHandler():
 
 
     def process_event(self, info):
-        event_type = EventType(info['event'])
-        object_type = PlaidObjectType(info['type'])
+        try:
+            event_type = EventType(info['event'])
+            object_type = PlaidObjectType(info['type'])
+        except ValueError:
+            # Skip this event as it is not recognized.
+            self._handle_passthrough(None, None)
+            
         data = info['data']
+
         kwargs = {k: v for k, v in info.items() if k not in REQUIRED_FIELDS}
 
         event_handlers = {
