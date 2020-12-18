@@ -21,6 +21,7 @@ from sqlalchemy.orm.query import Query
 
 from superset import security_manager
 from superset.views.base import BaseFilter
+from superset.connectors.sqla.models import SqlaTable
 
 
 class SliceFilter(BaseFilter):  # pylint: disable=too-few-public-methods
@@ -30,6 +31,6 @@ class SliceFilter(BaseFilter):  # pylint: disable=too-few-public-methods
         perms = security_manager.user_view_menu_names("datasource_access")
         schema_perms = security_manager.user_view_menu_names("schema_access")
         table_uuids = security_manager.table_uuids_for_session()
-        return query.filter(
-            or_(self.model.perm.in_(perms), self.model.schema_perm.in_(schema_perms), self.model.table.uuid.in_(table_uuids)),
+        return query.join(SqlaTable).filter(
+            or_(self.model.perm.in_(perms), self.model.schema_perm.in_(schema_perms), SqlaTable.uuid.in_(table_uuids)),
         )
