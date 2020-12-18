@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import logging
+import sys
 from typing import Any
 
 from sqlalchemy import or_
@@ -22,8 +22,6 @@ from sqlalchemy.orm.query import Query
 
 from superset import security_manager
 from superset.views.base import BaseFilter
-
-logger = logging.getLogger(__name__)
 
 
 class SliceFilter(BaseFilter):  # pylint: disable=too-few-public-methods
@@ -33,7 +31,7 @@ class SliceFilter(BaseFilter):  # pylint: disable=too-few-public-methods
         perms = security_manager.user_view_menu_names("datasource_access")
         schema_perms = security_manager.user_view_menu_names("schema_access")
         table_uuids = security_manager.table_uuids_for_session()
-        logger.info(self.model.table.uuid)
+        print(self.model.table.uuid, file=sys.stderr)
         return query.filter(
             or_(self.model.perm.in_(perms), self.model.schema_perm.in_(schema_perms), self.model.table.uuid.in_(table_uuids)),
         )
