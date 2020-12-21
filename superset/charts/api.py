@@ -129,6 +129,7 @@ class ChartRestApi(BaseSupersetModelRestApi):
         "slice_name",
         "table.default_endpoint",
         "table.table_name",
+        "table.uuid",
         "thumbnail_url",
         "url",
         "viz_type",
