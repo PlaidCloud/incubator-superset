@@ -137,7 +137,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         tables = rpc.analyze.table.published_tables_by_project()
         end = time.time()
         table_ids = {str(uuid.UUID(table['id'].replace('analyzetable_', ''))) for table in tables}
-        log.info(f"Fetched these in {start - end}: {table_ids}")
+        log.info(f"Fetched these in {end - start}: {table_ids}")
         return table_ids
 
 
