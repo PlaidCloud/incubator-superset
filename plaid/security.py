@@ -5,6 +5,7 @@ Plaid Security Class for Superset
 import logging
 import redis
 import uuid
+import time
 from sqlalchemy import func, Table, MetaData
 from typing import Union
 from urllib.parse import urljoin
@@ -132,9 +133,11 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
     def table_uuids_for_session(self):
         rpc = self.get_rpc()
+        start = time.time()
         tables = rpc.analyze.table.published_tables_by_project()
+        end = time.time()
         table_ids = {str(uuid.UUID(table['id'].replace('analyzetable_', ''))) for table in tables}
-        log.info(table_ids)
+        log.info(f"Fetched these in {start - end}: {table_ids}")
         return table_ids
 
 
