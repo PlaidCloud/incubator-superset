@@ -131,7 +131,18 @@ class PlaidSecurityManager(SupersetSecurityManager):
         return table.get('id', None) is not None or super().can_access_datasource(datasource)
 
 
-    def table_uuids_for_session(self):
+    def get_project_ids(self):
+        from superset.models.core import Database
+        rpc = self.get_rpc()
+        start = time.time()
+        projects = rpc.analyze.project.projects()
+        end = time.time()
+        project_uuids = {str(uuid.UUID(project['id'])) for project in projects}
+        log.info(f"Fetched these in {end - start}: {project_uuids}")
+        return self.get_session.query(Database.id).filter(Database.uuid.in_(project_uuids))
+
+
+    def get_table_ids(self):
         rpc = self.get_rpc()
         start = time.time()
         tables = rpc.analyze.table.published_tables_by_project()
