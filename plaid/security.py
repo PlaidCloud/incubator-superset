@@ -138,7 +138,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         projects = rpc.analyze.project.projects()
         end = time.time()
         project_uuids = {str(uuid.UUID(project['id'])) for project in projects}
-        log.info(f"Fetched these in {end - start}: {project_uuids}")
+        log.info(f"Fetched these projects in {end - start}: {project_uuids}")
         return self.get_session.query(Database.id).filter(Database.uuid.in_(project_uuids))
 
 
@@ -148,7 +148,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         tables = rpc.analyze.table.published_tables_by_project()
         end = time.time()
         table_ids = {str(uuid.UUID(table['id'].replace('analyzetable_', ''))) for table in tables}
-        log.info(f"Fetched these in {end - start}: {table_ids}")
+        log.info(f"Fetched these tables in {end - start}: {table_ids}")
         return table_ids
 
 
