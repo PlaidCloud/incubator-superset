@@ -30,7 +30,7 @@ class SliceFilter(BaseFilter):  # pylint: disable=too-few-public-methods
             return query
         perms = security_manager.user_view_menu_names("datasource_access")
         schema_perms = security_manager.user_view_menu_names("schema_access")
-        table_uuids = security_manager.get_table_ids()
+        project_ids = security_manager.get_project_ids()
         return query.filter(
-            or_(self.model.perm.in_(perms), self.model.schema_perm.in_(schema_perms), SqlaTable.uuid.in_(table_uuids)),
+            or_(self.model.perm.in_(perms), self.model.schema_perm.in_(schema_perms), SqlaTable.database_id.in_(project_ids)),
         )
