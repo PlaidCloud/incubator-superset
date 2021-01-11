@@ -26,7 +26,7 @@ import React, {
 import rison from 'rison';
 import {
   createFetchRelated,
-  createFetchDistinct,
+  // createFetchDistinct,
   createErrorHandler,
 } from 'src/views/CRUD/utils';
 import { useListViewResource } from 'src/views/CRUD/hooks';
