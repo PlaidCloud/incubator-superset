@@ -65,12 +65,45 @@ spec:
             - name: superset-config
               mountPath: {{ .Values.configMountPath | quote }}
               readOnly: true
+            {{- if .Values.devMode }}
+            - name: superset-frontend
+              mountPath: /app/superset/static/assets
+            {{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}
               protocol: TCP
           resources:
 {{ toYaml .Values.resources | indent 12 }}
+        {{- if .Values.devMode }}
+        - name: node
+          image: node:12
+          imagePullPolicy: IfNotPresent
+          command: ["sleep", "infinity"]
+          env:
+          {{ if .Values.extraEnv }}
+            {{- range $key, $value := .Values.extraEnv }}
+            - name: {{ $key | quote}}
+              value: {{ $value | quote }}
+            {{- end }}
+          {{- end }}
+          envFrom:
+            - secretRef:
+                name: {{ tpl .Values.envFromSecret . | quote }}
+          volumeMounts:
+            - name: superset-config
+              mountPath: {{ .Values.configMountPath | quote }}
+              readOnly: true
+            - name: superset-frontend
+              mountPath: /app/superset/static/assets
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+        {{- end }}
+
     {{- if .Values.image.pullSecret }}
       imagePullSecrets:
       - name: {{ .Values.image.pullSecret }}
@@ -91,3 +124,7 @@ spec:
         - name: superset-config
           secret:
             secretName: {{ tpl .Values.configFromSecret . }}
+        {{- if .Values.devMode }}
+        - name: superset-frontend
+          emptyDir: {}
+        {{- end }}

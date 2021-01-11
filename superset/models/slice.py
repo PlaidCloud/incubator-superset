@@ -140,12 +140,12 @@ class Slice(
     def datasource_name_text(self) -> Optional[str]:
         # pylint: disable=no-member
         if self.table:
-            if self.table.schema:
-                return f"{self.table.schema}.{self.table.table_name}"
+            # if self.table.schema:
+            #     return f"{self.table.schema}.{self.table.table_name}"
             return self.table.table_name
         if self.datasource:
-            if self.datasource.schema:
-                return f"{self.datasource.schema}.{self.datasource.name}"
+            # if self.datasource.schema:
+            #     return f"{self.datasource.schema}.{self.datasource.name}"
             return self.datasource.name
         return None
 

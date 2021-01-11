@@ -287,7 +287,7 @@ PLAID_BASE_PERMISSIONS = {
     "can_invalidate": {"CacheRestApi"},
     "can_list": {
         "AnnotationModelView",
-        #"DatabaseView",
+        "DatabaseView",
         #"LogModelView",
         "SavedQueryViewApi",
         "QueryView",
@@ -339,7 +339,7 @@ PLAID_BASE_PERMISSIONS = {
     "can_shortner": {"R"},
     "can_show": {
         "AnnotationModelView",
-        #"DatabaseView",
+        "DatabaseView",
         #"LogModelView",
         "SavedQueryViewApi",
         "QueryView",

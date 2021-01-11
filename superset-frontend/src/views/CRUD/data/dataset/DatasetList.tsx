@@ -318,36 +318,36 @@ const DatasetList: FunctionComponent<DatasetListProps> = ({
         ),
         paginate: true,
       },
-      {
-        Header: t('Database'),
-        id: 'database',
-        input: 'select',
-        operator: 'rel_o_m',
-        unfilteredLabel: 'All',
-        fetchSelects: createFetchRelated(
-          'dataset',
-          'database',
-          createErrorHandler(errMsg =>
-            t('An error occurred while fetching datasets: %s', errMsg),
-          ),
-        ),
-        paginate: true,
-      },
-      {
-        Header: t('Schema'),
-        id: 'schema',
-        input: 'select',
-        operator: 'eq',
-        unfilteredLabel: 'All',
-        fetchSelects: createFetchDistinct(
-          'dataset',
-          'schema',
-          createErrorHandler(errMsg =>
-            t('An error occurred while fetching schema values: %s', errMsg),
-          ),
-        ),
-        paginate: true,
-      },
+      // {
+      //   Header: t('Database'),
+      //   id: 'database',
+      //   input: 'select',
+      //   operator: 'rel_o_m',
+      //   unfilteredLabel: 'All',
+      //   fetchSelects: createFetchRelated(
+      //     'dataset',
+      //     'database',
+      //     createErrorHandler(errMsg =>
+      //       t('An error occurred while fetching datasets: %s', errMsg),
+      //     ),
+      //   ),
+      //   paginate: true,
+      // },
+      // {
+      //   Header: t('Schema'),
+      //   id: 'schema',
+      //   input: 'select',
+      //   operator: 'eq',
+      //   unfilteredLabel: 'All',
+      //   fetchSelects: createFetchDistinct(
+      //     'dataset',
+      //     'schema',
+      //     createErrorHandler(errMsg =>
+      //       t('An error occurred while fetching schema values: %s', errMsg),
+      //     ),
+      //   ),
+      //   paginate: true,
+      // },
       {
         Header: t('Type'),
         id: 'is_sqllab_view',

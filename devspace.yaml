@@ -11,6 +11,17 @@ images:
         - ${DEVSPACE_RANDOM}
     tags:
     - ${DEVSPACE_RANDOM}
+  # frontend:
+  #   image: node:12
+  #   preferSyncOverRebuild: true
+  #   build:
+  #     custom:
+  #       command: ./deploy
+  #       args:
+  #       - node
+  #       - ${DEVSPACE_RANDOM}
+  #   tags:
+  #   - ${DEVSPACE_RANDOM}
   events:
     image: gcr.io/plaidcloud-build/superset/events
     preferSyncOverRebuild: true
@@ -22,14 +33,7 @@ images:
         - ${DEVSPACE_RANDOM}
     tags:
     - ${DEVSPACE_RANDOM}
-  # frontend:
-  #   image: gcr.io/plaidcloud-build/superset/node
-  #   preferSyncOverRebuild: true
-  #   build:
-  #     custom:
-  #       command: ./deploy
-  #       args:
-  #       - node
+
 deployments:
 - name: superset
   helm:
@@ -37,6 +41,7 @@ deployments:
       name: ./helm/superset
       version: v0.0.1
     values:
+      devMode: true
       extraEnv:
         FLASK_ENV: "development"
       image:
@@ -58,6 +63,13 @@ deployments:
         loadExamples: true
       greenplum:
         host: postgres-postgresql-headless
+      rabbitmq:
+        host: rabbitmq-rabbitmq-ha
+        port: 5672
+        queue: events
+        vhost: events
+        username: event_user
+        password: cocoa puffs
       supersetNode:
         command:
           - "entrypoint"
@@ -122,13 +134,14 @@ dev:
           args:
           - -c
           - "kill -HUP 1"
-  # - imageName: gcr.io/plaidcloud-build/superset/node
-  #   labelSelector:
-  #     app: superset
-  #   containerName: node
-  #   localSubPath: ./superset-frontend/src
-  #   containerPath: /app/superset-frontend/src
-  #   disableDownload: true
+  - imageName: node:12
+    labelSelector:
+      app: superset
+      component: superset
+    containerName: node
+    localSubPath: ./superset-frontend
+    containerPath: /app/superset-frontend
+    disableDownload: true
   - imageName: gcr.io/plaidcloud-build/superset/events
     labelSelector:
       app: superset
@@ -158,3 +171,11 @@ commands:
   command: |
     POD_NAME=$(kubectl get pods -l app=superset,component=superset --field-selector status.phase=Running -o jsonpath={.items[0].metadata.name})
     kubectl exec $POD_NAME -- bash -c "kill -HUP 1"
+- name: node
+  command: |
+    POD_NAME=$(kubectl get pods -l app=superset,component=superset --field-selector status.phase=Running -o jsonpath={.items[0].metadata.name})
+    kubectl exec $POD_NAME -c node -- bash -c "cd /app/superset-frontend && npm install -f --no-optional --global webpack webpack-cli && npm install -f --no-optional && npm run dev"
+- name: dev
+  command: |
+    POD_NAME=$(kubectl get pods -l app=superset,component=superset --field-selector status.phase=Running -o jsonpath={.items[0].metadata.name})
+    kubectl exec $POD_NAME -c node -- bash -c "cd /app/superset-frontend && npm run dev"

@@ -19,6 +19,8 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+devMode: false
+
 replicaCount: 1
 
 ## These requirements are used to build a requirements file which is then applied on init

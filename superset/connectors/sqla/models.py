@@ -610,9 +610,7 @@ class SqlaTable(  # pylint: disable=too-many-public-methods,too-many-instance-at
 
     @property
     def name(self) -> str:
-        if not self.schema:
-            return self.table_name
-        return "{}.{}".format(self.schema, self.table_name)
+        return self.table_name
 
     @property
     def full_name(self) -> str:

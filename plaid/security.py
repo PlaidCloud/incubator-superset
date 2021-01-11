@@ -102,15 +102,17 @@ class PlaidSecurityManager(SupersetSecurityManager):
             temp_rpc = SimpleRPC(session["token"]["access_token"], uri=rpc_url, verify_ssl=False)
             session["workspace"] = temp_rpc.identity.me.workspace_id()
         # Specify user's default workspace in token.
-        log.info(f"workspace: {session['workspace']}")
+        log.debug(f"workspace: {session['workspace']}")
         token = "{}_ws{}".format(session["token"]["access_token"], session["workspace"])
         return SimpleRPC(token, uri=rpc_url, verify_ssl=False)
 
 
     def can_access_database(self, database: Union["Database", "DruidCluster"]) -> bool:
         rpc = self.get_rpc()
-        proj = rpc.analyze.project.project(project_id=database.verbose_name)
-        log.info(proj)
+        proj = rpc.analyze.project.project(project_id=str(database.uuid))
+        log.debug(proj)
+        if proj["id"] is None:
+            proj = rpc.analyze.project.project(project_id=str(database.uuid).replace('-', ''))
         return proj.get("id", None) is not None or super().can_access_database(database)
 
 
@@ -122,12 +124,12 @@ class PlaidSecurityManager(SupersetSecurityManager):
         rpc = self.get_rpc()
         table_id = "{}{}".format("analyzetable_", str(datasource.uuid))
         table_id_without_dashes = table_id.replace("-", "")
-        log.info(table_id)
+        log.debug(table_id)
         table = rpc.analyze.table.table(project_id=datasource.schema.replace("report", ""), table_id=table_id)
-        log.info(table)
+        log.debug(table)
         if table["id"] is None:
             table = rpc.analyze.table.table(project_id=datasource.schema.replace("report", ""), table_id=table_id_without_dashes)            
-            log.info(table)
+            log.debug(table)
         return table.get('id', None) is not None or super().can_access_datasource(datasource)
 
 
@@ -138,7 +140,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         projects = rpc.analyze.project.projects()
         end = time.time()
         project_uuids = {str(uuid.UUID(project['id'])) for project in projects}
-        log.info(f"Fetched these projects in {end - start}: {project_uuids}")
+        log.debug(f"Fetched these projects in {end - start}: {project_uuids}")
         return self.get_session.query(Database.id).filter(Database.uuid.in_(project_uuids))
 
 
@@ -148,7 +150,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         tables = rpc.analyze.table.published_tables_by_project()
         end = time.time()
         table_ids = {str(uuid.UUID(table['id'].replace('analyzetable_', ''))) for table in tables}
-        log.info(f"Fetched these tables in {end - start}: {table_ids}")
+        log.debug(f"Fetched these tables in {end - start}: {table_ids}")
         return table_ids
 
 
