@@ -35,7 +35,7 @@ podTemplate(label: 'superset',
       stage("Test Helm Chart") {
         withCredentials([usernamePassword(credentialsId: 'plaid-machine-user', usernameVariable: 'user', passwordVariable: 'pass')]) {
           // This script will lint, check for version increment, and dry-run an install.	
-          sh "check_helm_chart --repo-path=$env.WORKSPACE --chart-name=$params.chart_name"
+          sh "check_helm_chart --repo-path=$env.WORKSPACE --chart-path=helm/$params.chart_name"
         }
       }
 
