@@ -102,14 +102,17 @@ podTemplate(label: 'superset',
 
                   python_version="3.7.9"
                   sh "docker pull python:${python_version}"
-                  image = docker.build("${image_name}/production:${image_label}", "--build-arg PY_VER=${python_version} --target=lean --pull ${docker_args} .")
-                  events_image = docker.build("${image_name}/events:${image_label}", "--build-arg PY_VER=${python_version} --pull ${docker_args} -f Dockerfile.events .")
+                  image = docker.build("${image_name}/production:latest", "--build-arg PY_VER=${python_version} --target=lean --pull ${docker_args} .")
+                  events_image = docker.build("${image_name}/events:latest", "--build-arg PY_VER=${python_version} --pull ${docker_args} -f Dockerfile.events .")
 
                   if (branch == 'master') { // Push 'latest' tag on master branch.
                     image.push()
+                    events_image.push()
                     image.push(image_label)
+                    events_image.push(image_label)
                   } else if (branch ==~ /^beta-.*/) { // Only push image with build tag.
                     image.push(image_label)
+                    events_image.push(image_label)
                   }
                 }
               }
