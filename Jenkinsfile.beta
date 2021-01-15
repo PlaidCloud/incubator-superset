@@ -128,8 +128,9 @@ podTemplate(label: 'superset',
                   package_helm_chart \
                     --repo-url=https://$user:$pass@github.com/PlaidCloud/k8s.git \
                     --chart-path=helm/$params.chart_name \
-                    --argo-app=$params.argo_app \
-                    --image=$params.image_name:$image_label
+                    --argo-app=$params.argo_app
+
+                  argocd app set $ARGO_APP -p image.repository="$IMAGE_NAME" -p events.repository="$IMAGE_NAME"
                 """
               }
             }
