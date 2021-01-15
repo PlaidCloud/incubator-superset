@@ -133,7 +133,7 @@ podTemplate(label: 'superset',
                     --chart-path=helm/$params.chart_name \
                     --argo-app=$params.argo_app
 
-                  argocd app set $ARGO_APP -p image.repository="$IMAGE_NAME" -p events.repository="$IMAGE_NAME"
+                  argocd app set $argo_app -p image.repository="$image_name/production:$image_label" -p events.repository="$image_name/events:$image_label"
                 """
               }
             }
