@@ -571,7 +571,8 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
                 flash("Dashboard(s) have been imported", "success")
                 return redirect("/dashboard/list/")
 
-        databases = db.session.query(Database).all()
+        projects = security_manager.get_project_ids()
+        databases = db.session.query(Database).filter(Database.id.in_(projects)).all()
         return self.render_template(
             "superset/import_dashboards.html", databases=databases
         )
