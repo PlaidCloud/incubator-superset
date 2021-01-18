@@ -160,7 +160,7 @@ class EventHandler():
             else:
                 proj = Database()
 
-            proj.database_name = event_data["name"]
+            proj.database_name = f"{event_data['name']} ({event_data['id'][:4]})"
             proj.verbose_name = event_data["id"]
             proj.uuid = event_data["id"]
             proj.password = event_data["report_database_password"]
