@@ -163,49 +163,6 @@ class PlaidSecurityManager(SupersetSecurityManager):
         return self.appbuilder.app.config.get('PLAID_BASE_PERMISSIONS')
 
 
-    def set_project_role(self, project):
-        project_perm = project.get_perm()
-        self.add_permission_view_menu("database_access", project_perm)
-
-        schema_perms = {t.schema for t in project.plaid_tables}
-        table_perms = {t.perm for t in project.plaid_tables}
-
-        def has_project_access_pvm(pvm):
-            '''has_project_access_pvm()
-
-            Callable to determine which permission/view menu relations will
-            be added to a role. Used by self.set_role(name, callable)
-            method.
-            '''
-            if pvm.permission.name == 'database_access':
-                return pvm.view_menu.name == project_perm
-
-            if pvm.permission.name == 'schema_access':
-                return pvm.view_menu.name in schema_perms
-
-            if pvm.permission.name == 'datasource_access':
-                return pvm.view_menu.name in table_perms
-
-            return False
-
-
-        # Name the role after the project.
-        self.set_role(
-            role_name=get_project_role_name(project.uuid),
-            pvm_check=has_project_access_pvm
-        )
-
-
-    # def get_user_by_plaid_id(self, plaid_id):
-    #     mapping = self.get_session.query(
-    #             self.plaiduser_user
-    #         ).filter_by(
-    #             plaid_user_id=plaid_id
-    #         ).one()
-
-    #     return self.get_user_by_id(mapping.user_id)
-
-
     def add_user_to_project(self, user, project_id):
         role = self.find_role(get_project_role_name(project_id))
 
