@@ -8,22 +8,20 @@ images:
         command: ./deploy
         args:
         - dev
-  # events:
-  #   image: gcr.io/plaidcloud-build/superset/events
-  #   preferSyncOverRebuild: true
-  #   build:
-  #     custom:
-  #       command: ./deploy
-  #       args:
-  #       - events
-  # frontend:
-  #   image: gcr.io/plaidcloud-build/superset/node
-  #   preferSyncOverRebuild: true
-  #   build:
-  #     custom:
-  #       command: ./deploy
-  #       args:
-  #       - node
+        - ${DEVSPACE_RANDOM}
+    tags:
+    - ${DEVSPACE_RANDOM}
+  events:
+    image: gcr.io/plaidcloud-build/superset/events
+    preferSyncOverRebuild: true
+    build:
+      custom:
+        command: ./deploy
+        args:
+        - events
+        - ${DEVSPACE_RANDOM}
+    tags:
+    - ${DEVSPACE_RANDOM}
 deployments:
 - name: superset
   helm:
@@ -31,21 +29,44 @@ deployments:
       name: ./helm/superset
       version: v0.0.1
     values:
-      # devMode: true
-      # database:
-      #   greenplumHost: postgres-postgresql
-      #   host: postgres-postgresql
-      #   name: superset
-      #   pass: superset
-      #   port: 5432
-      #   user: superset
+      devMode: true
+      extraEnv:
+        FLASK_ENV: "development"
       image:
         repository: gcr.io/plaidcloud-build/superset/dev
         tag: latest
         pullPolicy: IfNotPresent
         pullSecret: gcr-key
+      events:
+        repository: gcr.io/plaidcloud-build/superset/events
+        tag: latest
+        pullPolicy: IfNotPresent
+        pullSecret: gcr-key
+        entrypoint:
+          - "entrypoint"
+          - "python"
+          - "/plaid/plaid/event_handler.py"
       init:
+        enabled: false
         loadExamples: true
+      greenplum:
+        host: postgres-postgresql-headless
+      rabbitmq:
+        host: rabbitmq-rabbitmq-ha
+        port: 5672
+        queue: events
+        vhost: events
+        username: event_user
+        password: cocoa puffs
+      supersetNode:
+        command:
+          - "entrypoint"
+          - "flask"
+          - "run"
+          - "--host"
+          - "0.0.0.0"
+          - "--port"
+          - "8088"
       ingress:
         enabled: true
         annotations:
@@ -69,76 +90,80 @@ deployments:
         - https://${DEV_NAMESPACE}-viz.plaidcloud.io/oidc_callback
       # mapbox:
       #   apiKey: pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ
-      # node:
-      #   image: gcr.io/plaidcloud-build/superset/node
-      # rabbitmq:
-      #   host: rabbitmq-rabbitmq-ha
-      #   password: cocoa puffs
-      #   port: 5672
-      #   queue: events
-      #   username: event_user
-      #   vhost: events
-      # redis:
-      #   group: ""
-      #   host: redis-master
-      #   port: 6379
-      #   cache_db: 14
-      #   table_db: 15
-      # spec:
-      #   env:
-      #   - name: SUPERSET_ENV
-      #     value: development
-      #   - name: SUPERSET_PORT
-      #     value: "8088"
-      #   - name: FLASK_APP
-      #     value: superset.app:create_app()
-      #   - name: FLASK_ENV
-      #     value: development
-      #   - name: PYTHONPATH
-      #     value: /app:/plaid:/etc/superset
-      #   image: gcr.io/plaidcloud-build/superset/dev
-      #   imagePullSecret: gcr-key
-      # superset_events:
-      #   env:
-      #   - name: SUPERSET_ENV
-      #     value: development
-      #   - name: HEADLESS
-      #     value: "true"
-      #   image: gcr.io/plaidcloud-build/superset/events
-      #   imagePullSecret: gcr-key
-      #   pullPolicy: Always
 dev:
   sync:
   - imageName: gcr.io/plaidcloud-build/superset/dev
     labelSelector:
       app: superset
+      component: superset
     containerName: superset
     localSubPath: ./superset
     containerPath: /app/superset
     disableDownload: true
+    onUpload:
+      execRemote:
+        onBatch:
+          command: bash
+          args:
+          - -c
+          - "kill -HUP 1"
   - imageName: gcr.io/plaidcloud-build/superset/dev
     labelSelector:
       app: superset
+      component: superset
     containerName: superset
     localSubPath: ./plaid
     containerPath: /plaid/plaid
     disableDownload: true
-  # - imageName: gcr.io/plaidcloud-build/superset/node
-  #   labelSelector:
-  #     app: superset
-  #   containerName: node
-  #   localSubPath: ./superset-frontend/src
-  #   containerPath: /app/superset-frontend/src
-  #   disableDownload: true
-  # - imageName: gcr.io/plaidcloud-build/superset/events
-  #   labelSelector:
-  #     app: superset-events
-  #   containerName: superset
-  #   localSubPath: ./plaid
-  #   containerPath: /plaid
-  #   disableDownload: true
+    onUpload:
+      execRemote:
+        onBatch:
+          command: bash
+          args:
+          - -c
+          - "kill -HUP 1"
+  - imageName: node:12
+    labelSelector:
+      app: superset
+      component: superset
+    containerName: node
+    localSubPath: ./superset-frontend
+    containerPath: /app/superset-frontend
+    disableDownload: true
+  - imageName: gcr.io/plaidcloud-build/superset/events
+    labelSelector:
+      app: superset
+      component: superset-events
+    containerName: events
+    localSubPath: ./plaid
+    containerPath: /plaid/plaid
+    disableDownload: true
+    onUpload:
+      execRemote:
+        onBatch:
+          command: bash
+          args:
+          - -c
+          - "kill -HUP 1"
 vars:
 - name: DEV_NAMESPACE
   question: Whats your dev namespace name? This can be changed later with `devspace
     set var DEV_NAMESPACE=<new-namespace>`
   source: input
+commands:
+- name: start
+  command: |
+    POD_NAME=$(kubectl get pods -l app=superset,component=superset --field-selector status.phase=Running -o jsonpath={.items[0].metadata.name})
+    kubectl exec $POD_NAME -- bash -c "entrypoint flask run --host 0.0.0.0 --port 8088"
+- name: restart
+  command: |
+    POD_NAME=$(kubectl get pods -l app=superset,component=superset --field-selector status.phase=Running -o jsonpath={.items[0].metadata.name})
+    kubectl exec $POD_NAME -- bash -c "kill -HUP 1"
+- name: node
+  command: |
+    POD_NAME=$(kubectl get pods -l app=superset,component=superset --field-selector status.phase=Running -o jsonpath={.items[0].metadata.name})
+    kubectl exec $POD_NAME -c node -- bash -c "cd /app/superset-frontend && npm install -f --no-optional --global webpack webpack-cli && npm install -f --no-optional && npm run dev"
+- name: dev
+  command: |
+    POD_NAME=$(kubectl get pods -l app=superset,component=superset --field-selector status.phase=Running -o jsonpath={.items[0].metadata.name})
+    kubectl exec $POD_NAME -c node -- bash -c "cd /app/superset-frontend && npm run dev"

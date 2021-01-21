@@ -92,6 +92,7 @@ setup(
         "pandas>=1.1.2, <1.2",
         "parsedatetime",
         "pathlib2",
+        "plaidcloud-rpc @ git+git://github.com/PlaidCloud/plaid-rpc.git@master#egg=plaidcloud-rpc",
         "polyline",
         "python-dateutil",
         "python-dotenv",

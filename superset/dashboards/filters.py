@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import logging
 from typing import Any
 
 from flask_babel import lazy_gettext as _
@@ -21,12 +22,15 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm.query import Query
 
 from superset import db, security_manager
+from superset.connectors.sqla.models import SqlaTable
 from superset.models.core import FavStar
 from superset.models.dashboard import Dashboard
 from superset.models.slice import Slice
 from superset.views.base import BaseFilter, get_user_roles
 from superset.views.base_api import BaseFavoriteFilter
 
+
+logger = logging.getLogger(__name__)
 
 class DashboardTitleOrSlugFilter(BaseFilter):  # pylint: disable=too-few-public-methods
     name = _("Title or Slug")
@@ -75,9 +79,11 @@ class DashboardFilter(BaseFilter):  # pylint: disable=too-few-public-methods
 
         datasource_perms = security_manager.user_view_menu_names("datasource_access")
         schema_perms = security_manager.user_view_menu_names("schema_access")
+        project_ids = security_manager.get_project_ids()
         published_dash_query = (
             db.session.query(Dashboard.id)
             .join(Dashboard.slices)
+            .join(Slice.table)
             .filter(
                 and_(
                     Dashboard.published == True,  # pylint: disable=singleton-comparison
@@ -85,10 +91,13 @@ class DashboardFilter(BaseFilter):  # pylint: disable=too-few-public-methods
                         Slice.perm.in_(datasource_perms),
                         Slice.schema_perm.in_(schema_perms),
                         security_manager.can_access_all_datasources(),
+                        SqlaTable.database_id.in_(project_ids),
                     ),
                 )
             )
         )
+
+        logger.info(str(published_dash_query))
 
         users_favorite_dash_query = db.session.query(FavStar.obj_id).filter(
             and_(

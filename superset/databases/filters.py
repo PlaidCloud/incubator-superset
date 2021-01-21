@@ -37,9 +37,11 @@ class DatabaseFilter(BaseFilter):
         database_perms = security_manager.user_view_menu_names("database_access")
         # TODO(bogdan): consider adding datasource access here as well.
         schema_access_databases = self.schema_access_databases()
+        project_ids = security_manager.get_project_ids()
         return query.filter(
             or_(
                 self.model.perm.in_(database_perms),
                 self.model.database_name.in_(schema_access_databases),
+                self.model.id.in_(project_ids),
             )
         )

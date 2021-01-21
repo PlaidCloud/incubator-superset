@@ -61,6 +61,7 @@ class ChartFilter(BaseFilter):  # pylint: disable=too-few-public-methods
             return query
         perms = security_manager.user_view_menu_names("datasource_access")
         schema_perms = security_manager.user_view_menu_names("schema_access")
+        project_ids = security_manager.get_project_ids()
         return query.filter(
-            or_(self.model.perm.in_(perms), self.model.schema_perm.in_(schema_perms))
+            or_(self.model.perm.in_(perms), self.model.schema_perm.in_(schema_perms), SqlaTable.database_id.in_(project_ids)),
         )

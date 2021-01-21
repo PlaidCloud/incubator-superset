@@ -21,7 +21,7 @@ steps:
 
       docker build \
         -t gcr.io/plaidcloud-build/superset/node:$TAG_NAME \
-        --cache-from gcr.io/plaidcloud-build/superset/py:$(cat tmp/py) \
+        --cache-from gcr.io/plaidcloud-build/superset/py:$TAG_NAME \
         --cache-from gcr.io/plaidcloud-build/superset/node:$(cat tmp/node) \
         --target=superset-node \
         --build-arg PY_VER=3.7.9 \

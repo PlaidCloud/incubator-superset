@@ -229,7 +229,7 @@ export default function DatabaseSelector({
         valueKey="id"
         valueRenderer={(db: any) => (
           <div>
-            <span className="text-muted m-r-5">{t('Database:')}</span>
+            <span className="text-muted m-r-5">{t('Project:')}</span>
             {renderDatabaseOption(db)}
           </div>
         )}

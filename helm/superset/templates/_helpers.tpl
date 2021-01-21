@@ -78,6 +78,7 @@ MAPBOX_API_KEY = '{{ .Values.mapbox.apiKey }}'
 HOSTNAME = '{{ .Values.ingress.hostname }}'
 PLAID_HOST = '{{ .Values.ingress.hostname }}'
 PLAID_DATABASE_HOST = '{{ .Values.greenplum.host }}'
+PLAID_RPC = '{{ .Values.rpc.host }}'
 SCHEME = 'https'
 SQLALCHEMY_DATABASE_URI = 'postgresql://{{ .Values.postgresql.postgresqlUsername }}:{{ .Values.postgresql.postgresqlPassword }}@{{ template "superset.fullname" . }}-postgresql:{{ .Values.postgresql.service.port }}/{{ .Values.postgresql.postgresqlDatabase }}'
 PUBLIC_ROLE_LIKE_PLAID = False
@@ -95,6 +96,17 @@ APP_NAME = 'PlaidCloud'
 
 # Uncomment to setup an App icon
 APP_ICON = '/static/assets/images/plaidcloud.png'
+
+
+RABBITMQ_CONNECTION_INFO = {
+    'host': '{{ .Values.rabbitmq.host }}',
+    'port': '{{ .Values.rabbitmq.port }}',
+    'queue': '{{ .Values.rabbitmq.queue }}',
+    'vhost': '{{ .Values.rabbitmq.vhost }}',
+    'username': '{{ .Values.rabbitmq.username }}',
+    'password': '{{ .Values.rabbitmq.password }}',
+}
+
 {{- if .Values.redis.enabled }}
 CACHE_CONFIG: CacheConfig = {
     {{- if .Values.redis.group }}
@@ -275,7 +287,7 @@ PLAID_BASE_PERMISSIONS = {
     "can_invalidate": {"CacheRestApi"},
     "can_list": {
         "AnnotationModelView",
-        #"DatabaseView",
+        "DatabaseView",
         #"LogModelView",
         "SavedQueryViewApi",
         "QueryView",
@@ -327,7 +339,7 @@ PLAID_BASE_PERMISSIONS = {
     "can_shortner": {"R"},
     "can_show": {
         "AnnotationModelView",
-        #"DatabaseView",
+        "DatabaseView",
         #"LogModelView",
         "SavedQueryViewApi",
         "QueryView",
@@ -379,7 +391,7 @@ PLAID_BASE_PERMISSIONS = {
         # "Databases",
         "Manage",
         "Query Search",
-        "Upload Excel",
+        # "Upload Excel",
         "Datasets",
         "Annotation Layers",
         "Action Log",
@@ -388,7 +400,7 @@ PLAID_BASE_PERMISSIONS = {
         "Data",
         "SQL Editor",
         "Saved Queries",
-        "Upload a CSV",
+        # "Upload a CSV",
         # "Security",
         "Dashboards",
         # "List Users",

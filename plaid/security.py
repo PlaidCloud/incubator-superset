@@ -4,14 +4,20 @@ Plaid Security Class for Superset
 """
 import logging
 import redis
+import uuid
+import time
 from sqlalchemy import func, Table, MetaData
+from typing import Union
+from urllib.parse import urljoin
 from superset.extensions import cache_manager
 from superset.security import SupersetSecurityManager
+from flask import session
 from flask_appbuilder import Model
 from flask_appbuilder.security.manager import AUTH_OID
 from flask_appbuilder.security.sqla.manager import SecurityManager
 from authlib.integrations.flask_client import OAuth
 from plaid.auth_oidc import AuthOIDCView
+from plaidcloud.rpc.connection.jsonrpc import SimpleRPC
 
 __author__ = "Garrett Bates"
 __copyright__ = "© Copyright 2018, Tartan Solutions, Inc"
@@ -40,17 +46,17 @@ class PlaidSecurityManager(SupersetSecurityManager):
         # metadata = MetaData(bind=engine, reflect=True)
         # self.plaiduser_user = metadata.tables['plaiduser_user']
         if self.auth_type == AUTH_OID:
-            oidc_params = self.appbuilder.app.config.get("OIDC_PARAMS")
+            self.oidc_params = self.appbuilder.app.config.get("OIDC_PARAMS")
             self.oauth = OAuth(app=appbuilder.get_app)
             self.oauth.register(
                 'plaid',
-                client_id=oidc_params['client_id'],
-                client_secret=oidc_params['client_secret'],
-                access_token_url=oidc_params['token_url'],
-                authorize_url=oidc_params['auth_url'],
-                authorize_params=oidc_params['auth_params'],
-                jwks_uri=oidc_params['jwks_uri'],
-                client_kwargs=oidc_params['client_kwargs'],
+                client_id=self.oidc_params['client_id'],
+                client_secret=self.oidc_params['client_secret'],
+                access_token_url=self.oidc_params['token_url'],
+                authorize_url=self.oidc_params['auth_url'],
+                authorize_params=self.oidc_params['auth_params'],
+                jwks_uri=self.oidc_params['jwks_uri'],
+                client_kwargs=self.oidc_params['client_kwargs'],
             )
         self.authoidview = AuthOIDCView
 
@@ -89,6 +95,65 @@ class PlaidSecurityManager(SupersetSecurityManager):
         return perm and pvm.view_menu.name in perm
 
 
+    def get_rpc(self):
+        base_url = "{}{}".format("http://", self.appbuilder.app.config.get("PLAID_RPC"))
+        rpc_url = urljoin(base_url, "json-rpc")
+        if session.get("workspace") is None:
+            temp_rpc = SimpleRPC(session["token"]["access_token"], uri=rpc_url, verify_ssl=False)
+            session["workspace"] = temp_rpc.identity.me.workspace_id()
+        # Specify user's default workspace in token.
+        log.debug(f"workspace: {session['workspace']}")
+        token = "{}_ws{}".format(session["token"]["access_token"], session["workspace"])
+        return SimpleRPC(token, uri=rpc_url, verify_ssl=False)
+
+
+    def can_access_database(self, database: Union["Database", "DruidCluster"]) -> bool:
+        rpc = self.get_rpc()
+        proj = rpc.analyze.project.project(project_id=str(database.uuid))
+        log.debug(proj)
+        if proj["id"] is None:
+            proj = rpc.analyze.project.project(project_id=str(database.uuid).replace('-', ''))
+        return proj.get("id", None) is not None or super().can_access_database(database)
+
+
+    def can_access_schema(self, datasource: "BaseDatasource") -> bool:
+        return self.can_access_datasource(datasource) or super().can_access_schema(datasource)
+
+
+    def can_access_datasource(self, datasource: "BaseDatasource") -> bool:
+        rpc = self.get_rpc()
+        table_id = "{}{}".format("analyzetable_", str(datasource.uuid))
+        table_id_without_dashes = table_id.replace("-", "")
+        log.debug(table_id)
+        table = rpc.analyze.table.table(project_id=datasource.schema.replace("report", ""), table_id=table_id)
+        log.debug(table)
+        if table["id"] is None:
+            table = rpc.analyze.table.table(project_id=datasource.schema.replace("report", ""), table_id=table_id_without_dashes)            
+            log.debug(table)
+        return table.get('id', None) is not None or super().can_access_datasource(datasource)
+
+
+    def get_project_ids(self):
+        from superset.models.core import Database
+        rpc = self.get_rpc()
+        start = time.time()
+        projects = rpc.analyze.project.projects()
+        end = time.time()
+        project_uuids = {str(uuid.UUID(project['id'])) for project in projects}
+        log.debug(f"Fetched these projects in {end - start}: {project_uuids}")
+        return self.get_session.query(Database.id).filter(Database.uuid.in_(project_uuids))
+
+
+    def get_table_ids(self):
+        rpc = self.get_rpc()
+        start = time.time()
+        tables = rpc.analyze.table.published_tables_by_project()
+        end = time.time()
+        table_ids = {str(uuid.UUID(table['id'].replace('analyzetable_', ''))) for table in tables}
+        log.debug(f"Fetched these tables in {end - start}: {table_ids}")
+        return table_ids
+
+
     def get_perms(self):
         """Accesses plaid permission dictionary from config.
 
@@ -96,49 +161,6 @@ class PlaidSecurityManager(SupersetSecurityManager):
             dict: collection of view menus indexed by permission name.
         """
         return self.appbuilder.app.config.get('PLAID_BASE_PERMISSIONS')
-
-
-    def set_project_role(self, project):
-        project_perm = project.get_perm()
-        self.add_permission_view_menu("database_access", project_perm)
-
-        schema_perms = {t.schema for t in project.plaid_tables}
-        table_perms = {t.perm for t in project.plaid_tables}
-
-        def has_project_access_pvm(pvm):
-            '''has_project_access_pvm()
-
-            Callable to determine which permission/view menu relations will
-            be added to a role. Used by self.set_role(name, callable)
-            method.
-            '''
-            if pvm.permission.name == 'database_access':
-                return pvm.view_menu.name == project_perm
-
-            if pvm.permission.name == 'schema_access':
-                return pvm.view_menu.name in schema_perms
-
-            if pvm.permission.name == 'datasource_access':
-                return pvm.view_menu.name in table_perms
-
-            return False
-
-
-        # Name the role after the project.
-        self.set_role(
-            role_name=get_project_role_name(project.uuid),
-            pvm_check=has_project_access_pvm
-        )
-
-
-    # def get_user_by_plaid_id(self, plaid_id):
-    #     mapping = self.get_session.query(
-    #             self.plaiduser_user
-    #         ).filter_by(
-    #             plaid_user_id=plaid_id
-    #         ).one()
-
-    #     return self.get_user_by_id(mapping.user_id)
 
 
     def add_user_to_project(self, user, project_id):

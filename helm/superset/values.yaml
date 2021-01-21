@@ -19,13 +19,15 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+devMode: false
+
 replicaCount: 1
 
 ## These requirements are used to build a requirements file which is then applied on init
 ## of superset containers
 additionalRequirements:
-  - "psycopg2==2.8.5"
-  - "redis==3.2.1"
+  - "psycopg2-binary==2.8.6"
+  - "redis==3.5.3"
 
 ## The name of the secret which we will use to generate a superset_config.py file
 ## Note: this secret must have the key superset_config.py in it and can include other files as well
@@ -44,10 +46,18 @@ extraEnv: {}
 configMountPath: "/app/pythonpath"
 
 image:
-  repository: preset/superset
-  tag: latest
+  repository: preset/superset:latest
   pullPolicy: IfNotPresent
   pullSecret: gcr-key
+
+events:
+  enabled: true
+  repository: gcr.io/plaidcloud-build/superset/events:latest
+  pullPolicy: IfNotPresent
+  pullSecret: gcr-key
+  entrypoint:
+    - python
+    - /plaid/plaid/event_handler.py
 
 service:
   type: NodePort
@@ -140,6 +150,9 @@ init:
 greenplum:
   host: "192.168.2.206"
 
+rpc:
+  host: plaid
+
 mapbox:
   apiKey: "pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ"
 
@@ -154,6 +167,14 @@ oidc:
   jwksEndpoint: https://plaidcloud.io/oauth/jwks
   redirectUris:
   - https://viz.plaidcloud.io/oidc_callback
+
+rabbitmq:
+  host: rabbitmq-rabbitmq-ha
+  port: 5672
+  queue: events
+  vhost: events
+  username: event_user
+  password: event_password
 
 ##
 ## Configuration values for the postgresql dependency.

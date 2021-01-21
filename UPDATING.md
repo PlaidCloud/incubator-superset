@@ -21,7 +21,7 @@ under the License.
 This file documents any backwards-incompatible changes in Superset and
 assists people when migrating to a new version.
 
-## Next
+## 0.38.0
 
 * NOTICE: config flag ENABLE_REACT_CRUD_VIEWS has been set to `True` by default, set to `False` if
   you prefer to vintage look and feel :)

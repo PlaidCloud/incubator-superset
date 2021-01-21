@@ -71,7 +71,6 @@ from superset.jinja_context import (
 from superset.models.annotations import Annotation
 from superset.models.core import Database
 from superset.models.helpers import AuditMixinNullable, QueryResult
-from superset.result_set import SupersetResultSet
 from superset.sql_parse import ParsedQuery
 from superset.typing import Metric, QueryObjectDict
 from superset.utils import core as utils, import_datasource
@@ -611,9 +610,7 @@ class SqlaTable(  # pylint: disable=too-many-public-methods,too-many-instance-at
 
     @property
     def name(self) -> str:
-        if not self.schema:
-            return self.table_name
-        return "{}.{}".format(self.schema, self.table_name)
+        return self.table_name
 
     @property
     def full_name(self) -> str:
