@@ -28,7 +28,7 @@ class AuthOIDCView(AuthOIDView):
                 userinfo['name'],
                 first_name=userinfo['given_name'],
                 last_name=userinfo['family_name'],
-                email=userinfo["email"],
+                email=userinfo["email"].lower(),
                 role=plaid_role,
                 password=uuid4().bytes,
             )
