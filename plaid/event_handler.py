@@ -3,6 +3,7 @@
 
 import logging
 import time
+import uuid
 from enum import Enum
 import json
 import pika
@@ -161,8 +162,8 @@ class EventHandler():
                 proj = Database()
 
             proj.database_name = f"{event_data['name']} ({event_data['id'][:4]})"
-            proj.verbose_name = event_data["id"]
-            proj.uuid = event_data["id"]
+            proj.verbose_name = f"{event_data['name']} ({event_data['id'][:4]})"
+            proj.uuid = uuid.UUID(event_data["id"])
             proj.password = event_data["report_database_password"]
 
             # TODO: Parameterize port, and maybe database name and driver.
@@ -180,7 +181,7 @@ class EventHandler():
 
 
         def insert_project(event_data):
-            if not db.session.query(db.session.query(Database).filter_by(verbose_name=event_data['id']).exists()).scalar():
+            if not db.session.query(db.session.query(Database).filter_by(uuid=event_data['id']).exists()).scalar():
                 # Project doesn't exist, so make a new one.
                 log.info(f"Inserting project {event_data['name']} ({event_data['id']}).")
                 new_project = map_data_to_row(event_data)
@@ -194,7 +195,7 @@ class EventHandler():
         def update_project(event_data):
             try:
                 log.info(f"Updating project {event_data['name']} ({event_data['id']}).")
-                existing_project = db.session.query(Database).filter_by(verbose_name=event_data['id']).one()
+                existing_project = db.session.query(Database).filter_by(uuid=event_data['id']).one()
             except NoResultFound:
                 # TODO: Log a warning here. A project should exist.
                 insert_project(event_data)
@@ -236,7 +237,8 @@ class EventHandler():
             table.table_name = event_data["published_name"]
             table.uuid = event_data["id"].replace('analyzetable_', '')
             table.schema = f"report{kwargs['project_id']}"
-
+            project = db.session.query(Database).filter_by(uuid=kwargs['project_id']).one()
+            table.database_id = project.id
             return table
 
 
@@ -262,7 +264,7 @@ class EventHandler():
 
                     # Test if source table/view actually exists before we add it.
                     try:
-                        project = db.session.query(Database).filter_by(verbose_name=kwargs['project_id']).one()
+                        project = db.session.query(Database).filter_by(uuid=kwargs['project_id']).one()
                         log.info(project.get_all_view_names_in_schema(schema=new_table.schema))
                         # TODO: This is pretty dumb. Event is being processed before the DB can create the view. 
                         time.sleep(2)
@@ -301,8 +303,12 @@ class EventHandler():
                     delete_table(event_data)
                     return
                 map_data_to_row(event_data, existing_table)
+                
                 # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
                 time.sleep(2)
+                
+                # Commit the table changes before we fetch metadata, in case the table name or project name changed.
+                db.session.commit()
                 existing_table.fetch_metadata()
                 db.session.commit()
             except NoResultFound:
@@ -322,7 +328,7 @@ class EventHandler():
                 ).one()
 
                 has_charts = db.session.query(
-                        db.session.query(Slice).filter_by(datasource_id=table.id, datasource_type='plaid').exists()
+                        db.session.query(Slice).filter_by(datasource_id=table.id, datasource_type='table').exists()
                     ).scalar()
 
                 has_metrics = db.session.query(
