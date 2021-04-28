@@ -21,6 +21,7 @@ import PropTypes from 'prop-types';
 import { bindActionCreators } from 'redux';
 import { connect } from 'react-redux';
 import { t, supersetTheme, ThemeProvider } from '@superset-ui/core';
+import { FeatureFlag, isFeatureEnabled } from 'src/featureFlags';
 import throttle from 'lodash/throttle';
 import TabbedSqlEditors from './TabbedSqlEditors';
 import QueryAutoRefresh from './QueryAutoRefresh';
@@ -86,7 +87,10 @@ class App extends React.PureComponent {
 
   render() {
     let content;
-    if (this.state.hash) {
+    if (this.state.hash && this.state.hash === '#search') {
+      if (isFeatureEnabled(FeatureFlag.ENABLE_REACT_CRUD_VIEWS)) {
+        return window.location.replace('/superset/sqllab/history/');
+      }
       content = (
         <QuerySearch
           actions={this.props.actions}

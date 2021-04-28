@@ -53,6 +53,10 @@ const propTypes = {
   filterOption: PropTypes.func,
   promptTextCreator: PropTypes.func,
   commaChoosesOption: PropTypes.bool,
+  menuPortalTarget: PropTypes.element,
+  menuPosition: PropTypes.string,
+  menuPlacement: PropTypes.string,
+  forceOverflow: PropTypes.bool,
 };
 
 const defaultProps = {
@@ -78,7 +82,10 @@ const defaultProps = {
 export default class SelectControl extends React.PureComponent {
   constructor(props) {
     super(props);
-    this.state = { options: this.getOptions(props) };
+    this.state = {
+      options: this.getOptions(props),
+      value: this.props.value,
+    };
     this.onChange = this.onChange.bind(this);
     this.createMetaSelectAllOption = this.createMetaSelectAllOption.bind(this);
     this.select = null; // pointer to the react-select instance
@@ -99,18 +106,15 @@ export default class SelectControl extends React.PureComponent {
   // Beware: This is acting like an on-click instead of an on-change
   // (firing every time user chooses vs firing only if a new option is chosen).
   onChange(opt) {
-    let optionValue = null;
+    let optionValue = this.props.multi ? [] : null;
     if (opt) {
       if (this.props.multi) {
-        optionValue = [];
         opt.forEach(o => {
           // select all options
           if (o.meta === true) {
-            this.props.onChange(
-              this.getOptions(this.props)
-                .filter(x => !x.meta)
-                .map(x => x[this.props.valueKey]),
-            );
+            optionValue = this.getOptions(this.props)
+              .filter(x => !x.meta)
+              .map(x => x[this.props.valueKey]);
             return;
           }
           optionValue.push(o[this.props.valueKey] || o);
@@ -163,7 +167,7 @@ export default class SelectControl extends React.PureComponent {
       });
     }
     if (props.allowAll === true && props.multi === true) {
-      if (options.findIndex(o => this.isMetaSelectAllOption(o)) < 0) {
+      if (!this.optionsIncludesSelectAll(options)) {
         options.unshift(this.createMetaSelectAllOption());
       }
     } else {
@@ -183,42 +187,100 @@ export default class SelectControl extends React.PureComponent {
   }
 
   isMetaSelectAllOption(o) {
-    return o.meta && o.meta === true && o.label === 'Select All';
+    return o.meta && o.meta === true && o.label === 'Select all';
+  }
+
+  optionsIncludesSelectAll(o) {
+    return o.findIndex(o => this.isMetaSelectAllOption(o)) >= 0;
+  }
+
+  optionsRemaining() {
+    const { options } = this.state;
+    const { value } = this.props;
+    // if select is multi/value is array, we show the options not selected
+    let remainingOptions = Array.isArray(value)
+      ? options.length - value.length
+      : options.length;
+    if (this.optionsIncludesSelectAll(options)) {
+      remainingOptions -= 1;
+    }
+    return remainingOptions < 0 ? 0 : remainingOptions;
   }
 
   createMetaSelectAllOption() {
-    const option = { label: 'Select All', meta: true };
-    option[this.props.valueKey] = 'Select All';
+    const option = { label: 'Select all', meta: true };
+    option[this.props.valueKey] = 'Select all';
     return option;
   }
 
   render() {
     //  Tab, comma or Enter will trigger a new option created for FreeFormSelect
-    const placeholder =
-      this.props.placeholder || t('%s option(s)', this.state.options.length);
+    const {
+      autoFocus,
+      clearable,
+      disabled,
+      filterOption,
+      isLoading,
+      label,
+      menuPlacement,
+      name,
+      noResultsText,
+      onFocus,
+      optionRenderer,
+      promptTextCreator,
+      value,
+      valueKey,
+      valueRenderer,
+      forceOverflow,
+      menuPortalTarget,
+      menuPosition,
+    } = this.props;
+
+    const optionsRemaining = this.optionsRemaining();
+    const optionRemaingText = optionsRemaining
+      ? t('%s option(s)', optionsRemaining)
+      : '';
+    const placeholder = this.props.placeholder || optionRemaingText;
     const isMulti = this.props.isMulti || this.props.multi;
 
+    let assistiveText;
+    if (
+      isMulti &&
+      optionsRemaining &&
+      Array.isArray(this.state.value) &&
+      Array.isArray(value) &&
+      !!value.length
+    ) {
+      assistiveText = optionRemaingText;
+    }
+
     const selectProps = {
-      autoFocus: this.props.autoFocus,
-      isMulti,
-      selectRef: this.getSelectRef,
-      name: `select-${this.props.name}`,
-      placeholder,
-      options: this.state.options,
-      value: this.props.value,
-      labelKey: 'label',
-      valueKey: this.props.valueKey,
-      clearable: this.props.clearable,
-      isLoading: this.props.isLoading,
-      onChange: this.onChange,
-      onFocus: this.props.onFocus,
-      optionRenderer: this.props.optionRenderer,
-      valueRenderer: this.props.valueRenderer,
-      noResultsText: this.props.noResultsText,
-      disabled: this.props.disabled,
-      filterOption: this.props.filterOption,
-      promptTextCreator: this.props.promptTextCreator,
+      autoFocus,
+      'aria-label': label,
+      clearable,
+      disabled,
+      filterOption,
       ignoreAccents: false,
+      isLoading,
+      isMulti,
+      labelKey: 'label',
+      menuPlacement,
+      forceOverflow,
+      menuPortalTarget,
+      menuPosition,
+      name: `select-${name}`,
+      noResultsText,
+      onChange: this.onChange,
+      onFocus,
+      optionRenderer,
+      value,
+      options: this.state.options,
+      placeholder,
+      assistiveText,
+      promptTextCreator,
+      selectRef: this.getSelectRef,
+      valueKey,
+      valueRenderer,
     };
 
     let SelectComponent;

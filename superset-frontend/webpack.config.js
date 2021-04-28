@@ -23,6 +23,7 @@ const webpack = require('webpack');
 const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 const CopyPlugin = require('copy-webpack-plugin');
+const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const OptimizeCSSAssetsPlugin = require('optimize-css-assets-webpack-plugin');
 const SpeedMeasurePlugin = require('speed-measure-webpack-plugin');
@@ -47,6 +48,7 @@ const {
   nameChunks = false,
 } = parsedArgs;
 const isDevMode = mode !== 'production';
+const isDevServer = process.argv[1].includes('webpack-dev-server');
 
 const output = {
   path: BUILD_DIR,
@@ -94,17 +96,9 @@ const plugins = [
         entrypoints: entryFiles,
       };
     },
-    // Also write to disk when using devServer
-    // instead of only keeping manifest.json in memory
-    // This is required to make devServer work with flask.
-    writeToFileEmit: isDevMode,
-  }),
-
-  // create fresh dist/ upon build
-  new CleanWebpackPlugin({
-    dry: false,
-    // required because the build directory is outside the frontend directory:
-    dangerouslyAllowCleanPatternsOutsideProject: true,
+    // Also write maniafest.json to disk when running `npm run dev`.
+    // This is required for Flask to work.
+    writeToFileEmit: isDevMode && !isDevServer,
   }),
 
   // expose mode variable to other modules
@@ -116,6 +110,7 @@ const plugins = [
   new ForkTsCheckerWebpackPlugin({
     eslint: true,
     checkSyntacticErrors: true,
+    memoryLimit: 4096,
   }),
 
   new CopyPlugin({
@@ -125,10 +120,36 @@ const plugins = [
       { from: 'stylesheets', to: 'stylesheets' },
     ],
   }),
+
+  // static pages
+  new HtmlWebpackPlugin({
+    template: './src/assets/staticPages/404.html',
+    inject: true,
+    chunks: [],
+    filename: '404.html',
+  }),
+  new HtmlWebpackPlugin({
+    template: './src/assets/staticPages/500.html',
+    inject: true,
+    chunks: [],
+    filename: '500.html',
+  }),
 ];
+
 if (!process.env.CI) {
   plugins.push(new webpack.ProgressPlugin());
 }
+
+// clean up built assets if not from dev-server
+if (!isDevServer) {
+  plugins.push(
+    new CleanWebpackPlugin({
+      // required because the build directory is outside the frontend directory:
+      dangerouslyAllowCleanPatternsOutsideProject: true,
+    }),
+  );
+}
+
 if (!isDevMode) {
   // text loading (webpack 4+)
   plugins.push(
@@ -167,7 +188,7 @@ const babelLoader = {
       [
         '@emotion/babel-preset-css-prop',
         {
-          autoLabel: true,
+          autoLabel: 'dev-only',
           labelFormat: '[local]',
         },
       ],
@@ -268,8 +289,12 @@ const config = {
     modules: [APP_DIR, 'node_modules'],
     alias: {
       'react-dom': '@hot-loader/react-dom',
-      // force using absolute import path of the @superset-ui/core and @superset-ui/chart-controls
-      // so that we can `npm link` viz plugins without linking these two base packages
+      // Force using absolute import path of some packages in the root node_modules,
+      // as they can be dependencies of other packages via `npm link`.
+      // Both `@emotion/core` and `@superset-ui/core` remember some globals within
+      // module after imported, which will not be available everywhere if two
+      // different copies of the same module are imported in different places.
+      '@emotion/core': path.resolve(APP_DIR, './node_modules/@emotion/core'),
       '@superset-ui/core': path.resolve(
         APP_DIR,
         './node_modules/@superset-ui/core',
@@ -365,10 +390,23 @@ const config = {
       /* for css linking images (and viz plugin thumbnails) */
       {
         test: /\.png$/,
+        issuer: {
+          exclude: /\/src\/assets\/staticPages\//,
+        },
         loader: 'url-loader',
         options: {
           limit: 10000,
           name: '[name].[hash:8].[ext]',
+        },
+      },
+      {
+        test: /\.png$/,
+        issuer: {
+          test: /\/src\/assets\/staticPages\//,
+        },
+        loader: 'url-loader',
+        options: {
+          limit: 150000, // Convert images < 150kb to base64 strings
         },
       },
       {
@@ -435,9 +473,7 @@ if (isDevMode) {
     // and proxy everything else to Superset backend
     proxy: [
       // functions are called for every request
-      () => {
-        return proxyConfig;
-      },
+      () => proxyConfig,
     ],
     contentBase: path.join(process.cwd(), '../static/assets'),
   };
@@ -453,6 +489,7 @@ if (isDevMode) {
       // only allow exact match so imports like `@superset-ui/plugin-name/lib`
       // and `@superset-ui/plugin-name/esm` can still work.
       config.resolve.alias[`${pkg}$`] = `${pkg}/src`;
+      delete config.resolve.alias[pkg];
       hasSymlink = true;
     }
   });

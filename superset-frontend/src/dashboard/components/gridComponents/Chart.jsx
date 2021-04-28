@@ -18,8 +18,9 @@
  */
 import cx from 'classnames';
 import React from 'react';
-import { connect } from 'react-redux';
 import PropTypes from 'prop-types';
+import { styled } from '@superset-ui/core';
+
 import { exploreChart, exportChart } from '../../../explore/exploreUtils';
 import SliceHeader from '../SliceHeader';
 import ChartContainer from '../../../chart/ChartContainer';
@@ -33,6 +34,7 @@ import {
 } from '../../../logger/LogUtils';
 import { isFilterBox } from '../../util/activeDashboardFilters';
 import getFilterValuesByFilterId from '../../util/getFilterValuesByFilterId';
+import { areObjectsEqual } from '../../../reduxUtils';
 
 const propTypes = {
   id: PropTypes.number.isRequired,
@@ -42,8 +44,6 @@ const propTypes = {
   height: PropTypes.number.isRequired,
   updateSliceName: PropTypes.func.isRequired,
   isComponentVisible: PropTypes.bool,
-  // last switched tab
-  mountedParent: PropTypes.string,
   handleToggleFullSize: PropTypes.func.isRequired,
 
   // from redux
@@ -65,15 +65,18 @@ const propTypes = {
   isExpanded: PropTypes.bool.isRequired,
   isCached: PropTypes.bool,
   supersetCanExplore: PropTypes.bool.isRequired,
+  supersetCanShare: PropTypes.bool.isRequired,
   supersetCanCSV: PropTypes.bool.isRequired,
   sliceCanEdit: PropTypes.bool.isRequired,
+  addSuccessToast: PropTypes.func.isRequired,
   addDangerToast: PropTypes.func.isRequired,
+  ownState: PropTypes.object,
+  filterState: PropTypes.object,
 };
 
 const defaultProps = {
   isCached: false,
   isComponentVisible: true,
-  mountedParent: 'ROOT',
 };
 
 // we use state + shouldComponentUpdate() logic to prevent perf-wrecking
@@ -85,7 +88,14 @@ const SHOULD_UPDATE_ON_PROP_CHANGES = Object.keys(propTypes).filter(
 const OVERFLOWABLE_VIZ_TYPES = new Set(['filter_box']);
 const DEFAULT_HEADER_HEIGHT = 22;
 
-class Chart extends React.Component {
+const ChartOverlay = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+`;
+
+export default class Chart extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
@@ -118,9 +128,6 @@ class Chart extends React.Component {
     // allow chart update/re-render only if visible:
     // under selected tab or no tab layout
     if (nextProps.isComponentVisible) {
-      if (nextProps.mountedParent === null) {
-        return false;
-      }
       if (nextProps.chart.triggerQuery) {
         return true;
       }
@@ -131,19 +138,21 @@ class Chart extends React.Component {
         return false;
       }
 
-      for (let i = 0; i < SHOULD_UPDATE_ON_PROP_CHANGES.length; i += 1) {
-        const prop = SHOULD_UPDATE_ON_PROP_CHANGES[i];
-        if (nextProps[prop] !== this.props[prop]) {
-          return true;
-        }
-      }
-
       if (
         nextProps.width !== this.props.width ||
         nextProps.height !== this.props.height
       ) {
         clearTimeout(this.resizeTimeout);
         this.resizeTimeout = setTimeout(this.resize, RESIZE_TIMEOUT);
+      }
+
+      for (let i = 0; i < SHOULD_UPDATE_ON_PROP_CHANGES.length; i += 1) {
+        const prop = SHOULD_UPDATE_ON_PROP_CHANGES[i];
+        // use deep objects equality comparison to prevent
+        // unneccessary updates when objects references change
+        if (!areObjectsEqual(nextProps[prop], this.props[prop])) {
+          return true;
+        }
       }
     }
 
@@ -196,8 +205,8 @@ class Chart extends React.Component {
     this.props.setFocusedFilterField(chartId, column);
   }
 
-  handleFilterMenuClose() {
-    this.props.unsetFocusedFilterField();
+  handleFilterMenuClose(chartId, column) {
+    this.props.unsetFocusedFilterField(chartId, column);
   }
 
   exploreChart() {
@@ -249,9 +258,13 @@ class Chart extends React.Component {
       toggleExpandSlice,
       timeout,
       supersetCanExplore,
+      supersetCanShare,
       supersetCanCSV,
       sliceCanEdit,
+      addSuccessToast,
       addDangerToast,
+      ownState,
+      filterState,
       handleToggleFullSize,
       isFullSize,
     } = this.props;
@@ -264,9 +277,13 @@ class Chart extends React.Component {
       return <MissingChart height={this.getChartHeight()} />;
     }
 
-    const { queryResponse, chartUpdateEndTime } = chart;
-    const isCached = queryResponse && queryResponse.is_cached;
-    const cachedDttm = queryResponse && queryResponse.cached_dttm;
+    const { queriesResponse, chartUpdateEndTime, chartStatus } = chart;
+    const isLoading = chartStatus === 'loading';
+    // eslint-disable-next-line camelcase
+    const isCached = queriesResponse?.map(({ is_cached }) => is_cached) || [];
+    const cachedDttm =
+      // eslint-disable-next-line camelcase
+      queriesResponse?.map(({ cached_dttm }) => cached_dttm) || [];
     const isOverflowable = OVERFLOWABLE_VIZ_TYPES.has(slice.viz_type);
     const initialValues = isFilterBox(id)
       ? getFilterValuesByFilterId({
@@ -274,9 +291,14 @@ class Chart extends React.Component {
           filterId: id,
         })
       : {};
-
     return (
-      <div>
+      <div
+        className="chart-slice"
+        data-test="chart-grid-component"
+        data-test-chart-id={id}
+        data-test-viz-type={slice.viz_type}
+        data-test-chart-name={slice.slice_name}
+      >
         <SliceHeader
           innerRef={this.setHeaderRef}
           slice={slice}
@@ -293,11 +315,13 @@ class Chart extends React.Component {
           updateSliceName={updateSliceName}
           sliceName={sliceName}
           supersetCanExplore={supersetCanExplore}
+          supersetCanShare={supersetCanShare}
           supersetCanCSV={supersetCanCSV}
           sliceCanEdit={sliceCanEdit}
           componentId={componentId}
           dashboardId={dashboardId}
           filters={filters}
+          addSuccessToast={addSuccessToast}
           addDangerToast={addDangerToast}
           handleToggleFullSize={handleToggleFullSize}
           isFullSize={isFullSize}
@@ -307,9 +331,9 @@ class Chart extends React.Component {
         {/*
           This usage of dangerouslySetInnerHTML is safe since it is being used to render
           markdown that is sanitized with bleach. See:
-             https://github.com/apache/incubator-superset/pull/4390
+             https://github.com/apache/superset/pull/4390
           and
-             https://github.com/apache/incubator-superset/commit/b6fcc22d5a2cb7a5e92599ed5795a0169385a825
+             https://github.com/apache/superset/commit/b6fcc22d5a2cb7a5e92599ed5795a0169385a825
         */}
         {isExpanded && slice.description_markeddown && (
           <div
@@ -326,6 +350,15 @@ class Chart extends React.Component {
             isOverflowable && 'dashboard-chart--overflowable',
           )}
         >
+          {isLoading && (
+            <ChartOverlay
+              style={{
+                width,
+                height: this.getChartHeight(),
+              }}
+            />
+          )}
+
           <ChartContainer
             width={width}
             height={this.getChartHeight()}
@@ -335,16 +368,17 @@ class Chart extends React.Component {
             annotationData={chart.annotationData}
             chartAlert={chart.chartAlert}
             chartId={id}
-            chartStatus={chart.chartStatus}
+            chartStatus={chartStatus}
             datasource={datasource}
             dashboardId={dashboardId}
             initialValues={initialValues}
             formData={formData}
-            queryResponse={chart.queryResponse}
+            ownState={ownState}
+            filterState={filterState}
+            queriesResponse={chart.queriesResponse}
             timeout={timeout}
             triggerQuery={chart.triggerQuery}
             vizType={slice.viz_type}
-            owners={slice.owners}
           />
         </div>
       </div>
@@ -354,21 +388,3 @@ class Chart extends React.Component {
 
 Chart.propTypes = propTypes;
 Chart.defaultProps = defaultProps;
-
-function mapStateToProps({ dashboardState }) {
-  return {
-    // needed to prevent chart from rendering while tab switch animation in progress
-    // when undefined, default to have mounted the root tab
-    mountedParent: dashboardState?.mountedTab,
-  };
-}
-
-/**
- * The original Chart component not connected to state.
- */
-export const ChartUnconnected = Chart;
-
-/**
- * Redux connected Chart component.
- */
-export default connect(mapStateToProps, null)(Chart);

@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from collections import namedtuple
 from unittest import mock, skipUnless
 
 import pandas as pd
@@ -22,6 +23,9 @@ from sqlalchemy.engine.result import RowProxy
 from sqlalchemy.sql import select
 
 from superset.db_engine_specs.presto import PrestoEngineSpec
+from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
+from superset.sql_parse import ParsedQuery
+from superset.utils.core import DatasourceName, GenericDataType
 from tests.db_engine_specs.base_tests import TestDbEngineSpec
 
 
@@ -36,6 +40,45 @@ class TestPrestoDbEngineSpec(TestDbEngineSpec):
         self.assertEqual(
             [], PrestoEngineSpec.get_view_names(mock.ANY, mock.ANY, mock.ANY)
         )
+
+    @mock.patch("superset.db_engine_specs.presto.is_feature_enabled")
+    def test_get_view_names(self, mock_is_feature_enabled):
+        mock_is_feature_enabled.return_value = True
+        mock_execute = mock.MagicMock()
+        mock_fetchall = mock.MagicMock(return_value=[["a", "b,", "c"], ["d", "e"]])
+        database = mock.MagicMock()
+        database.get_sqla_engine.return_value.raw_connection.return_value.cursor.return_value.execute = (
+            mock_execute
+        )
+        database.get_sqla_engine.return_value.raw_connection.return_value.cursor.return_value.fetchall = (
+            mock_fetchall
+        )
+        result = PrestoEngineSpec.get_view_names(database, mock.Mock(), None)
+        mock_execute.assert_called_once_with(
+            "SELECT table_name FROM information_schema.views", {}
+        )
+        assert result == ["a", "d"]
+
+    @mock.patch("superset.db_engine_specs.presto.is_feature_enabled")
+    def test_get_view_names_with_schema(self, mock_is_feature_enabled):
+        mock_is_feature_enabled.return_value = True
+        mock_execute = mock.MagicMock()
+        mock_fetchall = mock.MagicMock(return_value=[["a", "b,", "c"], ["d", "e"]])
+        database = mock.MagicMock()
+        database.get_sqla_engine.return_value.raw_connection.return_value.cursor.return_value.execute = (
+            mock_execute
+        )
+        database.get_sqla_engine.return_value.raw_connection.return_value.cursor.return_value.fetchall = (
+            mock_fetchall
+        )
+        schema = "schema"
+        result = PrestoEngineSpec.get_view_names(database, mock.Mock(), schema)
+        mock_execute.assert_called_once_with(
+            "SELECT table_name FROM information_schema.views "
+            "WHERE table_schema=%(schema)s",
+            {"schema": schema},
+        )
+        assert result == ["a", "d"]
 
     def verify_presto_column(self, column, expected_results):
         inspector = mock.Mock()
@@ -493,24 +536,496 @@ class TestPrestoDbEngineSpec(TestDbEngineSpec):
         self.assertEqual(actual_expanded_cols, expected_expanded_cols)
 
     def test_get_sqla_column_type(self):
-        sqla_type = PrestoEngineSpec.get_sqla_column_type("varchar(255)")
-        assert isinstance(sqla_type, types.VARCHAR)
-        assert sqla_type.length == 255
+        column_spec = PrestoEngineSpec.get_column_spec("varchar(255)")
+        assert isinstance(column_spec.sqla_type, types.VARCHAR)
+        assert column_spec.sqla_type.length == 255
+        self.assertEqual(column_spec.generic_type, GenericDataType.STRING)
 
-        sqla_type = PrestoEngineSpec.get_sqla_column_type("varchar")
-        assert isinstance(sqla_type, types.String)
-        assert sqla_type.length is None
+        column_spec = PrestoEngineSpec.get_column_spec("varchar")
+        assert isinstance(column_spec.sqla_type, types.String)
+        assert column_spec.sqla_type.length is None
+        self.assertEqual(column_spec.generic_type, GenericDataType.STRING)
 
-        sqla_type = PrestoEngineSpec.get_sqla_column_type("char(10)")
-        assert isinstance(sqla_type, types.CHAR)
-        assert sqla_type.length == 10
+        column_spec = PrestoEngineSpec.get_column_spec("char(10)")
+        assert isinstance(column_spec.sqla_type, types.CHAR)
+        assert column_spec.sqla_type.length == 10
+        self.assertEqual(column_spec.generic_type, GenericDataType.STRING)
 
-        sqla_type = PrestoEngineSpec.get_sqla_column_type("char")
-        assert isinstance(sqla_type, types.CHAR)
-        assert sqla_type.length is None
+        column_spec = PrestoEngineSpec.get_column_spec("char")
+        assert isinstance(column_spec.sqla_type, types.CHAR)
+        assert column_spec.sqla_type.length is None
+        self.assertEqual(column_spec.generic_type, GenericDataType.STRING)
 
-        sqla_type = PrestoEngineSpec.get_sqla_column_type("integer")
-        assert isinstance(sqla_type, types.Integer)
+        column_spec = PrestoEngineSpec.get_column_spec("integer")
+        assert isinstance(column_spec.sqla_type, types.Integer)
+        self.assertEqual(column_spec.generic_type, GenericDataType.NUMERIC)
+
+        column_spec = PrestoEngineSpec.get_column_spec("time")
+        assert issubclass(column_spec.sqla_type, types.Time)
+        self.assertEqual(column_spec.generic_type, GenericDataType.TEMPORAL)
+
+        column_spec = PrestoEngineSpec.get_column_spec("timestamp")
+        assert issubclass(column_spec.sqla_type, types.TIMESTAMP)
+        self.assertEqual(column_spec.generic_type, GenericDataType.TEMPORAL)
 
         sqla_type = PrestoEngineSpec.get_sqla_column_type(None)
         assert sqla_type is None
+
+    @mock.patch(
+        "superset.utils.feature_flag_manager.FeatureFlagManager.is_feature_enabled"
+    )
+    @mock.patch("superset.db_engine_specs.base.BaseEngineSpec.get_table_names")
+    @mock.patch("superset.db_engine_specs.presto.PrestoEngineSpec.get_view_names")
+    def test_get_table_names_no_split_views_from_tables(
+        self, mock_get_view_names, mock_get_table_names, mock_is_feature_enabled
+    ):
+        mock_get_view_names.return_value = ["view1", "view2"]
+        table_names = ["table1", "table2", "view1", "view2"]
+        mock_get_table_names.return_value = table_names
+        mock_is_feature_enabled.return_value = False
+        tables = PrestoEngineSpec.get_table_names(mock.Mock(), mock.Mock(), None)
+        assert tables == table_names
+
+    @mock.patch(
+        "superset.utils.feature_flag_manager.FeatureFlagManager.is_feature_enabled"
+    )
+    @mock.patch("superset.db_engine_specs.base.BaseEngineSpec.get_table_names")
+    @mock.patch("superset.db_engine_specs.presto.PrestoEngineSpec.get_view_names")
+    def test_get_table_names_split_views_from_tables(
+        self, mock_get_view_names, mock_get_table_names, mock_is_feature_enabled
+    ):
+        mock_get_view_names.return_value = ["view1", "view2"]
+        table_names = ["table1", "table2", "view1", "view2"]
+        mock_get_table_names.return_value = table_names
+        mock_is_feature_enabled.return_value = True
+        tables = PrestoEngineSpec.get_table_names(mock.Mock(), mock.Mock(), None)
+        assert sorted(tables) == sorted(table_names)
+
+    @mock.patch(
+        "superset.utils.feature_flag_manager.FeatureFlagManager.is_feature_enabled"
+    )
+    @mock.patch("superset.db_engine_specs.base.BaseEngineSpec.get_table_names")
+    @mock.patch("superset.db_engine_specs.presto.PrestoEngineSpec.get_view_names")
+    def test_get_table_names_split_views_from_tables_no_tables(
+        self, mock_get_view_names, mock_get_table_names, mock_is_feature_enabled
+    ):
+        mock_get_view_names.return_value = []
+        table_names = []
+        mock_get_table_names.return_value = table_names
+        mock_is_feature_enabled.return_value = True
+        tables = PrestoEngineSpec.get_table_names(mock.Mock(), mock.Mock(), None)
+        assert tables == []
+
+    def test_get_full_name(self):
+        names = [
+            ("part1", "part2"),
+            ("part11", "part22"),
+        ]
+        result = PrestoEngineSpec._get_full_name(names)
+        assert result == "part1.part11"
+
+    def test_get_full_name_empty_tuple(self):
+        names = [
+            ("part1", "part2"),
+            ("", "part3"),
+            ("part4", "part5"),
+            ("", "part6"),
+        ]
+        result = PrestoEngineSpec._get_full_name(names)
+        assert result == "part1.part4"
+
+    def test_split_data_type(self):
+        data_type = "value1 value2"
+        result = PrestoEngineSpec._split_data_type(data_type, " ")
+        assert result == ["value1", "value2"]
+
+        data_type = "value1,value2"
+        result = PrestoEngineSpec._split_data_type(data_type, ",")
+        assert result == ["value1", "value2"]
+
+        data_type = '"value,1",value2'
+        result = PrestoEngineSpec._split_data_type(data_type, ",")
+        assert result == ['"value,1"', "value2"]
+
+    def test_show_columns(self):
+        inspector = mock.MagicMock()
+        inspector.engine.dialect.identifier_preparer.quote_identifier = (
+            lambda x: f'"{x}"'
+        )
+        mock_execute = mock.MagicMock(return_value=["a", "b"])
+        inspector.bind.execute = mock_execute
+        table_name = "table_name"
+        result = PrestoEngineSpec._show_columns(inspector, table_name, None)
+        assert result == ["a", "b"]
+        mock_execute.assert_called_once_with(f'SHOW COLUMNS FROM "{table_name}"')
+
+    def test_show_columns_with_schema(self):
+        inspector = mock.MagicMock()
+        inspector.engine.dialect.identifier_preparer.quote_identifier = (
+            lambda x: f'"{x}"'
+        )
+        mock_execute = mock.MagicMock(return_value=["a", "b"])
+        inspector.bind.execute = mock_execute
+        table_name = "table_name"
+        schema = "schema"
+        result = PrestoEngineSpec._show_columns(inspector, table_name, schema)
+        assert result == ["a", "b"]
+        mock_execute.assert_called_once_with(
+            f'SHOW COLUMNS FROM "{schema}"."{table_name}"'
+        )
+
+    def test_is_column_name_quoted(self):
+        column_name = "mock"
+        assert PrestoEngineSpec._is_column_name_quoted(column_name) is False
+
+        column_name = '"mock'
+        assert PrestoEngineSpec._is_column_name_quoted(column_name) is False
+
+        column_name = '"moc"k'
+        assert PrestoEngineSpec._is_column_name_quoted(column_name) is False
+
+        column_name = '"moc"k"'
+        assert PrestoEngineSpec._is_column_name_quoted(column_name) is True
+
+    @mock.patch("superset.db_engine_specs.base.BaseEngineSpec.select_star")
+    def test_select_star_no_presto_expand_data(self, mock_select_star):
+        database = mock.Mock()
+        table_name = "table_name"
+        engine = mock.Mock()
+        cols = [
+            {"col1": "val1"},
+            {"col2": "val2"},
+        ]
+        PrestoEngineSpec.select_star(database, table_name, engine, cols=cols)
+        mock_select_star.assert_called_once_with(
+            database, table_name, engine, None, 100, False, True, True, cols
+        )
+
+    @mock.patch("superset.db_engine_specs.presto.is_feature_enabled")
+    @mock.patch("superset.db_engine_specs.base.BaseEngineSpec.select_star")
+    def test_select_star_presto_expand_data(
+        self, mock_select_star, mock_is_feature_enabled
+    ):
+        mock_is_feature_enabled.return_value = True
+        database = mock.Mock()
+        table_name = "table_name"
+        engine = mock.Mock()
+        cols = [
+            {"name": "val1"},
+            {"name": "val2<?!@#$312,/'][p098"},
+            {"name": ".val2"},
+            {"name": "val2."},
+            {"name": "val.2"},
+            {"name": ".val2."},
+        ]
+        PrestoEngineSpec.select_star(
+            database, table_name, engine, show_cols=True, cols=cols
+        )
+        mock_select_star.assert_called_once_with(
+            database,
+            table_name,
+            engine,
+            None,
+            100,
+            True,
+            True,
+            True,
+            [{"name": "val1"}, {"name": "val2<?!@#$312,/'][p098"},],
+        )
+
+    def test_estimate_statement_cost(self):
+        mock_cursor = mock.MagicMock()
+        estimate_json = {"a": "b"}
+        mock_cursor.fetchone.return_value = [
+            '{"a": "b"}',
+        ]
+        result = PrestoEngineSpec.estimate_statement_cost(
+            "SELECT * FROM brth_names", mock_cursor
+        )
+        assert result == estimate_json
+
+    def test_estimate_statement_cost_invalid_syntax(self):
+        mock_cursor = mock.MagicMock()
+        mock_cursor.execute.side_effect = Exception()
+        with self.assertRaises(Exception):
+            PrestoEngineSpec.estimate_statement_cost(
+                "DROP TABLE brth_names", mock_cursor
+            )
+
+    def test_get_all_datasource_names(self):
+        df = pd.DataFrame.from_dict(
+            {"table_schema": ["schema1", "schema2"], "table_name": ["name1", "name2"]}
+        )
+        database = mock.MagicMock()
+        database.get_df.return_value = df
+        result = PrestoEngineSpec.get_all_datasource_names(database, "table")
+        expected_result = [
+            DatasourceName(schema="schema1", table="name1"),
+            DatasourceName(schema="schema2", table="name2"),
+        ]
+        assert result == expected_result
+
+    def test_get_create_view(self):
+        mock_execute = mock.MagicMock()
+        mock_fetchall = mock.MagicMock(return_value=[["a", "b,", "c"], ["d", "e"]])
+        database = mock.MagicMock()
+        database.get_sqla_engine.return_value.raw_connection.return_value.cursor.return_value.execute = (
+            mock_execute
+        )
+        database.get_sqla_engine.return_value.raw_connection.return_value.cursor.return_value.fetchall = (
+            mock_fetchall
+        )
+        database.get_sqla_engine.return_value.raw_connection.return_value.cursor.return_value.poll.return_value = (
+            False
+        )
+        schema = "schema"
+        table = "table"
+        result = PrestoEngineSpec.get_create_view(database, schema=schema, table=table)
+        assert result == "a"
+        mock_execute.assert_called_once_with(f"SHOW CREATE VIEW {schema}.{table}")
+
+    def test_get_create_view_exception(self):
+        mock_execute = mock.MagicMock(side_effect=Exception())
+        database = mock.MagicMock()
+        database.get_sqla_engine.return_value.raw_connection.return_value.cursor.return_value.execute = (
+            mock_execute
+        )
+        schema = "schema"
+        table = "table"
+        with self.assertRaises(Exception):
+            PrestoEngineSpec.get_create_view(database, schema=schema, table=table)
+
+    def test_get_create_view_database_error(self):
+        from pyhive.exc import DatabaseError
+
+        mock_execute = mock.MagicMock(side_effect=DatabaseError())
+        database = mock.MagicMock()
+        database.get_sqla_engine.return_value.raw_connection.return_value.cursor.return_value.execute = (
+            mock_execute
+        )
+        schema = "schema"
+        table = "table"
+        result = PrestoEngineSpec.get_create_view(database, schema=schema, table=table)
+        assert result is None
+
+    def test_extract_error_message_orig(self):
+        DatabaseError = namedtuple("DatabaseError", ["error_dict"])
+        db_err = DatabaseError(
+            {"errorName": "name", "errorLocation": "location", "message": "msg"}
+        )
+        exception = Exception()
+        exception.orig = db_err
+        result = PrestoEngineSpec._extract_error_message(exception)
+        assert result == "name at location: msg"
+
+    def test_extract_error_message_db_errr(self):
+        from pyhive.exc import DatabaseError
+
+        exception = DatabaseError({"message": "Err message"})
+        result = PrestoEngineSpec._extract_error_message(exception)
+        assert result == "Err message"
+
+    def test_extract_error_message_general_exception(self):
+        exception = Exception("Err message")
+        result = PrestoEngineSpec._extract_error_message(exception)
+        assert result == "Err message"
+
+    def test_extract_errors(self):
+        msg = "Generic Error"
+        result = PrestoEngineSpec.extract_errors(Exception(msg))
+        assert result == [
+            SupersetError(
+                message="Generic Error",
+                error_type=SupersetErrorType.GENERIC_DB_ENGINE_ERROR,
+                level=ErrorLevel.ERROR,
+                extra={
+                    "engine_name": "Presto",
+                    "issue_codes": [
+                        {
+                            "code": 1002,
+                            "message": "Issue 1002 - The database returned an unexpected error.",
+                        }
+                    ],
+                },
+            )
+        ]
+
+        msg = "line 1:8: Column 'bogus' cannot be resolved"
+        result = PrestoEngineSpec.extract_errors(Exception(msg))
+        assert result == [
+            SupersetError(
+                message='We can\'t seem to resolve the column "bogus" at line 1:8.',
+                error_type=SupersetErrorType.COLUMN_DOES_NOT_EXIST_ERROR,
+                level=ErrorLevel.ERROR,
+                extra={
+                    "engine_name": "Presto",
+                    "issue_codes": [
+                        {
+                            "code": 1003,
+                            "message": "Issue 1003 - There is a syntax error in the SQL query. Perhaps there was a misspelling or a typo.",
+                        },
+                        {
+                            "code": 1004,
+                            "message": "Issue 1004 - The column was deleted or renamed in the database.",
+                        },
+                    ],
+                },
+            )
+        ]
+
+        msg = "line 1:15: Table 'tpch.tiny.region2' does not exist"
+        result = PrestoEngineSpec.extract_errors(Exception(msg))
+        assert result == [
+            SupersetError(
+                message="The table \"'tpch.tiny.region2'\" does not exist. A valid table must be used to run this query.",
+                error_type=SupersetErrorType.TABLE_DOES_NOT_EXIST_ERROR,
+                level=ErrorLevel.ERROR,
+                extra={
+                    "engine_name": "Presto",
+                    "issue_codes": [
+                        {
+                            "code": 1003,
+                            "message": "Issue 1003 - There is a syntax error in the SQL query. Perhaps there was a misspelling or a typo.",
+                        },
+                        {
+                            "code": 1005,
+                            "message": "Issue 1005 - The table was deleted or renamed in the database.",
+                        },
+                    ],
+                },
+            )
+        ]
+
+        msg = "line 1:15: Schema 'tin' does not exist"
+        result = PrestoEngineSpec.extract_errors(Exception(msg))
+        assert result == [
+            SupersetError(
+                message='The schema "tin" does not exist. A valid schema must be used to run this query.',
+                error_type=SupersetErrorType.SCHEMA_DOES_NOT_EXIST_ERROR,
+                level=ErrorLevel.ERROR,
+                extra={
+                    "engine_name": "Presto",
+                    "issue_codes": [
+                        {
+                            "code": 1003,
+                            "message": "Issue 1003 - There is a syntax error in the SQL query. Perhaps there was a misspelling or a typo.",
+                        },
+                        {
+                            "code": 1016,
+                            "message": "Issue 1005 - The schema was deleted or renamed in the database.",
+                        },
+                    ],
+                },
+            )
+        ]
+
+        msg = b"Access Denied: Invalid credentials"
+        result = PrestoEngineSpec.extract_errors(Exception(msg), {"username": "alice"})
+        assert result == [
+            SupersetError(
+                message='Either the username "alice" or the password is incorrect.',
+                error_type=SupersetErrorType.CONNECTION_ACCESS_DENIED_ERROR,
+                level=ErrorLevel.ERROR,
+                extra={
+                    "engine_name": "Presto",
+                    "issue_codes": [
+                        {
+                            "code": 1014,
+                            "message": "Issue 1014 - Either the username or the password is wrong.",
+                        }
+                    ],
+                },
+            )
+        ]
+
+        msg = "Failed to establish a new connection: [Errno 8] nodename nor servname provided, or not known"
+        result = PrestoEngineSpec.extract_errors(
+            Exception(msg), {"hostname": "badhost"}
+        )
+        assert result == [
+            SupersetError(
+                message='The hostname "badhost" cannot be resolved.',
+                error_type=SupersetErrorType.CONNECTION_INVALID_HOSTNAME_ERROR,
+                level=ErrorLevel.ERROR,
+                extra={
+                    "engine_name": "Presto",
+                    "issue_codes": [
+                        {
+                            "code": 1007,
+                            "message": "Issue 1007 - The hostname provided can't be resolved.",
+                        }
+                    ],
+                },
+            )
+        ]
+
+        msg = "Failed to establish a new connection: [Errno 60] Operation timed out"
+        result = PrestoEngineSpec.extract_errors(
+            Exception(msg), {"hostname": "badhost", "port": 12345}
+        )
+        assert result == [
+            SupersetError(
+                message='The host "badhost" might be down, and can\'t be reached on port 12345.',
+                error_type=SupersetErrorType.CONNECTION_HOST_DOWN_ERROR,
+                level=ErrorLevel.ERROR,
+                extra={
+                    "engine_name": "Presto",
+                    "issue_codes": [
+                        {
+                            "code": 1009,
+                            "message": "Issue 1009 - The host might be down, and can't be reached on the provided port.",
+                        }
+                    ],
+                },
+            )
+        ]
+
+        msg = "Failed to establish a new connection: [Errno 61] Connection refused"
+        result = PrestoEngineSpec.extract_errors(
+            Exception(msg), {"hostname": "badhost", "port": 12345}
+        )
+        assert result == [
+            SupersetError(
+                message='Port 12345 on hostname "badhost" refused the connection.',
+                error_type=SupersetErrorType.CONNECTION_PORT_CLOSED_ERROR,
+                level=ErrorLevel.ERROR,
+                extra={
+                    "engine_name": "Presto",
+                    "issue_codes": [
+                        {"code": 1008, "message": "Issue 1008 - The port is closed."}
+                    ],
+                },
+            )
+        ]
+
+        msg = "line 1:15: Catalog 'wrong' does not exist"
+        result = PrestoEngineSpec.extract_errors(Exception(msg))
+        assert result == [
+            SupersetError(
+                message='Unable to connect to catalog named "wrong".',
+                error_type=SupersetErrorType.CONNECTION_UNKNOWN_DATABASE_ERROR,
+                level=ErrorLevel.ERROR,
+                extra={
+                    "engine_name": "Presto",
+                    "issue_codes": [
+                        {
+                            "code": 1015,
+                            "message": "Issue 1015 - Either the database is spelled incorrectly or does not exist.",
+                        }
+                    ],
+                },
+            )
+        ]
+
+
+def test_is_readonly():
+    def is_readonly(sql: str) -> bool:
+        return PrestoEngineSpec.is_readonly_query(ParsedQuery(sql))
+
+    assert not is_readonly("SET hivevar:desc='Legislators'")
+    assert not is_readonly("UPDATE t1 SET col1 = NULL")
+    assert not is_readonly("INSERT OVERWRITE TABLE tabB SELECT a.Age FROM TableA")
+    assert is_readonly("SHOW LOCKS test EXTENDED")
+    assert is_readonly("EXPLAIN SELECT 1")
+    assert is_readonly("SELECT 1")
+    assert is_readonly("WITH (SELECT 1) bla SELECT * from bla")

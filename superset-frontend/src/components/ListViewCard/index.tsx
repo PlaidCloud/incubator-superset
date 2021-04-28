@@ -19,15 +19,9 @@
 import React from 'react';
 import { styled } from '@superset-ui/core';
 import Icon from 'src/components/Icon';
-import { Card, Skeleton, ThinSkeleton } from 'src/common/components';
+import { AntdCard, Skeleton, ThinSkeleton } from 'src/common/components';
+import { Tooltip } from 'src/components/Tooltip';
 import ImageLoader, { BackgroundPosition } from './ImageLoader';
-
-const MenuIcon = styled(Icon)`
-  width: ${({ theme }) => theme.gridUnit * 4}px;
-  height: ${({ theme }) => theme.gridUnit * 4}px;
-  position: relative;
-  top: ${({ theme }) => theme.gridUnit / 2}px;
-`;
 
 const ActionsWrapper = styled.div`
   width: 64px;
@@ -35,8 +29,10 @@ const ActionsWrapper = styled.div`
   justify-content: space-between;
 `;
 
-const StyledCard = styled(Card)`
+const StyledCard = styled(AntdCard)`
   border: 1px solid #d9dbe4;
+  border-radius: ${({ theme }) => theme.gridUnit}px;
+  overflow: hidden;
 
   .ant-card-body {
     padding: ${({ theme }) => theme.gridUnit * 4}px
@@ -80,6 +76,7 @@ const StyledCard = styled(Card)`
 
 const Cover = styled.div`
   height: 264px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.grayscale.light2};
   overflow: hidden;
 
   .cover-footer {
@@ -141,17 +138,20 @@ const SkeletonActions = styled(Skeleton.Button)`
 
 const paragraphConfig = { rows: 1, width: 150 };
 interface CardProps {
-  title: React.ReactNode;
+  title?: React.ReactNode;
   url?: string;
-  imgURL: string;
-  imgFallbackURL: string;
+  imgURL?: string;
+  imgFallbackURL?: string;
   imgPosition?: BackgroundPosition;
   description: string;
-  loading: boolean;
+  loading?: boolean;
   titleRight?: React.ReactNode;
   coverLeft?: React.ReactNode;
   coverRight?: React.ReactNode;
-  actions: React.ReactNode;
+  actions?: React.ReactNode | null;
+  rows?: number | string;
+  avatar?: string;
+  cover?: React.ReactNode | null;
 }
 
 function ListViewCard({
@@ -164,37 +164,41 @@ function ListViewCard({
   coverLeft,
   coverRight,
   actions,
+  avatar,
   loading,
   imgPosition = 'top',
+  cover,
 }: CardProps) {
   return (
     <StyledCard
       data-test="styled-card"
       cover={
-        <Cover>
-          <a href={url}>
-            <div className="gradient-container">
-              <ImageLoader
-                src={imgURL}
-                fallback={imgFallbackURL}
-                isLoading={loading}
-                position={imgPosition}
-              />
-            </div>
-          </a>
-          <CoverFooter className="cover-footer">
-            {!loading && coverLeft && (
-              <CoverFooterLeft>{coverLeft}</CoverFooterLeft>
-            )}
-            {!loading && coverRight && (
-              <CoverFooterRight>{coverRight}</CoverFooterRight>
-            )}
-          </CoverFooter>
-        </Cover>
+        cover || (
+          <Cover>
+            <a href={url}>
+              <div className="gradient-container">
+                <ImageLoader
+                  src={imgURL || ''}
+                  fallback={imgFallbackURL || ''}
+                  isLoading={loading}
+                  position={imgPosition}
+                />
+              </div>
+            </a>
+            <CoverFooter className="cover-footer">
+              {!loading && coverLeft && (
+                <CoverFooterLeft>{coverLeft}</CoverFooterLeft>
+              )}
+              {!loading && coverRight && (
+                <CoverFooterRight>{coverRight}</CoverFooterRight>
+              )}
+            </CoverFooter>
+          </Cover>
+        )
       }
     >
       {loading && (
-        <Card.Meta
+        <AntdCard.Meta
           title={
             <>
               <TitleContainer>
@@ -217,19 +221,21 @@ function ListViewCard({
         />
       )}
       {!loading && (
-        <Card.Meta
+        <AntdCard.Meta
           title={
-            <>
-              <TitleContainer>
+            <TitleContainer>
+              <Tooltip title={title}>
                 <TitleLink href={url}>{title}</TitleLink>
-                {titleRight && <div className="title-right"> {titleRight}</div>}
-                <div className="card-actions" data-test="card-actions">
-                  {actions}
-                </div>
-              </TitleContainer>
-            </>
+              </Tooltip>
+              {titleRight && <div className="title-right"> {titleRight}</div>}
+              <div className="card-actions" data-test="card-actions">
+                {actions}
+              </div>
+            </TitleContainer>
           }
           description={description}
+          // @ts-ignore
+          avatar={avatar ? <Icon name={avatar} /> : null}
         />
       )}
     </StyledCard>
@@ -237,5 +243,5 @@ function ListViewCard({
 }
 
 ListViewCard.Actions = ActionsWrapper;
-ListViewCard.MenuIcon = MenuIcon;
+
 export default ListViewCard;

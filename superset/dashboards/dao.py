@@ -20,9 +20,12 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.exc import SQLAlchemyError
 
+from superset import security_manager
 from superset.dao.base import BaseDAO
-from superset.dashboards.filters import DashboardFilter
+from superset.dashboards.commands.exceptions import DashboardNotFoundError
+from superset.dashboards.filters import DashboardAccessFilter
 from superset.extensions import db
+from superset.models.core import FavStar, FavStarClassName
 from superset.models.dashboard import Dashboard
 from superset.models.slice import Slice
 from superset.utils.dashboard_filter_scopes_converter import copy_filter_scopes
@@ -32,7 +35,24 @@ logger = logging.getLogger(__name__)
 
 class DashboardDAO(BaseDAO):
     model_cls = Dashboard
-    base_filter = DashboardFilter
+    base_filter = DashboardAccessFilter
+
+    @staticmethod
+    def get_by_id_or_slug(id_or_slug: str) -> Dashboard:
+        dashboard = Dashboard.get(id_or_slug)
+        if not dashboard:
+            raise DashboardNotFoundError()
+        security_manager.raise_for_dashboard_access(dashboard)
+        return dashboard
+
+    @staticmethod
+    def get_datasets_for_dashboard(id_or_slug: str) -> List[Any]:
+        dashboard = DashboardDAO.get_by_id_or_slug(id_or_slug)
+        return dashboard.datasets_trimmed_for_slices()
+
+    @staticmethod
+    def get_charts_for_dashboard(id_or_slug: str) -> List[Slice]:
+        return DashboardDAO.get_by_id_or_slug(id_or_slug).slices
 
     @staticmethod
     def validate_slug_uniqueness(slug: str) -> bool:
@@ -154,3 +174,19 @@ class DashboardDAO(BaseDAO):
         if data.get("label_colors"):
             md["label_colors"] = data.get("label_colors")
         dashboard.json_metadata = json.dumps(md)
+
+    @staticmethod
+    def favorited_ids(
+        dashboards: List[Dashboard], current_user_id: int
+    ) -> List[FavStar]:
+        ids = [dash.id for dash in dashboards]
+        return [
+            star.obj_id
+            for star in db.session.query(FavStar.obj_id)
+            .filter(
+                FavStar.class_name == FavStarClassName.DASHBOARD,
+                FavStar.obj_id.in_(ids),
+                FavStar.user_id == current_user_id,
+            )
+            .all()
+        ]

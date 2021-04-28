@@ -20,19 +20,18 @@ import { Provider } from 'react-redux';
 import React from 'react';
 import { styledMount as mount } from 'spec/helpers/theming';
 import sinon from 'sinon';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 
 import DashboardComponent from 'src/dashboard/containers/DashboardComponent';
-import DeleteComponentModal from 'src/dashboard/components/DeleteComponentModal';
 import DragDroppable from 'src/dashboard/components/dnd/DragDroppable';
 import EditableTitle from 'src/components/EditableTitle';
-import WithPopoverMenu from 'src/dashboard/components/menu/WithPopoverMenu';
 import Tab, {
   RENDER_TAB,
   RENDER_TAB_CONTENT,
 } from 'src/dashboard/components/gridComponents/Tab';
-import WithDragDropContext from '../../helpers/WithDragDropContext';
-import { dashboardLayoutWithTabs } from '../../fixtures/mockDashboardLayout';
-import { mockStoreWithTabs } from '../../fixtures/mockStore';
+import { dashboardLayoutWithTabs } from 'spec/fixtures/mockDashboardLayout';
+import { mockStoreWithTabs } from 'spec/fixtures/mockStore';
 
 describe('Tabs', () => {
   const props = {
@@ -44,6 +43,8 @@ describe('Tabs', () => {
     depth: 1,
     editMode: false,
     renderType: RENDER_TAB,
+    filters: {},
+    setDirectPathToChild: jest.fn(),
     onDropOnTab() {},
     onDeleteTab() {},
     availableColumnCount: 12,
@@ -63,9 +64,9 @@ describe('Tabs', () => {
     // otherwise we cannot assert on DragDroppable children
     const wrapper = mount(
       <Provider store={mockStoreWithTabs}>
-        <WithDragDropContext>
+        <DndProvider backend={HTML5Backend}>
           <Tab {...props} {...overrideProps} />
-        </WithDragDropContext>
+        </DndProvider>
       </Provider>,
     );
     return wrapper;
@@ -81,7 +82,9 @@ describe('Tabs', () => {
       const wrapper = setup();
       const title = wrapper.find(EditableTitle);
       expect(title).toHaveLength(1);
-      expect(title.find('input').prop('value')).toBe(props.component.meta.text);
+      expect(title.find('.editable-title')).toHaveText(
+        props.component.meta.defaultText,
+      );
     });
 
     it('should call updateComponents when EditableTitle changes', () => {
@@ -93,42 +96,6 @@ describe('Tabs', () => {
       expect(updateComponents.getCall(0).args[0].TAB_ID.meta.text).toBe(
         'New title',
       );
-    });
-
-    it('should render a WithPopoverMenu', () => {
-      const wrapper = setup();
-      expect(wrapper.find(WithPopoverMenu)).toExist();
-    });
-
-    it('should render a DeleteComponentModal when focused if its not the only tab', () => {
-      let wrapper = setup();
-      wrapper.find(WithPopoverMenu).simulate('click'); // focus
-      expect(wrapper.find(DeleteComponentModal)).not.toExist();
-
-      wrapper = setup({ editMode: true });
-      wrapper.find(WithPopoverMenu).simulate('click');
-      expect(wrapper.find(DeleteComponentModal)).toExist();
-
-      wrapper = setup({
-        editMode: true,
-        parentComponent: {
-          ...props.parentComponent,
-          children: props.parentComponent.children.slice(0, 1),
-        },
-      });
-      wrapper.find(WithPopoverMenu).simulate('click');
-      expect(wrapper.find(DeleteComponentModal)).not.toExist();
-    });
-
-    it('should show modal when clicked delete icon', () => {
-      const deleteComponent = sinon.spy();
-      const wrapper = setup({ editMode: true, deleteComponent });
-      wrapper.find(WithPopoverMenu).simulate('click'); // focus
-      wrapper.find('.icon-button').simulate('click');
-
-      const modal = document.getElementsByClassName('ant-modal');
-      expect(modal).toHaveLength(1);
-      expect(deleteComponent.callCount).toBe(0);
     });
   });
 

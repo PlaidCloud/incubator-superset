@@ -75,9 +75,15 @@ export const Table = styled.table`
       min-width: 200px;
     }
 
+    span {
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      line-height: 2;
+    }
+
     svg {
       display: inline-block;
-      top: 6px;
       position: relative;
     }
   }
@@ -156,6 +162,7 @@ export const Table = styled.table`
   .table-row {
     .actions {
       opacity: 0;
+      font-size: ${({ theme }) => theme.typography.sizes.xl}px;
     }
 
     &:hover {
@@ -201,17 +208,17 @@ export const Table = styled.table`
 
 Table.displayName = 'table';
 
-export default function TableCollection({
-  getTableProps,
-  getTableBodyProps,
-  prepareRow,
-  headerGroups,
-  columns,
-  rows,
-  loading,
-  highlightRowId,
-}: TableCollectionProps) {
-  return (
+export default React.memo(
+  ({
+    getTableProps,
+    getTableBodyProps,
+    prepareRow,
+    headerGroups,
+    columns,
+    rows,
+    loading,
+    highlightRowId,
+  }: TableCollectionProps) => (
     <Table
       {...getTableProps()}
       className="table table-hover"
@@ -262,7 +269,7 @@ export default function TableCollection({
                       [column.size || '']: column.size,
                     })}
                   >
-                    <span className="loading-bar">
+                    <span className="loading-bar" role="progressbar">
                       <span>LOADING</span>
                     </span>
                   </td>
@@ -291,7 +298,7 @@ export default function TableCollection({
                   const columnCellProps = cell.column.cellProps || {};
                   return (
                     <td
-                      data-test="table-cell"
+                      data-test="table-row-cell"
                       className={cx('table-cell', {
                         'table-cell-loader': loading,
                         [cell.column.size || '']: cell.column.size,
@@ -299,7 +306,10 @@ export default function TableCollection({
                       {...cell.getCellProps()}
                       {...columnCellProps}
                     >
-                      <span className={cx({ 'loading-bar': loading })}>
+                      <span
+                        className={cx({ 'loading-bar': loading })}
+                        role={loading ? 'progressbar' : undefined}
+                      >
                         <span data-test="cell-text">{cell.render('Cell')}</span>
                       </span>
                     </td>
@@ -310,5 +320,5 @@ export default function TableCollection({
           })}
       </tbody>
     </Table>
-  );
-}
+  ),
+);

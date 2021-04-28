@@ -16,26 +16,25 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { action } from '@storybook/addon-actions';
-import { withKnobs, boolean, select } from '@storybook/addon-knobs';
-import Button from 'src/components/Button';
-import Modal from './Modal';
-import Tabs, { EditableTabs } from './Tabs';
-import AntdPopover from './Popover';
-import AntdTooltip from './Tooltip';
-import { Menu } from '.';
-import { Dropdown } from './Dropdown';
+import { withKnobs, boolean } from '@storybook/addon-knobs';
+import { CronPicker, CronError } from 'src/components/CronPicker';
+import Modal from 'src/components/Modal';
+import InfoTooltip from 'src/components/InfoTooltip';
+import { Dropdown } from 'src/components/Dropdown';
+import Tabs, { EditableTabs } from 'src/components/Tabs';
+import { Menu, Input, Divider } from '.';
 
 export default {
-  title: 'Common Components',
+  title: 'Common components',
   decorators: [withKnobs],
 };
 
 export const StyledModal = () => (
   <Modal
     disablePrimaryButton={false}
-    onHandledPrimaryAction={action('Primary Action')}
+    onHandledPrimaryAction={action('Primary action')}
     primaryButtonName="Danger"
     primaryButtonType="danger"
     show
@@ -55,14 +54,14 @@ export const StyledTabs = () => (
     <Tabs.TabPane
       tab="Tab 1"
       key="1"
-      disabled={boolean('Tab 1 Disabled', false)}
+      disabled={boolean('Tab 1 disabled', false)}
     >
       Tab 1 Content!
     </Tabs.TabPane>
     <Tabs.TabPane
       tab="Tab 2"
       key="2"
-      disabled={boolean('Tab 2 Disabled', false)}
+      disabled={boolean('Tab 2 disabled', false)}
     >
       Tab 2 Content!
     </Tabs.TabPane>
@@ -78,14 +77,14 @@ export const StyledEditableTabs = () => (
     <Tabs.TabPane
       tab="Tab 1"
       key="1"
-      disabled={boolean('Tab 1 Disabled', false)}
+      disabled={boolean('Tab 1 disabled', false)}
     >
       Tab 1 Content!
     </Tabs.TabPane>
     <Tabs.TabPane
       tab="Tab 2"
       key="2"
-      disabled={boolean('Tab 2 Disabled', false)}
+      disabled={boolean('Tab 2 disabled', false)}
     >
       Tab 2 Content!
     </Tabs.TabPane>
@@ -113,65 +112,99 @@ export const TabsWithDropdownMenu = () => (
         </>
       }
       key="1"
-      disabled={boolean('Tab 1 Disabled', false)}
+      disabled={boolean('Tab 1 disabled', false)}
     >
       Tab 1 Content!
     </Tabs.TabPane>
   </EditableTabs>
 );
 
-export const Popover = () => (
-  <AntdPopover
-    trigger={select('Trigger', ['click', 'hover', 'focus'], 'click')}
-    placement={select(
-      'Placement',
-      [
-        'topLeft',
-        'top',
-        'topRight',
-        'leftTop',
-        'left',
-        'leftBottom',
-        'rightTop',
-        'right',
-        'rightBottom',
-        'bottomLeft',
-        'bottom',
-        'bottomRight',
-      ],
-      'topLeft',
-    )}
-    arrowPointAtCenter={boolean('Arrow point at center', false)}
-    content={<div>CONTENT</div>}
-  >
-    <Button>TRIGGER</Button>
-  </AntdPopover>
-);
+export const StyledInfoTooltip = (args: any) => {
+  const styles = {
+    padding: '100px 0 0 200px',
+  };
 
-export const Tooltip = () => (
-  <AntdTooltip
-    title="This is a Tooltip"
-    trigger={select('Trigger', ['click', 'hover', 'focus'], 'click')}
-    placement={select(
-      'Placement',
-      [
-        'topLeft',
-        'top',
-        'topRight',
-        'leftTop',
+  return (
+    <div style={styles}>
+      <InfoTooltip tooltip="This is the text that will display!" {...args} />
+    </div>
+  );
+};
+
+StyledInfoTooltip.args = {
+  placement: 'right',
+  trigger: 'hover',
+};
+
+StyledInfoTooltip.argTypes = {
+  placement: {
+    name: 'Placement',
+    control: {
+      type: 'select',
+      options: [
+        'bottom',
         'left',
+        'right',
+        'top',
+        'topLeft',
+        'topRight',
+        'bottomLeft',
+        'bottomRight',
+        'leftTop',
         'leftBottom',
         'rightTop',
-        'right',
         'rightBottom',
-        'bottomLeft',
-        'bottom',
-        'bottomRight',
       ],
-      'topLeft',
-    )}
-    arrowPointAtCenter={boolean('Arrow point at center', false)}
-  >
-    <Button>A button with tooltip</Button>
-  </AntdTooltip>
-);
+    },
+  },
+
+  trigger: {
+    name: 'Trigger',
+    control: {
+      type: 'select',
+      options: ['hover', 'click'],
+    },
+  },
+};
+
+export function StyledCronPicker() {
+  // @ts-ignore
+  const inputRef = useRef<Input>(null);
+  const defaultValue = '30 5 * * 1,6';
+  const [value, setValue] = useState(defaultValue);
+  const customSetValue = useCallback(
+    (newValue: string) => {
+      setValue(newValue);
+      inputRef.current?.setValue(newValue);
+    },
+    [inputRef],
+  );
+  const [error, onError] = useState<CronError>();
+
+  return (
+    <div>
+      <Input
+        ref={inputRef}
+        onBlur={event => {
+          setValue(event.target.value);
+        }}
+        onPressEnter={() => {
+          setValue(inputRef.current?.input.value || '');
+        }}
+      />
+
+      <Divider />
+
+      <CronPicker
+        clearButton={false}
+        value={value}
+        setValue={customSetValue}
+        onError={onError}
+      />
+
+      <p style={{ marginTop: 20 }}>
+        Error: {error ? error.description : 'undefined'}
+      </p>
+    </div>
+  );
+}

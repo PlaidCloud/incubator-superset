@@ -22,7 +22,7 @@ import rison from 'rison';
 
 import { addDangerToast } from 'src/messageToasts/actions';
 import { getDatasourceParameter } from 'src/modules/utils';
-import getClientErrorObject from 'src/utils/getClientErrorObject';
+import { getClientErrorObject } from 'src/utils/getClientErrorObject';
 
 export const SET_ALL_SLICES = 'SET_ALL_SLICES';
 export function setAllSlices(slices) {
@@ -49,58 +49,55 @@ export function fetchAllSlices(userId) {
       return SupersetClient.get({
         endpoint: `/api/v1/chart/?q=${rison.encode({
           columns: [
-            'changed_on_humanized',
-            'changed_on',
+            'changed_on_delta_humanized',
+            'changed_on_utc',
             'datasource_id',
             'datasource_type',
-            'datasource_link',
+            'datasource_url',
             'datasource_name_text',
             'description_markeddown',
             'description',
-            'edit_url',
             'id',
-            'modified',
             'params',
             'slice_name',
-            'slice_url',
+            'url',
             'viz_type',
           ],
           filters: [{ col: 'owners', opr: 'rel_m_m', value: userId }],
           page_size: FETCH_SLICES_PAGE_SIZE,
+          order_column: 'changed_on_delta_humanized',
+          order_direction: 'desc',
         })}`,
       })
         .then(({ json }) => {
           const slices = {};
           json.result.forEach(slice => {
             let form_data = JSON.parse(slice.params);
-            let { datasource } = form_data;
-            if (!datasource) {
-              datasource = getDatasourceParameter(
-                slice.datasource_id,
-                slice.datasource_type,
-              );
-              form_data = {
-                ...form_data,
-                datasource,
-              };
-            }
-            if (['markup', 'separator'].indexOf(slice.viz_type) === -1) {
-              slices[slice.id] = {
-                slice_id: slice.id,
-                slice_url: slice.slice_url,
-                slice_name: slice.slice_name,
-                edit_url: slice.edit_url,
-                form_data,
-                datasource_name: slice.datasource_name_text,
-                datasource_link: slice.datasource_link,
-                changed_on: new Date(slice.changed_on).getTime(),
-                description: slice.description,
-                description_markdown: slice.description_markeddown,
-                viz_type: slice.viz_type,
-                modified: slice.modified,
-                changed_on_humanized: slice.changed_on_humanized,
-              };
-            }
+            form_data = {
+              ...form_data,
+              // force using datasource stored in relational table prop
+              datasource:
+                getDatasourceParameter(
+                  slice.datasource_id,
+                  slice.datasource_type,
+                ) || form_data.datasource,
+            };
+            slices[slice.id] = {
+              slice_id: slice.id,
+              slice_url: slice.url,
+              slice_name: slice.slice_name,
+              form_data,
+              datasource_name: slice.datasource_name_text,
+              datasource_url: slice.datasource_url,
+              datasource_id: slice.datasource_id,
+              datasource_type: slice.datasource_type,
+              changed_on: new Date(slice.changed_on_utc).getTime(),
+              description: slice.description,
+              description_markdown: slice.description_markeddown,
+              viz_type: slice.viz_type,
+              modified: slice.changed_on_delta_humanized,
+              changed_on_humanized: slice.changed_on_delta_humanized,
+            };
           });
 
           return dispatch(setAllSlices(slices));

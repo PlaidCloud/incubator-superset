@@ -18,7 +18,8 @@ import logging
 
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 
-from superset.constants import RouteMethod
+from superset.constants import MODEL_API_RW_METHOD_PERMISSION_MAP, RouteMethod
+from superset.databases.filters import DatabaseFilter
 from superset.models.sql_lab import Query
 from superset.queries.filters import QueryFilter
 from superset.queries.schemas import openapi_spec_methods_override
@@ -32,42 +33,64 @@ class QueryRestApi(BaseSupersetModelRestApi):
     datamodel = SQLAInterface(Query)
 
     resource_name = "query"
-    allow_browser_login = True
-    include_route_methods = {RouteMethod.GET, RouteMethod.GET_LIST, RouteMethod.RELATED}
 
-    class_permission_name = "QueryView"
+    class_permission_name = "Query"
+    method_permission_name = MODEL_API_RW_METHOD_PERMISSION_MAP
+
+    allow_browser_login = True
+    include_route_methods = {
+        RouteMethod.GET,
+        RouteMethod.GET_LIST,
+        RouteMethod.RELATED,
+        RouteMethod.DISTINCT,
+    }
+
     list_columns = [
-        "user.username",
+        "id",
+        "changed_on",
         "database.database_name",
-        "status",
-        "start_time",
-        "end_time",
-    ]
-    show_columns = [
-        "client_id",
-        "tmp_table_name",
-        "tmp_schema_name",
-        "status",
-        "tab_name",
-        "sql_editor_id",
-        "database.id",
+        "executed_sql",
+        "rows",
         "schema",
         "sql",
-        "select_sql",
+        "sql_tables",
+        "status",
+        "tab_name",
+        "user.first_name",
+        "user.id",
+        "user.last_name",
+        "user.username",
+        "start_time",
+        "end_time",
+        "tmp_table_name",
+        "tracking_url",
+    ]
+    show_columns = [
+        "id",
+        "changed_on",
+        "client_id",
+        "database.id",
+        "end_result_backend_time",
+        "end_time",
+        "error_message",
         "executed_sql",
         "limit",
+        "progress",
+        "results_key",
+        "rows",
+        "schema",
         "select_as_cta",
         "select_as_cta_used",
-        "progress",
-        "rows",
-        "error_message",
-        "results_key",
-        "start_time",
+        "select_sql",
+        "sql",
+        "sql_editor_id",
         "start_running_time",
-        "end_time",
-        "end_result_backend_time",
+        "start_time",
+        "status",
+        "tab_name",
+        "tmp_schema_name",
+        "tmp_table_name",
         "tracking_url",
-        "changed_on",
     ]
     base_filters = [["id", QueryFilter, lambda: []]]
     base_order = ("changed_on", "desc")
@@ -75,7 +98,24 @@ class QueryRestApi(BaseSupersetModelRestApi):
     openapi_spec_tag = "Queries"
     openapi_spec_methods = openapi_spec_methods_override
 
+    order_columns = [
+        "changed_on",
+        "database.database_name",
+        "rows",
+        "schema",
+        "start_time",
+        "sql",
+        "tab_name",
+        "user.first_name",
+    ]
+
     related_field_filters = {
         "created_by": RelatedFieldFilter("first_name", FilterRelatedOwners),
+        "user": RelatedFieldFilter("first_name", FilterRelatedOwners),
     }
-    allowed_rel_fields = {"user"}
+
+    search_columns = ["changed_on", "database", "sql", "status", "user", "start_time"]
+
+    filter_rel_fields = {"database": [["id", DatabaseFilter, lambda: []]]}
+    allowed_rel_fields = {"database", "user"}
+    allowed_distinct_fields = {"status"}

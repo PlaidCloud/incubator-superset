@@ -23,6 +23,7 @@ import { shallow } from 'enzyme';
 import { Select, CreatableSelect } from 'src/components/Select';
 import OnPasteSelect from 'src/components/Select/OnPasteSelect';
 import SelectControl from 'src/explore/components/controls/SelectControl';
+import { styledMount as mount } from 'spec/helpers/theming';
 
 const defaultProps = {
   choices: [
@@ -45,25 +46,6 @@ describe('SelectControl', () => {
 
   beforeEach(() => {
     wrapper = shallow(<SelectControl {...defaultProps} />);
-  });
-
-  it('renders with Select by default', () => {
-    expect(wrapper.find(OnPasteSelect)).not.toExist();
-    expect(wrapper.findWhere(x => x.type() === Select)).toHaveLength(1);
-  });
-
-  it('renders with OnPasteSelect when multi', () => {
-    wrapper.setProps({ multi: true });
-    expect(wrapper.find(OnPasteSelect)).toExist();
-    expect(wrapper.findWhere(x => x.type() === Select)).toHaveLength(0);
-  });
-
-  it('renders with Creatable when freeForm', () => {
-    wrapper.setProps({ freeForm: true });
-    expect(wrapper.find(OnPasteSelect)).not.toExist();
-    expect(wrapper.findWhere(x => x.type() === CreatableSelect)).toHaveLength(
-      1,
-    );
   });
 
   it('uses Select in onPasteSelect when freeForm=false', () => {
@@ -96,8 +78,143 @@ describe('SelectControl', () => {
       onChange: sinon.spy(),
     };
     wrapper.setProps(selectAllProps);
-    wrapper.instance().onChange([{ meta: true, value: 'Select All' }]);
+    wrapper.instance().onChange([{ meta: true, value: 'Select all' }]);
     expect(selectAllProps.onChange.calledWith(expectedValues)).toBe(true);
+  });
+
+  describe('render', () => {
+    it('renders with Select by default', () => {
+      expect(wrapper.find(OnPasteSelect)).not.toExist();
+      expect(wrapper.findWhere(x => x.type() === Select)).toHaveLength(1);
+    });
+
+    it('renders with OnPasteSelect when multi', () => {
+      wrapper.setProps({ multi: true });
+      expect(wrapper.find(OnPasteSelect)).toExist();
+      expect(wrapper.findWhere(x => x.type() === Select)).toHaveLength(0);
+    });
+
+    it('renders with Creatable when freeForm', () => {
+      wrapper.setProps({ freeForm: true });
+      expect(wrapper.find(OnPasteSelect)).not.toExist();
+      expect(wrapper.findWhere(x => x.type() === CreatableSelect)).toHaveLength(
+        1,
+      );
+    });
+    describe('empty placeholder', () => {
+      describe('withMulti', () => {
+        it('does not show a placeholder if there are no choices', () => {
+          const withMulti = mount(
+            <SelectControl
+              {...defaultProps}
+              choices={[]}
+              multi
+              placeholder="add something"
+            />,
+          );
+          expect(withMulti.html()).not.toContain('option(s');
+        });
+      });
+      describe('withSingleChoice', () => {
+        it('does not show a placeholder if there are no choices', () => {
+          const singleChoice = mount(
+            <SelectControl
+              {...defaultProps}
+              choices={[]}
+              multi
+              placeholder="add something"
+            />,
+          );
+          expect(singleChoice.html()).not.toContain('option(s');
+        });
+      });
+      describe('default placeholder', () => {
+        it('does not show a placeholder if there are no options', () => {
+          const defaultPlaceholder = mount(
+            <SelectControl {...defaultProps} choices={[]} multi />,
+          );
+          expect(defaultPlaceholder.html()).not.toContain('option(s');
+        });
+      });
+      describe('all choices selected', () => {
+        it('does not show a placeholder', () => {
+          const allChoicesSelected = mount(
+            <SelectControl
+              {...defaultProps}
+              multi
+              value={['today', '1 year ago']}
+            />,
+          );
+          expect(allChoicesSelected.html()).not.toContain('option(s');
+        });
+      });
+    });
+    describe('when select is multi', () => {
+      it('does not render the placeholder when a selection has been made', () => {
+        wrapper = mount(
+          <SelectControl
+            {...defaultProps}
+            multi
+            value={['today']}
+            placeholder="add something"
+          />,
+        );
+        expect(wrapper.html()).not.toContain('add something');
+      });
+      it('shows numbers of options as a placeholder by default', () => {
+        wrapper = mount(<SelectControl {...defaultProps} multi />);
+        expect(wrapper.html()).toContain('2 option(s');
+      });
+      it('reduces the number of options in the placeholder by the value length', () => {
+        wrapper = mount(
+          <SelectControl {...defaultProps} multi value={['today']} />,
+        );
+        expect(wrapper.html()).toContain('1 option(s');
+      });
+    });
+    describe('when select is single', () => {
+      it('does not render the placeholder when a selection has been made', () => {
+        wrapper = mount(
+          <SelectControl
+            {...defaultProps}
+            value={50}
+            placeholder="add something"
+          />,
+        );
+        expect(wrapper.html()).not.toContain('add something');
+      });
+    });
+  });
+
+  describe('optionsRemaining', () => {
+    describe('isMulti', () => {
+      it('returns the options minus selected values', () => {
+        const wrapper = mount(
+          <SelectControl {...defaultProps} multi value={['today']} />,
+        );
+        expect(wrapper.instance().optionsRemaining()).toEqual(1);
+      });
+    });
+    describe('is not multi', () => {
+      it('returns the length of all options', () => {
+        wrapper = mount(
+          <SelectControl
+            {...defaultProps}
+            value={50}
+            placeholder="add something"
+          />,
+        );
+        expect(wrapper.instance().optionsRemaining()).toEqual(2);
+      });
+    });
+    describe('with Select all', () => {
+      it('does not count it', () => {
+        const props = { ...defaultProps, multi: true, allowAll: true };
+        const wrapper = mount(<SelectControl {...props} />);
+        expect(wrapper.instance().getOptions(props).length).toEqual(3);
+        expect(wrapper.instance().optionsRemaining()).toEqual(2);
+      });
+    });
   });
 
   describe('getOptions', () => {
@@ -117,9 +234,9 @@ describe('SelectControl', () => {
       };
       wrapper.setProps(selectAllProps);
       expect(wrapper.instance().getOptions(selectAllProps)).toContainEqual({
-        label: 'Select All',
+        label: 'Select all',
         meta: true,
-        value: 'Select All',
+        value: 'Select all',
       });
     });
 

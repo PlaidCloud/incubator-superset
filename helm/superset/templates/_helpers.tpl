@@ -49,16 +49,10 @@ Create chart name and version as used by the chart label.
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
-{{- define "superset-bootstrap" }}
-#!/bin/sh
-
-pip install {{ range .Values.additionalRequirements }}{{ . }} {{ end }}
-
-{{ end -}}
-
 {{- define "superset-config" }}
 import os
 import ssl
+from cachelib.redis import RedisCache
 from collections import OrderedDict
 from flask_appbuilder.security.manager import AUTH_DB, AUTH_OID
 from plaid.security import PlaidSecurityManager
@@ -84,6 +78,37 @@ SQLALCHEMY_DATABASE_URI = 'postgresql://{{ .Values.postgresql.postgresqlUsername
 PUBLIC_ROLE_LIKE_PLAID = False
 ADMIN_ENABLED = True
 SESSION_EXPIRATION = 600
+
+SQLALCHEMY_DATABASE_URI = f"postgresql+psycopg2://{env('DB_USER')}:{env('DB_PASS')}@{env('DB_HOST')}:{env('DB_PORT')}/{env('DB_NAME')}"
+SQLALCHEMY_TRACK_MODIFICATIONS = True
+SECRET_KEY = env('SECRET_KEY', 'thisISaSECRET_1234')
+
+# Flask-WTF flag for CSRF
+WTF_CSRF_ENABLED = True
+# Add endpoints that need to be exempt from CSRF protection
+WTF_CSRF_EXEMPT_LIST = []
+# A CSRF token that expires in 1 year
+WTF_CSRF_TIME_LIMIT = 60 * 60 * 24 * 365
+class CeleryConfig(object):
+  BROKER_URL = f"redis://{env('REDIS_HOST')}:{env('REDIS_PORT')}/0"
+  CELERY_IMPORTS = ('superset.sql_lab', )
+  CELERY_RESULT_BACKEND = f"redis://{env('REDIS_HOST')}:{env('REDIS_PORT')}/0"
+  CELERY_ANNOTATIONS = {'tasks.add': {'rate_limit': '10/s'}}
+
+CELERY_CONFIG = CeleryConfig
+RESULTS_BACKEND = RedisCache(
+      host=env('REDIS_HOST'),
+      port=env('REDIS_PORT'),
+      key_prefix='superset_results'
+)
+
+{{ if .Values.configOverrides }}
+# Overrides
+{{- range $key, $value := .Values.configOverrides }}
+# {{ $key }}
+{{ tpl $value $ }}
+{{- end }}
+{{- end }}
 
 ENABLE_CORS = False
 PREFERRED_URL_SCHEME = 'https'
@@ -425,5 +450,7 @@ PLAID_BASE_PERMISSIONS = {
         "[examples].(id:1)",
     },
 }
+
+DATA_CACHE_CONFIG = CACHE_CONFIG
 
 {{- end }}

@@ -19,14 +19,15 @@
 import React, { useMemo } from 'react';
 import PropTypes from 'prop-types';
 import moment from 'moment';
-import { ProgressBar, Well } from 'react-bootstrap';
+import Card from 'src/common/components/Card';
+import ProgressBar from 'src/components/ProgressBar';
 import Label from 'src/components/Label';
 import { t } from '@superset-ui/core';
 
 import TableView from 'src/components/TableView';
 import Button from 'src/components/Button';
 import { fDuration } from 'src/modules/dates';
-import Link from '../../components/Link';
+import { IconTooltip } from '../../components/IconTooltip';
 import ResultSet from './ResultSet';
 import ModalTrigger from '../../components/ModalTrigger';
 import HighlightedSql from './HighlightedSql';
@@ -118,34 +119,32 @@ const QueryTable = props => {
         );
         q.started = moment(q.startDttm).format('HH:mm:ss');
         q.querylink = (
-          <div style={{ width: '100px' }}>
-            <Button
-              buttonSize="small"
-              buttonStyle="link"
-              onClick={() => openQuery(q.queryId)}
-            >
-              <i className="fa fa-external-link m-r-3" />
-              {t('Edit')}
-            </Button>
-          </div>
+          <Button
+            buttonSize="small"
+            buttonStyle="link"
+            onClick={() => openQuery(q.queryId)}
+          >
+            <i className="fa fa-external-link m-r-3" />
+            {t('Edit')}
+          </Button>
         );
         q.sql = (
-          <Well>
+          <Card>
             <HighlightedSql
               sql={q.sql}
               rawSql={q.executedSql}
               shrink
               maxWidth={60}
             />
-          </Well>
+          </Card>
         );
         if (q.resultsKey) {
           q.output = (
             <ModalTrigger
               className="ResultsModal"
               triggerNode={
-                <Label bsStyle="info" className="pointer">
-                  {t('view results')}
+                <Label type="info" className="pointer">
+                  {t('View results')}
                 </Label>
               }
               modalTitle={t('Data preview')}
@@ -171,19 +170,14 @@ const QueryTable = props => {
           q.output = [schemaUsed, q.tempTable].filter(v => v).join('.');
         }
         q.progress = (
-          <ProgressBar
-            style={{ width: '75px' }}
-            striped
-            now={q.progress}
-            label={`${q.progress.toFixed(0)}%`}
-          />
+          <ProgressBar percent={parseInt(q.progress.toFixed(0), 10)} striped />
         );
         let errorTooltip;
         if (q.errorMessage) {
           errorTooltip = (
-            <Link tooltip={q.errorMessage}>
+            <IconTooltip tooltip={q.errorMessage}>
               <i className="fa fa-exclamation-circle text-danger" />
-            </Link>
+            </IconTooltip>
           );
         }
         q.state = (
@@ -193,23 +187,23 @@ const QueryTable = props => {
           </div>
         );
         q.actions = (
-          <div style={{ width: '75px' }}>
-            <Link
-              className="fa fa-pencil m-r-3"
+          <div>
+            <IconTooltip
+              className="fa fa-pencil m-r-3 pointer"
               onClick={() => restoreSql(query)}
               tooltip={t(
                 'Overwrite text in the editor with a query on this table',
               )}
               placement="top"
             />
-            <Link
-              className="fa fa-plus-circle m-r-3"
+            <IconTooltip
+              className="fa fa-plus-circle m-r-3 pointer"
               onClick={() => openQueryInNewTab(query)}
               tooltip={t('Run query in a new tab')}
               placement="top"
             />
-            <Link
-              className="fa fa-trash m-r-3"
+            <IconTooltip
+              className="fa fa-trash m-r-3 pointer"
               tooltip={t('Remove query from log')}
               onClick={() => removeQuery(query)}
             />

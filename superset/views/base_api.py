@@ -21,7 +21,7 @@ from typing import Any, Callable, cast, Dict, List, Optional, Set, Tuple, Type, 
 from apispec import APISpec
 from apispec.exceptions import DuplicateComponentNameError
 from flask import Blueprint, g, Response
-from flask_appbuilder import AppBuilder, ModelRestApi
+from flask_appbuilder import AppBuilder, Model, ModelRestApi
 from flask_appbuilder.api import expose, protect, rison, safe
 from flask_appbuilder.models.filters import BaseFilter, Filters
 from flask_appbuilder.models.sqla.filters import FilterStartsWith
@@ -31,10 +31,11 @@ from marshmallow import fields, Schema
 from sqlalchemy import and_, distinct, func
 from sqlalchemy.orm.query import Query
 
-from superset.extensions import db, security_manager
+from superset.extensions import db, event_logger, security_manager
 from superset.models.core import FavStar
 from superset.models.dashboard import Dashboard
 from superset.models.slice import Slice
+from superset.schemas import error_payload_content
 from superset.sql_lab import Query as SqllabQuery
 from superset.stats_logger import BaseStatsLogger
 from superset.typing import FlaskResponse
@@ -46,6 +47,7 @@ get_related_schema = {
     "properties": {
         "page_size": {"type": "integer"},
         "page": {"type": "integer"},
+        "include_ids": {"type": "array", "items": {"type": "integer"}},
         "filter": {"type": "string"},
     },
 }
@@ -76,7 +78,12 @@ def statsd_metrics(f: Callable[..., Any]) -> Callable[..., Any]:
     """
 
     def wraps(self: "BaseSupersetModelRestApi", *args: Any, **kwargs: Any) -> Response:
-        duration, response = time_function(f, self, *args, **kwargs)
+        try:
+            duration, response = time_function(f, self, *args, **kwargs)
+        except Exception as ex:
+            self.incr_stats("error", f.__name__)
+            raise ex
+
         self.send_stats_metrics(response, f.__name__, duration)
         return response
 
@@ -109,7 +116,10 @@ class BaseFavoriteFilter(BaseFilter):  # pylint: disable=too-few-public-methods
         if security_manager.current_user is None:
             return query
         users_favorite_query = db.session.query(FavStar.obj_id).filter(
-            and_(FavStar.user_id == g.user.id, FavStar.class_name == self.class_name)
+            and_(
+                FavStar.user_id == g.user.get_id(),
+                FavStar.class_name == self.class_name,
+            )
         )
         if value:
             return query.filter(and_(self.model.id.in_(users_favorite_query)))
@@ -125,9 +135,11 @@ class BaseSupersetModelRestApi(ModelRestApi):
     method_permission_name = {
         "bulk_delete": "delete",
         "data": "list",
+        "data_from_cache": "list",
         "delete": "delete",
         "distinct": "list",
         "export": "mulexport",
+        "import_": "add",
         "get": "show",
         "get_list": "list",
         "info": "list",
@@ -170,6 +182,18 @@ class BaseSupersetModelRestApi(ModelRestApi):
         }
     """  # pylint: disable=pointless-string-statement
     allowed_rel_fields: Set[str] = set()
+    """
+    Declare a set of allowed related fields that the `related` endpoint supports
+    """  # pylint: disable=pointless-string-statement
+
+    text_field_rel_fields: Dict[str, str] = {}
+    """
+    Declare an alternative for the human readable representation of the Model object::
+
+        text_field_rel_fields = {
+            "<RELATED_FIELD>": "<RELATED_OBJECT_FIELD>"
+        }
+    """  # pylint: disable=pointless-string-statement
 
     allowed_distinct_fields: Set[str] = set()
 
@@ -182,6 +206,18 @@ class BaseSupersetModelRestApi(ModelRestApi):
     edit_columns: List[str]
     list_columns: List[str]
     show_columns: List[str]
+
+    responses = {
+        "400": {"description": "Bad request", "content": error_payload_content},
+        "401": {"description": "Unauthorized", "content": error_payload_content},
+        "403": {"description": "Forbidden", "content": error_payload_content},
+        "404": {"description": "Not found", "content": error_payload_content},
+        "422": {
+            "description": "Could not process entity",
+            "content": error_payload_content,
+        },
+        "500": {"description": "Fatal error", "content": error_payload_content},
+    }
 
     def __init__(self) -> None:
         # Setup statsd
@@ -199,7 +235,10 @@ class BaseSupersetModelRestApi(ModelRestApi):
         super().__init__()
 
     def add_apispec_components(self, api_spec: APISpec) -> None:
-
+        """
+        Adds extra OpenApi schema spec components, these are declared
+        on the `openapi_spec_component_schemas` class property
+        """
         for schema in self.openapi_spec_component_schemas:
             try:
                 api_spec.components.schema(
@@ -257,6 +296,40 @@ class BaseSupersetModelRestApi(ModelRestApi):
             )
         return filters
 
+    def _get_text_for_model(self, model: Model, column_name: str) -> str:
+        if column_name in self.text_field_rel_fields:
+            model_column_name = self.text_field_rel_fields.get(column_name)
+            if model_column_name:
+                return getattr(model, model_column_name)
+        return str(model)
+
+    def _get_result_from_rows(
+        self, datamodel: SQLAInterface, rows: List[Model], column_name: str
+    ) -> List[Dict[str, Any]]:
+        return [
+            {
+                "value": datamodel.get_pk_value(row),
+                "text": self._get_text_for_model(row, column_name),
+            }
+            for row in rows
+        ]
+
+    def _add_extra_ids_to_result(
+        self,
+        datamodel: SQLAInterface,
+        column_name: str,
+        ids: List[int],
+        result: List[Dict[str, Any]],
+    ) -> None:
+        if ids:
+            # Filter out already present values on the result
+            values = [row["value"] for row in result]
+            ids = [id_ for id_ in ids if id_ not in values]
+            pk_col = datamodel.get_pk()
+            # Fetch requested values from ids
+            extra_rows = db.session.query(datamodel.obj).filter(pk_col.in_(ids)).all()
+            result += self._get_result_from_rows(datamodel, extra_rows, column_name)
+
     def incr_stats(self, action: str, func_name: str) -> None:
         """
         Proxy function for statsd.incr to impose a key structure for REST API's
@@ -295,6 +368,11 @@ class BaseSupersetModelRestApi(ModelRestApi):
         if time_delta:
             self.timing_stats("time", key, time_delta)
 
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.info",
+        object_ref=False,
+        log_to_statsd=False,
+    )
     def info_headless(self, **kwargs: Any) -> Response:
         """
         Add statsd metrics to builtin FAB _info endpoint
@@ -303,6 +381,11 @@ class BaseSupersetModelRestApi(ModelRestApi):
         self.send_stats_metrics(response, self.info.__name__, duration)
         return response
 
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.get",
+        object_ref=False,
+        log_to_statsd=False,
+    )
     def get_headless(self, pk: int, **kwargs: Any) -> Response:
         """
         Add statsd metrics to builtin FAB GET endpoint
@@ -311,6 +394,11 @@ class BaseSupersetModelRestApi(ModelRestApi):
         self.send_stats_metrics(response, self.get.__name__, duration)
         return response
 
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.get_list",
+        object_ref=False,
+        log_to_statsd=False,
+    )
     def get_list_headless(self, **kwargs: Any) -> Response:
         """
         Add statsd metrics to builtin FAB GET list endpoint
@@ -319,6 +407,11 @@ class BaseSupersetModelRestApi(ModelRestApi):
         self.send_stats_metrics(response, self.get_list.__name__, duration)
         return response
 
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.post",
+        object_ref=False,
+        log_to_statsd=False,
+    )
     def post_headless(self) -> Response:
         """
         Add statsd metrics to builtin FAB POST endpoint
@@ -327,6 +420,11 @@ class BaseSupersetModelRestApi(ModelRestApi):
         self.send_stats_metrics(response, self.post.__name__, duration)
         return response
 
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.put",
+        object_ref=False,
+        log_to_statsd=False,
+    )
     def put_headless(self, pk: int) -> Response:
         """
         Add statsd metrics to builtin FAB PUT endpoint
@@ -335,6 +433,11 @@ class BaseSupersetModelRestApi(ModelRestApi):
         self.send_stats_metrics(response, self.put.__name__, duration)
         return response
 
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.delete",
+        object_ref=False,
+        log_to_statsd=False,
+    )
     def delete_headless(self, pk: int) -> Response:
         """
         Add statsd metrics to builtin FAB DELETE endpoint
@@ -384,6 +487,7 @@ class BaseSupersetModelRestApi(ModelRestApi):
             self.incr_stats("error", self.related.__name__)
             return self.response_404()
         args = kwargs.get("rison", {})
+
         # handle pagination
         page, page_size = self._handle_page_args(args)
         try:
@@ -400,15 +504,18 @@ class BaseSupersetModelRestApi(ModelRestApi):
         # handle filters
         filters = self._get_related_filter(datamodel, column_name, args.get("filter"))
         # Make the query
-        count, values = datamodel.query(
+        _, rows = datamodel.query(
             filters, order_column, order_direction, page=page, page_size=page_size
         )
+
         # produce response
-        result = [
-            {"value": datamodel.get_pk_value(value), "text": str(value)}
-            for value in values
-        ]
-        return self.response(200, count=count, result=result)
+        result = self._get_result_from_rows(datamodel, rows, column_name)
+
+        # If ids are specified make sure we fetch and include them on the response
+        ids = args.get("include_ids")
+        self._add_extra_ids_to_result(datamodel, column_name, ids, result)
+
+        return self.response(200, count=len(result), result=result)
 
     @expose("/distinct/<column_name>", methods=["GET"])
     @protect()

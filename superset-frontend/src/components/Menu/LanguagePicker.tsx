@@ -16,8 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
-import { MenuItem } from 'react-bootstrap';
+import React, { useState } from 'react';
+import { Menu } from 'src/common/components';
 import NavDropdown from 'src/components/NavDropdown';
 
 export interface Languages {
@@ -37,26 +37,39 @@ export default function LanguagePicker({
   locale,
   languages,
 }: LanguagePickerProps) {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
   return (
     <NavDropdown
+      onMouseEnter={() => setDropdownOpen(true)}
+      onMouseLeave={() => setDropdownOpen(false)}
+      onToggle={value => setDropdownOpen(value)}
+      open={dropdownOpen}
       id="locale-dropdown"
       title={
         <span className="f16">
           <i className={`flag ${languages[locale].flag}`} />
         </span>
       }
+      data-test="language-picker"
     >
-      {Object.keys(languages).map(langKey =>
-        langKey === locale ? null : (
-          <MenuItem key={langKey} href={languages[langKey].url}>
-            {' '}
-            <div className="f16">
-              <i className={`flag ${languages[langKey].flag}`} /> -{' '}
-              {languages[langKey].name}
-            </div>
-          </MenuItem>
-        ),
-      )}
+      <Menu
+        onSelect={({ key }) => {
+          window.location.href = languages[key].url;
+        }}
+      >
+        {Object.keys(languages).map(langKey =>
+          langKey === locale ? null : (
+            <Menu.Item key={langKey}>
+              {' '}
+              <div className="f16">
+                <i className={`flag ${languages[langKey].flag}`} /> -{' '}
+                {languages[langKey].name}
+              </div>
+            </Menu.Item>
+          ),
+        )}
+      </Menu>
     </NavDropdown>
   );
 }

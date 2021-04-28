@@ -16,21 +16,17 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import {
-  Row,
-  Col,
-  FormControl,
-  Modal,
-  OverlayTrigger,
-  Tooltip,
-} from 'react-bootstrap';
-import { t, getChartMetadataRegistry } from '@superset-ui/core';
-
+import { Input, Row, Col } from 'src/common/components';
+import { Behavior, t, getChartMetadataRegistry } from '@superset-ui/core';
+import { useDynamicPluginContext } from 'src/components/DynamicPlugins';
+import Modal from 'src/components/Modal';
+import { Tooltip } from 'src/components/Tooltip';
 import Label from 'src/components/Label';
-import ControlHeader from '../ControlHeader';
+import ControlHeader from 'src/explore/components/ControlHeader';
 import './VizTypeControl.less';
+import { FeatureFlag, isFeatureEnabled } from 'src/featureFlags';
 
 const propTypes = {
   description: PropTypes.string,
@@ -38,17 +34,16 @@ const propTypes = {
   name: PropTypes.string.isRequired,
   onChange: PropTypes.func,
   value: PropTypes.string.isRequired,
-  labelBsStyle: PropTypes.string,
+  labelType: PropTypes.string,
 };
 
 const defaultProps = {
   onChange: () => {},
-  labelBsStyle: 'default',
+  labelType: 'default',
 };
 
 const registry = getChartMetadataRegistry();
 
-const IMAGE_PER_ROW = 6;
 const DEFAULT_ORDER = [
   'line',
   'big_number',
@@ -89,7 +84,7 @@ const DEFAULT_ORDER = [
   'partition',
   'event_flow',
   'deck_path',
-  'directed_force',
+  'graph_chart',
   'world_map',
   'paired_ttest',
   'para',
@@ -98,44 +93,50 @@ const DEFAULT_ORDER = [
 
 const typesWithDefaultOrder = new Set(DEFAULT_ORDER);
 
-export default class VizTypeControl extends React.PureComponent {
-  constructor(props) {
-    super(props);
-    this.state = {
-      showModal: false,
-      filter: '',
-    };
-    this.toggleModal = this.toggleModal.bind(this);
-    this.changeSearch = this.changeSearch.bind(this);
-    this.setSearchRef = this.setSearchRef.bind(this);
-    this.focusSearch = this.focusSearch.bind(this);
+function VizSupportValidation({ vizType }) {
+  const state = useDynamicPluginContext();
+  if (state.loading || registry.has(vizType)) {
+    return null;
   }
+  return (
+    <div className="text-danger">
+      <i className="fa fa-exclamation-circle text-danger" />{' '}
+      <small>{t('This visualization type is not supported.')}</small>
+    </div>
+  );
+}
 
-  onChange(vizType) {
-    this.props.onChange(vizType);
-    this.setState({ showModal: false });
-  }
+const nativeFilterGate = behaviors =>
+  !behaviors.includes(Behavior.NATIVE_FILTER) ||
+  (isFeatureEnabled(FeatureFlag.DASHBOARD_CROSS_FILTERS) &&
+    behaviors.includes(Behavior.INTERACTIVE_CHART));
 
-  setSearchRef(searchRef) {
-    this.searchRef = searchRef;
-  }
+const VizTypeControl = props => {
+  const [showModal, setShowModal] = useState(false);
+  const [filter, setFilter] = useState('');
+  const searchRef = useRef(null);
 
-  toggleModal() {
-    this.setState(prevState => ({ showModal: !prevState.showModal }));
-  }
-
-  changeSearch(event) {
-    this.setState({ filter: event.target.value });
-  }
-
-  focusSearch() {
-    if (this.searchRef) {
-      this.searchRef.focus();
+  useEffect(() => {
+    if (showModal) {
+      setTimeout(() => searchRef?.current?.focus(), 200);
     }
-  }
+  }, [showModal]);
 
-  renderItem(entry) {
-    const { value } = this.props;
+  const onChange = vizType => {
+    props.onChange(vizType);
+    setShowModal(false);
+  };
+
+  const toggleModal = () => {
+    setShowModal(prevState => !prevState);
+  };
+
+  const changeSearch = event => {
+    setFilter(event.target.value);
+  };
+
+  const renderItem = entry => {
+    const { value } = props;
     const { key, value: type } = entry;
     const isSelected = key === value;
 
@@ -144,7 +145,7 @@ export default class VizTypeControl extends React.PureComponent {
         role="button"
         tabIndex={0}
         className={`viztype-selector-container ${isSelected ? 'selected' : ''}`}
-        onClick={this.onChange.bind(this, key)}
+        onClick={() => onChange(key)}
       >
         <img
           alt={type.name}
@@ -157,86 +158,80 @@ export default class VizTypeControl extends React.PureComponent {
         </div>
       </div>
     );
-  }
+  };
 
-  render() {
-    const { filter, showModal } = this.state;
-    const { value, labelBsStyle } = this.props;
+  const { value, labelType } = props;
+  const filterString = filter.toLowerCase();
 
-    const filterString = filter.toLowerCase();
-    const filteredTypes = DEFAULT_ORDER.filter(type => registry.has(type))
-      .map(type => ({
-        key: type,
-        value: registry.get(type),
-      }))
-      .concat(
-        registry.entries().filter(({ key }) => !typesWithDefaultOrder.has(key)),
-      )
-      .filter(entry => entry.value.name.toLowerCase().includes(filterString));
+  const filteredTypes = DEFAULT_ORDER.filter(type => registry.has(type))
+    .filter(type => {
+      const behaviors = registry.get(type)?.behaviors || [];
+      return nativeFilterGate(behaviors);
+    })
+    .map(type => ({
+      key: type,
+      value: registry.get(type),
+    }))
+    .concat(
+      registry
+        .entries()
+        .filter(entry => {
+          const behaviors = entry.value?.behaviors || [];
+          return nativeFilterGate(behaviors);
+        })
+        .filter(({ key }) => !typesWithDefaultOrder.has(key)),
+    )
+    .filter(entry => entry.value.name.toLowerCase().includes(filterString));
 
-    const rows = [];
-    for (let i = 0; i <= filteredTypes.length; i += IMAGE_PER_ROW) {
-      rows.push(
-        <Row data-test="viz-row" key={`row-${i}`}>
-          {filteredTypes.slice(i, i + IMAGE_PER_ROW).map(entry => (
-            <Col md={12 / IMAGE_PER_ROW} key={`grid-col-${entry.key}`}>
-              {this.renderItem(entry)}
+  return (
+    <div>
+      <ControlHeader {...props} />
+      <Tooltip
+        id="error-tooltip"
+        placement="right"
+        title={t('Click to change visualization type')}
+      >
+        <>
+          <Label
+            onClick={toggleModal}
+            type={labelType}
+            data-test="visualization-type"
+          >
+            {registry.has(value) ? registry.get(value).name : `${value}`}
+          </Label>
+          <VizSupportValidation vizType={value} />
+        </>
+      </Tooltip>
+      <Modal
+        show={showModal}
+        onHide={toggleModal}
+        title={t('Select a visualization type')}
+        responsive
+        hideFooter
+        forceRender
+      >
+        <div className="viztype-control-search-box">
+          <Input
+            ref={searchRef}
+            type="text"
+            value={filter}
+            placeholder={t('Search')}
+            onChange={changeSearch}
+          />
+        </div>
+        <Row data-test="viz-row" gutter={16}>
+          {filteredTypes.map(entry => (
+            <Col xs={12} sm={8} md={6} lg={4} key={`grid-col-${entry.key}`}>
+              {renderItem(entry)}
             </Col>
           ))}
-        </Row>,
-      );
-    }
-
-    return (
-      <div>
-        <ControlHeader {...this.props} />
-        <OverlayTrigger
-          placement="right"
-          overlay={
-            <Tooltip id="error-tooltip">
-              {t('Click to change visualization type')}
-            </Tooltip>
-          }
-        >
-          <>
-            <Label onClick={this.toggleModal} bsStyle={labelBsStyle}>
-              {registry.has(value) ? registry.get(value).name : `${value}`}
-            </Label>
-            {!registry.has(value) && (
-              <div className="text-danger">
-                <i className="fa fa-exclamation-circle text-danger" />{' '}
-                <small>{t('This visualization type is not supported.')}</small>
-              </div>
-            )}
-          </>
-        </OverlayTrigger>
-        <Modal
-          show={showModal}
-          onHide={this.toggleModal}
-          onEnter={this.focusSearch}
-          onExit={this.setSearchRef}
-          bsSize="large"
-        >
-          <Modal.Header closeButton>
-            <Modal.Title>{t('Select a visualization type')}</Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
-            <div className="viztype-control-search-box">
-              <FormControl
-                inputRef={this.setSearchRef}
-                type="text"
-                value={filter}
-                placeholder={t('Search')}
-                onChange={this.changeSearch}
-              />
-            </div>
-            {rows}
-          </Modal.Body>
-        </Modal>
-      </div>
-    );
-  }
-}
+        </Row>
+      </Modal>
+    </div>
+  );
+};
 
 VizTypeControl.propTypes = propTypes;
 VizTypeControl.defaultProps = defaultProps;
+
+export default VizTypeControl;

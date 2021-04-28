@@ -16,17 +16,21 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { CSSProperties } from 'react';
+import React, { CSSProperties, ComponentType, ReactNode } from 'react';
 import { css, SerializedStyles, ClassNames } from '@emotion/core';
-import { supersetTheme } from '@superset-ui/core';
+import { SupersetTheme } from '@superset-ui/core';
 import {
   Styles,
   Theme,
   SelectComponentsConfig,
   components as defaultComponents,
+  InputProps as ReactSelectInputProps,
 } from 'react-select';
-import { colors as reactSelectColros } from 'react-select/src/theme';
-import { supersetColors } from 'src/components/styles';
+import { Props as SelectProps } from 'react-select/src/Select';
+import { colors as reactSelectColors } from 'react-select/src/theme';
+import { DeepNonNullable } from 'react-select/src/components';
+import { OptionType } from 'antd/lib/select';
+import { SupersetStyledSelectProps } from './Select';
 
 export const DEFAULT_CLASS_NAME = 'Select';
 export const DEFAULT_CLASS_NAME_PREFIX = 'Select';
@@ -35,6 +39,30 @@ type RecursivePartial<T> = {
   [P in keyof T]?: RecursivePartial<T[P]>;
 };
 
+const colors = (theme: SupersetTheme) => ({
+  primary: theme.colors.success.base,
+  danger: theme.colors.error.base,
+  warning: theme.colors.warning.base,
+  indicator: theme.colors.info.base,
+  almostBlack: theme.colors.grayscale.dark1,
+  grayDark: theme.colors.grayscale.dark1,
+  grayLight: theme.colors.grayscale.light2,
+  gray: theme.colors.grayscale.light1,
+  grayBg: theme.colors.grayscale.light4,
+  grayBgDarker: theme.colors.grayscale.light3,
+  grayBgDarkest: theme.colors.grayscale.light2,
+  grayHeading: theme.colors.grayscale.light1,
+  menuHover: theme.colors.grayscale.light3,
+  lightest: theme.colors.grayscale.light5,
+  darkest: theme.colors.grayscale.dark2,
+  grayBorder: theme.colors.grayscale.light2,
+  grayBorderLight: theme.colors.grayscale.light3,
+  grayBorderDark: theme.colors.grayscale.light1,
+  textDefault: theme.colors.grayscale.dark1,
+  textDarkest: theme.colors.grayscale.dark2,
+  dangerLight: theme.colors.error.light1,
+});
+
 export type ThemeConfig = {
   borderRadius: number;
   // z-index for menu dropdown
@@ -42,10 +70,10 @@ export type ThemeConfig = {
   zIndex: number;
   colors: {
     // add known colors
-    [key in keyof typeof reactSelectColros]: string;
+    [key in keyof typeof reactSelectColors]: string;
   } &
     {
-      [key in keyof typeof supersetColors]: string;
+      [key in keyof ReturnType<typeof colors>]: string;
     } & {
       [key: string]: string; // any other colors
     };
@@ -61,22 +89,21 @@ export type ThemeConfig = {
 
 export type PartialThemeConfig = RecursivePartial<ThemeConfig>;
 
-export const DEFAULT_THEME: PartialThemeConfig = {
-  borderRadius: supersetTheme.borderRadius,
+export const defaultTheme: (
+  theme: SupersetTheme,
+) => PartialThemeConfig = theme => ({
+  borderRadius: theme.borderRadius,
   zIndex: 11,
-  colors: {
-    ...supersetColors,
-    dangerLight: supersetColors.warning,
-  },
+  colors: colors(theme),
   spacing: {
     baseUnit: 3,
     menuGutter: 0,
-    controlHeight: 28,
+    controlHeight: 34,
     lineHeight: 19,
     fontSize: 14,
     minWidth: '7.5em', // just enough to display 'No options'
   },
-};
+});
 
 // let styles accept serialized CSS, too
 type CSSStyles = CSSProperties | SerializedStyles;
@@ -125,7 +152,7 @@ export const DEFAULT_STYLES: PartialStylesConfig = {
   clearIndicator: provider => [
     provider,
     css`
-      padding-right: 0;
+      padding: 4px 0 4px 6px;
     `,
   ],
   control: (
@@ -133,11 +160,9 @@ export const DEFAULT_STYLES: PartialStylesConfig = {
     { isFocused, menuIsOpen, theme: { borderRadius, colors } },
   ) => {
     const isPseudoFocused = isFocused && !menuIsOpen;
-    let borderColor = '#ccc';
-    if (isPseudoFocused) {
-      borderColor = '#000';
-    } else if (menuIsOpen) {
-      borderColor = `${colors.grayBorderDark} ${colors.grayBorder} ${colors.grayBorderLight}`;
+    let borderColor = colors.grayBorder;
+    if (isPseudoFocused || menuIsOpen) {
+      borderColor = colors.grayBorderDark;
     }
     return [
       provider,
@@ -153,25 +178,35 @@ export const DEFAULT_STYLES: PartialStylesConfig = {
           border-color: ${borderColor};
           box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
         }
+        flex-wrap: nowrap;
+        padding-left: 1px;
       `,
     ];
   },
-  menu: (provider, { theme: { borderRadius, zIndex, colors } }) => [
+  menu: (provider, { theme: { zIndex } }) => [
     provider,
     css`
+      padding-bottom: 2em;
+      z-index: ${zIndex}; /* override at least multi-page pagination */
+      width: auto;
+      min-width: 100%;
+      max-width: 80vw;
+      background: none;
+      box-shadow: none;
+      border: 0;
+    `,
+  ],
+  menuList: (provider, { theme: { borderRadius, colors } }) => [
+    provider,
+    css`
+      background: ${colors.lightest};
       border-radius: 0 0 ${borderRadius}px ${borderRadius}px;
-      border: 1px solid #ccc;
+      border: 1px solid ${colors.grayBorderDark};
       box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
       margin-top: -1px;
       border-top-color: ${colors.grayBorderLight};
       min-width: 100%;
       width: auto;
-      z-index: ${zIndex}; /* override at least multi-page pagination */
-    `,
-  ],
-  menuList: (provider, { theme: { borderRadius } }) => [
-    provider,
-    css`
       border-radius: 0 0 ${borderRadius}px ${borderRadius}px;
       padding-top: 0;
       padding-bottom: 0;
@@ -239,11 +274,76 @@ export const DEFAULT_STYLES: PartialStylesConfig = {
     paddingLeft: baseUnit * 1.2,
     paddingRight: baseUnit * 1.2,
   }),
+  input: (provider, { selectProps }) => [
+    provider,
+    css`
+      margin-left: 0;
+      vertical-align: middle;
+      ${selectProps?.isMulti && selectProps?.value?.length
+        ? 'padding: 0 6px; width: 100%'
+        : 'padding: 0; flex: 1 1 auto;'};
+    `,
+  ],
+  menuPortal: base => ({
+    ...base,
+    zIndex: 1030, // must be same or higher of antd popover
+  }),
 };
 
-const { ClearIndicator, DropdownIndicator, Option } = defaultComponents;
+const INPUT_TAG_BASE_STYLES = {
+  background: 'none',
+  border: 'none',
+  outline: 'none',
+  padding: 0,
+};
 
-export const DEFAULT_COMPONENTS: SelectComponentsConfig<any> = {
+export type SelectComponentsType = Omit<
+  SelectComponentsConfig<any>,
+  'Input'
+> & {
+  Input: ComponentType<InputProps>;
+};
+
+// react-select is missing selectProps from their props type
+// so overwriting it here to avoid errors
+export type InputProps = ReactSelectInputProps & {
+  placeholder?: ReactNode;
+  selectProps: SelectProps;
+  autoComplete?: string;
+  onPaste?: SupersetStyledSelectProps<OptionType>['onPaste'];
+  inputStyle?: object;
+};
+
+const {
+  ClearIndicator,
+  DropdownIndicator,
+  Option,
+  Input,
+  SelectContainer,
+} = defaultComponents as Required<DeepNonNullable<SelectComponentsType>>;
+
+export const DEFAULT_COMPONENTS: SelectComponentsType = {
+  SelectContainer: ({ children, ...props }) => {
+    const {
+      selectProps: { assistiveText },
+    } = props;
+    return (
+      <div>
+        <SelectContainer {...props}>{children}</SelectContainer>
+        {assistiveText && (
+          <span
+            css={(theme: SupersetTheme) => ({
+              marginLeft: 3,
+              fontSize: theme.typography.sizes.s,
+              color: theme.colors.grayscale.light1,
+            })}
+          >
+            {assistiveText}
+          </span>
+        )}
+      </div>
+    );
+  },
   Option: ({ children, innerProps, data, ...props }) => (
     <ClassNames>
       {({ css }) => (
@@ -272,6 +372,17 @@ export const DEFAULT_COMPONENTS: SelectComponentsConfig<any> = {
       />
     </DropdownIndicator>
   ),
+  Input: (props: InputProps) => {
+    const { getStyles } = props;
+    return (
+      <Input
+        {...props}
+        css={getStyles('input', props)}
+        autoComplete="chrome-off"
+        inputStyle={INPUT_TAG_BASE_STYLES}
+      />
+    );
+  },
 };
 
 export const VALUE_LABELED_STYLES: PartialStylesConfig = {
@@ -282,10 +393,12 @@ export const VALUE_LABELED_STYLES: PartialStylesConfig = {
       theme: {
         spacing: { baseUnit },
       },
+      isMulti,
     },
   ) => ({
     ...provider,
     paddingLeft: getValue().length > 0 ? 1 : baseUnit * 3,
+    overflow: isMulti && getValue().length > 0 ? 'visible' : 'hidden',
   }),
   // render single value as is they are multi-value
   singleValue: (provider, props) => {

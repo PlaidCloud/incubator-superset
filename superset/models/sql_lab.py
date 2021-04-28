@@ -39,7 +39,11 @@ from sqlalchemy.engine.url import URL
 from sqlalchemy.orm import backref, relationship
 
 from superset import security_manager
-from superset.models.helpers import AuditMixinNullable, ExtraJSONMixin, ImportMixin
+from superset.models.helpers import (
+    AuditMixinNullable,
+    ExtraJSONMixin,
+    ImportExportMixin,
+)
 from superset.models.tags import QueryUpdater
 from superset.sql_parse import CtasMethod, ParsedQuery, Table
 from superset.utils.core import QueryStatus, user_label
@@ -152,6 +156,10 @@ class Query(Model, ExtraJSONMixin):
     def username(self) -> str:
         return self.user.username
 
+    @property
+    def sql_tables(self) -> List[Table]:
+        return list(ParsedQuery(self.sql).tables)
+
     def raise_for_access(self) -> None:
         """
         Raise an exception if the user cannot access the resource.
@@ -162,7 +170,7 @@ class Query(Model, ExtraJSONMixin):
         security_manager.raise_for_access(query=self)
 
 
-class SavedQuery(Model, AuditMixinNullable, ExtraJSONMixin, ImportMixin):
+class SavedQuery(Model, AuditMixinNullable, ExtraJSONMixin, ImportExportMixin):
     """ORM model for SQL query"""
 
     __tablename__ = "saved_query"
@@ -188,7 +196,6 @@ class SavedQuery(Model, AuditMixinNullable, ExtraJSONMixin, ImportMixin):
 
     export_parent = "database"
     export_fields = [
-        "db_id",
         "schema",
         "label",
         "description",
@@ -270,6 +277,7 @@ class TabState(Model, AuditMixinNullable, ExtraJSONMixin):
     # other properties
     autorun = Column(Boolean, default=False)
     template_params = Column(Text)
+    hide_left_bar = Column(Boolean, default=False)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -285,6 +293,7 @@ class TabState(Model, AuditMixinNullable, ExtraJSONMixin):
             "latest_query": self.latest_query.to_dict() if self.latest_query else None,
             "autorun": self.autorun,
             "template_params": self.template_params,
+            "hide_left_bar": self.hide_left_bar,
         }
 
 

@@ -14,20 +14,29 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import hashlib
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 import pandas as pd
+from flask_babel import gettext as __
 from sqlalchemy import literal_column
 from sqlalchemy.sql.expression import ColumnClause
 
 from superset.db_engine_specs.base import BaseEngineSpec
+from superset.errors import SupersetErrorType
+from superset.sql_parse import Table
 from superset.utils import core as utils
+from superset.utils.hashing import md5_sha_from_str
 
 if TYPE_CHECKING:
     from superset.models.core import Database  # pragma: no cover
+
+
+CONNECTION_DATABASE_PERMISSIONS_REGEX = re.compile(
+    "Access Denied: Project User does not have bigquery.jobs.create "
+    + "permission in project (?P<project>.+?)"
+)
 
 
 class BigQueryEngineSpec(BaseEngineSpec):
@@ -38,6 +47,10 @@ class BigQueryEngineSpec(BaseEngineSpec):
     engine = "bigquery"
     engine_name = "Google BigQuery"
     max_column_name_length = 128
+
+    # BigQuery doesn't maintain context when running multiple statements in the
+    # same cursor, so we need to run all statements at once
+    run_multiple_statements_as_one = True
 
     """
     https://www.python.org/dev/peps/pep-0249/#arraysize
@@ -62,12 +75,35 @@ class BigQueryEngineSpec(BaseEngineSpec):
         None: "{col}",
         "PT1S": "{func}({col}, SECOND)",
         "PT1M": "{func}({col}, MINUTE)",
+        "PT5M": "CAST(TIMESTAMP_SECONDS("
+        "5*60 * DIV(UNIX_SECONDS(CAST({col} AS TIMESTAMP)), 5*60)"
+        ") AS {type})",
+        "PT10M": "CAST(TIMESTAMP_SECONDS("
+        "10*60 * DIV(UNIX_SECONDS(CAST({col} AS TIMESTAMP)), 10*60)"
+        ") AS {type})",
+        "PT15M": "CAST(TIMESTAMP_SECONDS("
+        "15*60 * DIV(UNIX_SECONDS(CAST({col} AS TIMESTAMP)), 15*60)"
+        ") AS {type})",
+        "PT0.5H": "CAST(TIMESTAMP_SECONDS("
+        "30*60 * DIV(UNIX_SECONDS(CAST({col} AS TIMESTAMP)), 30*60)"
+        ") AS {type})",
         "PT1H": "{func}({col}, HOUR)",
         "P1D": "{func}({col}, DAY)",
         "P1W": "{func}({col}, WEEK)",
         "P1M": "{func}({col}, MONTH)",
         "P0.25Y": "{func}({col}, QUARTER)",
         "P1Y": "{func}({col}, YEAR)",
+    }
+
+    custom_errors = {
+        CONNECTION_DATABASE_PERMISSIONS_REGEX: (
+            __(
+                "We were unable to connect to your database. Please "
+                "confirm that your service account has the Viewer "
+                "and Job User roles on the project."
+            ),
+            SupersetErrorType.CONNECTION_DATABASE_PERMISSIONS_ERROR,
+        ),
     }
 
     @classmethod
@@ -105,7 +141,7 @@ class BigQueryEngineSpec(BaseEngineSpec):
         :param label: Expected expression label
         :return: Conditionally mutated label
         """
-        label_hashed = "_" + hashlib.md5(label.encode("utf-8")).hexdigest()
+        label_hashed = "_" + md5_sha_from_str(label)
 
         # if label starts with number, add underscore as first character
         label_mutated = "_" + label if re.match(r"^\d", label) else label
@@ -127,7 +163,7 @@ class BigQueryEngineSpec(BaseEngineSpec):
         :param label: expected expression label
         :return: truncated label
         """
-        return "_" + hashlib.md5(label.encode("utf-8")).hexdigest()
+        return "_" + md5_sha_from_str(label)
 
     @classmethod
     def normalize_indexes(cls, indexes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -193,16 +229,26 @@ class BigQueryEngineSpec(BaseEngineSpec):
         return "TIMESTAMP_MILLIS({col})"
 
     @classmethod
-    def df_to_sql(cls, df: pd.DataFrame, **kwargs: Any) -> None:
+    def df_to_sql(
+        cls,
+        database: "Database",
+        table: Table,
+        df: pd.DataFrame,
+        to_sql_kwargs: Dict[str, Any],
+    ) -> None:
         """
-        Upload data from a Pandas DataFrame to BigQuery. Calls
-        `DataFrame.to_gbq()` which requires `pandas_gbq` to be installed.
+        Upload data from a Pandas DataFrame to a database.
 
-        :param df: Dataframe with data to be uploaded
-        :param kwargs: kwargs to be passed to to_gbq() method. Requires that `schema`,
-        `name` and `con` are present in kwargs. `name` and `schema` are combined
-         and passed to `to_gbq()` as `destination_table`.
+        Calls `pandas_gbq.DataFrame.to_gbq` which requires `pandas_gbq` to be installed.
+
+        Note this method does not create metadata for the table.
+
+        :param database: The database to upload the data to
+        :param table: The table to upload the data to
+        :param df: The dataframe with data to be uploaded
+        :param to_sql_kwargs: The kwargs to be passed to pandas.DataFrame.to_sql` method
         """
+
         try:
             import pandas_gbq
             from google.oauth2 import service_account
@@ -213,22 +259,25 @@ class BigQueryEngineSpec(BaseEngineSpec):
                 "to upload data to BigQuery"
             )
 
-        if not ("name" in kwargs and "schema" in kwargs and "con" in kwargs):
-            raise Exception("name, schema and con need to be defined in kwargs")
+        if not table.schema:
+            raise Exception("The table schema must be defined")
 
-        gbq_kwargs = {}
-        gbq_kwargs["project_id"] = kwargs["con"].engine.url.host
-        gbq_kwargs["destination_table"] = f"{kwargs.pop('schema')}.{kwargs.pop('name')}"
+        engine = cls.get_engine(database)
+        to_gbq_kwargs = {"destination_table": str(table), "project_id": engine.url.host}
 
-        # add credentials if they are set on the SQLAlchemy Dialect:
-        creds = kwargs["con"].dialect.credentials_info
+        # Add credentials if they are set on the SQLAlchemy dialect.
+        creds = engine.dialect.credentials_info
+
         if creds:
-            credentials = service_account.Credentials.from_service_account_info(creds)
-            gbq_kwargs["credentials"] = credentials
+            to_gbq_kwargs[
+                "credentials"
+            ] = service_account.Credentials.from_service_account_info(creds)
 
-        # Only pass through supported kwargs
+        # Only pass through supported kwargs.
         supported_kwarg_keys = {"if_exists"}
+
         for key in supported_kwarg_keys:
-            if key in kwargs:
-                gbq_kwargs[key] = kwargs[key]
-        pandas_gbq.to_gbq(df, **gbq_kwargs)
+            if key in to_sql_kwargs:
+                to_gbq_kwargs[key] = to_sql_kwargs[key]
+
+        pandas_gbq.to_gbq(df, **to_gbq_kwargs)

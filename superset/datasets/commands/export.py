@@ -18,41 +18,56 @@
 
 import json
 import logging
-from typing import Iterator, List, Tuple
+from typing import Iterator, Tuple
 
 import yaml
+from werkzeug.utils import secure_filename
 
-from superset.commands.base import BaseCommand
+from superset.commands.export import ExportModelsCommand
 from superset.connectors.sqla.models import SqlaTable
 from superset.datasets.commands.exceptions import DatasetNotFoundError
 from superset.datasets.dao import DatasetDAO
-from superset.utils.dict_import_export import IMPORT_EXPORT_VERSION, sanitize
+from superset.utils.dict_import_export import EXPORT_VERSION
 
 logger = logging.getLogger(__name__)
 
+JSON_KEYS = {"params", "template_params", "extra"}
 
-class ExportDatasetsCommand(BaseCommand):
-    def __init__(self, dataset_ids: List[int]):
-        self.dataset_ids = dataset_ids
 
-        # this will be set when calling validate()
-        self._models: List[SqlaTable] = []
+class ExportDatasetsCommand(ExportModelsCommand):
+
+    dao = DatasetDAO
+    not_found = DatasetNotFoundError
 
     @staticmethod
-    def export_dataset(dataset: SqlaTable) -> Iterator[Tuple[str, str]]:
-        database_slug = sanitize(dataset.database.database_name)
-        dataset_slug = sanitize(dataset.table_name)
+    def _export(model: SqlaTable) -> Iterator[Tuple[str, str]]:
+        database_slug = secure_filename(model.database.database_name)
+        dataset_slug = secure_filename(model.table_name)
         file_name = f"datasets/{database_slug}/{dataset_slug}.yaml"
 
-        payload = dataset.export_to_dict(
+        payload = model.export_to_dict(
             recursive=True,
             include_parent_ref=False,
             include_defaults=True,
             export_uuids=True,
         )
+        # TODO (betodealmeida): move this logic to export_to_dict once this
+        # becomes the default export endpoint
+        for key in JSON_KEYS:
+            if payload.get(key):
+                try:
+                    payload[key] = json.loads(payload[key])
+                except json.decoder.JSONDecodeError:
+                    logger.info("Unable to decode `%s` field: %s", key, payload[key])
+        for metric in payload.get("metrics", []):
+            if metric.get("extra"):
+                try:
+                    metric["extra"] = json.loads(metric["extra"])
+                except json.decoder.JSONDecodeError:
+                    logger.info("Unable to decode `extra` field: %s", metric["extra"])
 
-        payload["version"] = IMPORT_EXPORT_VERSION
-        payload["database_uuid"] = str(dataset.database.uuid)
+        payload["version"] = EXPORT_VERSION
+        payload["database_uuid"] = str(model.database.uuid)
 
         file_content = yaml.safe_dump(payload, sort_keys=False)
         yield file_name, file_content
@@ -60,7 +75,7 @@ class ExportDatasetsCommand(BaseCommand):
         # include database as well
         file_name = f"databases/{database_slug}.yaml"
 
-        payload = dataset.database.export_to_dict(
+        payload = model.database.export_to_dict(
             recursive=False,
             include_parent_ref=False,
             include_defaults=True,
@@ -68,29 +83,13 @@ class ExportDatasetsCommand(BaseCommand):
         )
         # TODO (betodealmeida): move this logic to export_to_dict once this
         # becomes the default export endpoint
-        if "extra" in payload:
+        if payload.get("extra"):
             try:
                 payload["extra"] = json.loads(payload["extra"])
             except json.decoder.JSONDecodeError:
                 logger.info("Unable to decode `extra` field: %s", payload["extra"])
 
-        payload["version"] = IMPORT_EXPORT_VERSION
+        payload["version"] = EXPORT_VERSION
 
         file_content = yaml.safe_dump(payload, sort_keys=False)
         yield file_name, file_content
-
-    def run(self) -> Iterator[Tuple[str, str]]:
-        self.validate()
-
-        seen = set()
-        for dataset in self._models:
-            for file_name, file_content in self.export_dataset(dataset):
-                # ignore repeated databases
-                if file_name not in seen:
-                    yield file_name, file_content
-                    seen.add(file_name)
-
-    def validate(self) -> None:
-        self._models = DatasetDAO.find_by_ids(self.dataset_ids)
-        if len(self._models) != len(self.dataset_ids):
-            raise DatasetNotFoundError()

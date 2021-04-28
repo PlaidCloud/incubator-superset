@@ -15,8 +15,9 @@
 # specific language governing permissions and limitations
 # under the License.
 import logging
+from decimal import Decimal
 from functools import partial
-from typing import Any, Callable, cast, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import geohash as geohash_lib
 import numpy as np
@@ -25,30 +26,37 @@ from geopy.point import Point
 from pandas import DataFrame, NamedAgg, Series, Timestamp
 
 from superset.exceptions import QueryObjectValidationError
-from superset.utils.core import DTTM_ALIAS, PostProcessingContributionOrientation
-
-ALLOWLIST_NUMPY_FUNCTIONS = (
-    "average",
-    "argmin",
-    "argmax",
-    "cumsum",
-    "cumprod",
-    "max",
-    "mean",
-    "median",
-    "nansum",
-    "nanmin",
-    "nanmax",
-    "nanmean",
-    "nanmedian",
-    "min",
-    "percentile",
-    "prod",
-    "product",
-    "std",
-    "sum",
-    "var",
+from superset.utils.core import (
+    DTTM_ALIAS,
+    PostProcessingBoxplotWhiskerType,
+    PostProcessingContributionOrientation,
 )
+
+NUMPY_FUNCTIONS = {
+    "average": np.average,
+    "argmin": np.argmin,
+    "argmax": np.argmax,
+    "count": np.ma.count,
+    "count_nonzero": np.count_nonzero,
+    "cumsum": np.cumsum,
+    "cumprod": np.cumprod,
+    "max": np.max,
+    "mean": np.mean,
+    "median": np.median,
+    "nansum": np.nansum,
+    "nanmin": np.nanmin,
+    "nanmax": np.nanmax,
+    "nanmean": np.nanmean,
+    "nanmedian": np.nanmedian,
+    "nanpercentile": np.nanpercentile,
+    "min": np.min,
+    "percentile": np.percentile,
+    "prod": np.prod,
+    "product": np.product,
+    "std": np.std,
+    "sum": np.sum,
+    "var": np.var,
+}
 
 DENYLIST_ROLLING_FUNCTIONS = (
     "count",
@@ -161,13 +169,17 @@ def _get_aggregate_funcs(
                 _("Operator undefined for aggregator: %(name)s", name=name,)
             )
         operator = agg_obj["operator"]
-        if operator not in ALLOWLIST_NUMPY_FUNCTIONS or not hasattr(np, operator):
-            raise QueryObjectValidationError(
-                _("Invalid numpy function: %(operator)s", operator=operator,)
-            )
-        func = getattr(np, operator)
-        options = agg_obj.get("options", {})
-        agg_funcs[name] = NamedAgg(column=column, aggfunc=partial(func, **options))
+        if callable(operator):
+            aggfunc = operator
+        else:
+            func = NUMPY_FUNCTIONS.get(operator)
+            if not func:
+                raise QueryObjectValidationError(
+                    _("Invalid numpy function: %(operator)s", operator=operator,)
+                )
+            options = agg_obj.get("options", {})
+            aggfunc = partial(func, **options)
+        agg_funcs[name] = NamedAgg(column=column, aggfunc=aggfunc)
 
     return agg_funcs
 
@@ -227,7 +239,7 @@ def pivot(  # pylint: disable=too-many-arguments
            Default to 'All'.
     :param flatten_columns: Convert column names to strings
     :return: A pivot table
-    :raises ChartDataValidationError: If the request in incorrect
+    :raises QueryObjectValidationError: If the request in incorrect
     """
     if not index:
         raise QueryObjectValidationError(
@@ -282,11 +294,15 @@ def aggregate(
     :param groupby: columns to aggregate
     :param aggregates: A mapping from metric column to the function used to
            aggregate values.
-    :raises ChartDataValidationError: If the request in incorrect
+    :raises QueryObjectValidationError: If the request in incorrect
     """
     aggregates = aggregates or {}
     aggregate_funcs = _get_aggregate_funcs(df, aggregates)
-    return df.groupby(by=groupby).agg(**aggregate_funcs).reset_index()
+    if groupby:
+        df_groupby = df.groupby(by=groupby)
+    else:
+        df_groupby = df.groupby(lambda _: True)
+    return df_groupby.agg(**aggregate_funcs).reset_index(drop=not groupby)
 
 
 @validate_column_args("columns")
@@ -298,7 +314,7 @@ def sort(df: DataFrame, columns: Dict[str, bool]) -> DataFrame:
     :param columns: columns by by which to sort. The key specifies the column name,
            value specifies if sorting in ascending order.
     :return: Sorted DataFrame
-    :raises ChartDataValidationError: If the request in incorrect
+    :raises QueryObjectValidationError: If the request in incorrect
     """
     return df.sort_values(by=list(columns.keys()), ascending=list(columns.values()))
 
@@ -333,7 +349,7 @@ def rolling(  # pylint: disable=too-many-arguments
     :param min_periods: The minimum amount of periods required for a row to be included
                         in the result set.
     :return: DataFrame with the rolling columns
-    :raises ChartDataValidationError: If the request in incorrect
+    :raises QueryObjectValidationError: If the request in incorrect
     """
     rolling_type_options = rolling_type_options or {}
     df_rolling = df[columns.keys()]
@@ -393,7 +409,7 @@ def select(
                    For instance, `{'y': 'y2'}` will rename the column `y` to
                    `y2`.
     :return: Subset of columns in original DataFrame
-    :raises ChartDataValidationError: If the request in incorrect
+    :raises QueryObjectValidationError: If the request in incorrect
     """
     df_select = df.copy(deep=False)
     if columns:
@@ -418,7 +434,7 @@ def diff(df: DataFrame, columns: Dict[str, str], periods: int = 1,) -> DataFrame
            unchanged.
     :param periods: periods to shift for calculating difference.
     :return: DataFrame with diffed columns
-    :raises ChartDataValidationError: If the request in incorrect
+    :raises QueryObjectValidationError: If the request in incorrect
     """
     df_diff = df[columns.keys()]
     df_diff = df_diff.diff(periods=periods)
@@ -539,29 +555,53 @@ def geodetic_parse(
         raise QueryObjectValidationError(_("Invalid geodetic string"))
 
 
+@validate_column_args("columns")
 def contribution(
-    df: DataFrame, orientation: PostProcessingContributionOrientation
+    df: DataFrame,
+    orientation: Optional[
+        PostProcessingContributionOrientation
+    ] = PostProcessingContributionOrientation.COLUMN,
+    columns: Optional[List[str]] = None,
+    rename_columns: Optional[List[str]] = None,
 ) -> DataFrame:
     """
-    Calculate cell contibution to row/column total.
+    Calculate cell contibution to row/column total for numeric columns.
+    Non-numeric columns will be kept untouched.
+
+    If `columns` are specified, only calculate contributions on selected columns.
 
     :param df: DataFrame containing all-numeric data (temporal column ignored)
+    :param columns: Columns to calculate values from.
+    :param rename_columns: The new labels for the calculated contribution columns.
+                           The original columns will not be removed.
     :param orientation: calculate by dividing cell with row/column total
-    :return: DataFrame with contributions, with temporal column at beginning if present
+    :return: DataFrame with contributions.
     """
-    temporal_series: Optional[Series] = None
     contribution_df = df.copy()
-    if DTTM_ALIAS in df.columns:
-        temporal_series = cast(Series, contribution_df.pop(DTTM_ALIAS))
-
-    if orientation == PostProcessingContributionOrientation.ROW:
-        contribution_dft = contribution_df.T
-        contribution_df = (contribution_dft / contribution_dft.sum()).T
-    else:
-        contribution_df = contribution_df / contribution_df.sum()
-
-    if temporal_series is not None:
-        contribution_df.insert(0, DTTM_ALIAS, temporal_series)
+    numeric_df = contribution_df.select_dtypes(include=["number", Decimal])
+    # verify column selections
+    if columns:
+        numeric_columns = numeric_df.columns.tolist()
+        for col in columns:
+            if col not in numeric_columns:
+                raise QueryObjectValidationError(
+                    _(
+                        'Column "%(column)s" is not numeric or does not '
+                        "exists in the query results.",
+                        column=col,
+                    )
+                )
+    columns = columns or numeric_df.columns
+    rename_columns = rename_columns or columns
+    if len(rename_columns) != len(columns):
+        raise QueryObjectValidationError(
+            _("`rename_columns` must have the same length as `columns`.")
+        )
+    # limit to selected columns
+    numeric_df = numeric_df[columns]
+    axis = 0 if orientation == PostProcessingContributionOrientation.COLUMN else 1
+    numeric_df = numeric_df / numeric_df.values.sum(axis=axis, keepdims=True)
+    contribution_df[rename_columns] = numeric_df
     return contribution_df
 
 
@@ -591,14 +631,14 @@ def _prophet_fit_and_predict(  # pylint: disable=too-many-arguments
     Fit a prophet model and return a DataFrame with predicted results.
     """
     try:
-        prophet_logger = logging.getLogger("fbprophet.plot")
+        prophet_logger = logging.getLogger("prophet.plot")
 
         prophet_logger.setLevel(logging.CRITICAL)
-        from fbprophet import Prophet  # pylint: disable=import-error
+        from prophet import Prophet  # pylint: disable=import-error
 
         prophet_logger.setLevel(logging.NOTSET)
     except ModuleNotFoundError:
-        raise QueryObjectValidationError(_("`fbprophet` package not installed"))
+        raise QueryObjectValidationError(_("`prophet` package not installed"))
     model = Prophet(
         interval_width=confidence_interval,
         yearly_seasonality=yearly_seasonality,
@@ -693,3 +733,103 @@ def prophet(  # pylint: disable=too-many-arguments
                 target_df = target_df.assign(**{new_column: fit_df[new_column]})
     target_df.reset_index(level=0, inplace=True)
     return target_df.rename(columns={"ds": DTTM_ALIAS})
+
+
+def boxplot(
+    df: DataFrame,
+    groupby: List[str],
+    metrics: List[str],
+    whisker_type: PostProcessingBoxplotWhiskerType,
+    percentiles: Optional[
+        Union[List[Union[int, float]], Tuple[Union[int, float], Union[int, float]]]
+    ] = None,
+) -> DataFrame:
+    """
+    Calculate boxplot statistics. For each metric, the operation creates eight
+    new columns with the column name suffixed with the following values:
+
+    - `__mean`: the mean
+    - `__median`: the median
+    - `__max`: the maximum value excluding outliers (see whisker type)
+    - `__min`: the minimum value excluding outliers (see whisker type)
+    - `__q1`: the median
+    - `__q1`: the first quartile (25th percentile)
+    - `__q3`: the third quartile (75th percentile)
+    - `__count`: count of observations
+    - `__outliers`: the values that fall outside the minimum/maximum value
+                    (see whisker type)
+
+    :param df: DataFrame containing all-numeric data (temporal column ignored)
+    :param groupby: The categories to group by (x-axis)
+    :param metrics: The metrics for which to calculate the distribution
+    :param whisker_type: The confidence level type
+    :return: DataFrame with boxplot statistics per groupby
+    """
+
+    def quartile1(series: Series) -> float:
+        return np.nanpercentile(series, 25, interpolation="midpoint")
+
+    def quartile3(series: Series) -> float:
+        return np.nanpercentile(series, 75, interpolation="midpoint")
+
+    if whisker_type == PostProcessingBoxplotWhiskerType.TUKEY:
+
+        def whisker_high(series: Series) -> float:
+            upper_outer_lim = quartile3(series) + 1.5 * (
+                quartile3(series) - quartile1(series)
+            )
+            return series[series <= upper_outer_lim].max()
+
+        def whisker_low(series: Series) -> float:
+            lower_outer_lim = quartile1(series) - 1.5 * (
+                quartile3(series) - quartile1(series)
+            )
+            return series[series >= lower_outer_lim].min()
+
+    elif whisker_type == PostProcessingBoxplotWhiskerType.PERCENTILE:
+        if (
+            not isinstance(percentiles, (list, tuple))
+            or len(percentiles) != 2
+            or not isinstance(percentiles[0], (int, float))
+            or not isinstance(percentiles[1], (int, float))
+            or percentiles[0] >= percentiles[1]
+        ):
+            raise QueryObjectValidationError(
+                _(
+                    "percentiles must be a list or tuple with two numeric values, "
+                    "of which the first is lower than the second value"
+                )
+            )
+        low, high = percentiles[0], percentiles[1]
+
+        def whisker_high(series: Series) -> float:
+            return np.nanpercentile(series, high)
+
+        def whisker_low(series: Series) -> float:
+            return np.nanpercentile(series, low)
+
+    else:
+        whisker_high = np.max
+        whisker_low = np.min
+
+    def outliers(series: Series) -> Set[float]:
+        above = series[series > whisker_high(series)]
+        below = series[series < whisker_low(series)]
+        return above.tolist() + below.tolist()
+
+    operators: Dict[str, Callable[[Any], Any]] = {
+        "mean": np.mean,
+        "median": np.median,
+        "max": whisker_high,
+        "min": whisker_low,
+        "q1": quartile1,
+        "q3": quartile3,
+        "count": np.ma.count,
+        "outliers": outliers,
+    }
+    aggregates: Dict[str, Dict[str, Union[str, Callable[..., Any]]]] = {
+        f"{metric}__{operator_name}": {"column": metric, "operator": operator}
+        for operator_name, operator in operators.items()
+        for metric in metrics
+    }
+    return aggregate(df, groupby=groupby, aggregates=aggregates)
