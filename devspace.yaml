@@ -167,9 +167,9 @@ vars:
   question: Whats your dev namespace name? This can be changed later with `devspace
     set var DEV_NAMESPACE=<new-namespace>`
   source: input
-- name: CLIENT_ID
+- name: OAUTH_CLIENT_ID
   source: env
-- name: CLIENT_SECRET
+- name: OAUTH_CLIENT_SECRET
   source: env
 commands:
 - name: start
