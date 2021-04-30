@@ -90,3 +90,4 @@ messages.mo
 .last_tag
 *.tmp
 docker/requirements-local.txt
+.env
