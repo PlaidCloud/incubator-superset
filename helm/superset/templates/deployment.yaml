@@ -153,6 +153,7 @@ spec:
         {{- if .Values.devMode }}
         - name: superset-frontend
           emptyDir: {}
+        {{- end }}
         {{- if .Values.extraConfigs }}
         - name: superset-extra-config
           configMap:

@@ -117,10 +117,13 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
 
     def can_access_schema(self, datasource: "BaseDatasource") -> bool:
-        return self.can_access_datasource(datasource) or super().can_access_schema(datasource)
+        return self.can_access_datasource(datasource)
 
 
     def can_access_datasource(self, datasource: "BaseDatasource") -> bool:
+        if datasource.schema is None:
+            # Call the base method if there is no schema since it isn't a plaid table.
+            return super().can_access_datasource(datasource)
         rpc = self.get_rpc()
         table_id = "{}{}".format("analyzetable_", str(datasource.uuid))
         table_id_without_dashes = table_id.replace("-", "")
@@ -130,8 +133,8 @@ class PlaidSecurityManager(SupersetSecurityManager):
         if table["id"] is None:
             table = rpc.analyze.table.table(project_id=datasource.schema.replace("report", ""), table_id=table_id_without_dashes)            
             log.debug(table)
-        return table.get('id', None) is not None or super().can_access_datasource(datasource)
-
+        return table.get('id', None) is not None
+        
 
     def get_project_ids(self):
         from superset.models.core import Database

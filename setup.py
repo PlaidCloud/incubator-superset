@@ -64,6 +64,7 @@ setup(
     zip_safe=False,
     entry_points={"console_scripts": ["superset=superset.cli:superset"]},
     install_requires=[
+        "Authlib==0.13",
         "backoff>=1.8.0",
         "bleach>=3.0.2, <4.0.0",
         "cachelib>=0.1.1,<0.2",

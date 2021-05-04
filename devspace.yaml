@@ -1,7 +1,7 @@
 version: v1beta9
 images:
-  backend:
-    image: gcr.io/plaidcloud-build/superset/dev
+  superset:
+    image: gcr.io/plaidcloud-build/superset/production
     preferSyncOverRebuild: true
     build:
       custom:
@@ -22,6 +22,17 @@ images:
         - ${DEVSPACE_RANDOM}
     tags:
     - ${DEVSPACE_RANDOM}
+  node:
+    image: gcr.io/plaidcloud-build/superset/node
+    preferSyncOverRebuild: true
+    build:
+      custom:
+        command: ./deploy
+        args:
+        - node
+        - ${DEVSPACE_RANDOM}
+    tags:
+    - ${DEVSPACE_RANDOM}
 deployments:
 - name: superset
   helm:
@@ -29,11 +40,11 @@ deployments:
       name: ./helm/superset
       version: v0.0.1
     values:
-      devMode: true
+      devMode: false
       extraEnv:
         FLASK_ENV: "development"
       image:
-        repository: gcr.io/plaidcloud-build/superset/dev
+        repository: gcr.io/plaidcloud-build/superset/production
         tag: latest
         pullPolicy: IfNotPresent
         pullSecret: gcr-key
@@ -43,7 +54,7 @@ deployments:
         pullPolicy: IfNotPresent
         pullSecret: gcr-key
         entrypoint:
-          - "entrypoint"
+          # - "entrypoint"
           - "python"
           - "/plaid/plaid/event_handler.py"
       init:
@@ -60,7 +71,7 @@ deployments:
         password: cocoa puffs
       supersetNode:
         command:
-          - "entrypoint"
+          # - "entrypoint"
           - "flask"
           - "run"
           - "--host"
@@ -81,8 +92,8 @@ deployments:
         enabled: true
         baseUrl: "https://${DEV_NAMESPACE}.plaidcloud.io/"
         cookieName: "_session_id"
-        clientId: "GMJCvjkqe01vr6gk5ZW9yirE"
-        clientSecret: "xdWRa49Uh7n7nm1jTh273ilCVitvNJ4TqHSm12J3sHTyVuwY"
+        clientId: "CfEsXCRvwLqkYQNYc67FhsU6"
+        clientSecret: "b5jK3fLorFBrBY575l32JUnkUoRto0mD1TsX45vheC0SVycz"
         authEndpoint: https://${DEV_NAMESPACE}.plaidcloud.io/oauth/authorize
         tokenEndpoint: https://${DEV_NAMESPACE}.plaidcloud.io/oauth/token
         jwksEndpoint: https://${DEV_NAMESPACE}.plaidcloud.io/oauth/jwks
@@ -92,7 +103,7 @@ deployments:
       #   apiKey: pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ
 dev:
   sync:
-  - imageName: gcr.io/plaidcloud-build/superset/dev
+  - imageName: superset
     labelSelector:
       app: superset
       component: superset
@@ -107,7 +118,7 @@ dev:
           args:
           - -c
           - "kill -HUP 1"
-  - imageName: gcr.io/plaidcloud-build/superset/dev
+  - imageName: superset
     labelSelector:
       app: superset
       component: superset
@@ -122,7 +133,7 @@ dev:
           args:
           - -c
           - "kill -HUP 1"
-  - imageName: node:12
+  - imageName: node
     labelSelector:
       app: superset
       component: superset
@@ -130,7 +141,7 @@ dev:
     localSubPath: ./superset-frontend
     containerPath: /app/superset-frontend
     disableDownload: true
-  - imageName: gcr.io/plaidcloud-build/superset/events
+  - imageName: events
     labelSelector:
       app: superset
       component: superset-events

@@ -21,6 +21,7 @@ attrs==20.2.0
 # via
 #   aiohttp
 #   jsonschema
+Authlib==0.13
 babel==2.8.0
 # via flask-babel
 backoff==1.10.0
