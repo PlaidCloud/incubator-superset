@@ -37,8 +37,16 @@ import FilterTabs from './FilterTabs';
 import FiltersConfigForm from './FiltersConfigForm/FiltersConfigForm';
 import { useOpenModal, useRemoveCurrentFilter } from './state';
 
+const StyledModalWrapper = styled(StyledModal)`
+  min-width: 700px;
+  .ant-modal-body {
+    padding: 0px;
+  }
+`;
+
 export const StyledModalBody = styled.div`
   display: flex;
+  height: 500px;
   flex-direction: row;
   .filters-list {
     width: ${({ theme }) => theme.gridUnit * 50}px;
@@ -62,6 +70,7 @@ export interface FiltersConfigModalProps {
   onSave: (filterConfig: FilterConfiguration) => Promise<void>;
   onCancel: () => void;
 }
+export const CASCADING_FILTERS = ['filter_select'];
 
 /**
  * This is the modal to configure all the dashboard-native filters.
@@ -170,6 +179,9 @@ export function FiltersConfigModal({
   const getParentFilters = (id: string) =>
     filterIds
       .filter(filterId => filterId !== id && !removedFilters[filterId])
+      .filter(filterId =>
+        CASCADING_FILTERS.includes(formValues.filters[filterId]?.filterType),
+      )
       .map(id => ({
         id,
         title: getFilterTitle(id),
@@ -200,11 +212,11 @@ export function FiltersConfigModal({
   };
 
   return (
-    <StyledModal
+    <StyledModalWrapper
       visible={isOpen}
       maskClosable={false}
       title={t('Filters configuration and scoping')}
-      width="55%"
+      width="50%"
       destroyOnClose
       onCancel={handleCancel}
       onOk={handleSave}
@@ -264,6 +276,6 @@ export function FiltersConfigModal({
           </StyledForm>
         </StyledModalBody>
       </ErrorBoundary>
-    </StyledModal>
+    </StyledModalWrapper>
   );
 }

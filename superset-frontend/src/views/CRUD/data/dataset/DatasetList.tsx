@@ -420,7 +420,7 @@ const DatasetList: FunctionComponent<DatasetListProps> = ({
       //   Header: t('Database'),
       //   id: 'database',
       //   input: 'select',
-      //   operator: 'rel_o_m',
+      //   operator: FilterOperator.relationOneMany,
       //   unfilteredLabel: 'All',
       //   fetchSelects: createFetchRelated(
       //     'dataset',
@@ -435,7 +435,7 @@ const DatasetList: FunctionComponent<DatasetListProps> = ({
       //   Header: t('Schema'),
       //   id: 'schema',
       //   input: 'select',
-      //   operator: 'eq',
+      //   operator: FilterOperator.equals,
       //   unfilteredLabel: 'All',
       //   fetchSelects: createFetchDistinct(
       //     'dataset',
