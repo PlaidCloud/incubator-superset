@@ -1,7 +1,11 @@
 version: v1beta9
 images:
   superset:
+<<<<<<< HEAD
     image: gcr.io/plaidcloud-build/superset/production
+=======
+    image: gcr.io/plaidcloud-build/superset/dev
+>>>>>>> develop
     preferSyncOverRebuild: true
     build:
       custom:
@@ -92,8 +96,8 @@ deployments:
         enabled: true
         baseUrl: "https://${DEV_NAMESPACE}.plaidcloud.io/"
         cookieName: "_session_id"
-        clientId: "CfEsXCRvwLqkYQNYc67FhsU6"
-        clientSecret: "b5jK3fLorFBrBY575l32JUnkUoRto0mD1TsX45vheC0SVycz"
+        clientId: "${OAUTH_CLIENT_ID}"
+        clientSecret: "${OAUTH_CLIENT_SECRET}"
         authEndpoint: https://${DEV_NAMESPACE}.plaidcloud.io/oauth/authorize
         tokenEndpoint: https://${DEV_NAMESPACE}.plaidcloud.io/oauth/token
         jwksEndpoint: https://${DEV_NAMESPACE}.plaidcloud.io/oauth/jwks
@@ -156,11 +160,21 @@ dev:
           args:
           - -c
           - "kill -HUP 1"
+######################################################################################################
+# READ THIS:
+#   To set any variables with a source of `env`, copy the `.env-sample` file at the root of
+#   this project into a new `.env` file (if it doesn't exist), and add/update the vars there.
+#   More info: <https://devspace.sh/cli/docs/configuration/env-file>
+######################################################################################################
 vars:
 - name: DEV_NAMESPACE
   question: Whats your dev namespace name? This can be changed later with `devspace
     set var DEV_NAMESPACE=<new-namespace>`
   source: input
+- name: OAUTH_CLIENT_ID
+  source: env
+- name: OAUTH_CLIENT_SECRET
+  source: env
 commands:
 - name: start
   command: |
