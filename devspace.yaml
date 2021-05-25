@@ -1,11 +1,7 @@
 version: v1beta9
 images:
   superset:
-<<<<<<< HEAD
-    image: gcr.io/plaidcloud-build/superset/production
-=======
     image: gcr.io/plaidcloud-build/superset/dev
->>>>>>> develop
     preferSyncOverRebuild: true
     build:
       custom:
