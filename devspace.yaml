@@ -1,27 +1,27 @@
 version: v1beta9
 images:
-  superset:
-    image: gcr.io/plaidcloud-build/superset/dev
-    preferSyncOverRebuild: true
-    build:
-      custom:
-        command: ./deploy
-        args:
-        - dev
-        - ${DEVSPACE_RANDOM}
-    tags:
-    - ${DEVSPACE_RANDOM}
-  events:
-    image: gcr.io/plaidcloud-build/superset/events
-    preferSyncOverRebuild: true
-    build:
-      custom:
-        command: ./deploy
-        args:
-        - events
-        - ${DEVSPACE_RANDOM}
-    tags:
-    - ${DEVSPACE_RANDOM}
+  # superset:
+  #   image: gcr.io/plaidcloud-build/superset/dev
+  #   preferSyncOverRebuild: true
+  #   build:
+  #     custom:
+  #       command: ./deploy
+  #       args:
+  #       - dev
+  #       - ${DEVSPACE_RANDOM}
+  #   tags:
+  #   - ${DEVSPACE_RANDOM}
+  # events:
+  #   image: gcr.io/plaidcloud-build/superset/events
+  #   preferSyncOverRebuild: true
+  #   build:
+  #     custom:
+  #       command: ./deploy
+  #       args:
+  #       - events
+  #       - ${DEVSPACE_RANDOM}
+  #   tags:
+  #   - ${DEVSPACE_RANDOM}
   node:
     image: gcr.io/plaidcloud-build/superset/node
     preferSyncOverRebuild: true
@@ -40,11 +40,11 @@ deployments:
       name: ./helm/superset
       version: v0.0.1
     values:
-      devMode: false
+      devMode: true
       extraEnv:
         FLASK_ENV: "development"
       image:
-        repository: gcr.io/plaidcloud-build/superset/production
+        repository: gcr.io/plaidcloud-build/superset/dev
         tag: latest
         pullPolicy: IfNotPresent
         pullSecret: gcr-key
@@ -58,17 +58,17 @@ deployments:
           - "python"
           - "/plaid/plaid/event_handler.py"
       init:
-        enabled: false
+        enabled: true
         loadExamples: true
       greenplum:
         host: postgres-postgresql-headless
       rabbitmq:
-        host: rabbitmq-rabbitmq-ha
+        host: plaid-rabbitmq-headless
         port: 5672
         queue: events
-        vhost: events
-        username: event_user
-        password: cocoa puffs
+        vhost: plaidcloud-public
+        username: plaidcloud-public
+        password: plaidcloud-public
       supersetNode:
         command:
           # - "entrypoint"
@@ -103,36 +103,36 @@ deployments:
       #   apiKey: pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ
 dev:
   sync:
-  - imageName: superset
-    labelSelector:
-      app: superset
-      component: superset
-    containerName: superset
-    localSubPath: ./superset
-    containerPath: /app/superset
-    disableDownload: true
-    onUpload:
-      execRemote:
-        onBatch:
-          command: bash
-          args:
-          - -c
-          - "kill -HUP 1"
-  - imageName: superset
-    labelSelector:
-      app: superset
-      component: superset
-    containerName: superset
-    localSubPath: ./plaid
-    containerPath: /plaid/plaid
-    disableDownload: true
-    onUpload:
-      execRemote:
-        onBatch:
-          command: bash
-          args:
-          - -c
-          - "kill -HUP 1"
+  # - imageName: superset
+  #   labelSelector:
+  #     app: superset
+  #     component: superset
+  #   containerName: superset
+  #   localSubPath: ./superset
+  #   containerPath: /app/superset
+  #   disableDownload: true
+  #   onUpload:
+  #     execRemote:
+  #       onBatch:
+  #         command: bash
+  #         args:
+  #         - -c
+  #         - "kill -HUP 1"
+  # - imageName: superset
+  #   labelSelector:
+  #     app: superset
+  #     component: superset
+  #   containerName: superset
+  #   localSubPath: ./plaid
+  #   containerPath: /plaid/plaid
+  #   disableDownload: true
+  #   onUpload:
+  #     execRemote:
+  #       onBatch:
+  #         command: bash
+  #         args:
+  #         - -c
+  #         - "kill -HUP 1"
   - imageName: node
     labelSelector:
       app: superset
@@ -141,21 +141,21 @@ dev:
     localSubPath: ./superset-frontend
     containerPath: /app/superset-frontend
     disableDownload: true
-  - imageName: events
-    labelSelector:
-      app: superset
-      component: superset-events
-    containerName: events
-    localSubPath: ./plaid
-    containerPath: /plaid/plaid
-    disableDownload: true
-    onUpload:
-      execRemote:
-        onBatch:
-          command: bash
-          args:
-          - -c
-          - "kill -HUP 1"
+  # - imageName: events
+  #   labelSelector:
+  #     app: superset
+  #     component: superset-events
+  #   containerName: events
+  #   localSubPath: ./plaid
+  #   containerPath: /plaid/plaid
+  #   disableDownload: true
+  #   onUpload:
+  #     execRemote:
+  #       onBatch:
+  #         command: bash
+  #         args:
+  #         - -c
+  #         - "kill -HUP 1"
 ######################################################################################################
 # READ THIS:
 #   To set any variables with a source of `env`, copy the `.env-sample` file at the root of

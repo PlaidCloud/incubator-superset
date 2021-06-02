@@ -68,7 +68,10 @@ COPY ./superset-frontend /app/superset-frontend
 RUN cd /app/superset-frontend \
         && npm run ${BUILD_CMD} \
         && rm -rf node_modules
-
+COPY ./docker/docker-frontend.sh /app/docker/docker-frontend.sh
+RUN chmod +x /app/docker/docker-frontend.sh
+WORKDIR /app/superset-frontend
+ENTRYPOINT ["/app/docker/docker-frontend.sh"]
 
 ######################################################################
 # Final lean image...
@@ -106,7 +109,6 @@ COPY setup.py MANIFEST.in README.md /app/
 RUN cd /app \
         && chown -R superset:superset * \
         && pip install -e .
-
 COPY plaid /plaid/plaid/
 COPY ./docker/docker-entrypoint.sh /usr/bin/
 

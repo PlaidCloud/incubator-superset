@@ -98,9 +98,8 @@ spec:
 {{ toYaml .Values.resources | indent 12 }}
         {{- if .Values.devMode }}
         - name: node
-          image: node:12
+          image: gcr.io/plaidcloud-build/superset/dev:latest
           imagePullPolicy: IfNotPresent
-          command: ["sleep", "infinity"]
           env:
           {{ if .Values.extraEnv }}
             {{- range $key, $value := .Values.extraEnv }}
