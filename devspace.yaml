@@ -48,6 +48,8 @@ deployments:
         tag: latest
         pullPolicy: IfNotPresent
         pullSecret: gcr-key
+      node:
+        repository: gcr.io/plaidcloud-build/superset/node
       events:
         repository: gcr.io/plaidcloud-build/superset/events
         tag: latest
@@ -58,7 +60,7 @@ deployments:
           - "python"
           - "/plaid/plaid/event_handler.py"
       init:
-        enabled: true
+        enabled: false
         loadExamples: true
       greenplum:
         host: postgres-postgresql-headless

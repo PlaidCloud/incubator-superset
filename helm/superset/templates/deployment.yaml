@@ -98,7 +98,7 @@ spec:
 {{ toYaml .Values.resources | indent 12 }}
         {{- if .Values.devMode }}
         - name: node
-          image: gcr.io/plaidcloud-build/superset/dev:latest
+          image: "{{ .Values.node.repository }}"
           imagePullPolicy: IfNotPresent
           env:
           {{ if .Values.extraEnv }}
