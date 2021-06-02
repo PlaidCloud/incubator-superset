@@ -140,9 +140,17 @@ dev:
       app: superset
       component: superset
     containerName: node
-    localSubPath: ./superset-frontend
-    containerPath: /app/superset-frontend
+    localSubPath: ./superset-frontend/src
+    containerPath: /app/superset-frontend/src
     disableDownload: true
+  - imageName: node
+    labelSelector:
+      app: superset
+      component: superset
+    containerName: node
+    localSubPath: ./superset-frontend/spec
+    containerPath: /app/superset-frontend/spec
+    disableDownload: true    
   # - imageName: events
   #   labelSelector:
   #     app: superset
