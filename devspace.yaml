@@ -104,6 +104,16 @@ deployments:
       # mapbox:
       #   apiKey: pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ
 dev:
+  ports:
+  - imageName: superset
+    labelSelector:
+      component: superset
+    forward:
+    - port: 9000
+      remotePort: 9000
+    reverseForward:
+    - port: 4000
+      remotePort: 8091
   sync:
   - imageName: superset
     labelSelector:
@@ -193,7 +203,7 @@ commands:
 - name: node
   command: |
     POD_NAME=$(kubectl get pods -l app=superset,component=superset --field-selector status.phase=Running -o jsonpath={.items[0].metadata.name})
-    kubectl exec $POD_NAME -c node -- bash -c "cd /app/superset-frontend && npm install -f --no-optional --global webpack webpack-cli && npm install -f --no-optional && npm run dev"
+    kubectl exec $POD_NAME -c node -- bash -c "/app/docker/docker-frontend.sh"
 - name: dev
   command: |
     POD_NAME=$(kubectl get pods -l app=superset,component=superset --field-selector status.phase=Running -o jsonpath={.items[0].metadata.name})

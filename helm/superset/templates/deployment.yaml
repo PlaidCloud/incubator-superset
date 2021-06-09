@@ -100,7 +100,7 @@ spec:
         - name: node
           image: "{{ .Values.node.repository }}"
           imagePullPolicy: IfNotPresent
-          # command: ["sleep", "infinity"]
+          command: ["sleep", "infinity"]
           env:
           {{ if .Values.extraEnv }}
             {{- range $key, $value := .Values.extraEnv }}
