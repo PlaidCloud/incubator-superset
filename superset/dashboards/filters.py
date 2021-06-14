@@ -105,7 +105,7 @@ class DashboardAccessFilter(BaseFilter):
             )
         )
 
-        logger.info(str(published_dash_query))
+        logger.info(str(datasource_perm_query))
 
         users_favorite_dash_query = db.session.query(FavStar.obj_id).filter(
             and_(

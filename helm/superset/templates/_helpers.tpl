@@ -425,7 +425,7 @@ PLAID_BASE_PERMISSIONS = {
 		"SavedQuery"
     },
 	# "copyrole": {"RoleModelView"},
-	# "database_access": {"[examples].(id:1)"},
+	"database_access": {"[examples].(id:1)"},
 	# "datasource_access": {
         # "[examples].[bart_lines](id:11)",
 		# "[examples].[birth_france_by_region](id:6)",

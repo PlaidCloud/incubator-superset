@@ -30,8 +30,8 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: {{ .Values.service.port }}
-      targetPort: http
+    - port: 80
+      targetPort: {{ .Values.devMode | ternary 9000 .Values.service.port }}
       protocol: TCP
       name: http
   selector:

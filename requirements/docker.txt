@@ -12,6 +12,7 @@ gevent==20.9.0
     # via -r requirements/docker.in
 greenlet==0.4.17
     # via gevent
+pika
 psycopg2-binary==2.8.6
     # via -r requirements/docker.in
 zope.event==4.5.0

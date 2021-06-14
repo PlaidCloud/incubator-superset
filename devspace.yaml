@@ -56,14 +56,14 @@ deployments:
         pullPolicy: IfNotPresent
         pullSecret: gcr-key
         entrypoint:
-          # - "entrypoint"
+          - "entrypoint"
           - "python"
           - "/plaid/plaid/event_handler.py"
       init:
         enabled: false
         loadExamples: true
       greenplum:
-        host: postgres-postgresql-headless
+        host: plaid-postgres-headless
       rabbitmq:
         host: plaid-rabbitmq-headless
         port: 5672
@@ -132,6 +132,13 @@ dev:
           - "kill -HUP 1"
   - imageName: superset
     labelSelector:
+      component: superset
+    containerName: superset
+    localSubPath: ../plaid-rpc/plaidcloud/rpc
+    containerPath: /usr/local/lib/python3.7/site-packages/plaidcloud/rpc/
+    disableDownload: true
+  - imageName: superset
+    labelSelector:
       app: superset
       component: superset
     containerName: superset
@@ -161,21 +168,21 @@ dev:
     localSubPath: ./superset-frontend/spec
     containerPath: /app/superset-frontend/spec
     disableDownload: true    
-  # - imageName: events
-  #   labelSelector:
-  #     app: superset
-  #     component: superset-events
-  #   containerName: events
-  #   localSubPath: ./plaid
-  #   containerPath: /plaid/plaid
-  #   disableDownload: true
-  #   onUpload:
-  #     execRemote:
-  #       onBatch:
-  #         command: bash
-  #         args:
-  #         - -c
-  #         - "kill -HUP 1"
+  - imageName: events
+    labelSelector:
+      app: superset
+      component: superset-events
+    containerName: events
+    localSubPath: ./plaid
+    containerPath: /plaid/plaid
+    disableDownload: true
+    onUpload:
+      execRemote:
+        onBatch:
+          command: bash
+          args:
+          - -c
+          - "kill -HUP 1"
 ######################################################################################################
 # READ THIS:
 #   To set any variables with a source of `env`, copy the `.env-sample` file at the root of
@@ -203,8 +210,8 @@ commands:
 - name: node
   command: |
     POD_NAME=$(kubectl get pods -l app=superset,component=superset --field-selector status.phase=Running -o jsonpath={.items[0].metadata.name})
-    kubectl exec $POD_NAME -c node -- bash -c "/app/docker/docker-frontend.sh"
+    kubectl exec $POD_NAME -c node -- bash -c "npm install -f --no-optional --global webpack webpack-cli && npm install -f --no-optional"
 - name: dev
   command: |
     POD_NAME=$(kubectl get pods -l app=superset,component=superset --field-selector status.phase=Running -o jsonpath={.items[0].metadata.name})
-    kubectl exec $POD_NAME -c node -- bash -c "cd /app/superset-frontend && npm run dev"
+    kubectl exec $POD_NAME -c node -- bash -c "npm run dev-server -- --host=0.0.0.0 --public=https://${DEV_NAMESPACE}-viz.plaidcloud.io --disable-host-check"

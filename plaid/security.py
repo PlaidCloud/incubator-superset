@@ -108,6 +108,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
 
     def can_access_database(self, database: Union["Database", "DruidCluster"]) -> bool:
+        log.error(database)
         rpc = self.get_rpc()
         proj = rpc.analyze.project.project_sync(project_id=str(database.uuid))
         log.debug(proj)
@@ -121,6 +122,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
 
     def can_access_datasource(self, datasource: "BaseDatasource") -> bool:
+        log.error(datasource)
         if datasource.schema is None:
             # Call the base method if there is no schema since it isn't a plaid table.
             return super().can_access_datasource(datasource)
@@ -142,8 +144,9 @@ class PlaidSecurityManager(SupersetSecurityManager):
         start = time.time()
         projects = rpc.analyze.project.projects_sync()
         end = time.time()
+        log.error(f"Fetched these projects in {end - start}: {projects}")
         project_uuids = {str(uuid.UUID(project['id'])) for project in projects}
-        log.debug(f"Fetched these projects in {end - start}: {project_uuids}")
+        log.error(project_uuids)
         return self.get_session.query(Database.id).filter(Database.uuid.in_(project_uuids))
 
 
