@@ -19,9 +19,10 @@
 import React from 'react';
 import sinon from 'sinon';
 import { shallow } from 'enzyme';
-import { Modal } from 'react-bootstrap';
 import { getChartMetadataRegistry, ChartMetadata } from '@superset-ui/core';
 import VizTypeControl from 'src/explore/components/controls/VizTypeControl';
+import Modal from 'src/components/Modal';
+import { Input } from 'src/common/components';
 
 const defaultProps = {
   name: 'viz_type',
@@ -65,7 +66,11 @@ describe('VizTypeControl', () => {
   });
   it('filters images based on text input', () => {
     expect(wrapper.find('img')).toHaveLength(2);
-    wrapper.setState({ filter: 'vis2' });
+    wrapper.find(Input).simulate('change', {
+      target: {
+        value: 'vis2',
+      },
+    });
     expect(wrapper.find('img')).toExist();
   });
 });

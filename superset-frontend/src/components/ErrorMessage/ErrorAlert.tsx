@@ -17,9 +17,9 @@
  * under the License.
  */
 import React, { useState, ReactNode } from 'react';
-import { Modal } from 'react-bootstrap';
 import { styled, supersetTheme, t } from '@superset-ui/core';
 import { noOp } from 'src/utils/common';
+import Modal from 'src/components/Modal';
 import Button from 'src/components/Button';
 
 import Icon from '../Icon';
@@ -59,22 +59,19 @@ const ErrorModal = styled(Modal)<{ level: ErrorLevel }>`
   color: ${({ level, theme }) => theme.colors[level].dark2};
   overflow-wrap: break-word;
 
+  .ant-modal-header {
+    background-color: ${({ level, theme }) => theme.colors[level].light2};
+    padding: ${({ theme }) => 4 * theme.gridUnit}px;
+  }
+
   .icon {
     margin-right: ${({ theme }) => 2 * theme.gridUnit}px;
   }
 
   .header {
-    align-items: center;
-    background-color: ${({ level, theme }) => theme.colors[level].light2};
     display: flex;
-    justify-content: space-between;
+    align-items: center;
     font-size: ${({ theme }) => theme.typography.sizes.l}px;
-
-    // Remove clearfix hack as Superset is only used on modern browsers
-    ::before,
-    ::after {
-      content: unset;
-    }
   }
 `;
 
@@ -106,7 +103,7 @@ export default function ErrorAlert({
   const isExpandable = ['explore', 'sqllab'].includes(source);
 
   return (
-    <ErrorAlertDiv level={level}>
+    <ErrorAlertDiv level={level} role="alert">
       <div className="top-row">
         <LeftSideContent>
           <Icon
@@ -117,9 +114,14 @@ export default function ErrorAlert({
           <strong>{title}</strong>
         </LeftSideContent>
         {!isExpandable && (
-          <a href="#" className="link" onClick={() => setIsModalOpen(true)}>
-            {t('See More')}
-          </a>
+          <span
+            role="button"
+            tabIndex={0}
+            className="link"
+            onClick={() => setIsModalOpen(true)}
+          >
+            {t('See more')}
+          </span>
         )}
       </div>
       {isExpandable ? (
@@ -128,25 +130,27 @@ export default function ErrorAlert({
           {body && (
             <>
               {!isBodyExpanded && (
-                <a
-                  href="#"
+                <span
+                  role="button"
+                  tabIndex={0}
                   className="link"
                   onClick={() => setIsBodyExpanded(true)}
                 >
-                  {t('See More')}
-                </a>
+                  {t('See more')}
+                </span>
               )}
               {isBodyExpanded && (
                 <>
                   <br />
                   {body}
-                  <a
-                    href="#"
+                  <span
+                    role="button"
+                    tabIndex={0}
                     className="link"
                     onClick={() => setIsBodyExpanded(false)}
                   >
-                    {t('See Less')}
-                  </a>
+                    {t('See less')}
+                  </span>
                 </>
               )}
             </>
@@ -157,46 +161,41 @@ export default function ErrorAlert({
           level={level}
           show={isModalOpen}
           onHide={() => setIsModalOpen(false)}
-        >
-          <Modal.Header className="header">
-            <LeftSideContent>
+          title={
+            <div className="header">
               <Icon
                 className="icon"
                 name={level === 'error' ? 'error-solid' : 'warning-solid'}
                 color={supersetTheme.colors[level].base}
               />
               <div className="title">{title}</div>
-            </LeftSideContent>
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={() => setIsModalOpen(false)}
-            >
-              <Icon name="close" />
-            </span>
-          </Modal.Header>
-          <Modal.Body>
+            </div>
+          }
+          footer={
+            <>
+              {copyText && (
+                <CopyToClipboard
+                  text={copyText}
+                  shouldShowText={false}
+                  wrapped={false}
+                  copyNode={<Button onClick={noOp}>{t('Copy message')}</Button>}
+                />
+              )}
+              <Button
+                cta
+                buttonStyle="primary"
+                onClick={() => setIsModalOpen(false)}
+              >
+                {t('Close')}
+              </Button>
+            </>
+          }
+        >
+          <>
             <p>{subtitle}</p>
             <br />
             {body}
-          </Modal.Body>
-          <Modal.Footer>
-            {copyText && (
-              <CopyToClipboard
-                text={copyText}
-                shouldShowText={false}
-                wrapped={false}
-                copyNode={<Button onClick={noOp}>{t('Copy Message')}</Button>}
-              />
-            )}
-            <Button
-              cta
-              buttonStyle="primary"
-              onClick={() => setIsModalOpen(false)}
-            >
-              {t('Close')}
-            </Button>
-          </Modal.Footer>
+          </>
         </ErrorModal>
       )}
     </ErrorAlertDiv>

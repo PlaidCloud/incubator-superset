@@ -27,11 +27,14 @@ import { createFetchRelated, createErrorHandler } from 'src/views/CRUD/utils';
 import withToasts from 'src/messageToasts/enhancers/withToasts';
 import SubMenu, { SubMenuProps } from 'src/components/Menu/SubMenu';
 import DeleteModal from 'src/components/DeleteModal';
-import TooltipWrapper from 'src/components/TooltipWrapper';
+import { Tooltip } from 'src/components/Tooltip';
 import ConfirmStatusChange from 'src/components/ConfirmStatusChange';
-import { IconName } from 'src/components/Icon';
 import ActionsBar, { ActionProps } from 'src/components/ListView/ActionsBar';
-import ListView, { ListViewProps, Filters } from 'src/components/ListView';
+import ListView, {
+  ListViewProps,
+  Filters,
+  FilterOperator,
+} from 'src/components/ListView';
 import CssTemplateModal from './CssTemplateModal';
 import { TemplateObject } from './types';
 
@@ -40,11 +43,15 @@ const PAGE_SIZE = 25;
 interface CssTemplatesListProps {
   addDangerToast: (msg: string) => void;
   addSuccessToast: (msg: string) => void;
+  user: {
+    userId: string | number;
+  };
 }
 
 function CssTemplatesList({
   addDangerToast,
   addSuccessToast,
+  user,
 }: CssTemplatesListProps) {
   const {
     state: {
@@ -59,7 +66,7 @@ function CssTemplatesList({
     toggleBulkSelect,
   } = useListViewResource<TemplateObject>(
     'css_template',
-    t('css templates'),
+    t('CSS templates'),
     addDangerToast,
   );
   const [cssTemplateModalOpen, setCssTemplateModalOpen] = useState<boolean>(
@@ -70,9 +77,9 @@ function CssTemplatesList({
     setCurrentCssTemplate,
   ] = useState<TemplateObject | null>(null);
 
-  const canCreate = hasPerm('can_add');
-  const canEdit = hasPerm('can_edit');
-  const canDelete = hasPerm('can_delete');
+  const canCreate = hasPerm('can_write');
+  const canEdit = hasPerm('can_write');
+  const canDelete = hasPerm('can_write');
 
   const [
     templateCurrentlyDeleting,
@@ -142,16 +149,16 @@ function CssTemplatesList({
           }
 
           return (
-            <TooltipWrapper
-              label="allow-run-async-header"
-              tooltip={t('Last modified by %s', name)}
+            <Tooltip
+              id="allow-run-async-header-tooltip"
+              title={t('Last modified by %s', name)}
               placement="right"
             >
               <span>{changedOn}</span>
-            </TooltipWrapper>
+            </Tooltip>
           );
         },
-        Header: t('Last Modified'),
+        Header: t('Last modified'),
         accessor: 'changed_on_delta_humanized',
         size: 'xl',
         disableSortBy: true,
@@ -177,7 +184,7 @@ function CssTemplatesList({
 
           return moment(utc).fromNow();
         },
-        Header: t('Created On'),
+        Header: t('Created on'),
         accessor: 'created_on',
         size: 'xl',
         disableSortBy: true,
@@ -185,7 +192,7 @@ function CssTemplatesList({
       {
         accessor: 'created_by',
         disableSortBy: true,
-        Header: t('Created By'),
+        Header: t('Created by'),
         Cell: ({
           row: {
             original: { created_by: createdBy },
@@ -205,7 +212,7 @@ function CssTemplatesList({
                   label: 'edit-action',
                   tooltip: t('Edit template'),
                   placement: 'bottom',
-                  icon: 'edit' as IconName,
+                  icon: 'Edit',
                   onClick: handleEdit,
                 }
               : null,
@@ -214,7 +221,7 @@ function CssTemplatesList({
                   label: 'delete-action',
                   tooltip: t('Delete template'),
                   placement: 'bottom',
-                  icon: 'trash' as IconName,
+                  icon: 'Trash',
                   onClick: handleDelete,
                 }
               : null,
@@ -233,7 +240,7 @@ function CssTemplatesList({
   );
 
   const menuData: SubMenuProps = {
-    name: t('CSS Templates'),
+    name: t('CSS templates'),
   };
 
   const subMenuButtons: SubMenuProps['buttons'] = [];
@@ -242,7 +249,7 @@ function CssTemplatesList({
     subMenuButtons.push({
       name: (
         <>
-          <i className="fa fa-plus" /> {t('Css Template')}
+          <i className="fa fa-plus" /> {t('CSS template')}
         </>
       ),
       buttonStyle: 'primary',
@@ -255,7 +262,7 @@ function CssTemplatesList({
 
   if (canDelete) {
     subMenuButtons.push({
-      name: t('Bulk Select'),
+      name: t('Bulk select'),
       onClick: toggleBulkSelect,
       buttonStyle: 'secondary',
     });
@@ -266,10 +273,10 @@ function CssTemplatesList({
   const filters: Filters = useMemo(
     () => [
       {
-        Header: t('Created By'),
+        Header: t('Created by'),
         id: 'created_by',
         input: 'select',
-        operator: 'rel_o_m',
+        operator: FilterOperator.relationOneMany,
         unfilteredLabel: 'All',
         fetchSelects: createFetchRelated(
           'css_template',
@@ -280,6 +287,7 @@ function CssTemplatesList({
               errMsg,
             ),
           ),
+          user.userId,
         ),
         paginate: true,
       },
@@ -287,7 +295,7 @@ function CssTemplatesList({
         Header: t('Search'),
         id: 'template_name',
         input: 'search',
-        operator: 'ct',
+        operator: FilterOperator.contains,
       },
     ],
     [],

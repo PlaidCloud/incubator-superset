@@ -97,7 +97,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
     def get_rpc(self):
         base_url = "{}{}".format("http://", self.appbuilder.app.config.get("PLAID_RPC"))
-        rpc_url = urljoin(base_url, "json-rpc")
+        rpc_url = urljoin(base_url, "json-rpc/")
         if session.get("workspace") is None:
             temp_rpc = SimpleRPC(session["token"]["access_token"], uri=rpc_url, verify_ssl=False)
             session["workspace"] = temp_rpc.identity.me.workspace_id()
@@ -108,46 +108,52 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
 
     def can_access_database(self, database: Union["Database", "DruidCluster"]) -> bool:
+        log.error(database)
         rpc = self.get_rpc()
-        proj = rpc.analyze.project.project(project_id=str(database.uuid))
+        proj = rpc.analyze.project.project_sync(project_id=str(database.uuid))
         log.debug(proj)
         if proj["id"] is None:
-            proj = rpc.analyze.project.project(project_id=str(database.uuid).replace('-', ''))
+            proj = rpc.analyze.project.project_sync(project_id=str(database.uuid).replace('-', ''))
         return proj.get("id", None) is not None or super().can_access_database(database)
 
 
     def can_access_schema(self, datasource: "BaseDatasource") -> bool:
-        return self.can_access_datasource(datasource) or super().can_access_schema(datasource)
+        return self.can_access_datasource(datasource)
 
 
     def can_access_datasource(self, datasource: "BaseDatasource") -> bool:
+        log.error(datasource)
+        if datasource.schema is None:
+            # Call the base method if there is no schema since it isn't a plaid table.
+            return super().can_access_datasource(datasource)
         rpc = self.get_rpc()
         table_id = "{}{}".format("analyzetable_", str(datasource.uuid))
         table_id_without_dashes = table_id.replace("-", "")
         log.debug(table_id)
-        table = rpc.analyze.table.table(project_id=datasource.schema.replace("report", ""), table_id=table_id)
+        table = rpc.analyze.table.table_sync(project_id=datasource.schema.replace("report", ""), table_id=table_id)
         log.debug(table)
         if table["id"] is None:
-            table = rpc.analyze.table.table(project_id=datasource.schema.replace("report", ""), table_id=table_id_without_dashes)            
+            table = rpc.analyze.table.table_sync(project_id=datasource.schema.replace("report", ""), table_id=table_id_without_dashes)            
             log.debug(table)
-        return table.get('id', None) is not None or super().can_access_datasource(datasource)
-
+        return table.get('id', None) is not None
+        
 
     def get_project_ids(self):
         from superset.models.core import Database
         rpc = self.get_rpc()
         start = time.time()
-        projects = rpc.analyze.project.projects()
+        projects = rpc.analyze.project.projects_sync()
         end = time.time()
+        log.error(f"Fetched these projects in {end - start}: {projects}")
         project_uuids = {str(uuid.UUID(project['id'])) for project in projects}
-        log.debug(f"Fetched these projects in {end - start}: {project_uuids}")
+        log.error(project_uuids)
         return self.get_session.query(Database.id).filter(Database.uuid.in_(project_uuids))
 
 
     def get_table_ids(self):
         rpc = self.get_rpc()
         start = time.time()
-        tables = rpc.analyze.table.published_tables_by_project()
+        tables = rpc.analyze.table.published_tables_by_project_sync()
         end = time.time()
         table_ids = {str(uuid.UUID(table['id'].replace('analyzetable_', ''))) for table in tables}
         log.debug(f"Fetched these tables in {end - start}: {table_ids}")

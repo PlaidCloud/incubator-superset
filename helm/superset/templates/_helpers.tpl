@@ -49,16 +49,10 @@ Create chart name and version as used by the chart label.
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
-{{- define "superset-bootstrap" }}
-#!/bin/sh
-
-pip install {{ range .Values.additionalRequirements }}{{ . }} {{ end }}
-
-{{ end -}}
-
 {{- define "superset-config" }}
 import os
 import ssl
+from cachelib.redis import RedisCache
 from collections import OrderedDict
 from flask_appbuilder.security.manager import AUTH_DB, AUTH_OID
 from plaid.security import PlaidSecurityManager
@@ -84,6 +78,23 @@ SQLALCHEMY_DATABASE_URI = 'postgresql://{{ .Values.postgresql.postgresqlUsername
 PUBLIC_ROLE_LIKE_PLAID = False
 ADMIN_ENABLED = True
 SESSION_EXPIRATION = 600
+
+SQLALCHEMY_TRACK_MODIFICATIONS = True
+
+# Flask-WTF flag for CSRF
+WTF_CSRF_ENABLED = True
+# Add endpoints that need to be exempt from CSRF protection
+WTF_CSRF_EXEMPT_LIST = []
+# A CSRF token that expires in 1 year
+WTF_CSRF_TIME_LIMIT = 60 * 60 * 24 * 365
+
+{{ if .Values.configOverrides }}
+# Overrides
+{{- range $key, $value := .Values.configOverrides }}
+# {{ $key }}
+{{ tpl $value $ }}
+{{- end }}
+{{- end }}
 
 ENABLE_CORS = False
 PREFERRED_URL_SCHEME = 'https'
@@ -133,6 +144,8 @@ TABLE_NAMES_CACHE_CONFIG: CacheConfig = {
     {{- end }}
     'CACHE_REDIS_DB': 1,
 }
+
+DATA_CACHE_CONFIG = CACHE_CONFIG
 {{- end }}
 
 # Disable Druid. We don't use it.
@@ -205,26 +218,11 @@ OIDC_PARAMS = {
 
 {{- define "superset-permissions" }}
 PLAID_BASE_PERMISSIONS = {
-    # "all_database_access": {"all_database_access"},
-    # "all_datasource_access": {"all_datasource_access"},
-    # "all_query_access": {"all_query_access"},
+    #"all_database_access": {"all_database_access"},
+    #"all_datasource_access": {"all_datasource_access"},
+    #"all_query_access": {"all_query_access"},
     "can_activate": {"TabStateView"},
-    "can_add": {
-        "AnnotationModelView",
-        #"DatabaseView",
-        #"LogModelView",
-        "SavedQueryViewApi",
-        "SavedQueryView",
-        "SqlMetricInlineView",
-        "AnnotationLayerModelView",
-        "TableModelView",
-        "CssTemplateModelView",
-        "TableColumnInlineView",
-        # "UserOIDModelView",
-        "SliceModelView",
-        "DashboardModelView",
-        #"RoleModelView",
-    },
+    #"can_add": {"RoleModelView", "UserOIDModelView"},
     "can_add_slices": {"Superset"},
     "can_annotation_json": {"Superset"},
     "can_approve": {"Superset"},
@@ -237,39 +235,13 @@ PLAID_BASE_PERMISSIONS = {
     "can_dashboard": {"Superset"},
     "can_datasources": {"Superset"},
     "can_delete": {
-        "AnnotationModelView",
-        #"DatabaseView",
-        "TableSchemaView",
-        "SavedQueryView",
-        "SqlMetricInlineView",
-        "AnnotationLayerModelView",
-        "TableModelView",
-        "CssTemplateModelView",
-        "TabStateView",
-        "TableColumnInlineView",
-        # "UserOIDModelView",
-        "SliceModelView",
-        "DashboardModelView",
         #"RoleModelView",
+        "TableSchemaView",
+        "TabStateView",
+        #"UserOIDModelView",
     },
     "can_delete_query": {"TabStateView"},
-    "can_download": {"SliceModelView"},
-    "can_download_dashboards": {"DashboardModelView"},
-    "can_edit": {
-        "AnnotationModelView",
-        #"DatabaseView",
-        "SavedQueryViewApi",
-        "SavedQueryView",
-        "SqlMetricInlineView",
-        "AnnotationLayerModelView",
-        "TableModelView",
-        "CssTemplateModelView",
-        "TableColumnInlineView",
-        # "UserOIDModelView",
-        "SliceModelView",
-        "DashboardModelView",
-        #"RoleModelView",
-    },
+    #"can_edit": {"RoleModelView", "UserOIDModelView"},
     "can_estimate_query_cost": {"Superset"},
     "can_expanded": {"TableSchemaView"},
     "can_explore": {"Superset"},
@@ -282,53 +254,40 @@ PLAID_BASE_PERMISSIONS = {
     "can_favstar": {"Superset"},
     "can_fetch_datasource_metadata": {"Superset"},
     "can_filter": {"Superset"},
-    "can_get": {"TabStateView", "MenuApi", "OpenApi", "Datasource"},
+    "can_get": {
+		"Datasource",
+		"MenuApi",
+		"OpenApi",
+		"TabStateView",
+	},
     "can_import_dashboards": {"Superset"},
     "can_invalidate": {"CacheRestApi"},
-    "can_list": {
-        "AnnotationModelView",
-        "DatabaseView",
-        #"LogModelView",
-        "SavedQueryViewApi",
-        "QueryView",
-        "SavedQueryView",
-        "SliceAsync",
-        "AnnotationLayerModelView",
-        "SqlMetricInlineView",
-        "TableModelView",
-        "CssTemplateModelView",
-        "TableColumnInlineView",
-        "DashboardModelViewAsync",
-        # "UserOIDModelView",
-        "SliceModelView",
-        "DashboardModelView",
-        "CssTemplateAsyncModelView",
-        #"RoleModelView",
-    },
+    #"can_list": {"RoleModelView", "UserOIDModelView"},
     "can_log": {"Superset"},
     "can_migrate_query": {"TabStateView"},
-    "can_mulexport": {
-        "SliceModelView",
-        "DashboardModelView",
-        #"DatabaseView",
-        "TableModelView",
-    },
     "can_my_queries": {"SqlLab"},
-    "can_new": {"Dashboard"},
-    # "can_override_role_permissions": {"Superset"},
-    "can_post": {
-        # "DatabaseView",
-        "TableSchemaView",
-        "TabStateView",
-    },
-    # "can_profile": {"Superset"},
+    #"can_override_role_permissions": {"Superset"},
+    "can_post": {"TableSchemaView", "TabStateView"},
+    #"can_profile": {"Superset"},
     "can_publish": {"Superset"},
     "can_put": {"TabStateView"},
     "can_queries": {"Superset"},
-    # "can_query": {"Api"},
-    # "can_query_form_data": {"Api"},
+    #"can_query": {"Api"},
+    #"can_query_form_data": {"Api"},
+    "can_read": {
+        "Annotation",
+        "Chart",
+        "CssTemplate",
+        "Dashboard",
+        "Database",
+        "Dataset",
+        "Log",
+        "Query",
+        "ReportSchedule",
+        "SavedQuery",
+    },
     "can_recent_activity": {"Superset"},
-    # "can_request_access": {"Superset"},
+    #"can_request_access": {"Superset"},
     "can_results": {"Superset"},
     "can_save": {"Datasource"},
     "can_save_dash": {"Superset"},
@@ -337,24 +296,7 @@ PLAID_BASE_PERMISSIONS = {
     "can_search_queries": {"Superset"},
     "can_select_star": {"Superset"},
     "can_shortner": {"R"},
-    "can_show": {
-        "AnnotationModelView",
-        "DatabaseView",
-        #"LogModelView",
-        "SavedQueryViewApi",
-        "QueryView",
-        "SavedQueryView",
-        "SqlMetricInlineView",
-        "AnnotationLayerModelView",
-        # "SwaggerView",
-        "TableModelView",
-        "CssTemplateModelView",
-        "TableColumnInlineView",
-        # "UserOIDModelView",
-        "SliceModelView",
-        "DashboardModelView",
-        #"RoleModelView",
-    },
+    #"can_show": {"RoleModelView", "SwaggerView", "UserOIDModelView"},
     "can_slice": {"Superset"},
     "can_slice_json": {"Superset"},
     "can_sql_json": {"Superset"},
@@ -362,68 +304,76 @@ PLAID_BASE_PERMISSIONS = {
     "can_sqllab_table_viz": {"Superset"},
     "can_sqllab_viz": {"Superset"},
     "can_stop_query": {"Superset"},
-    # "can_sync_druid_source": {"Superset"},
+    #"can_sync_druid_source": {"Superset"},
     "can_tables": {"Superset"},
     "can_testconn": {"Superset"},
     "can_this_form_get": {
-        #"CsvToDatabaseView",
-        #"ExcelToDatabaseView",
-        "UserInfoEditView",
-        "ResetPasswordView",
+        "CsvToDatabaseView",
+        "ExcelToDatabaseView",
         "ResetMyPasswordView",
+        "ResetPasswordView",
+        "UserInfoEditView",
     },
     "can_this_form_post": {
-        #"CsvToDatabaseView",
-        #"ExcelToDatabaseView",
-        "UserInfoEditView",
-        "ResetPasswordView",
+        "CsvToDatabaseView",
+        "ExcelToDatabaseView",
         "ResetMyPasswordView",
+        "ResetPasswordView",
+        "UserInfoEditView",
     },
-    # "can_userinfo": {"UserOIDModelView"},
+    #"can_userinfo": {"UserOIDModelView"},
     "can_user_slices": {"Superset"},
     "can_validate_sql_json": {"Superset"},
     "can_warm_up_cache": {"Superset"},
+    "can_write": {
+        "Annotation",
+        "Chart",
+        "CssTemplate",
+        "Dashboard",
+        #"Database",
+        "Dataset",
+        "Log",
+        "ReportSchedule",
+        "SavedQuery",
+    },
     #"copyrole": {"RoleModelView"},
+    "database_access": {"[examples].(id:1)"},
+    "datasource_access": {
+        "[examples].[bart_lines](id:12)",
+        "[examples].[birth_france_by_region](id:7)",
+        "[examples].[birth_names](id:3)",
+        "[examples].[energy_usage](id:1)",
+        "[examples].[flights](id:11)",
+        "[examples].[long_lat](id:6)",
+        "[examples].[multiformat_time_series](id:8)",
+        "[examples].[paris_iris_mapping](id:9)",
+        "[examples].[random_time_series](id:5)",
+        "[examples].[sf_population_polygons](id:10)",
+        "[examples].[unicode_test](id:4)",
+        "[examples].[wb_health_population](id:2)",
+    },
     "menu_access": {
-        "Import Dashboards",
+        #"Action Log",
+        "Annotation Layers",
         "Charts",
         "CSS Templates",
-        # "Databases",
+        "Dashboards",
+        "Data",
+        #"Databases",
+        "Datasets",
+        "Import Dashboards",
+        #"List Roles",
+        #"List Users",
         "Manage",
         "Query Search",
-        # "Upload Excel",
-        "Datasets",
-        "Annotation Layers",
-        "Action Log",
-        # "List Roles",
-        "SQL Lab",
-        "Data",
-        "SQL Editor",
         "Saved Queries",
-        # "Upload a CSV",
-        # "Security",
-        "Dashboards",
-        # "List Users",
+        "Security",
+        "SQL Editor",
+        "SQL Lab",
+        #"Upload a CSV",
+        #"Upload Excel",
     },
-    "muldelete": {
-        #"DatabaseView",
-        "SliceAsync",
-        "SavedQueryViewApi",
-        "SavedQueryView",
-        "TableModelView",
-        "CssTemplateModelView",
-        "DashboardModelViewAsync",
-        "SliceModelView",
-        "DashboardModelView",
-        "CssTemplateAsyncModelView",
-    },
-    "mulexport": {"DashboardModelView", "DashboardModelViewAsync"},
-    "refresh": {"TableModelView"},
-    # "userinfoedit": {"UserOIDModelView"},
-    #"yaml_export": {"DatabaseView", "TableModelView"},
-    "database_access": {
-        "[examples].(id:1)",
-    },
+    #"userinfoedit": {"UserOIDModelView"},
 }
 
 {{- end }}

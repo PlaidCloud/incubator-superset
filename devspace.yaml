@@ -48,6 +48,8 @@ deployments:
         tag: latest
         pullPolicy: IfNotPresent
         pullSecret: gcr-key
+      node:
+        repository: gcr.io/plaidcloud-build/superset/node
       events:
         repository: gcr.io/plaidcloud-build/superset/events
         tag: latest
@@ -61,17 +63,17 @@ deployments:
         enabled: false
         loadExamples: true
       greenplum:
-        host: postgres-postgresql-headless
+        host: plaid-postgres-headless
       rabbitmq:
-        host: rabbitmq-rabbitmq-ha
+        host: plaid-rabbitmq-headless
         port: 5672
         queue: events
-        vhost: events
-        username: event_user
-        password: cocoa puffs
+        vhost: plaidcloud-public
+        username: plaidcloud-public
+        password: plaidcloud-public
       supersetNode:
         command:
-          - "entrypoint"
+          # - "entrypoint"
           - "flask"
           - "run"
           - "--host"
@@ -102,6 +104,16 @@ deployments:
       # mapbox:
       #   apiKey: pk.eyJ1IjoiZ2JhdGVzIiwiYSI6ImNqaGkwY25mZzIyZGczZG50MHpxMXk0bXYifQ.KKZQGn5QOn14NTnyNFNczQ
 dev:
+  ports:
+  - imageName: superset
+    labelSelector:
+      component: superset
+    forward:
+    - port: 9000
+      remotePort: 9000
+    reverseForward:
+    - port: 4000
+      remotePort: 8091
   sync:
   - imageName: superset
     labelSelector:
@@ -118,6 +130,13 @@ dev:
           args:
           - -c
           - "kill -HUP 1"
+  - imageName: superset
+    labelSelector:
+      component: superset
+    containerName: superset
+    localSubPath: ../plaid-rpc/plaidcloud/rpc
+    containerPath: /usr/local/lib/python3.7/site-packages/plaidcloud/rpc/
+    disableDownload: true
   - imageName: superset
     labelSelector:
       app: superset
@@ -138,9 +157,9 @@ dev:
       app: superset
       component: superset
     containerName: node
-    localSubPath: ./superset-frontend
-    containerPath: /app/superset-frontend
-    disableDownload: true
+    localSubPath: ./superset-frontend/src
+    containerPath: /app/superset-frontend/src
+    disableDownload: true  
   - imageName: events
     labelSelector:
       app: superset
@@ -183,8 +202,8 @@ commands:
 - name: node
   command: |
     POD_NAME=$(kubectl get pods -l app=superset,component=superset --field-selector status.phase=Running -o jsonpath={.items[0].metadata.name})
-    kubectl exec $POD_NAME -c node -- bash -c "cd /app/superset-frontend && npm install -f --no-optional --global webpack webpack-cli && npm install -f --no-optional && npm run dev"
+    kubectl exec $POD_NAME -c node -- bash -c "npm install -f --no-optional --global webpack webpack-cli && npm install -f --no-optional"
 - name: dev
   command: |
     POD_NAME=$(kubectl get pods -l app=superset,component=superset --field-selector status.phase=Running -o jsonpath={.items[0].metadata.name})
-    kubectl exec $POD_NAME -c node -- bash -c "cd /app/superset-frontend && npm run dev"
+    kubectl exec $POD_NAME -c node -- bash -c "npm run dev-server -- --host=0.0.0.0 --public=https://${DEV_NAMESPACE}-viz.plaidcloud.io --disable-host-check"

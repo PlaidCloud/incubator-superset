@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 """A collection of ORM sqlalchemy models for SQL Lab"""
+import enum
 import re
 from datetime import datetime
 from typing import Any, Dict, List
@@ -29,6 +30,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    Enum,
     ForeignKey,
     Integer,
     Numeric,
@@ -39,10 +41,22 @@ from sqlalchemy.engine.url import URL
 from sqlalchemy.orm import backref, relationship
 
 from superset import security_manager
-from superset.models.helpers import AuditMixinNullable, ExtraJSONMixin, ImportMixin
+from superset.models.helpers import (
+    AuditMixinNullable,
+    ExtraJSONMixin,
+    ImportExportMixin,
+)
 from superset.models.tags import QueryUpdater
 from superset.sql_parse import CtasMethod, ParsedQuery, Table
 from superset.utils.core import QueryStatus, user_label
+
+
+class LimitingFactor(str, enum.Enum):
+    QUERY = "QUERY"
+    DROPDOWN = "DROPDOWN"
+    QUERY_AND_DROPDOWN = "QUERY_AND_DROPDOWN"
+    NOT_LIMITED = "NOT_LIMITED"
+    UNKNOWN = "UNKNOWN"
 
 
 class Query(Model, ExtraJSONMixin):
@@ -72,6 +86,9 @@ class Query(Model, ExtraJSONMixin):
     executed_sql = Column(Text)
     # Could be configured in the superset config.
     limit = Column(Integer)
+    limiting_factor = Column(
+        Enum(LimitingFactor), server_default=LimitingFactor.UNKNOWN
+    )
     select_as_cta = Column(Boolean)
     select_as_cta_used = Column(Boolean, default=False)
     ctas_method = Column(String(16), default=CtasMethod.TABLE)
@@ -116,6 +133,7 @@ class Query(Model, ExtraJSONMixin):
             "id": self.client_id,
             "queryId": self.id,
             "limit": self.limit,
+            "limitingFactor": self.limiting_factor,
             "progress": self.progress,
             "rows": self.rows,
             "schema": self.schema,
@@ -152,6 +170,10 @@ class Query(Model, ExtraJSONMixin):
     def username(self) -> str:
         return self.user.username
 
+    @property
+    def sql_tables(self) -> List[Table]:
+        return list(ParsedQuery(self.sql).tables)
+
     def raise_for_access(self) -> None:
         """
         Raise an exception if the user cannot access the resource.
@@ -162,7 +184,7 @@ class Query(Model, ExtraJSONMixin):
         security_manager.raise_for_access(query=self)
 
 
-class SavedQuery(Model, AuditMixinNullable, ExtraJSONMixin, ImportMixin):
+class SavedQuery(Model, AuditMixinNullable, ExtraJSONMixin, ImportExportMixin):
     """ORM model for SQL query"""
 
     __tablename__ = "saved_query"
@@ -188,7 +210,6 @@ class SavedQuery(Model, AuditMixinNullable, ExtraJSONMixin, ImportMixin):
 
     export_parent = "database"
     export_fields = [
-        "db_id",
         "schema",
         "label",
         "description",
@@ -270,6 +291,7 @@ class TabState(Model, AuditMixinNullable, ExtraJSONMixin):
     # other properties
     autorun = Column(Boolean, default=False)
     template_params = Column(Text)
+    hide_left_bar = Column(Boolean, default=False)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -285,6 +307,7 @@ class TabState(Model, AuditMixinNullable, ExtraJSONMixin):
             "latest_query": self.latest_query.to_dict() if self.latest_query else None,
             "autorun": self.autorun,
             "template_params": self.template_params,
+            "hide_left_bar": self.hide_left_bar,
         }
 
 

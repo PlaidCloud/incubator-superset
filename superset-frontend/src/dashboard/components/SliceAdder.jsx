@@ -19,18 +19,24 @@
 /* eslint-env browser */
 import React from 'react';
 import PropTypes from 'prop-types';
-import { DropdownButton, MenuItem } from 'react-bootstrap';
 import { List } from 'react-virtualized';
-import SearchInput, { createFilter } from 'react-search-input';
-import { t } from '@superset-ui/core';
-
+import { createFilter } from 'react-search-input';
+import { t, styled } from '@superset-ui/core';
+import { Input } from 'src/common/components';
+import Select from 'src/components/Select';
+import Loading from 'src/components/Loading';
+import {
+  CHART_TYPE,
+  NEW_COMPONENT_SOURCE_TYPE,
+} from 'src/dashboard/util/componentTypes';
+import {
+  NEW_CHART_ID,
+  NEW_COMPONENTS_SOURCE_ID,
+} from 'src/dashboard/util/constants';
+import { slicePropShape } from 'src/dashboard/util/propShapes';
 import AddSliceCard from './AddSliceCard';
 import AddSliceDragPreview from './dnd/AddSliceDragPreview';
 import DragDroppable from './dnd/DragDroppable';
-import Loading from '../../components/Loading';
-import { CHART_TYPE, NEW_COMPONENT_SOURCE_TYPE } from '../util/componentTypes';
-import { NEW_CHART_ID, NEW_COMPONENTS_SOURCE_ID } from '../util/constants';
-import { slicePropShape } from '../util/propShapes';
 
 const propTypes = {
   fetchAllSlices: PropTypes.func.isRequired,
@@ -52,17 +58,30 @@ const defaultProps = {
 };
 
 const KEYS_TO_FILTERS = ['slice_name', 'viz_type', 'datasource_name'];
-const KEYS_TO_SORT = [
-  { key: 'slice_name', label: 'Name' },
-  { key: 'viz_type', label: 'Vis type' },
-  { key: 'datasource_name', label: 'Dataset' },
-  { key: 'changed_on', label: 'Recent' },
-];
+const KEYS_TO_SORT = {
+  slice_name: 'Name',
+  viz_type: 'Vis type',
+  datasource_name: 'Dataset',
+  changed_on: 'Recent',
+};
+
+const DEFAULT_SORT_KEY = 'changed_on';
 
 const MARGIN_BOTTOM = 16;
 const SIDEPANE_HEADER_HEIGHT = 30;
 const SLICE_ADDER_CONTROL_HEIGHT = 64;
 const DEFAULT_CELL_HEIGHT = 112;
+
+const Controls = styled.div`
+  display: flex;
+  flex-direction: row;
+  padding: ${({ theme }) => theme.gridUnit * 3}px;
+`;
+
+const StyledSelect = styled(Select)`
+  margin-left: ${({ theme }) => theme.gridUnit * 2}px;
+  min-width: 150px;
+`;
 
 class SliceAdder extends React.Component {
   static sortByComparator(attr) {
@@ -84,12 +103,13 @@ class SliceAdder extends React.Component {
     this.state = {
       filteredSlices: [],
       searchTerm: '',
-      sortBy: KEYS_TO_SORT.findIndex(item => item.key === 'changed_on'),
+      sortBy: DEFAULT_SORT_KEY,
       selectedSliceIdsSet: new Set(props.selectedSliceIds),
     };
     this.rowRenderer = this.rowRenderer.bind(this);
     this.searchUpdated = this.searchUpdated.bind(this);
     this.handleKeyPress = this.handleKeyPress.bind(this);
+    this.handleChange = this.handleChange.bind(this);
     this.handleSelect = this.handleSelect.bind(this);
   }
 
@@ -102,7 +122,7 @@ class SliceAdder extends React.Component {
     if (nextProps.lastUpdated !== this.props.lastUpdated) {
       nextState.filteredSlices = Object.values(nextProps.slices)
         .filter(createFilter(this.state.searchTerm, KEYS_TO_FILTERS))
-        .sort(SliceAdder.sortByComparator(KEYS_TO_SORT[this.state.sortBy].key));
+        .sort(SliceAdder.sortByComparator(this.state.sortBy));
     }
 
     if (nextProps.selectedSliceIds !== this.props.selectedSliceIds) {
@@ -123,7 +143,7 @@ class SliceAdder extends React.Component {
   getFilteredSortedSlices(searchTerm, sortBy) {
     return Object.values(this.props.slices)
       .filter(createFilter(searchTerm, KEYS_TO_FILTERS))
-      .sort(SliceAdder.sortByComparator(KEYS_TO_SORT[sortBy].key));
+      .sort(SliceAdder.sortByComparator(sortBy));
   }
 
   handleKeyPress(ev) {
@@ -132,6 +152,10 @@ class SliceAdder extends React.Component {
 
       this.searchUpdated(ev.target.value);
     }
+  }
+
+  handleChange(ev) {
+    this.searchUpdated(ev.target.value);
   }
 
   searchUpdated(searchTerm) {
@@ -144,7 +168,8 @@ class SliceAdder extends React.Component {
     }));
   }
 
-  handleSelect(sortBy) {
+  handleSelect(object) {
+    const sortBy = object.value;
     this.setState(prevState => ({
       sortBy,
       filteredSlices: this.getFilteredSortedSlices(
@@ -208,26 +233,25 @@ class SliceAdder extends React.Component {
       MARGIN_BOTTOM;
     return (
       <div className="slice-adder-container">
-        <div className="controls">
-          <SearchInput
+        <Controls>
+          <Input
             placeholder={t('Filter your charts')}
             className="search-input"
-            onChange={this.searchUpdated}
+            onChange={this.handleChange}
             onKeyPress={this.handleKeyPress}
             data-test="dashboard-charts-filter-search-input"
           />
-          <DropdownButton
-            title={`Sort by ${KEYS_TO_SORT[this.state.sortBy].label}`}
-            onSelect={this.handleSelect}
+          <StyledSelect
             id="slice-adder-sortby"
-          >
-            {KEYS_TO_SORT.map((item, index) => (
-              <MenuItem key={item.key} eventKey={index}>
-                Sort by {item.label}
-              </MenuItem>
-            ))}
-          </DropdownButton>
-        </div>
+            value={this.state.sortBy}
+            onChange={this.handleSelect}
+            options={Object.entries(KEYS_TO_SORT).map(([key, label]) => ({
+              label: `${t('Sort by')} ${label}`,
+              value: key,
+            }))}
+            placeholder={t('Sort by')}
+          />
+        </Controls>
         {this.props.isLoading && <Loading />}
         {!this.props.isLoading && this.state.filteredSlices.length > 0 && (
           <List

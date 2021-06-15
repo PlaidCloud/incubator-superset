@@ -22,12 +22,15 @@
 *.swp
 __pycache__
 
+.local
+.cache
 .bento*
 .cache-loader
 .coverage
 cover
 .DS_Store
 .eggs
+.env
 .envrc
 .idea
 .mypy_cache
@@ -51,11 +54,13 @@ envpy3
 env36
 local_config.py
 /superset_config.py
+/superset_text.yml
 superset.egg-info/
 superset/bin/supersetc
 tmp
 rat-results.txt
 __pycache__
+superset/app/
 
 # Node.js, webpack artifacts
 *.entry.js
@@ -81,6 +86,7 @@ ghostdriver.log
 testCSV.csv
 .terser-plugin-cache/
 apache-superset-*.tar.gz*
+release.json
 
 # Translation binaries
 messages.mo

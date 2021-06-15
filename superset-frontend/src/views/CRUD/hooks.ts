@@ -17,12 +17,16 @@
  * under the License.
  */
 import rison from 'rison';
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { SupersetClient, t } from '@superset-ui/core';
+import { useState, useEffect, useCallback } from 'react';
+import { makeApi, SupersetClient, t, JsonObject } from '@superset-ui/core';
 
 import { createErrorHandler } from 'src/views/CRUD/utils';
 import { FetchDataConfig } from 'src/components/ListView';
-import { FavoriteStatus } from './types';
+import { FilterValue } from 'src/components/ListView/types';
+import Chart, { Slice } from 'src/types/Chart';
+import copyTextToClipboard from 'src/utils/copy';
+import { getClientErrorObject } from 'src/utils/getClientErrorObject';
+import { FavoriteStatus, ImportResourceName, DatabaseObject } from './types';
 
 interface ListViewResourceState<D extends object = any> {
   loading: boolean;
@@ -31,17 +35,38 @@ interface ListViewResourceState<D extends object = any> {
   permissions: string[];
   lastFetchDataConfig: FetchDataConfig | null;
   bulkSelectEnabled: boolean;
+  lastFetched?: string;
 }
+
+const parsedErrorMessage = (
+  errorMessage: Record<string, string[] | string> | string,
+) => {
+  if (typeof errorMessage === 'string') {
+    return errorMessage;
+  }
+  return Object.entries(errorMessage)
+    .map(([key, value]) => {
+      if (Array.isArray(value)) {
+        return `(${key}) ${value.join(', ')}`;
+      }
+      return `(${key}) ${value}`;
+    })
+    .join('\n');
+};
 
 export function useListViewResource<D extends object = any>(
   resource: string,
   resourceLabel: string, // resourceLabel for translations
   handleErrorMsg: (errorMsg: string) => void,
+  infoEnable = true,
+  defaultCollectionValue: D[] = [],
+  baseFilters?: FilterValue[], // must be memoized
+  initialLoadingState = true,
 ) {
   const [state, setState] = useState<ListViewResourceState<D>>({
     count: 0,
-    collection: [],
-    loading: true,
+    collection: defaultCollectionValue,
+    loading: initialLoadingState,
     lastFetchDataConfig: null,
     permissions: [],
     bulkSelectEnabled: false,
@@ -56,8 +81,11 @@ export function useListViewResource<D extends object = any>(
   }
 
   useEffect(() => {
+    if (!infoEnable) return;
     SupersetClient.get({
-      endpoint: `/api/v1/${resource}/_info?q=(keys:!(permissions))`,
+      endpoint: `/api/v1/${resource}/_info?q=${rison.encode({
+        keys: ['permissions'],
+      })}`,
     }).then(
       ({ json: infoJson = {} }) => {
         updateState({
@@ -67,7 +95,7 @@ export function useListViewResource<D extends object = any>(
       createErrorHandler(errMsg =>
         handleErrorMsg(
           t(
-            'An error occurred while fetching %ss info: %s',
+            'An error occurred while fetching %s info: %s',
             resourceLabel,
             errMsg,
           ),
@@ -102,13 +130,13 @@ export function useListViewResource<D extends object = any>(
         loading: true,
       });
 
-      const filterExps = filterValues.map(
-        ({ id: col, operator: opr, value }) => ({
-          col,
+      const filterExps = (baseFilters || [])
+        .concat(filterValues)
+        .map(({ id, operator: opr, value }) => ({
+          col: id,
           opr,
           value,
-        }),
-      );
+        }));
 
       const queryParams = rison.encode({
         order_column: sortBy[0].id,
@@ -126,6 +154,7 @@ export function useListViewResource<D extends object = any>(
             updateState({
               collection: json.result,
               count: json.count,
+              lastFetched: new Date().toISOString(),
             });
           },
           createErrorHandler(errMsg =>
@@ -142,7 +171,7 @@ export function useListViewResource<D extends object = any>(
           updateState({ loading: false });
         });
     },
-    [],
+    [baseFilters],
   );
 
   return {
@@ -151,6 +180,7 @@ export function useListViewResource<D extends object = any>(
       resourceCount: state.count,
       resourceCollection: state.collection,
       bulkSelectEnabled: state.bulkSelectEnabled,
+      lastFetched: state.lastFetched,
     },
     setResourceCollection: (update: D[]) =>
       updateState({
@@ -159,10 +189,14 @@ export function useListViewResource<D extends object = any>(
     hasPerm,
     fetchData,
     toggleBulkSelect,
-    refreshData: () => {
+    refreshData: (provideConfig?: FetchDataConfig) => {
       if (state.lastFetchDataConfig) {
-        fetchData(state.lastFetchDataConfig);
+        return fetchData(state.lastFetchDataConfig);
       }
+      if (provideConfig) {
+        return fetchData(provideConfig);
+      }
+      return null;
     },
   };
 }
@@ -171,6 +205,7 @@ export function useListViewResource<D extends object = any>(
 interface SingleViewResourceState<D extends object = any> {
   loading: boolean;
   resource: D | null;
+  error: string | Record<string, string[] | string> | null;
 }
 
 export function useSingleViewResource<D extends object = any>(
@@ -181,111 +216,142 @@ export function useSingleViewResource<D extends object = any>(
   const [state, setState] = useState<SingleViewResourceState<D>>({
     loading: false,
     resource: null,
+    error: null,
   });
 
   function updateState(update: Partial<SingleViewResourceState<D>>) {
     setState(currentState => ({ ...currentState, ...update }));
   }
 
-  const fetchResource = useCallback((resourceID: number) => {
-    // Set loading state
-    updateState({
-      loading: true,
-    });
-
-    return SupersetClient.get({
-      endpoint: `/api/v1/${resourceName}/${resourceID}`,
-    })
-      .then(
-        ({ json = {} }) => {
-          updateState({
-            resource: json.result,
-          });
-        },
-        createErrorHandler(errMsg =>
-          handleErrorMsg(
-            t(
-              'An error occurred while fetching %ss: %s',
-              resourceLabel,
-              errMsg,
-            ),
-          ),
-        ),
-      )
-      .finally(() => {
-        updateState({ loading: false });
+  const fetchResource = useCallback(
+    (resourceID: number) => {
+      // Set loading state
+      updateState({
+        loading: true,
       });
-  }, []);
 
-  const createResource = useCallback((resource: D) => {
-    // Set loading state
-    updateState({
-      loading: true,
-    });
+      return SupersetClient.get({
+        endpoint: `/api/v1/${resourceName}/${resourceID}`,
+      })
+        .then(
+          ({ json = {} }) => {
+            updateState({
+              resource: json.result,
+              error: null,
+            });
+            return json.result;
+          },
+          createErrorHandler((errMsg: Record<string, string[] | string>) => {
+            handleErrorMsg(
+              t(
+                'An error occurred while fetching %ss: %s',
+                resourceLabel,
+                parsedErrorMessage(errMsg),
+              ),
+            );
 
-    return SupersetClient.post({
-      endpoint: `/api/v1/${resourceName}/`,
-      body: JSON.stringify(resource),
-      headers: { 'Content-Type': 'application/json' },
-    })
-      .then(
-        ({ json = {} }) => {
-          updateState({
-            resource: json.result,
-          });
-        },
-        createErrorHandler(errMsg =>
-          handleErrorMsg(
-            t(
-              'An error occurred while fetching %ss: %s',
-              resourceLabel,
-              errMsg,
-            ),
-          ),
-        ),
-      )
-      .finally(() => {
-        updateState({ loading: false });
+            updateState({
+              error: errMsg,
+            });
+          }),
+        )
+        .finally(() => {
+          updateState({ loading: false });
+        });
+    },
+    [handleErrorMsg, resourceName, resourceLabel],
+  );
+
+  const createResource = useCallback(
+    (resource: D) => {
+      // Set loading state
+      updateState({
+        loading: true,
       });
-  }, []);
 
-  const updateResource = useCallback((resourceID: number, resource: D) => {
-    // Set loading state
-    updateState({
-      loading: true,
-    });
+      return SupersetClient.post({
+        endpoint: `/api/v1/${resourceName}/`,
+        body: JSON.stringify(resource),
+        headers: { 'Content-Type': 'application/json' },
+      })
+        .then(
+          ({ json = {} }) => {
+            updateState({
+              resource: { id: json.id, ...json.result },
+              error: null,
+            });
+            return json.id;
+          },
+          createErrorHandler((errMsg: Record<string, string[] | string>) => {
+            handleErrorMsg(
+              t(
+                'An error occurred while creating %ss: %s',
+                resourceLabel,
+                parsedErrorMessage(errMsg),
+              ),
+            );
 
-    return SupersetClient.put({
-      endpoint: `/api/v1/${resourceName}/${resourceID}`,
-      body: JSON.stringify(resource),
-      headers: { 'Content-Type': 'application/json' },
-    })
-      .then(
-        ({ json = {} }) => {
-          updateState({
-            resource: json.result,
-          });
-        },
-        createErrorHandler(errMsg =>
-          handleErrorMsg(
-            t(
-              'An error occurred while fetching %ss: %s',
-              resourceLabel,
-              errMsg,
-            ),
-          ),
-        ),
-      )
-      .finally(() => {
-        updateState({ loading: false });
+            updateState({
+              error: errMsg,
+            });
+          }),
+        )
+        .finally(() => {
+          updateState({ loading: false });
+        });
+    },
+    [handleErrorMsg, resourceName, resourceLabel],
+  );
+
+  const updateResource = useCallback(
+    (resourceID: number, resource: D) => {
+      // Set loading state
+      updateState({
+        loading: true,
       });
-  }, []);
+
+      return SupersetClient.put({
+        endpoint: `/api/v1/${resourceName}/${resourceID}`,
+        body: JSON.stringify(resource),
+        headers: { 'Content-Type': 'application/json' },
+      })
+        .then(
+          ({ json = {} }) => {
+            updateState({
+              resource: json.result,
+              error: null,
+            });
+            return json.result;
+          },
+          createErrorHandler(errMsg => {
+            handleErrorMsg(
+              t(
+                'An error occurred while fetching %ss: %s',
+                resourceLabel,
+                JSON.stringify(errMsg),
+              ),
+            );
+
+            updateState({
+              error: errMsg,
+            });
+
+            return errMsg;
+          }),
+        )
+        .finally(() => {
+          updateState({ loading: false });
+        });
+    },
+    [handleErrorMsg, resourceName, resourceLabel],
+  );
+  const clearError = () =>
+    updateState({
+      error: null,
+    });
 
   return {
-    state: {
-      loading: state.loading,
-      resource: state.resource,
-    },
+    state,
     setResource: (update: D) =>
       updateState({
         resource: update,
@@ -293,35 +359,183 @@ export function useSingleViewResource<D extends object = any>(
     fetchResource,
     createResource,
     updateResource,
+    clearError,
   };
 }
 
-// the hooks api has some known limitations around stale state in closures.
-// See https://github.com/reactjs/rfcs/blob/master/text/0068-react-hooks.md#drawbacks
-// the useRef hook is a way of getting around these limitations by having a consistent ref
-// that points to the most recent value.
+interface ImportResourceState {
+  loading: boolean;
+  passwordsNeeded: string[];
+  alreadyExists: string[];
+}
+
+export function useImportResource(
+  resourceName: ImportResourceName,
+  resourceLabel: string, // resourceLabel for translations
+  handleErrorMsg: (errorMsg: string) => void,
+) {
+  const [state, setState] = useState<ImportResourceState>({
+    loading: false,
+    passwordsNeeded: [],
+    alreadyExists: [],
+  });
+
+  function updateState(update: Partial<ImportResourceState>) {
+    setState(currentState => ({ ...currentState, ...update }));
+  }
+
+  /* eslint-disable no-underscore-dangle */
+  const isNeedsPassword = (payload: any) =>
+    typeof payload === 'object' &&
+    Array.isArray(payload._schema) &&
+    payload._schema.length === 1 &&
+    payload._schema[0] === 'Must provide a password for the database';
+
+  const isAlreadyExists = (payload: any) =>
+    typeof payload === 'string' &&
+    payload.includes('already exists and `overwrite=true` was not passed');
+
+  const getPasswordsNeeded = (
+    errMsg: Record<string, Record<string, string[] | string>>,
+  ) =>
+    Object.entries(errMsg)
+      .filter(([, validationErrors]) => isNeedsPassword(validationErrors))
+      .map(([fileName]) => fileName);
+
+  const getAlreadyExists = (
+    errMsg: Record<string, Record<string, string[] | string>>,
+  ) =>
+    Object.entries(errMsg)
+      .filter(([, validationErrors]) => isAlreadyExists(validationErrors))
+      .map(([fileName]) => fileName);
+
+  const hasTerminalValidation = (
+    errMsg: Record<string, Record<string, string[] | string>>,
+  ) =>
+    Object.values(errMsg).some(
+      validationErrors =>
+        !isNeedsPassword(validationErrors) &&
+        !isAlreadyExists(validationErrors),
+    );
+
+  const importResource = useCallback(
+    (
+      bundle: File,
+      databasePasswords: Record<string, string> = {},
+      overwrite = false,
+    ) => {
+      // Set loading state
+      updateState({
+        loading: true,
+      });
+
+      const formData = new FormData();
+      formData.append('formData', bundle);
+
+      /* The import bundle never contains database passwords; if required
+       * they should be provided by the user during import.
+       */
+      if (databasePasswords) {
+        formData.append('passwords', JSON.stringify(databasePasswords));
+      }
+      /* If the imported model already exists the user needs to confirm
+       * that they want to overwrite it.
+       */
+      if (overwrite) {
+        formData.append('overwrite', 'true');
+      }
+
+      return SupersetClient.post({
+        endpoint: `/api/v1/${resourceName}/import/`,
+        body: formData,
+      })
+        .then(() => true)
+        .catch(response =>
+          getClientErrorObject(response).then(error => {
+            const errMsg = error.message || error.error;
+            if (typeof errMsg === 'string') {
+              handleErrorMsg(
+                t(
+                  'An error occurred while importing %s: %s',
+                  resourceLabel,
+                  parsedErrorMessage(errMsg),
+                ),
+              );
+              return false;
+            }
+            if (hasTerminalValidation(errMsg)) {
+              handleErrorMsg(
+                t(
+                  'An error occurred while importing %s: %s',
+                  resourceLabel,
+                  parsedErrorMessage(errMsg),
+                ),
+              );
+            } else {
+              updateState({
+                passwordsNeeded: getPasswordsNeeded(errMsg),
+                alreadyExists: getAlreadyExists(errMsg),
+              });
+            }
+            return false;
+          }),
+        )
+        .finally(() => {
+          updateState({ loading: false });
+        });
+    },
+    [],
+  );
+
+  return { state, importResource };
+}
+
+enum FavStarClassName {
+  CHART = 'slice',
+  DASHBOARD = 'Dashboard',
+}
+
+type FavoriteStatusResponse = {
+  result: Array<{
+    id: string;
+    value: boolean;
+  }>;
+};
+
+const favoriteApis = {
+  chart: makeApi<Array<string | number>, FavoriteStatusResponse>({
+    requestType: 'rison',
+    method: 'GET',
+    endpoint: '/api/v1/chart/favorite_status/',
+  }),
+  dashboard: makeApi<Array<string | number>, FavoriteStatusResponse>({
+    requestType: 'rison',
+    method: 'GET',
+    endpoint: '/api/v1/dashboard/favorite_status/',
+  }),
+};
+
 export function useFavoriteStatus(
-  initialState: FavoriteStatus,
-  baseURL: string,
+  type: 'chart' | 'dashboard',
+  ids: Array<string | number>,
   handleErrorMsg: (message: string) => void,
 ) {
-  const [favoriteStatus, setFavoriteStatus] = useState<FavoriteStatus>(
-    initialState,
-  );
-  const favoriteStatusRef = useRef<FavoriteStatus>(favoriteStatus);
-  useEffect(() => {
-    favoriteStatusRef.current = favoriteStatus;
-  });
+  const [favoriteStatus, setFavoriteStatus] = useState<FavoriteStatus>({});
 
   const updateFavoriteStatus = (update: FavoriteStatus) =>
     setFavoriteStatus(currentState => ({ ...currentState, ...update }));
 
-  const fetchFaveStar = (id: number) => {
-    SupersetClient.get({
-      endpoint: `${baseURL}/${id}/count/`,
-    }).then(
-      ({ json }) => {
-        updateFavoriteStatus({ [id]: json.count > 0 });
+  useEffect(() => {
+    if (!ids.length) {
+      return;
+    }
+    favoriteApis[type](ids).then(
+      ({ result }) => {
+        const update = result.reduce((acc, element) => {
+          acc[element.id] = element.value;
+          return acc;
+        }, {});
+        updateFavoriteStatus(update);
       },
       createErrorHandler(errMsg =>
         handleErrorMsg(
@@ -329,24 +543,117 @@ export function useFavoriteStatus(
         ),
       ),
     );
-  };
+  }, [ids, type, handleErrorMsg]);
 
-  const saveFaveStar = (id: number, isStarred: boolean) => {
-    const urlSuffix = isStarred ? 'unselect' : 'select';
-
-    SupersetClient.get({
-      endpoint: `${baseURL}/${id}/${urlSuffix}/`,
-    }).then(
-      () => {
-        updateFavoriteStatus({ [id]: !isStarred });
-      },
-      createErrorHandler(errMsg =>
-        handleErrorMsg(
-          t('There was an error saving the favorite status: %s', errMsg),
+  const saveFaveStar = useCallback(
+    (id: number, isStarred: boolean) => {
+      const urlSuffix = isStarred ? 'unselect' : 'select';
+      SupersetClient.get({
+        endpoint: `/superset/favstar/${
+          type === 'chart' ? FavStarClassName.CHART : FavStarClassName.DASHBOARD
+        }/${id}/${urlSuffix}/`,
+      }).then(
+        ({ json }) => {
+          updateFavoriteStatus({
+            [id]: (json as { count: number })?.count > 0,
+          });
+        },
+        createErrorHandler(errMsg =>
+          handleErrorMsg(
+            t('There was an error saving the favorite status: %s', errMsg),
+          ),
         ),
-      ),
-    );
-  };
+      );
+    },
+    [type],
+  );
 
-  return [favoriteStatusRef, fetchFaveStar, saveFaveStar] as const;
+  return [saveFaveStar, favoriteStatus] as const;
+}
+
+export const useChartEditModal = (
+  setCharts: (charts: Array<Chart>) => void,
+  charts: Array<Chart>,
+) => {
+  const [
+    sliceCurrentlyEditing,
+    setSliceCurrentlyEditing,
+  ] = useState<Slice | null>(null);
+
+  function openChartEditModal(chart: Chart) {
+    setSliceCurrentlyEditing({
+      slice_id: chart.id,
+      slice_name: chart.slice_name,
+      description: chart.description,
+      cache_timeout: chart.cache_timeout,
+    });
+  }
+
+  function closeChartEditModal() {
+    setSliceCurrentlyEditing(null);
+  }
+
+  function handleChartUpdated(edits: Chart) {
+    // update the chart in our state with the edited info
+    const newCharts = charts.map((chart: Chart) =>
+      chart.id === edits.id ? { ...chart, ...edits } : chart,
+    );
+    setCharts(newCharts);
+  }
+
+  return {
+    sliceCurrentlyEditing,
+    handleChartUpdated,
+    openChartEditModal,
+    closeChartEditModal,
+  };
+};
+
+export const copyQueryLink = (
+  id: number,
+  addDangerToast: (arg0: string) => void,
+  addSuccessToast: (arg0: string) => void,
+) => {
+  copyTextToClipboard(
+    `${window.location.origin}/superset/sqllab?savedQueryId=${id}`,
+  )
+    .then(() => {
+      addSuccessToast(t('Link Copied!'));
+    })
+    .catch(() => {
+      addDangerToast(t('Sorry, your browser does not support copying.'));
+    });
+};
+
+export const testDatabaseConnection = (
+  connection: DatabaseObject,
+  handleErrorMsg: (errorMsg: string) => void,
+  addSuccessToast: (arg0: string) => void,
+) => {
+  SupersetClient.post({
+    endpoint: 'api/v1/database/test_connection',
+    body: JSON.stringify(connection),
+    headers: { 'Content-Type': 'application/json' },
+  }).then(
+    () => {
+      addSuccessToast(t('Connection looks good!'));
+    },
+    createErrorHandler((errMsg: Record<string, string[] | string> | string) => {
+      handleErrorMsg(t(`${t('ERROR: ')}${parsedErrorMessage(errMsg)}`));
+    }),
+  );
+};
+
+export function useAvailableDatabases() {
+  const [availableDbs, setAvailableDbs] = useState<JsonObject | null>(null);
+
+  const getAvailable = useCallback(() => {
+    SupersetClient.get({
+      endpoint: `/api/v1/database/available`,
+    }).then(({ json }) => {
+      setAvailableDbs(json);
+    });
+  }, [setAvailableDbs]);
+
+  return [availableDbs, getAvailable] as const;
 }

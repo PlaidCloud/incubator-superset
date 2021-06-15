@@ -16,6 +16,7 @@
 # under the License.
 # isort:skip_file
 from datetime import datetime
+from importlib.util import find_spec
 import math
 from typing import Any, List, Optional
 
@@ -24,10 +25,20 @@ import pytest
 
 from superset.exceptions import QueryObjectValidationError
 from superset.utils import pandas_postprocessing as proc
-from superset.utils.core import DTTM_ALIAS, PostProcessingContributionOrientation
+from superset.utils.core import (
+    DTTM_ALIAS,
+    PostProcessingContributionOrientation,
+    PostProcessingBoxplotWhiskerType,
+)
 
 from .base_tests import SupersetTestCase
-from .fixtures.dataframes import categories_df, lonlat_df, timeseries_df, prophet_df
+from .fixtures.dataframes import (
+    categories_df,
+    lonlat_df,
+    names_df,
+    timeseries_df,
+    prophet_df,
+)
 
 AGGREGATES_SINGLE = {"idx_nulls": {"operator": "sum"}}
 AGGREGATES_MULTIPLE = {
@@ -185,6 +196,21 @@ class TestPostProcessing(SupersetTestCase):
             aggregates={"idx_nulls": {"operator": "sum"}},
         )
         self.assertEqual(df.sum()[1], 382)
+
+    def test_pivot_fill_column_values(self):
+        """
+        Make sure pivot witn null column names returns correct DataFrame
+        """
+        df_copy = categories_df.copy()
+        df_copy["category"] = None
+        df = proc.pivot(
+            df=df_copy,
+            index=["name"],
+            columns=["category"],
+            aggregates={"idx_nulls": {"operator": "sum"}},
+        )
+        assert len(df) == 101
+        assert df.columns.tolist() == ["name", "<NULL>"]
 
     def test_pivot_exceptions(self):
         """
@@ -514,22 +540,43 @@ class TestPostProcessing(SupersetTestCase):
                 "b": [1, 9],
             }
         )
+        with pytest.raises(QueryObjectValidationError, match="not numeric"):
+            proc.contribution(df, columns=[DTTM_ALIAS])
+
+        with pytest.raises(QueryObjectValidationError, match="same length"):
+            proc.contribution(df, columns=["a"], rename_columns=["aa", "bb"])
 
         # cell contribution across row
-        row_df = proc.contribution(df, PostProcessingContributionOrientation.ROW)
-        self.assertListEqual(df.columns.tolist(), [DTTM_ALIAS, "a", "b"])
-        self.assertListEqual(series_to_list(row_df["a"]), [0.5, 0.25])
-        self.assertListEqual(series_to_list(row_df["b"]), [0.5, 0.75])
+        processed_df = proc.contribution(
+            df, orientation=PostProcessingContributionOrientation.ROW,
+        )
+        self.assertListEqual(processed_df.columns.tolist(), [DTTM_ALIAS, "a", "b"])
+        self.assertListEqual(processed_df["a"].tolist(), [0.5, 0.25])
+        self.assertListEqual(processed_df["b"].tolist(), [0.5, 0.75])
 
         # cell contribution across column without temporal column
         df.pop(DTTM_ALIAS)
-        column_df = proc.contribution(df, PostProcessingContributionOrientation.COLUMN)
-        self.assertListEqual(df.columns.tolist(), ["a", "b"])
-        self.assertListEqual(series_to_list(column_df["a"]), [0.25, 0.75])
-        self.assertListEqual(series_to_list(column_df["b"]), [0.1, 0.9])
+        processed_df = proc.contribution(
+            df, orientation=PostProcessingContributionOrientation.COLUMN
+        )
+        self.assertListEqual(processed_df.columns.tolist(), ["a", "b"])
+        self.assertListEqual(processed_df["a"].tolist(), [0.25, 0.75])
+        self.assertListEqual(processed_df["b"].tolist(), [0.1, 0.9])
+
+        # contribution only on selected columns
+        processed_df = proc.contribution(
+            df,
+            orientation=PostProcessingContributionOrientation.COLUMN,
+            columns=["a"],
+            rename_columns=["pct_a"],
+        )
+        self.assertListEqual(processed_df.columns.tolist(), ["a", "b", "pct_a"])
+        self.assertListEqual(processed_df["a"].tolist(), [1, 3])
+        self.assertListEqual(processed_df["b"].tolist(), [1, 9])
+        self.assertListEqual(processed_df["pct_a"].tolist(), [0.25, 0.75])
 
     def test_prophet_valid(self):
-        pytest.importorskip("fbprophet")
+        pytest.importorskip("prophet")
 
         df = proc.prophet(
             df=prophet_df, time_grain="P1M", periods=3, confidence_interval=0.9
@@ -556,6 +603,14 @@ class TestPostProcessing(SupersetTestCase):
         assert df[DTTM_ALIAS].iloc[0].to_pydatetime() == datetime(2018, 12, 31)
         assert df[DTTM_ALIAS].iloc[-1].to_pydatetime() == datetime(2022, 5, 31)
         assert len(df) == 9
+
+    def test_prophet_import(self):
+        prophet = find_spec("prophet")
+        if prophet is None:
+            with pytest.raises(QueryObjectValidationError):
+                proc.prophet(
+                    df=prophet_df, time_grain="P1M", periods=3, confidence_interval=0.9
+                )
 
     def test_prophet_missing_temporal_column(self):
         df = prophet_df.drop(DTTM_ALIAS, axis=1)
@@ -607,3 +662,103 @@ class TestPostProcessing(SupersetTestCase):
             periods=10,
             confidence_interval=0.8,
         )
+
+    def test_boxplot_tukey(self):
+        df = proc.boxplot(
+            df=names_df,
+            groupby=["region"],
+            whisker_type=PostProcessingBoxplotWhiskerType.TUKEY,
+            metrics=["cars"],
+        )
+        columns = {column for column in df.columns}
+        assert columns == {
+            "cars__mean",
+            "cars__median",
+            "cars__q1",
+            "cars__q3",
+            "cars__max",
+            "cars__min",
+            "cars__count",
+            "cars__outliers",
+            "region",
+        }
+        assert len(df) == 4
+
+    def test_boxplot_min_max(self):
+        df = proc.boxplot(
+            df=names_df,
+            groupby=["region"],
+            whisker_type=PostProcessingBoxplotWhiskerType.MINMAX,
+            metrics=["cars"],
+        )
+        columns = {column for column in df.columns}
+        assert columns == {
+            "cars__mean",
+            "cars__median",
+            "cars__q1",
+            "cars__q3",
+            "cars__max",
+            "cars__min",
+            "cars__count",
+            "cars__outliers",
+            "region",
+        }
+        assert len(df) == 4
+
+    def test_boxplot_percentile(self):
+        df = proc.boxplot(
+            df=names_df,
+            groupby=["region"],
+            whisker_type=PostProcessingBoxplotWhiskerType.PERCENTILE,
+            metrics=["cars"],
+            percentiles=[1, 99],
+        )
+        columns = {column for column in df.columns}
+        assert columns == {
+            "cars__mean",
+            "cars__median",
+            "cars__q1",
+            "cars__q3",
+            "cars__max",
+            "cars__min",
+            "cars__count",
+            "cars__outliers",
+            "region",
+        }
+        assert len(df) == 4
+
+    def test_boxplot_percentile_incorrect_params(self):
+        with pytest.raises(QueryObjectValidationError):
+            proc.boxplot(
+                df=names_df,
+                groupby=["region"],
+                whisker_type=PostProcessingBoxplotWhiskerType.PERCENTILE,
+                metrics=["cars"],
+            )
+
+        with pytest.raises(QueryObjectValidationError):
+            proc.boxplot(
+                df=names_df,
+                groupby=["region"],
+                whisker_type=PostProcessingBoxplotWhiskerType.PERCENTILE,
+                metrics=["cars"],
+                percentiles=[10],
+            )
+
+        with pytest.raises(QueryObjectValidationError):
+            proc.boxplot(
+                df=names_df,
+                groupby=["region"],
+                whisker_type=PostProcessingBoxplotWhiskerType.PERCENTILE,
+                metrics=["cars"],
+                percentiles=[90, 10],
+            )
+
+        with pytest.raises(QueryObjectValidationError):
+            proc.boxplot(
+                df=names_df,
+                groupby=["region"],
+                whisker_type=PostProcessingBoxplotWhiskerType.PERCENTILE,
+                metrics=["cars"],
+                percentiles=[10, 90, 10],
+            )

@@ -52,7 +52,7 @@ from superset.annotation_layers.annotations.schemas import (
     openapi_spec_methods_override,
 )
 from superset.annotation_layers.commands.exceptions import AnnotationLayerNotFoundError
-from superset.constants import RouteMethod
+from superset.constants import MODEL_API_RW_METHOD_PERMISSION_MAP, RouteMethod
 from superset.models.annotations import Annotation
 from superset.views.base_api import BaseSupersetModelRestApi, statsd_metrics
 
@@ -65,11 +65,14 @@ class AnnotationRestApi(BaseSupersetModelRestApi):
     include_route_methods = RouteMethod.REST_MODEL_VIEW_CRUD_SET | {
         "bulk_delete",  # not using RouteMethod since locally defined
     }
-    class_permission_name = "AnnotationLayerModelView"
+    class_permission_name = "Annotation"
+    method_permission_name = MODEL_API_RW_METHOD_PERMISSION_MAP
+
     resource_name = "annotation_layer"
     allow_browser_login = True
 
     show_columns = [
+        "id",
         "short_descr",
         "long_descr",
         "start_dttm",
@@ -79,14 +82,16 @@ class AnnotationRestApi(BaseSupersetModelRestApi):
         "layer.name",
     ]
     list_columns = [
-        "short_descr",
-        "created_by.id",
-        "created_by.first_name",
-        "changed_by.id",
+        "id",
         "changed_by.first_name",
+        "changed_by.id",
         "changed_on_delta_humanized",
-        "start_dttm",
+        "created_by.first_name",
+        "created_by.id",
         "end_dttm",
+        "long_descr",
+        "short_descr",
+        "start_dttm",
     ]
     add_columns = [
         "short_descr",
@@ -99,12 +104,13 @@ class AnnotationRestApi(BaseSupersetModelRestApi):
     edit_model_schema = AnnotationPutSchema()
     edit_columns = add_columns
     order_columns = [
-        "short_descr",
-        "created_by.first_name",
         "changed_by.first_name",
         "changed_on_delta_humanized",
-        "start_dttm",
+        "created_by.first_name",
         "end_dttm",
+        "long_descr",
+        "short_descr",
+        "start_dttm",
     ]
 
     search_filters = {"short_descr": [AnnotationAllTextFilter]}
@@ -116,7 +122,9 @@ class AnnotationRestApi(BaseSupersetModelRestApi):
     openapi_spec_methods = openapi_spec_methods_override
 
     @staticmethod
-    def _apply_layered_relation_to_rison(layer_id: int, rison_parameters) -> None:
+    def _apply_layered_relation_to_rison(  # pylint: disable=invalid-name
+        layer_id: int, rison_parameters: Dict[str, Any]
+    ) -> None:
         if "filters" not in rison_parameters:
             rison_parameters["filters"] = []
         rison_parameters["filters"].append(
@@ -128,7 +136,9 @@ class AnnotationRestApi(BaseSupersetModelRestApi):
     @safe
     @permission_name("get")
     @rison(get_list_schema)
-    def get_list(self, pk: int, **kwargs: Dict[str, Any]) -> Response:
+    def get_list(  # pylint: disable=arguments-differ
+        self, pk: int, **kwargs: Dict[str, Any]
+    ) -> Response:
         """Get a list of annotations
         ---
         get:
@@ -169,7 +179,7 @@ class AnnotationRestApi(BaseSupersetModelRestApi):
                           The result from the get list query
                         type: array
                         items:
-                          $ref: '#/components/schemas/{{self.__class__.__name__}}.get_list'  # noqa
+                          $ref: '#/components/schemas/{{self.__class__.__name__}}.get_list'  # pylint: disable=line-too-long
             400:
               $ref: '#/components/responses/400'
             401:
@@ -187,7 +197,9 @@ class AnnotationRestApi(BaseSupersetModelRestApi):
     @safe
     @permission_name("get")
     @rison(get_item_schema)
-    def get(self, pk: int, annotation_id: int, **kwargs: Dict[str, Any]) -> Response:
+    def get(  # pylint: disable=arguments-differ
+        self, pk: int, annotation_id: int, **kwargs: Dict[str, Any]
+    ) -> Response:
         """Get item from Model
         ---
         get:
@@ -242,7 +254,7 @@ class AnnotationRestApi(BaseSupersetModelRestApi):
     @safe
     @statsd_metrics
     @permission_name("post")
-    def post(self, pk: int) -> Response:
+    def post(self, pk: int) -> Response:  # pylint: disable=arguments-differ
         """Creates a new Annotation
         ---
         post:
@@ -299,7 +311,10 @@ class AnnotationRestApi(BaseSupersetModelRestApi):
             return self.response_422(message=ex.normalized_messages())
         except AnnotationCreateFailedError as ex:
             logger.error(
-                "Error creating annotation %s: %s", self.__class__.__name__, str(ex)
+                "Error creating annotation %s: %s",
+                self.__class__.__name__,
+                str(ex),
+                exc_info=True,
             )
             return self.response_422(message=str(ex))
 
@@ -308,7 +323,9 @@ class AnnotationRestApi(BaseSupersetModelRestApi):
     @safe
     @statsd_metrics
     @permission_name("put")
-    def put(self, pk: int, annotation_id: int) -> Response:
+    def put(  # pylint: disable=arguments-differ
+        self, pk: int, annotation_id: int
+    ) -> Response:
         """Updates an Annotation
         ---
         put:
@@ -370,7 +387,10 @@ class AnnotationRestApi(BaseSupersetModelRestApi):
             return self.response_422(message=ex.normalized_messages())
         except AnnotationUpdateFailedError as ex:
             logger.error(
-                "Error updating annotation %s: %s", self.__class__.__name__, str(ex)
+                "Error updating annotation %s: %s",
+                self.__class__.__name__,
+                str(ex),
+                exc_info=True,
             )
             return self.response_422(message=str(ex))
 
@@ -379,7 +399,9 @@ class AnnotationRestApi(BaseSupersetModelRestApi):
     @safe
     @statsd_metrics
     @permission_name("delete")
-    def delete(self, pk: int, annotation_id: int) -> Response:
+    def delete(  # pylint: disable=arguments-differ
+        self, pk: int, annotation_id: int
+    ) -> Response:
         """Deletes an Annotation
         ---
         delete:
@@ -420,7 +442,10 @@ class AnnotationRestApi(BaseSupersetModelRestApi):
             return self.response_404()
         except AnnotationDeleteFailedError as ex:
             logger.error(
-                "Error deleting annotation %s: %s", self.__class__.__name__, str(ex)
+                "Error deleting annotation %s: %s",
+                self.__class__.__name__,
+                str(ex),
+                exc_info=True,
             )
             return self.response_422(message=str(ex))
 

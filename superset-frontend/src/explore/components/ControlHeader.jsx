@@ -18,10 +18,10 @@
  */
 import React from 'react';
 import PropTypes from 'prop-types';
-import { t } from '@superset-ui/core';
+import { t, css } from '@superset-ui/core';
 import { InfoTooltipWithTrigger } from '@superset-ui/chart-controls';
-import { OverlayTrigger, Tooltip } from 'react-bootstrap';
-import FormLabel from 'src/components/FormLabel';
+import { Tooltip } from 'src/components/Tooltip';
+import { FormLabel } from 'src/components/Form';
 
 const propTypes = {
   name: PropTypes.string,
@@ -49,7 +49,16 @@ export default class ControlHeader extends React.Component {
   renderOptionalIcons() {
     if (this.props.hovered) {
       return (
-        <span>
+        <span
+          css={theme => css`
+            position: absolute;
+            top: 50%;
+            right: 0;
+            padding-left: ${theme.gridUnit}px;
+            transform: translate(100%, -50%);
+            white-space: nowrap;
+          `}
+        >
           {this.props.description && (
             <span>
               <InfoTooltipWithTrigger
@@ -85,7 +94,13 @@ export default class ControlHeader extends React.Component {
     return (
       <div className="ControlHeader" data-test={`${this.props.name}-header`}>
         <div className="pull-left">
-          <FormLabel>
+          <FormLabel
+            css={{
+              marginBottom: 0,
+              position: 'relative',
+              whiteSpace: 'nowrap',
+            }}
+          >
             {this.props.leftNode && <span>{this.props.leftNode}</span>}
             <span
               role="button"
@@ -98,40 +113,35 @@ export default class ControlHeader extends React.Component {
             </span>{' '}
             {this.props.warning && (
               <span>
-                <OverlayTrigger
+                <Tooltip
+                  id="error-tooltip"
                   placement="top"
-                  overlay={
-                    <Tooltip id="error-tooltip">{this.props.warning}</Tooltip>
-                  }
+                  title={this.props.warning}
                 >
                   <i className="fa fa-exclamation-circle text-warning" />
-                </OverlayTrigger>{' '}
+                </Tooltip>{' '}
               </span>
             )}
             {this.props.danger && (
               <span>
-                <OverlayTrigger
+                <Tooltip
+                  id="error-tooltip"
                   placement="top"
-                  overlay={
-                    <Tooltip id="error-tooltip">{this.props.danger}</Tooltip>
-                  }
+                  title={this.props.danger}
                 >
                   <i className="fa fa-exclamation-circle text-danger" />
-                </OverlayTrigger>{' '}
+                </Tooltip>{' '}
               </span>
             )}
             {this.props.validationErrors.length > 0 && (
               <span>
-                <OverlayTrigger
+                <Tooltip
+                  id="error-tooltip"
                   placement="top"
-                  overlay={
-                    <Tooltip id="error-tooltip">
-                      {this.props.validationErrors.join(' ')}
-                    </Tooltip>
-                  }
+                  title={this.props.validationErrors.join(' ')}
                 >
                   <i className="fa fa-exclamation-circle text-danger" />
-                </OverlayTrigger>{' '}
+                </Tooltip>{' '}
               </span>
             )}
             {this.renderOptionalIcons()}

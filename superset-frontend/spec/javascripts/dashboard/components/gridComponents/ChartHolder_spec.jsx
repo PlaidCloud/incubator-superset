@@ -20,6 +20,9 @@ import { Provider } from 'react-redux';
 import React from 'react';
 import { mount } from 'enzyme';
 import sinon from 'sinon';
+import { supersetTheme, ThemeProvider } from '@superset-ui/core';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 
 import Chart from 'src/dashboard/containers/Chart';
 import ChartHolder from 'src/dashboard/components/gridComponents/ChartHolder';
@@ -28,14 +31,16 @@ import DragDroppable from 'src/dashboard/components/dnd/DragDroppable';
 import HoverMenu from 'src/dashboard/components/menu/HoverMenu';
 import ResizableContainer from 'src/dashboard/components/resizable/ResizableContainer';
 
-import { mockStore } from '../../fixtures/mockStore';
-import { sliceId } from '../../fixtures/mockChartQueries';
-import { dashboardLayout as mockLayout } from '../../fixtures/mockDashboardLayout';
-import WithDragDropContext from '../../helpers/WithDragDropContext';
+import { getMockStore } from 'spec/fixtures/mockStore';
+import { sliceId } from 'spec/fixtures/mockChartQueries';
+import dashboardInfo from 'spec/fixtures/mockDashboardInfo';
+import { dashboardLayout as mockLayout } from 'spec/fixtures/mockDashboardLayout';
+import { sliceEntitiesForChart } from 'spec/fixtures/mockSliceEntities';
 
 describe('ChartHolder', () => {
   const props = {
     id: String(sliceId),
+    dashboardId: dashboardInfo.id,
     parentId: 'ROW_ID',
     component: mockLayout.present.CHART_ID,
     depth: 2,
@@ -53,14 +58,22 @@ describe('ChartHolder', () => {
   };
 
   function setup(overrideProps) {
+    const mockStore = getMockStore({
+      sliceEntities: sliceEntitiesForChart,
+    });
+
     // We have to wrap provide DragDropContext for the underlying DragDroppable
     // otherwise we cannot assert on DragDroppable children
     const wrapper = mount(
       <Provider store={mockStore}>
-        <WithDragDropContext>
+        <DndProvider backend={HTML5Backend}>
           <ChartHolder {...props} {...overrideProps} />
-        </WithDragDropContext>
+        </DndProvider>
       </Provider>,
+      {
+        wrappingComponent: ThemeProvider,
+        wrappingComponentProps: { theme: supersetTheme },
+      },
     );
     return wrapper;
   }

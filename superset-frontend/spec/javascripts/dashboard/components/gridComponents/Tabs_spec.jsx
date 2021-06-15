@@ -18,21 +18,27 @@
  */
 import { Provider } from 'react-redux';
 import React from 'react';
-import { mount, shallow } from 'enzyme';
+import { shallow } from 'enzyme';
 import sinon from 'sinon';
-import { Tabs as BootstrapTabs, Tab as BootstrapTab } from 'react-bootstrap';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 
+import { LineEditableTabs } from 'src/components/Tabs';
+import { Modal } from 'src/common/components';
+import fetchMock from 'fetch-mock';
+import { styledMount as mount } from 'spec/helpers/theming';
 import DashboardComponent from 'src/dashboard/containers/DashboardComponent';
 import DeleteComponentButton from 'src/dashboard/components/DeleteComponentButton';
 import HoverMenu from 'src/dashboard/components/menu/HoverMenu';
 import DragDroppable from 'src/dashboard/components/dnd/DragDroppable';
 import Tabs from 'src/dashboard/components/gridComponents/Tabs';
 import { DASHBOARD_ROOT_ID } from 'src/dashboard/util/constants';
-import WithDragDropContext from '../../helpers/WithDragDropContext';
-import { dashboardLayoutWithTabs } from '../../fixtures/mockDashboardLayout';
-import { mockStoreWithTabs } from '../../fixtures/mockStore';
+import { dashboardLayoutWithTabs } from 'spec/fixtures/mockDashboardLayout';
+import { mockStoreWithTabs } from 'spec/fixtures/mockStore';
 
 describe('Tabs', () => {
+  fetchMock.post('glob:*/r/shortner/', {});
+
   const props = {
     id: 'TABS_ID',
     parentId: DASHBOARD_ROOT_ID,
@@ -60,9 +66,9 @@ describe('Tabs', () => {
     // otherwise we cannot assert on DragDroppable children
     const wrapper = mount(
       <Provider store={mockStoreWithTabs}>
-        <WithDragDropContext>
+        <DndProvider backend={HTML5Backend}>
           <Tabs {...props} {...overrideProps} />
-        </WithDragDropContext>
+        </DndProvider>
       </Provider>,
     );
     return wrapper;
@@ -74,31 +80,23 @@ describe('Tabs', () => {
     expect(wrapper.find(DragDroppable)).toExist();
   });
 
-  it('should render BootstrapTabs', () => {
+  it('should render non-editable tabs', () => {
     const wrapper = setup();
-    expect(wrapper.find(BootstrapTabs)).toExist();
+    expect(wrapper.find(LineEditableTabs)).toExist();
+    expect(wrapper.find('.ant-tabs-nav-add').exists()).toBeFalsy();
   });
 
-  it('should set animation=true, mountOnEnter=true, and unmounOnExit=false on BootstrapTabs for perf', () => {
+  it('should render a tab pane for each child', () => {
     const wrapper = setup();
-    const tabProps = wrapper.find(BootstrapTabs).props();
-    expect(tabProps.animation).toBe(true);
-    expect(tabProps.mountOnEnter).toBe(true);
-    expect(tabProps.unmountOnExit).toBe(false);
-  });
-
-  it('should render a BootstrapTab for each child', () => {
-    const wrapper = setup();
-    expect(wrapper.find(BootstrapTab)).toHaveLength(
+    expect(wrapper.find(LineEditableTabs.TabPane)).toHaveLength(
       props.component.children.length,
     );
   });
 
-  it('should render an extra (+) BootstrapTab in editMode', () => {
+  it('should render editable tabs in editMode', () => {
     const wrapper = setup({ editMode: true });
-    expect(wrapper.find(BootstrapTab)).toHaveLength(
-      props.component.children.length + 1,
-    );
+    expect(wrapper.find(LineEditableTabs)).toExist();
+    expect(wrapper.find('.ant-tabs-nav-add')).toExist();
   });
 
   it('should render a DashboardComponent for each child', () => {
@@ -113,7 +111,7 @@ describe('Tabs', () => {
     const createComponent = sinon.spy();
     const wrapper = setup({ editMode: true, createComponent });
     wrapper
-      .find('.dashboard-component-tabs .nav-tabs a')
+      .find('[data-test="dashboard-component-tabs"] .ant-tabs-nav-add')
       .last()
       .simulate('click');
 
@@ -124,7 +122,7 @@ describe('Tabs', () => {
     const onChangeTab = sinon.spy();
     const wrapper = setup({ editMode: true, onChangeTab });
     wrapper
-      .find('.dashboard-component-tabs .nav-tabs a')
+      .find('[data-test="dashboard-component-tabs"] .ant-tabs-tab')
       .at(1) // will not call if it is already selected
       .simulate('click');
 
@@ -135,7 +133,9 @@ describe('Tabs', () => {
     const onChangeTab = sinon.spy();
     const wrapper = setup({ editMode: true, onChangeTab });
     wrapper
-      .find('.dashboard-component-tabs .nav-tabs a .short-link-trigger')
+      .find(
+        '[data-test="dashboard-component-tabs"] .ant-tabs-tab [role="button"]',
+      )
       .at(1) // will not call if it is already selected
       .simulate('click');
 
@@ -180,5 +180,14 @@ describe('Tabs', () => {
 
     wrapper = shallow(<Tabs {...directLinkProps} />);
     expect(wrapper.state('tabIndex')).toBe(1);
+  });
+
+  it('should render Modal when clicked remove tab button', () => {
+    const deleteComponent = sinon.spy();
+    const modalMock = jest.spyOn(Modal, 'confirm');
+    const wrapper = setup({ editMode: true, deleteComponent });
+    wrapper.find('.ant-tabs-tab-remove').at(0).simulate('click');
+    expect(modalMock.mock.calls).toHaveLength(1);
+    expect(deleteComponent.callCount).toBe(0);
   });
 });

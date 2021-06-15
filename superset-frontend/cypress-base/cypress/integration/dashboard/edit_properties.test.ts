@@ -64,15 +64,16 @@ function openAdvancedProperties() {
 function openDashboardEditProperties() {
   // open dashboard properties edit modal
   cy.get('#save-dash-split-button').trigger('click', { force: true });
-  cy.get('.dropdown-menu').contains('Edit dashboard properties').click();
+  cy.get('[data-test=header-actions-menu]')
+    .contains('Edit dashboard properties')
+    .click({ force: true });
 }
 
 describe('Dashboard edit action', () => {
   beforeEach(() => {
-    cy.server();
     cy.login();
     cy.visit(WORLD_HEALTH_DASHBOARD);
-    cy.route(`/api/v1/dashboard/1`).as('dashboardGet');
+    cy.intercept(`/api/v1/dashboard/1`).as('dashboardGet');
     cy.get('.dashboard-grid', { timeout: 50000 })
       .should('be.visible') // wait for 50 secs to load dashboard
       .then(() => {
@@ -87,19 +88,19 @@ describe('Dashboard edit action', () => {
     const dashboardTitle = `Test dashboard [${shortid.generate()}]`;
 
     // update title
-    cy.get('.modal-body')
+    cy.get('.ant-modal-body')
       .should('be.visible')
       .contains('Title')
-      .siblings('input')
+      .get('[data-test="dashboard-title-input"]')
       .type(`{selectall}{backspace}${dashboardTitle}`);
 
     // save edit changes
-    cy.get('.modal-footer')
+    cy.get('.ant-modal-footer')
       .contains('Save')
       .click()
       .then(() => {
         // assert that modal edit window has closed
-        cy.get('.modal-body').should('not.exist');
+        cy.get('.ant-modal-body').should('not.exist');
 
         // assert title has been updated
         cy.get('.editable-title input').should('have.value', dashboardTitle);

@@ -17,8 +17,11 @@
 # isort:skip_file
 """Unit tests for Superset"""
 import json
+from io import BytesIO
 from typing import Optional
+from zipfile import is_zipfile, ZipFile
 
+import yaml
 import pytest
 import prison
 from sqlalchemy.sql import func, and_
@@ -31,6 +34,11 @@ from superset.models.sql_lab import SavedQuery
 from superset.utils.core import get_example_database
 
 from tests.base_tests import SupersetTestCase
+from tests.fixtures.importexport import (
+    database_config,
+    saved_queries_config,
+    saved_queries_metadata_config,
+)
 
 
 SAVED_QUERIES_FIXTURE_COUNT = 10
@@ -412,9 +420,23 @@ class TestSavedQueryApi(SupersetTestCase):
         SavedQuery API: Test info
         """
         self.login(username="admin")
-        uri = f"api/v1/saved_query/_info"
+        uri = "api/v1/saved_query/_info"
         rv = self.get_assert_metric(uri, "info")
         assert rv.status_code == 200
+
+    def test_info_security_saved_query(self):
+        """
+        SavedQuery API: Test info security
+        """
+        self.login(username="admin")
+        params = {"keys": ["permissions"]}
+        uri = f"api/v1/saved_query/_info?q={prison.dumps(params)}"
+        rv = self.get_assert_metric(uri, "info")
+        data = json.loads(rv.data.decode("utf-8"))
+        assert rv.status_code == 200
+        assert "can_read" in data["permissions"]
+        assert "can_write" in data["permissions"]
+        assert len(data["permissions"]) == 2
 
     def test_related_saved_query(self):
         """
@@ -518,6 +540,8 @@ class TestSavedQueryApi(SupersetTestCase):
         uri = f"api/v1/saved_query/{max_id + 1}"
         rv = self.client.get(uri)
         assert rv.status_code == 404
+        db.session.delete(query)
+        db.session.commit()
 
     def test_create_saved_query(self):
         """
@@ -680,3 +704,99 @@ class TestSavedQueryApi(SupersetTestCase):
         uri = f"api/v1/saved_query/?q={prison.dumps(saved_query_ids)}"
         rv = self.delete_assert_metric(uri, "bulk_delete")
         assert rv.status_code == 404
+
+    @pytest.mark.usefixtures("create_saved_queries")
+    def test_export(self):
+        """
+        Saved Query API: Test export
+        """
+        admin = self.get_user("admin")
+        sample_query = (
+            db.session.query(SavedQuery).filter(SavedQuery.created_by == admin).first()
+        )
+
+        self.login(username="admin")
+        argument = [sample_query.id]
+        uri = f"api/v1/saved_query/export/?q={prison.dumps(argument)}"
+        rv = self.client.get(uri)
+        assert rv.status_code == 200
+        buf = BytesIO(rv.data)
+        assert is_zipfile(buf)
+
+    @pytest.mark.usefixtures("create_saved_queries")
+    def test_export_not_found(self):
+        """
+        Saved Query API: Test export
+        """
+        max_id = db.session.query(func.max(SavedQuery.id)).scalar()
+
+        self.login(username="admin")
+        argument = [max_id + 1, max_id + 2]
+        uri = f"api/v1/saved_query/export/?q={prison.dumps(argument)}"
+        rv = self.client.get(uri)
+        assert rv.status_code == 404
+
+    @pytest.mark.usefixtures("create_saved_queries")
+    def test_export_not_allowed(self):
+        """
+        Saved Query API: Test export
+        """
+        admin = self.get_user("admin")
+        sample_query = (
+            db.session.query(SavedQuery).filter(SavedQuery.created_by == admin).first()
+        )
+
+        self.login(username="gamma")
+        argument = [sample_query.id]
+        uri = f"api/v1/saved_query/export/?q={prison.dumps(argument)}"
+        rv = self.client.get(uri)
+        assert rv.status_code == 404
+
+    def create_saved_query_import(self):
+        buf = BytesIO()
+        with ZipFile(buf, "w") as bundle:
+            with bundle.open("saved_query_export/metadata.yaml", "w") as fp:
+                fp.write(yaml.safe_dump(saved_queries_metadata_config).encode())
+            with bundle.open(
+                "saved_query_export/databases/imported_database.yaml", "w"
+            ) as fp:
+                fp.write(yaml.safe_dump(database_config).encode())
+            with bundle.open(
+                "saved_query_export/queries/imported_database/public/imported_saved_query.yaml",
+                "w",
+            ) as fp:
+                fp.write(yaml.safe_dump(saved_queries_config).encode())
+        buf.seek(0)
+        return buf
+
+    def test_import_saved_queries(self):
+        """
+        Saved Query API: Test import
+        """
+        self.login(username="admin")
+        uri = "api/v1/saved_query/import/"
+
+        buf = self.create_saved_query_import()
+        form_data = {
+            "formData": (buf, "saved_query.zip"),
+        }
+        rv = self.client.post(uri, data=form_data, content_type="multipart/form-data")
+        response = json.loads(rv.data.decode("utf-8"))
+
+        assert rv.status_code == 200
+        assert response == {"message": "OK"}
+        database = (
+            db.session.query(Database).filter_by(uuid=database_config["uuid"]).one()
+        )
+        assert database.database_name == "imported_database"
+
+        saved_query = (
+            db.session.query(SavedQuery)
+            .filter_by(uuid=saved_queries_config["uuid"])
+            .one()
+        )
+        assert saved_query.database == database
+
+        db.session.delete(saved_query)
+        db.session.delete(database)
+        db.session.commit()

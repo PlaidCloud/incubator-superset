@@ -25,30 +25,35 @@ import json
 import logging
 from typing import Dict, List
 from urllib.parse import quote
+from tests.fixtures.birth_names_dashboard import load_birth_names_dashboard_with_slices
 
+import pytest
 import pytz
 import random
 import re
 import unittest
-from unittest import mock, skipUnless
+from unittest import mock
 
 import pandas as pd
 import sqlalchemy as sqla
-
+from sqlalchemy.exc import SQLAlchemyError
 from superset.models.cache import CacheKey
-from tests.test_app import app  # isort:skip
+from superset.utils.core import get_example_database
+from tests.conftest import with_feature_flags
+from tests.fixtures.energy_dashboard import load_energy_table_with_slice
+from tests.test_app import app
 import superset.views.utils
 from superset import (
     dataframe,
     db,
-    jinja_context,
     security_manager,
     sql_lab,
-    is_feature_enabled,
 )
 from superset.connectors.sqla.models import SqlaTable
 from superset.db_engine_specs.base import BaseEngineSpec
 from superset.db_engine_specs.mssql import MssqlEngineSpec
+from superset.exceptions import SupersetException
+from superset.extensions import async_query_manager
 from superset.models import core as models
 from superset.models.annotations import Annotation, AnnotationLayer
 from superset.models.dashboard import Dashboard
@@ -61,6 +66,7 @@ from superset.views import core as views
 from superset.views.database.views import DatabaseView
 
 from .base_tests import SupersetTestCase
+from tests.fixtures.world_bank_dashboard import load_world_bank_dashboard_with_slices
 
 logger = logging.getLogger(__name__)
 
@@ -96,11 +102,12 @@ class TestCore(SupersetTestCase):
         resp = self.client.get("/superset/dashboard/-1/")
         assert resp.status_code == 404
 
+    @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
     def test_slice_endpoint(self):
         self.login(username="admin")
         slc = self.get_slice("Girls", db.session)
         resp = self.get_resp("/superset/slice/{}/".format(slc.id))
-        assert "Time Column" in resp
+        assert "Original value" in resp
         assert "List Roles" in resp
 
         # Testing overrides
@@ -110,6 +117,7 @@ class TestCore(SupersetTestCase):
         resp = self.client.get("/superset/slice/-1/")
         assert resp.status_code == 404
 
+    @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
     def test_viz_cache_key(self):
         self.login(username="admin")
         slc = self.get_slice("Girls", db.session)
@@ -155,7 +163,7 @@ class TestCore(SupersetTestCase):
         response = json.loads(rv.data.decode("utf-8"))
         self.assertEqual(rv.status_code, 200)
 
-        expeted_response = {
+        expected_response = {
             "options": [
                 {
                     "label": "ab_role",
@@ -163,11 +171,12 @@ class TestCore(SupersetTestCase):
                     "title": "ab_role",
                     "type": "table",
                     "value": "ab_role",
+                    "extra": None,
                 }
             ],
             "tableLength": 1,
         }
-        self.assertEqual(response, expeted_response)
+        self.assertEqual(response, expected_response)
 
     def test_get_superset_tables_not_found(self):
         self.login(username="admin")
@@ -234,6 +243,7 @@ class TestCore(SupersetTestCase):
         assert_admin_view_menus_in("Alpha", self.assertNotIn)
         assert_admin_view_menus_in("Gamma", self.assertNotIn)
 
+    @pytest.mark.usefixtures("load_energy_table_with_slice")
     def test_save_slice(self):
         self.login(username="admin")
         slice_name = f"Energy Sankey"
@@ -300,6 +310,7 @@ class TestCore(SupersetTestCase):
             db.session.delete(slc)
         db.session.commit()
 
+    @pytest.mark.usefixtures("load_energy_table_with_slice")
     def test_filter_endpoint(self):
         self.login(username="admin")
         slice_name = "Energy Sankey"
@@ -318,8 +329,9 @@ class TestCore(SupersetTestCase):
         # Changing name
         resp = self.get_resp(url.format(tbl_id, slice_id))
         assert len(resp) > 0
-        assert "Carbon Dioxide" in resp
+        assert "energy_target0" in resp
 
+    @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
     def test_slice_data(self):
         # slice data should have some required attributes
         self.login(username="admin")
@@ -331,6 +343,7 @@ class TestCore(SupersetTestCase):
         assert "modified" in slc_data_attributes
         assert "owners" in slc_data_attributes
 
+    @pytest.mark.usefixtures("load_energy_table_with_slice")
     def test_slices(self):
         # Testing by hitting the two supported end points for all slices
         self.login(username="admin")
@@ -364,6 +377,7 @@ class TestCore(SupersetTestCase):
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
 
+    @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
     def test_get_user_slices_for_owners(self):
         self.login(username="alpha")
         user = security_manager.find_user("alpha")
@@ -407,6 +421,7 @@ class TestCore(SupersetTestCase):
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
 
+    @pytest.mark.usefixtures("load_energy_table_with_slice")
     def test_slices_V2(self):
         # Add explore-v2-beta role to admin user
         # Test all slice urls as user with with explore-v2-beta role
@@ -530,7 +545,7 @@ class TestCore(SupersetTestCase):
         self.assertEqual(400, response.status_code)
         response_body = json.loads(response.data.decode("utf-8"))
         expected_body = {
-            "error": "SQLite database cannot be used as a data source for security reasons."
+            "error": "SQLiteDialect_pysqlite cannot be used as a data source for security reasons."
         }
         self.assertEqual(expected_body, response_body)
 
@@ -568,6 +583,9 @@ class TestCore(SupersetTestCase):
         database.allow_run_async = False
         db.session.commit()
 
+    @pytest.mark.usefixtures(
+        "load_energy_table_with_slice", "load_birth_names_dashboard_with_slices"
+    )
     def test_warm_up_cache(self):
         self.login()
         slc = self.get_slice("Girls", db.session)
@@ -592,11 +610,16 @@ class TestCore(SupersetTestCase):
             + quote(json.dumps([{"col": "name", "op": "in", "val": ["Jennifer"]}]))
         ) == [{"slice_id": slc.id, "viz_error": None, "viz_status": "success"}]
 
+    @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
     def test_cache_logging(self):
+        self.login("admin")
+        store_cache_keys = app.config["STORE_CACHE_KEYS_IN_METADATA_DB"]
+        app.config["STORE_CACHE_KEYS_IN_METADATA_DB"] = True
         girls_slice = self.get_slice("Girls", db.session)
         self.get_json_resp("/superset/warm_up_cache?slice_id={}".format(girls_slice.id))
         ck = db.session.query(CacheKey).order_by(CacheKey.id.desc()).first()
         assert ck.datasource_uid == f"{girls_slice.table.id}__table"
+        app.config["STORE_CACHE_KEYS_IN_METADATA_DB"] = store_cache_keys
 
     def test_shortner(self):
         self.login(username="admin")
@@ -611,10 +634,41 @@ class TestCore(SupersetTestCase):
         resp = self.client.post("/r/shortner/", data=dict(data=data))
         assert re.search(r"\/r\/[0-9]+", resp.data.decode("utf-8"))
 
-    @skipUnless(
-        (is_feature_enabled("KV_STORE")), "skipping as /kv/ endpoints are not enabled"
-    )
-    def test_kv(self):
+    def test_shortner_invalid(self):
+        self.login(username="admin")
+        invalid_urls = [
+            "hhttp://invalid.com",
+            "hhttps://invalid.com",
+            "www.invalid.com",
+        ]
+        for invalid_url in invalid_urls:
+            resp = self.client.post("/r/shortner/", data=dict(data=invalid_url))
+            assert resp.status_code == 400
+
+    def test_redirect_invalid(self):
+        model_url = models.Url(url="hhttp://invalid.com")
+        db.session.add(model_url)
+        db.session.commit()
+
+        self.login(username="admin")
+        response = self.client.get(f"/r/{model_url.id}")
+        assert response.headers["Location"] == "http://localhost/"
+        db.session.delete(model_url)
+        db.session.commit()
+
+    @with_feature_flags(KV_STORE=False)
+    def test_kv_disabled(self):
+        self.login(username="admin")
+
+        resp = self.client.get("/kv/10001/")
+        self.assertEqual(404, resp.status_code)
+
+        value = json.dumps({"data": "this is a test"})
+        resp = self.client.post("/kv/store/", data=dict(data=value))
+        self.assertEqual(resp.status_code, 404)
+
+    @with_feature_flags(KV_STORE=True)
+    def test_kv_enabled(self):
         self.login(username="admin")
 
         resp = self.client.get("/kv/10001/")
@@ -636,12 +690,21 @@ class TestCore(SupersetTestCase):
         assert "Charts" in self.get_resp("/chart/list/")
         assert "Dashboards" in self.get_resp("/dashboard/list/")
 
+    @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
     def test_csv_endpoint(self):
         self.login()
-        sql = """
+        client_id = "{}".format(random.getrandbits(64))[:10]
+        get_name_sql = """
+                    SELECT name
+                    FROM birth_names
+                    LIMIT 1
+                """
+        resp = self.run_sql(get_name_sql, client_id, raise_on_error=True)
+        name = resp["data"][0]["name"]
+        sql = f"""
             SELECT name
             FROM birth_names
-            WHERE name = 'James'
+            WHERE name = '{name}'
             LIMIT 1
         """
         client_id = "{}".format(random.getrandbits(64))[:10]
@@ -649,18 +712,19 @@ class TestCore(SupersetTestCase):
 
         resp = self.get_resp("/superset/csv/{}".format(client_id))
         data = csv.reader(io.StringIO(resp))
-        expected_data = csv.reader(io.StringIO("name\nJames\n"))
+        expected_data = csv.reader(io.StringIO(f"name\n{name}\n"))
 
         client_id = "{}".format(random.getrandbits(64))[:10]
         self.run_sql(sql, client_id, raise_on_error=True)
 
         resp = self.get_resp("/superset/csv/{}".format(client_id))
         data = csv.reader(io.StringIO(resp))
-        expected_data = csv.reader(io.StringIO("name\nJames\n"))
+        expected_data = csv.reader(io.StringIO(f"name\n{name}\n"))
 
         self.assertEqual(list(expected_data), list(data))
         self.logout()
 
+    @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
     def test_extra_table_metadata(self):
         self.login()
         example_db = utils.get_example_database()
@@ -669,103 +733,14 @@ class TestCore(SupersetTestCase):
             f"/superset/extra_table_metadata/{example_db.id}/birth_names/{schema}/"
         )
 
-    def test_process_template(self):
-        maindb = utils.get_example_database()
-        if maindb.backend == "presto":
-            # TODO: make it work for presto
-            return
-        sql = "SELECT '{{ datetime(2017, 1, 1).isoformat() }}'"
-        tp = jinja_context.get_template_processor(database=maindb)
-        rendered = tp.process_template(sql)
-        self.assertEqual("SELECT '2017-01-01T00:00:00'", rendered)
-
-    def test_get_template_kwarg(self):
-        maindb = utils.get_example_database()
-        if maindb.backend == "presto":
-            # TODO: make it work for presto
-            return
-        s = "{{ foo }}"
-        tp = jinja_context.get_template_processor(database=maindb, foo="bar")
-        rendered = tp.process_template(s)
-        self.assertEqual("bar", rendered)
-
-    def test_template_kwarg(self):
-        maindb = utils.get_example_database()
-        if maindb.backend == "presto":
-            # TODO: make it work for presto
-            return
-        s = "{{ foo }}"
-        tp = jinja_context.get_template_processor(database=maindb)
-        rendered = tp.process_template(s, foo="bar")
-        self.assertEqual("bar", rendered)
-
     def test_templated_sql_json(self):
         if utils.get_example_database().backend == "presto":
             # TODO: make it work for presto
             return
         self.login()
-        sql = "SELECT '{{ datetime(2017, 1, 1).isoformat() }}' as test"
+        sql = "SELECT '{{ 1+1 }}' as test"
         data = self.run_sql(sql, "fdaklj3ws")
-        self.assertEqual(data["data"][0]["test"], "2017-01-01T00:00:00")
-
-    @mock.patch("tests.superset_test_custom_template_processors.datetime")
-    def test_custom_process_template(self, mock_dt) -> None:
-        """Test macro defined in custom template processor works."""
-        mock_dt.utcnow = mock.Mock(return_value=datetime.datetime(1970, 1, 1))
-        db = mock.Mock()
-        db.backend = "db_for_macros_testing"
-        tp = jinja_context.get_template_processor(database=db)
-
-        sql = "SELECT '$DATE()'"
-        rendered = tp.process_template(sql)
-        self.assertEqual("SELECT '{}'".format("1970-01-01"), rendered)
-
-        sql = "SELECT '$DATE(1, 2)'"
-        rendered = tp.process_template(sql)
-        self.assertEqual("SELECT '{}'".format("1970-01-02"), rendered)
-
-    def test_custom_get_template_kwarg(self):
-        """Test macro passed as kwargs when getting template processor
-        works in custom template processor."""
-        db = mock.Mock()
-        db.backend = "db_for_macros_testing"
-        s = "$foo()"
-        tp = jinja_context.get_template_processor(database=db, foo=lambda: "bar")
-        rendered = tp.process_template(s)
-        self.assertEqual("bar", rendered)
-
-    def test_custom_template_kwarg(self) -> None:
-        """Test macro passed as kwargs when processing template
-        works in custom template processor."""
-        db = mock.Mock()
-        db.backend = "db_for_macros_testing"
-        s = "$foo()"
-        tp = jinja_context.get_template_processor(database=db)
-        rendered = tp.process_template(s, foo=lambda: "bar")
-        self.assertEqual("bar", rendered)
-
-    def test_custom_template_processors_overwrite(self) -> None:
-        """Test template processor for presto gets overwritten by custom one."""
-        db = mock.Mock()
-        db.backend = "db_for_macros_testing"
-        tp = jinja_context.get_template_processor(database=db)
-
-        sql = "SELECT '{{ datetime(2017, 1, 1).isoformat() }}'"
-        rendered = tp.process_template(sql)
-        self.assertEqual(sql, rendered)
-
-        sql = "SELECT '{{ DATE(1, 2) }}'"
-        rendered = tp.process_template(sql)
-        self.assertEqual(sql, rendered)
-
-    def test_custom_template_processors_ignored(self) -> None:
-        """Test custom template processor is ignored for a difference backend
-        database."""
-        maindb = utils.get_example_database()
-        sql = "SELECT '$DATE()'"
-        tp = jinja_context.get_template_processor(database=maindb)
-        rendered = tp.process_template(sql)
-        assert sql == rendered
+        self.assertEqual(data["data"][0]["test"], "2")
 
     @mock.patch("tests.superset_test_custom_template_processors.datetime")
     @mock.patch("superset.sql_lab.get_sql_results")
@@ -806,6 +781,7 @@ class TestCore(SupersetTestCase):
         for k in keys:
             self.assertIn(k, resp.keys())
 
+    @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
     def test_user_profile(self, username="admin"):
         self.login(username=username)
         slc = self.get_slice("Girls", db.session)
@@ -838,8 +814,10 @@ class TestCore(SupersetTestCase):
         data = self.get_json_resp(f"/superset/fave_dashboards_by_username/{username}/")
         self.assertNotIn("message", data)
 
+    @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
     def test_slice_id_is_always_logged_correctly_on_web_request(self):
         # superset/explore case
+        self.login("admin")
         slc = db.session.query(Slice).filter_by(slice_name="Girls").one()
         qry = db.session.query(models.Log).filter_by(slice_id=slc.id)
         self.get_resp(slc.slice_url, {"form_data": json.dumps(slc.form_data)})
@@ -905,7 +883,9 @@ class TestCore(SupersetTestCase):
         clean_query = "SELECT '/* val 1 */' as c1, '-- val 2' as c2 FROM tbl"
         commented_query = "/* comment 1 */" + clean_query + "-- comment 2"
         table = SqlaTable(
-            table_name="test_comments_in_sqlatable_query_table", sql=commented_query
+            table_name="test_comments_in_sqlatable_query_table",
+            sql=commented_query,
+            database=get_example_database(),
         )
         rendered_query = str(table.get_from_clause())
         self.assertEqual(clean_query, rendered_query)
@@ -916,8 +896,266 @@ class TestCore(SupersetTestCase):
 
         self.assertEqual(
             data["errors"][0]["message"],
-            "The datasource associated with this chart no longer exists",
+            "The dataset associated with this chart no longer exists",
         )
+
+    @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
+    def test_explore_json(self):
+        tbl_id = self.table_ids.get("birth_names")
+        form_data = {
+            "datasource": f"{tbl_id}__table",
+            "viz_type": "dist_bar",
+            "time_range_endpoints": ["inclusive", "exclusive"],
+            "granularity_sqla": "ds",
+            "time_range": "No filter",
+            "metrics": ["count"],
+            "adhoc_filters": [],
+            "groupby": ["gender"],
+            "row_limit": 100,
+        }
+        self.login(username="admin")
+        rv = self.client.post(
+            "/superset/explore_json/", data={"form_data": json.dumps(form_data)},
+        )
+        data = json.loads(rv.data.decode("utf-8"))
+
+        self.assertEqual(rv.status_code, 200)
+        self.assertEqual(data["rowcount"], 2)
+
+    @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
+    def test_explore_json_dist_bar_order(self):
+        tbl_id = self.table_ids.get("birth_names")
+        form_data = {
+            "datasource": f"{tbl_id}__table",
+            "viz_type": "dist_bar",
+            "url_params": {},
+            "time_range_endpoints": ["inclusive", "exclusive"],
+            "granularity_sqla": "ds",
+            "time_range": 'DATEADD(DATETIME("2021-01-22T00:00:00"), -100, year) : 2021-01-22T00:00:00',
+            "metrics": [
+                {
+                    "expressionType": "SIMPLE",
+                    "column": {
+                        "id": 334,
+                        "column_name": "name",
+                        "verbose_name": "null",
+                        "description": "null",
+                        "expression": "",
+                        "filterable": True,
+                        "groupby": True,
+                        "is_dttm": False,
+                        "type": "VARCHAR(255)",
+                        "python_date_format": "null",
+                    },
+                    "aggregate": "COUNT",
+                    "sqlExpression": "null",
+                    "isNew": False,
+                    "hasCustomLabel": False,
+                    "label": "COUNT(name)",
+                    "optionName": "metric_xdzsijn42f9_khi4h3v3vci",
+                },
+                {
+                    "expressionType": "SIMPLE",
+                    "column": {
+                        "id": 332,
+                        "column_name": "ds",
+                        "verbose_name": "null",
+                        "description": "null",
+                        "expression": "",
+                        "filterable": True,
+                        "groupby": True,
+                        "is_dttm": True,
+                        "type": "TIMESTAMP WITHOUT TIME ZONE",
+                        "python_date_format": "null",
+                    },
+                    "aggregate": "COUNT",
+                    "sqlExpression": "null",
+                    "isNew": False,
+                    "hasCustomLabel": False,
+                    "label": "COUNT(ds)",
+                    "optionName": "metric_80g1qb9b6o7_ci5vquydcbe",
+                },
+            ],
+            "adhoc_filters": [],
+            "groupby": ["name"],
+            "columns": [],
+            "row_limit": 10,
+            "color_scheme": "supersetColors",
+            "label_colors": {},
+            "show_legend": True,
+            "y_axis_format": "SMART_NUMBER",
+            "bottom_margin": "auto",
+            "x_ticks_layout": "auto",
+        }
+
+        self.login(username="admin")
+        rv = self.client.post(
+            "/superset/explore_json/", data={"form_data": json.dumps(form_data)},
+        )
+        data = json.loads(rv.data.decode("utf-8"))
+
+        resp = self.run_sql(
+            """
+            SELECT count(name) AS count_name, count(ds) AS count_ds
+            FROM birth_names
+            WHERE ds >= '1921-01-22 00:00:00.000000' AND ds < '2021-01-22 00:00:00.000000'
+            GROUP BY name ORDER BY count_name DESC, count_ds DESC
+            LIMIT 10;
+            """,
+            client_id="client_id_1",
+            user_name="admin",
+        )
+        count_ds = []
+        count_name = []
+        for series in data["data"]:
+            if series["key"] == "COUNT(ds)":
+                count_ds = series["values"]
+            if series["key"] == "COUNT(name)":
+                count_name = series["values"]
+        for expected, actual_ds, actual_name in zip(resp["data"], count_ds, count_name):
+            assert expected["count_name"] == actual_name["y"]
+            assert expected["count_ds"] == actual_ds["y"]
+
+    @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
+    @mock.patch.dict(
+        "superset.extensions.feature_flag_manager._feature_flags",
+        GLOBAL_ASYNC_QUERIES=True,
+    )
+    def test_explore_json_async(self):
+        tbl_id = self.table_ids.get("birth_names")
+        form_data = {
+            "datasource": f"{tbl_id}__table",
+            "viz_type": "dist_bar",
+            "time_range_endpoints": ["inclusive", "exclusive"],
+            "granularity_sqla": "ds",
+            "time_range": "No filter",
+            "metrics": ["count"],
+            "adhoc_filters": [],
+            "groupby": ["gender"],
+            "row_limit": 100,
+        }
+        async_query_manager.init_app(app)
+        self.login(username="admin")
+        rv = self.client.post(
+            "/superset/explore_json/", data={"form_data": json.dumps(form_data)},
+        )
+        data = json.loads(rv.data.decode("utf-8"))
+        keys = list(data.keys())
+
+        self.assertEqual(rv.status_code, 202)
+        self.assertCountEqual(
+            keys, ["channel_id", "job_id", "user_id", "status", "errors", "result_url"]
+        )
+
+    @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
+    @mock.patch.dict(
+        "superset.extensions.feature_flag_manager._feature_flags",
+        GLOBAL_ASYNC_QUERIES=True,
+    )
+    def test_explore_json_async_results_format(self):
+        tbl_id = self.table_ids.get("birth_names")
+        form_data = {
+            "datasource": f"{tbl_id}__table",
+            "viz_type": "dist_bar",
+            "time_range_endpoints": ["inclusive", "exclusive"],
+            "granularity_sqla": "ds",
+            "time_range": "No filter",
+            "metrics": ["count"],
+            "adhoc_filters": [],
+            "groupby": ["gender"],
+            "row_limit": 100,
+        }
+        async_query_manager.init_app(app)
+        self.login(username="admin")
+        rv = self.client.post(
+            "/superset/explore_json/?results=true",
+            data={"form_data": json.dumps(form_data)},
+        )
+        self.assertEqual(rv.status_code, 200)
+
+    @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
+    @mock.patch(
+        "superset.utils.cache_manager.CacheManager.cache",
+        new_callable=mock.PropertyMock,
+    )
+    @mock.patch("superset.viz.BaseViz.force_cached", new_callable=mock.PropertyMock)
+    def test_explore_json_data(self, mock_force_cached, mock_cache):
+        tbl_id = self.table_ids.get("birth_names")
+        form_data = dict(
+            {
+                "form_data": {
+                    "datasource": f"{tbl_id}__table",
+                    "viz_type": "dist_bar",
+                    "time_range_endpoints": ["inclusive", "exclusive"],
+                    "granularity_sqla": "ds",
+                    "time_range": "No filter",
+                    "metrics": ["count"],
+                    "adhoc_filters": [],
+                    "groupby": ["gender"],
+                    "row_limit": 100,
+                }
+            }
+        )
+
+        class MockCache:
+            def get(self, key):
+                return form_data
+
+            def set(self):
+                return None
+
+        mock_cache.return_value = MockCache()
+        mock_force_cached.return_value = False
+
+        self.login(username="admin")
+        rv = self.client.get("/superset/explore_json/data/valid-cache-key")
+        data = json.loads(rv.data.decode("utf-8"))
+
+        self.assertEqual(rv.status_code, 200)
+        self.assertEqual(data["rowcount"], 2)
+
+    @mock.patch(
+        "superset.utils.cache_manager.CacheManager.cache",
+        new_callable=mock.PropertyMock,
+    )
+    def test_explore_json_data_no_login(self, mock_cache):
+        tbl_id = self.table_ids.get("birth_names")
+        form_data = dict(
+            {
+                "form_data": {
+                    "datasource": f"{tbl_id}__table",
+                    "viz_type": "dist_bar",
+                    "time_range_endpoints": ["inclusive", "exclusive"],
+                    "granularity_sqla": "ds",
+                    "time_range": "No filter",
+                    "metrics": ["count"],
+                    "adhoc_filters": [],
+                    "groupby": ["gender"],
+                    "row_limit": 100,
+                }
+            }
+        )
+
+        class MockCache:
+            def get(self, key):
+                return form_data
+
+            def set(self):
+                return None
+
+        mock_cache.return_value = MockCache()
+
+        rv = self.client.get("/superset/explore_json/data/valid-cache-key")
+        self.assertEqual(rv.status_code, 401)
+
+    def test_explore_json_data_invalid_cache_key(self):
+        self.login(username="admin")
+        cache_key = "invalid-cache-key"
+        rv = self.client.get(f"/superset/explore_json/data/{cache_key}")
+        data = json.loads(rv.data.decode("utf-8"))
+
+        self.assertEqual(rv.status_code, 404)
+        self.assertEqual(data["error"], "Cached data not found")
 
     @mock.patch(
         "superset.security.SupersetSecurityManager.get_schemas_accessible_by_user"
@@ -943,6 +1181,7 @@ class TestCore(SupersetTestCase):
         assert data == ["this_schema_is_allowed_too"]
         self.delete_fake_db()
 
+    @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
     def test_select_star(self):
         self.login(username="admin")
         examples_db = utils.get_example_database()
@@ -951,7 +1190,7 @@ class TestCore(SupersetTestCase):
 
     def test_get_select_star_not_allowed(self):
         """
-            Database API: Test get select star not allowed
+        Database API: Test get select star not allowed
         """
         self.login(username="gamma")
         example_db = utils.get_example_database()
@@ -1112,6 +1351,7 @@ class TestCore(SupersetTestCase):
         {"FOO": lambda x: 1},
         clear=True,
     )
+    @pytest.mark.usefixtures("load_world_bank_dashboard_with_slices")
     def test_feature_flag_serialization(self):
         """
         Functions in feature flags don't break bootstrap data serialization.
@@ -1127,13 +1367,14 @@ class TestCore(SupersetTestCase):
             .replace("'", "&#39;")
             .replace('"', "&#34;")
         )
-
+        dash_id = db.session.query(Dashboard.id).first()[0]
+        tbl_id = self.table_ids.get("wb_health_population")
         urls = [
             "/superset/sqllab",
             "/superset/welcome",
-            "/superset/dashboard/1/",
+            f"/superset/dashboard/{dash_id}/",
             "/superset/profile/admin/",
-            "/superset/explore/table/1",
+            f"/superset/explore/table/{tbl_id}",
         ]
         for url in urls:
             data = self.get_resp(url)
@@ -1241,6 +1482,59 @@ class TestCore(SupersetTestCase):
         assert utils.get_column_names_from_metrics([simple_metric, sql_metric]) == [
             "my_col"
         ]
+
+    @pytest.mark.usefixtures("load_world_bank_dashboard_with_slices")
+    @mock.patch("superset.models.core.DB_CONNECTION_MUTATOR")
+    def test_explore_injected_exceptions(self, mock_db_connection_mutator):
+        """
+        Handle injected exceptions from the db mutator
+        """
+        # Assert we can handle a custom exception at the mutator level
+        exception = SupersetException("Error message")
+        mock_db_connection_mutator.side_effect = exception
+        slice = db.session.query(Slice).first()
+        url = f"/superset/explore/?form_data=%7B%22slice_id%22%3A%20{slice.id}%7D"
+
+        self.login()
+        data = self.get_resp(url)
+        self.assertIn("Error message", data)
+
+        # Assert we can handle a driver exception at the mutator level
+        exception = SQLAlchemyError("Error message")
+        mock_db_connection_mutator.side_effect = exception
+        slice = db.session.query(Slice).first()
+        url = f"/superset/explore/?form_data=%7B%22slice_id%22%3A%20{slice.id}%7D"
+
+        self.login()
+        data = self.get_resp(url)
+        self.assertIn("Error message", data)
+
+    @pytest.mark.usefixtures("load_world_bank_dashboard_with_slices")
+    @mock.patch("superset.models.core.DB_CONNECTION_MUTATOR")
+    def test_dashboard_injected_exceptions(self, mock_db_connection_mutator):
+        """
+        Handle injected exceptions from the db mutator
+        """
+
+        # Assert we can handle a custom excetion at the mutator level
+        exception = SupersetException("Error message")
+        mock_db_connection_mutator.side_effect = exception
+        dash = db.session.query(Dashboard).first()
+        url = f"/superset/dashboard/{dash.id}/"
+
+        self.login()
+        data = self.get_resp(url)
+        self.assertIn("Error message", data)
+
+        # Assert we can handle a driver exception at the mutator level
+        exception = SQLAlchemyError("Error message")
+        mock_db_connection_mutator.side_effect = exception
+        dash = db.session.query(Dashboard).first()
+        url = f"/superset/dashboard/{dash.id}/"
+
+        self.login()
+        data = self.get_resp(url)
+        self.assertIn("Error message", data)
 
 
 if __name__ == "__main__":

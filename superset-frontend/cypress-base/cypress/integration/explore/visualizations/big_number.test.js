@@ -49,8 +49,7 @@ describe('Visualization > Big Number with Trendline', () => {
 
   beforeEach(() => {
     cy.login();
-    cy.server();
-    cy.route('POST', '/superset/explore_json/**').as('getJson');
+    cy.intercept('POST', '/superset/explore_json/**').as('getJson');
   });
 
   it('should work', () => {
@@ -75,8 +74,8 @@ describe('Visualization > Big Number with Trendline', () => {
       ...BIG_NUMBER_FORM_DATA,
       show_trend_line: false,
     });
-    cy.get('.chart-container .header-line');
-    cy.get('.chart-container .subheader-line');
-    cy.get('.chart-container svg').should('not.exist');
+    cy.get('[data-test="chart-container"] .header-line');
+    cy.get('[data-test="chart-container"] .subheader-line');
+    cy.get('[data-test="chart-container"] svg').should('not.exist');
   });
 });

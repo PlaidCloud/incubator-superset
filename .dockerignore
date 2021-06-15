@@ -15,6 +15,9 @@
 # limitations under the License.
 #
 **/__pycache__/
+**/.git
+**/.apache_superset.egg-info
+**/.github
 **/.mypy_cache
 **/.pytest_cache
 **/.tox
@@ -30,12 +33,16 @@
 **/*.pyc
 **/*.sqllite
 **/*.swp
+**/.terser-plugin-cache/
+**/.storybook/
+**/node_modules/
 
 kubernetes/
 tests/
 docs/
 install/
-superset-frontend/node_modules/
-superset-frontend/cypress/
+superset-frontend/cypress-base/
 superset-frontend/coverage/
+superset/static/assets/
+superset-websocket/dist/
 venv

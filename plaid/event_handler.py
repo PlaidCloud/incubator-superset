@@ -268,7 +268,7 @@ class EventHandler():
                         time.sleep(2)
                         project.get_table(table_name=new_table.table_name, schema=new_table.schema)
                         new_table.database = project
-                    except NoSuchTableError:
+                    except (NoResultFound, NoSuchTableError):
                         log.warning(f"Table {new_table.schema}.{new_table.table_name} doesn't exist. Skipping.")
                         return
 

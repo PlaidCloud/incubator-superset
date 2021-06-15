@@ -88,6 +88,8 @@ build-instrumented-assets() {
 }
 
 setup-postgres() {
+  say "::group::Install dependency for unit tests"
+  sudo apt-get update && sudo apt-get install --yes libecpg-dev
   say "::group::Initialize database"
   psql "postgresql://superset:superset@127.0.0.1:15432/superset" <<-EOF
     DROP SCHEMA IF EXISTS sqllab_test_db CASCADE;
@@ -129,12 +131,7 @@ testdata() {
 
 codecov() {
   say "::group::Upload code coverage"
-  local codecovScript="${HOME}/codecov.sh"
-  # download bash script if needed
-  if [[ ! -f "$codecovScript" ]]; then
-    curl -s https://codecov.io/bash >"$codecovScript"
-  fi
-  bash "$codecovScript" "$@"
+  bash ".github/workflows/codecov.sh" "$@"
   say "::endgroup::"
 }
 
@@ -162,9 +159,10 @@ cypress-run() {
   export TERM="xterm"
 
   say "::group::Run Cypress for [$page]"
-  if [[ -z $CYPRESS_RECORD_KEY ]]; then
+  if [[ -z $CYPRESS_KEY ]]; then
     $cypress --spec "cypress/integration/$page" --browser "$browser"
   else
+    export CYPRESS_RECORD_KEY=`echo $CYPRESS_KEY | base64 --decode`
     # additional flags for Cypress dashboard recording
     $cypress --spec "cypress/integration/$page" --browser "$browser" \
       --record --group "$group" --tag "${GITHUB_REPOSITORY},${GITHUB_EVENT_NAME}" \
@@ -188,11 +186,6 @@ cypress-run-all() {
 
   cypress-run "*/**/*"
 
-  # Upload code coverage separately so each page can have separate flags
-  # -c will clean existing coverage reports, -F means add flags
-  # || true to prevent CI failure on codecov upload
-  codecov -cF "cypress" || true
-
   # After job is done, print out Flask log for debugging
   say "::group::Flask log for default run"
   cat "$flasklog"
@@ -208,8 +201,10 @@ cypress-run-all() {
 
   cypress-run "sqllab/*" "Backend persist"
 
+  # Upload code coverage separately so each page can have separate flags
+  # -c will clean existing coverage reports, -F means add flags
   # || true to prevent CI failure on codecov upload
-  codecov -cF "cypress" || true
+  codecov -c -F "cypress" || true
 
   say "::group::Flask log for backend persist"
   cat "$flasklog"

@@ -15,19 +15,38 @@
 # specific language governing permissions and limitations
 # under the License.
 # isort:skip_file
-from typing import Any, Dict, NamedTuple, List, Tuple, Union
+import re
+from typing import Any, Dict, NamedTuple, List, Pattern, Tuple, Union
 from unittest.mock import patch
 import pytest
 
-import tests.test_app
 from superset import db
 from superset.connectors.sqla.models import SqlaTable, TableColumn
+from superset.db_engine_specs.bigquery import BigQueryEngineSpec
 from superset.db_engine_specs.druid import DruidEngineSpec
 from superset.exceptions import QueryObjectValidationError
 from superset.models.core import Database
-from superset.utils.core import DbColumnType, get_example_database, FilterOperator
+from superset.utils.core import GenericDataType, get_example_database, FilterOperator
+from tests.fixtures.birth_names_dashboard import load_birth_names_dashboard_with_slices
 
 from .base_tests import SupersetTestCase
+
+
+VIRTUAL_TABLE_INT_TYPES: Dict[str, Pattern[str]] = {
+    "hive": re.compile(r"^INT_TYPE$"),
+    "mysql": re.compile("^LONGLONG$"),
+    "postgresql": re.compile(r"^INT$"),
+    "presto": re.compile(r"^INTEGER$"),
+    "sqlite": re.compile(r"^INT$"),
+}
+
+VIRTUAL_TABLE_STRING_TYPES: Dict[str, Pattern[str]] = {
+    "hive": re.compile(r"^STRING_TYPE$"),
+    "mysql": re.compile(r"^VAR_STRING$"),
+    "postgresql": re.compile(r"^STRING$"),
+    "presto": re.compile(r"^VARCHAR*"),
+    "sqlite": re.compile(r"^STRING$"),
+}
 
 
 class TestDatabaseModel(SupersetTestCase):
@@ -57,33 +76,31 @@ class TestDatabaseModel(SupersetTestCase):
         assert col.is_temporal is True
 
     def test_db_column_types(self):
-        test_cases: Dict[str, DbColumnType] = {
+        test_cases: Dict[str, GenericDataType] = {
             # string
-            "CHAR": DbColumnType.STRING,
-            "VARCHAR": DbColumnType.STRING,
-            "NVARCHAR": DbColumnType.STRING,
-            "STRING": DbColumnType.STRING,
-            "TEXT": DbColumnType.STRING,
-            "NTEXT": DbColumnType.STRING,
+            "CHAR": GenericDataType.STRING,
+            "VARCHAR": GenericDataType.STRING,
+            "NVARCHAR": GenericDataType.STRING,
+            "STRING": GenericDataType.STRING,
+            "TEXT": GenericDataType.STRING,
+            "NTEXT": GenericDataType.STRING,
             # numeric
-            "INT": DbColumnType.NUMERIC,
-            "BIGINT": DbColumnType.NUMERIC,
-            "FLOAT": DbColumnType.NUMERIC,
-            "DECIMAL": DbColumnType.NUMERIC,
-            "MONEY": DbColumnType.NUMERIC,
+            "INTEGER": GenericDataType.NUMERIC,
+            "BIGINT": GenericDataType.NUMERIC,
+            "DECIMAL": GenericDataType.NUMERIC,
             # temporal
-            "DATE": DbColumnType.TEMPORAL,
-            "DATETIME": DbColumnType.TEMPORAL,
-            "TIME": DbColumnType.TEMPORAL,
-            "TIMESTAMP": DbColumnType.TEMPORAL,
+            "DATE": GenericDataType.TEMPORAL,
+            "DATETIME": GenericDataType.TEMPORAL,
+            "TIME": GenericDataType.TEMPORAL,
+            "TIMESTAMP": GenericDataType.TEMPORAL,
         }
 
         tbl = SqlaTable(table_name="col_type_test_tbl", database=get_example_database())
         for str_type, db_col_type in test_cases.items():
             col = TableColumn(column_name="foo", type=str_type, table=tbl)
-            self.assertEqual(col.is_temporal, db_col_type == DbColumnType.TEMPORAL)
-            self.assertEqual(col.is_numeric, db_col_type == DbColumnType.NUMERIC)
-            self.assertEqual(col.is_string, db_col_type == DbColumnType.STRING)
+            self.assertEqual(col.is_temporal, db_col_type == GenericDataType.TEMPORAL)
+            self.assertEqual(col.is_numeric, db_col_type == GenericDataType.NUMERIC)
+            self.assertEqual(col.is_string, db_col_type == GenericDataType.STRING)
 
     @patch("superset.jinja_context.g")
     def test_extra_cache_keys(self, flask_g):
@@ -147,15 +164,19 @@ class TestDatabaseModel(SupersetTestCase):
             db.session.delete(table)
         db.session.commit()
 
+    @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
     def test_where_operators(self):
         class FilterTestCase(NamedTuple):
             operator: str
             value: Union[float, int, List[Any], str]
-            expected: str
+            expected: Union[str, List[str]]
 
         filters: Tuple[FilterTestCase, ...] = (
             FilterTestCase(FilterOperator.IS_NULL, "", "IS NULL"),
             FilterTestCase(FilterOperator.IS_NOT_NULL, "", "IS NOT NULL"),
+            # Some db backends translate true/false to 1/0
+            FilterTestCase(FilterOperator.IS_TRUE, "", ["IS 1", "IS true"]),
+            FilterTestCase(FilterOperator.IS_FALSE, "", ["IS 0", "IS false"]),
             FilterTestCase(FilterOperator.GREATER_THAN, 0, "> 0"),
             FilterTestCase(FilterOperator.GREATER_THAN_OR_EQUALS, 0, ">= 0"),
             FilterTestCase(FilterOperator.LESS_THAN, 0, "< 0"),
@@ -181,7 +202,12 @@ class TestDatabaseModel(SupersetTestCase):
             }
             sqla_query = table.get_sqla_query(**query_obj)
             sql = table.database.compile_sqla_query(sqla_query.sqla_query)
-            self.assertIn(filter_.expected, sql)
+            if isinstance(filter_.expected, list):
+                self.assertTrue(
+                    any([candidate in sql for candidate in filter_.expected])
+                )
+            else:
+                self.assertIn(filter_.expected, sql)
 
     def test_incorrect_jinja_syntax_raises_correct_exception(self):
         query_obj = {
@@ -205,6 +231,28 @@ class TestDatabaseModel(SupersetTestCase):
         if get_example_database().backend != "presto":
             with pytest.raises(QueryObjectValidationError):
                 table.get_sqla_query(**query_obj)
+
+    def test_query_format_strip_trailing_semicolon(self):
+        query_obj = {
+            "granularity": None,
+            "from_dttm": None,
+            "to_dttm": None,
+            "groupby": ["user"],
+            "metrics": [],
+            "is_timeseries": False,
+            "filter": [],
+            "extras": {},
+        }
+
+        # Table with Jinja callable.
+        table = SqlaTable(
+            table_name="test_table",
+            sql="SELECT * from test_table;",
+            database=get_example_database(),
+        )
+        sqlaq = table.get_sqla_query(**query_obj)
+        sql = table.database.compile_sqla_query(sqlaq.sqla_query)
+        assert sql[-1] != ";"
 
     def test_multiple_sql_statements_raises_exception(self):
         base_query_obj = {
@@ -247,3 +295,77 @@ class TestDatabaseModel(SupersetTestCase):
         query_obj = dict(**base_query_obj, extras={})
         with pytest.raises(QueryObjectValidationError):
             table.get_sqla_query(**query_obj)
+
+    def test_fetch_metadata_for_updated_virtual_table(self):
+        table = SqlaTable(
+            table_name="updated_sql_table",
+            database=get_example_database(),
+            sql="select 123 as intcol, 'abc' as strcol, 'abc' as mycase",
+        )
+        TableColumn(column_name="intcol", type="FLOAT", table=table)
+        TableColumn(column_name="oldcol", type="INT", table=table)
+        TableColumn(
+            column_name="expr",
+            expression="case when 1 then 1 else 0 end",
+            type="INT",
+            table=table,
+        )
+        TableColumn(
+            column_name="mycase",
+            expression="case when 1 then 1 else 0 end",
+            type="INT",
+            table=table,
+        )
+
+        # make sure the columns have been mapped properly
+        assert len(table.columns) == 4
+        table.fetch_metadata()
+        # assert that the removed column has been dropped and
+        # the physical and calculated columns are present
+        assert {col.column_name for col in table.columns} == {
+            "intcol",
+            "strcol",
+            "mycase",
+            "expr",
+        }
+        cols: Dict[str, TableColumn] = {col.column_name: col for col in table.columns}
+        # assert that the type for intcol has been updated (asserting CI types)
+        backend = get_example_database().backend
+        assert VIRTUAL_TABLE_INT_TYPES[backend].match(cols["intcol"].type)
+        # assert that the expression has been replaced with the new physical column
+        assert cols["mycase"].expression == ""
+        assert VIRTUAL_TABLE_STRING_TYPES[backend].match(cols["mycase"].type)
+        assert cols["expr"].expression == "case when 1 then 1 else 0 end"
+
+    @patch("superset.models.core.Database.db_engine_spec", BigQueryEngineSpec)
+    def test_labels_expected_on_mutated_query(self):
+        query_obj = {
+            "granularity": None,
+            "from_dttm": None,
+            "to_dttm": None,
+            "groupby": ["user"],
+            "metrics": [
+                {
+                    "expressionType": "SIMPLE",
+                    "column": {"column_name": "user"},
+                    "aggregate": "COUNT_DISTINCT",
+                    "label": "COUNT_DISTINCT(user)",
+                }
+            ],
+            "is_timeseries": False,
+            "filter": [],
+            "extras": {},
+        }
+
+        database = Database(database_name="testdb", sqlalchemy_uri="sqlite://")
+        table = SqlaTable(table_name="bq_table", database=database)
+        db.session.add(database)
+        db.session.add(table)
+        db.session.commit()
+        sqlaq = table.get_sqla_query(**query_obj)
+        assert sqlaq.labels_expected == ["user", "COUNT_DISTINCT(user)"]
+        sql = table.database.compile_sqla_query(sqlaq.sqla_query)
+        assert "COUNT_DISTINCT_user__00db1" in sql
+        db.session.delete(table)
+        db.session.delete(database)
+        db.session.commit()

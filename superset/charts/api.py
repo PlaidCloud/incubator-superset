@@ -18,12 +18,13 @@ import json
 import logging
 from datetime import datetime
 from io import BytesIO
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from zipfile import ZipFile
 
 import simplejson
 from flask import g, make_response, redirect, request, Response, send_file, url_for
 from flask_appbuilder.api import expose, protect, rison, safe
+from flask_appbuilder.hooks import before_request
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_babel import gettext as _, ngettext
 from marshmallow import ValidationError
@@ -33,10 +34,13 @@ from werkzeug.wsgi import FileWrapper
 from superset import is_feature_enabled, thumbnail_cache
 from superset.charts.commands.bulk_delete import BulkDeleteChartCommand
 from superset.charts.commands.create import CreateChartCommand
+from superset.charts.commands.data import ChartDataCommand
 from superset.charts.commands.delete import DeleteChartCommand
 from superset.charts.commands.exceptions import (
     ChartBulkDeleteFailedError,
     ChartCreateFailedError,
+    ChartDataCacheLoadError,
+    ChartDataQueryFailedError,
     ChartDeleteFailedError,
     ChartForbiddenError,
     ChartInvalidError,
@@ -44,25 +48,34 @@ from superset.charts.commands.exceptions import (
     ChartUpdateFailedError,
 )
 from superset.charts.commands.export import ExportChartsCommand
+from superset.charts.commands.importers.dispatcher import ImportChartsCommand
 from superset.charts.commands.update import UpdateChartCommand
+from superset.charts.dao import ChartDAO
 from superset.charts.filters import ChartAllTextFilter, ChartFavoriteFilter, ChartFilter
 from superset.charts.schemas import (
     CHART_SCHEMAS,
-    ChartDataQueryContextSchema,
     ChartPostSchema,
     ChartPutSchema,
     get_delete_ids_schema,
     get_export_ids_schema,
+    get_fav_star_ids_schema,
     openapi_spec_methods_override,
     screenshot_query_schema,
     thumbnail_query_schema,
 )
-from superset.constants import RouteMethod
-from superset.exceptions import SupersetSecurityException
-from superset.extensions import event_logger
+from superset.commands.exceptions import CommandInvalidError
+from superset.commands.importers.v1.utils import get_contents_from_bundle
+from superset.constants import MODEL_API_RW_METHOD_PERMISSION_MAP, RouteMethod
+from superset.exceptions import QueryObjectValidationError
+from superset.extensions import event_logger, security_manager
 from superset.models.slice import Slice
 from superset.tasks.thumbnails import cache_chart_thumbnail
-from superset.utils.core import ChartDataResultFormat, json_int_dttm_ser
+from superset.utils.async_query_manager import AsyncQueryTokenException
+from superset.utils.core import (
+    ChartDataResultFormat,
+    ChartDataResultType,
+    json_int_dttm_ser,
+)
 from superset.utils.screenshots import ChartScreenshot
 from superset.utils.urls import get_url_path
 from superset.views.base_api import (
@@ -82,14 +95,27 @@ class ChartRestApi(BaseSupersetModelRestApi):
     resource_name = "chart"
     allow_browser_login = True
 
+    @before_request(only=["thumbnail", "screenshot", "cache_screenshot"])
+    def ensure_thumbnails_enabled(self) -> Optional[Response]:
+        if not is_feature_enabled("THUMBNAILS"):
+            return self.response_404()
+        return None
+
     include_route_methods = RouteMethod.REST_MODEL_VIEW_CRUD_SET | {
         RouteMethod.EXPORT,
+        RouteMethod.IMPORT,
         RouteMethod.RELATED,
         "bulk_delete",  # not using RouteMethod since locally defined
         "data",
+        "data_from_cache",
         "viz_types",
+        "favorite_status",
+        "thumbnail",
+        "screenshot",
+        "cache_screenshot",
     }
-    class_permission_name = "SliceModelView"
+    class_permission_name = "Chart"
+    method_permission_name = MODEL_API_RW_METHOD_PERMISSION_MAP
     show_columns = [
         "cache_timeout",
         "dashboards.dashboard_title",
@@ -120,6 +146,8 @@ class ChartRestApi(BaseSupersetModelRestApi):
         "datasource_type",
         "datasource_url",
         "description",
+        "description_markeddown",
+        "edit_url",
         "id",
         "owners.first_name",
         "owners.id",
@@ -145,6 +173,7 @@ class ChartRestApi(BaseSupersetModelRestApi):
     ]
     search_columns = [
         "created_by",
+        "changed_by",
         "datasource_id",
         "datasource_name",
         "datasource_type",
@@ -175,6 +204,8 @@ class ChartRestApi(BaseSupersetModelRestApi):
     apispec_parameter_schemas = {
         "screenshot_query_schema": screenshot_query_schema,
         "get_delete_ids_schema": get_delete_ids_schema,
+        "get_export_ids_schema": get_export_ids_schema,
+        "get_fav_star_ids_schema": get_fav_star_ids_schema,
     }
     """ Add extra schemas to the OpenAPI components schema section """
     openapi_spec_methods = openapi_spec_methods_override
@@ -192,19 +223,14 @@ class ChartRestApi(BaseSupersetModelRestApi):
 
     allowed_rel_fields = {"owners", "created_by"}
 
-    def __init__(self) -> None:
-        if is_feature_enabled("THUMBNAILS"):
-            self.include_route_methods = self.include_route_methods | {
-                "thumbnail",
-                "screenshot",
-                "cache_screenshot",
-            }
-        super().__init__()
-
     @expose("/", methods=["POST"])
     @protect()
     @safe
     @statsd_metrics
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.post",
+        log_to_statsd=False,
+    )
     def post(self) -> Response:
         """Creates a new Chart
         ---
@@ -253,7 +279,10 @@ class ChartRestApi(BaseSupersetModelRestApi):
             return self.response_422(message=ex.normalized_messages())
         except ChartCreateFailedError as ex:
             logger.error(
-                "Error creating model %s: %s", self.__class__.__name__, str(ex)
+                "Error creating model %s: %s",
+                self.__class__.__name__,
+                str(ex),
+                exc_info=True,
             )
             return self.response_422(message=str(ex))
 
@@ -261,6 +290,10 @@ class ChartRestApi(BaseSupersetModelRestApi):
     @protect()
     @safe
     @statsd_metrics
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.put",
+        log_to_statsd=False,
+    )
     def put(self, pk: int) -> Response:
         """Changes a Chart
         ---
@@ -324,7 +357,10 @@ class ChartRestApi(BaseSupersetModelRestApi):
             response = self.response_422(message=ex.normalized_messages())
         except ChartUpdateFailedError as ex:
             logger.error(
-                "Error updating model %s: %s", self.__class__.__name__, str(ex)
+                "Error updating model %s: %s",
+                self.__class__.__name__,
+                str(ex),
+                exc_info=True,
             )
             response = self.response_422(message=str(ex))
 
@@ -334,6 +370,10 @@ class ChartRestApi(BaseSupersetModelRestApi):
     @protect()
     @safe
     @statsd_metrics
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.delete",
+        log_to_statsd=False,
+    )
     def delete(self, pk: int) -> Response:
         """Deletes a Chart
         ---
@@ -375,7 +415,10 @@ class ChartRestApi(BaseSupersetModelRestApi):
             return self.response_403()
         except ChartDeleteFailedError as ex:
             logger.error(
-                "Error deleting model %s: %s", self.__class__.__name__, str(ex)
+                "Error deleting model %s: %s",
+                self.__class__.__name__,
+                str(ex),
+                exc_info=True,
             )
             return self.response_422(message=str(ex))
 
@@ -384,6 +427,10 @@ class ChartRestApi(BaseSupersetModelRestApi):
     @safe
     @statsd_metrics
     @rison(get_delete_ids_schema)
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.bulk_delete",
+        log_to_statsd=False,
+    )
     def bulk_delete(self, **kwargs: Any) -> Response:
         """Delete bulk Charts
         ---
@@ -434,11 +481,45 @@ class ChartRestApi(BaseSupersetModelRestApi):
         except ChartBulkDeleteFailedError as ex:
             return self.response_422(message=str(ex))
 
+    def get_data_response(
+        self, command: ChartDataCommand, force_cached: bool = False
+    ) -> Response:
+        try:
+            result = command.run(force_cached=force_cached)
+        except ChartDataCacheLoadError as exc:
+            return self.response_422(message=exc.message)
+        except ChartDataQueryFailedError as exc:
+            return self.response_400(message=exc.message)
+
+        result_format = result["query_context"].result_format
+        if result_format == ChartDataResultFormat.CSV:
+            # Verify user has permission to export CSV file
+            if not security_manager.can_access("can_csv", "Superset"):
+                return self.response_403()
+
+            # return the first result
+            data = result["queries"][0]["data"]
+            return CsvResponse(data, headers=generate_download_headers("csv"))
+
+        if result_format == ChartDataResultFormat.JSON:
+            response_data = simplejson.dumps(
+                {"result": result["queries"]},
+                default=json_int_dttm_ser,
+                ignore_nan=True,
+            )
+            resp = make_response(response_data, 200)
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+            return resp
+
+        return self.response_400(message=f"Unsupported result_format: {result_format}")
+
     @expose("/data", methods=["POST"])
-    @event_logger.log_this
     @protect()
-    @safe
     @statsd_metrics
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.data",
+        log_to_statsd=False,
+    )
     def data(self) -> Response:
         """
         Takes a query context constructed in the client and returns payload
@@ -464,65 +545,126 @@ class ChartRestApi(BaseSupersetModelRestApi):
                 application/json:
                   schema:
                     $ref: "#/components/schemas/ChartDataResponseSchema"
+            202:
+              description: Async job details
+              content:
+                application/json:
+                  schema:
+                    $ref: "#/components/schemas/ChartDataAsyncResponseSchema"
             400:
               $ref: '#/components/responses/400'
+            401:
+              $ref: '#/components/responses/401'
             500:
               $ref: '#/components/responses/500'
         """
+        json_body = None
         if request.is_json:
             json_body = request.json
         elif request.form.get("form_data"):
             # CSV export submits regular form data
-            json_body = json.loads(request.form["form_data"])
-        else:
-            return self.response_400(message="Request is not JSON")
+            try:
+                json_body = json.loads(request.form["form_data"])
+            except (TypeError, json.JSONDecodeError):
+                pass
+
+        if json_body is None:
+            return self.response_400(message=_("Request is not JSON"))
+
         try:
-            query_context = ChartDataQueryContextSchema().load(json_body)
-        except KeyError:
-            return self.response_400(message="Request is incorrect")
+            command = ChartDataCommand()
+            query_context = command.set_query_context(json_body)
+            command.validate()
+        except QueryObjectValidationError as error:
+            return self.response_400(message=error.message)
+        except ValidationError as error:
+            return self.response_400(
+                message=_(
+                    "Request is incorrect: %(error)s", error=error.normalized_messages()
+                )
+            )
+
+        # TODO: support CSV, SQL query and other non-JSON types
+        if (
+            is_feature_enabled("GLOBAL_ASYNC_QUERIES")
+            and query_context.result_format == ChartDataResultFormat.JSON
+            and query_context.result_type == ChartDataResultType.FULL
+        ):
+
+            try:
+                command.validate_async_request(request)
+            except AsyncQueryTokenException:
+                return self.response_401()
+
+            result = command.run_async(g.user.get_id())
+            return self.response(202, **result)
+
+        return self.get_data_response(command)
+
+    @expose("/data/<cache_key>", methods=["GET"])
+    @protect()
+    @statsd_metrics
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}"
+        f".data_from_cache",
+        log_to_statsd=False,
+    )
+    def data_from_cache(self, cache_key: str) -> Response:
+        """
+        Takes a query context cache key and returns payload
+        data response for the given query.
+        ---
+        get:
+          description: >-
+            Takes a query context cache key and returns payload data
+            response for the given query.
+          parameters:
+          - in: path
+            schema:
+              type: string
+            name: cache_key
+          responses:
+            200:
+              description: Query result
+              content:
+                application/json:
+                  schema:
+                    $ref: "#/components/schemas/ChartDataResponseSchema"
+            400:
+              $ref: '#/components/responses/400'
+            401:
+              $ref: '#/components/responses/401'
+            404:
+              $ref: '#/components/responses/404'
+            422:
+              $ref: '#/components/responses/422'
+            500:
+              $ref: '#/components/responses/500'
+        """
+        command = ChartDataCommand()
+        try:
+            cached_data = command.load_query_context_from_cache(cache_key)
+            command.set_query_context(cached_data)
+            command.validate()
+        except ChartDataCacheLoadError:
+            return self.response_404()
         except ValidationError as error:
             return self.response_400(
                 message=_("Request is incorrect: %(error)s", error=error.messages)
             )
-        try:
-            query_context.raise_for_access()
-        except SupersetSecurityException:
-            return self.response_401()
-        payload = query_context.get_payload()
-        for query in payload:
-            if query.get("error"):
-                return self.response_400(message=f"Error: {query['error']}")
-        result_format = query_context.result_format
 
-        response = self.response_400(
-            message=f"Unsupported result_format: {result_format}"
-        )
-
-        if result_format == ChartDataResultFormat.CSV:
-            # return the first result
-            result = payload[0]["data"]
-            response = CsvResponse(
-                result,
-                status=200,
-                headers=generate_download_headers("csv"),
-                mimetype="application/csv",
-            )
-
-        if result_format == ChartDataResultFormat.JSON:
-            response_data = simplejson.dumps(
-                {"result": payload}, default=json_int_dttm_ser, ignore_nan=True
-            )
-            resp = make_response(response_data, 200)
-            resp.headers["Content-Type"] = "application/json; charset=utf-8"
-            response = resp
-
-        return response
+        return self.get_data_response(command, True)
 
     @expose("/<pk>/cache_screenshot/", methods=["GET"])
     @protect()
     @rison(screenshot_query_schema)
     @safe
     @statsd_metrics
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}"
+        f".cache_screenshot",
+        log_to_statsd=False,
+    )
     def cache_screenshot(self, pk: int, **kwargs: Dict[str, bool]) -> WerkzeugResponse:
         """
         ---
@@ -592,9 +734,12 @@ class ChartRestApi(BaseSupersetModelRestApi):
 
     @expose("/<pk>/screenshot/<digest>/", methods=["GET"])
     @protect()
-    @rison(screenshot_query_schema)
     @safe
     @statsd_metrics
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.screenshot",
+        log_to_statsd=False,
+    )
     def screenshot(self, pk: int, digest: str) -> WerkzeugResponse:
         """Get Chart screenshot
         ---
@@ -648,6 +793,10 @@ class ChartRestApi(BaseSupersetModelRestApi):
     @rison(thumbnail_query_schema)
     @safe
     @statsd_metrics
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.thumbnail",
+        log_to_statsd=False,
+    )
     def thumbnail(
         self, pk: int, digest: str, **kwargs: Dict[str, bool]
     ) -> WerkzeugResponse:
@@ -721,6 +870,10 @@ class ChartRestApi(BaseSupersetModelRestApi):
     @safe
     @statsd_metrics
     @rison(get_export_ids_schema)
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.export",
+        log_to_statsd=False,
+    )
     def export(self, **kwargs: Any) -> Response:
         """Export charts
         ---
@@ -733,9 +886,7 @@ class ChartRestApi(BaseSupersetModelRestApi):
             content:
               application/json:
                 schema:
-                  type: array
-                  items:
-                    type: integer
+                  $ref: '#/components/schemas/get_export_ids_schema'
           responses:
             200:
               description: A zip file with chart(s), dataset(s) and database(s) as YAML
@@ -774,3 +925,127 @@ class ChartRestApi(BaseSupersetModelRestApi):
             as_attachment=True,
             attachment_filename=filename,
         )
+
+    @expose("/favorite_status/", methods=["GET"])
+    @protect()
+    @safe
+    @rison(get_fav_star_ids_schema)
+    @statsd_metrics
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}"
+        f".favorite_status",
+        log_to_statsd=False,
+    )
+    def favorite_status(self, **kwargs: Any) -> Response:
+        """Favorite stars for Charts
+        ---
+        get:
+          description: >-
+            Check favorited dashboards for current user
+          parameters:
+          - in: query
+            name: q
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/get_fav_star_ids_schema'
+          responses:
+            200:
+              description:
+              content:
+                application/json:
+                  schema:
+                    $ref: "#/components/schemas/GetFavStarIdsSchema"
+            400:
+              $ref: '#/components/responses/400'
+            401:
+              $ref: '#/components/responses/401'
+            404:
+              $ref: '#/components/responses/404'
+            500:
+              $ref: '#/components/responses/500'
+        """
+        requested_ids = kwargs["rison"]
+        charts = ChartDAO.find_by_ids(requested_ids)
+        if not charts:
+            return self.response_404()
+        favorited_chart_ids = ChartDAO.favorited_ids(charts, g.user.get_id())
+        res = [
+            {"id": request_id, "value": request_id in favorited_chart_ids}
+            for request_id in requested_ids
+        ]
+        return self.response(200, result=res)
+
+    @expose("/import/", methods=["POST"])
+    @protect()
+    @safe
+    @statsd_metrics
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.import_",
+        log_to_statsd=False,
+    )
+    def import_(self) -> Response:
+        """Import chart(s) with associated datasets and databases
+        ---
+        post:
+          requestBody:
+            required: true
+            content:
+              multipart/form-data:
+                schema:
+                  type: object
+                  properties:
+                    formData:
+                      description: upload file (ZIP)
+                      type: string
+                      format: binary
+                    passwords:
+                      description: JSON map of passwords for each file
+                      type: string
+                    overwrite:
+                      description: overwrite existing databases?
+                      type: bool
+          responses:
+            200:
+              description: Chart import result
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+            400:
+              $ref: '#/components/responses/400'
+            401:
+              $ref: '#/components/responses/401'
+            422:
+              $ref: '#/components/responses/422'
+            500:
+              $ref: '#/components/responses/500'
+        """
+        upload = request.files.get("formData")
+        if not upload:
+            return self.response_400()
+        with ZipFile(upload) as bundle:
+            contents = get_contents_from_bundle(bundle)
+
+        passwords = (
+            json.loads(request.form["passwords"])
+            if "passwords" in request.form
+            else None
+        )
+        overwrite = request.form.get("overwrite") == "true"
+
+        command = ImportChartsCommand(
+            contents, passwords=passwords, overwrite=overwrite
+        )
+        try:
+            command.run()
+            return self.response(200, message="OK")
+        except CommandInvalidError as exc:
+            logger.warning("Import chart failed")
+            return self.response_422(message=exc.normalized_messages())
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.exception("Import chart failed")
+            return self.response_500(message=str(exc))

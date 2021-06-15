@@ -28,6 +28,7 @@ RUN mkdir /app \
             default-libmysqlclient-dev \
             libpq-dev \
             libsasl2-dev \
+            libecpg-dev \
         && rm -rf /var/lib/apt/lists/*
 
 # First, we just wanna install requirements, which will allow us to utilize the cache
@@ -44,7 +45,10 @@ RUN cd /app \
 ######################################################################
 # Node stage to deal with static asset construction
 ######################################################################
-FROM node:12 AS superset-node
+FROM node:14 AS superset-node
+
+ARG NPM_VER=7
+RUN npm install -g npm@${NPM_VER}
 
 ARG NPM_BUILD_CMD="build"
 ENV BUILD_CMD=${NPM_BUILD_CMD}
@@ -64,7 +68,10 @@ COPY ./superset-frontend /app/superset-frontend
 RUN cd /app/superset-frontend \
         && npm run ${BUILD_CMD} \
         && rm -rf node_modules
-
+COPY ./docker/docker-frontend.sh /app/docker/docker-frontend.sh
+RUN chmod +x /app/docker/docker-frontend.sh
+WORKDIR /app/superset-frontend
+ENTRYPOINT ["/app/docker/docker-frontend.sh"]
 
 ######################################################################
 # Final lean image...
@@ -78,7 +85,7 @@ ENV LANG=C.UTF-8 \
     FLASK_APP="superset.app:create_app()" \
     PYTHONPATH="/app/pythonpath:/plaid:/etc/superset" \
     SUPERSET_HOME="/app/superset_home" \
-    SUPERSET_PORT=8080
+    SUPERSET_PORT=8088
 
 RUN useradd --user-group --no-create-home --no-log-init --shell /bin/bash superset \
         && mkdir -p ${SUPERSET_HOME} ${PYTHONPATH} \
@@ -86,6 +93,7 @@ RUN useradd --user-group --no-create-home --no-log-init --shell /bin/bash supers
         && apt-get install -y --no-install-recommends \
             build-essential \
             default-libmysqlclient-dev \
+            libsasl2-modules-gssapi-mit \
             libpq-dev \
         && rm -rf /var/lib/apt/lists/*
 
@@ -101,7 +109,6 @@ COPY setup.py MANIFEST.in README.md /app/
 RUN cd /app \
         && chown -R superset:superset * \
         && pip install -e .
-
 COPY plaid /plaid/plaid/
 COPY ./docker/docker-entrypoint.sh /usr/bin/
 
@@ -109,20 +116,50 @@ WORKDIR /app
 
 USER superset
 
-HEALTHCHECK CMD ["curl", "-f", "http://localhost:8088/health"]
+HEALTHCHECK CMD curl -f "http://localhost:$SUPERSET_PORT/health"
 
 EXPOSE ${SUPERSET_PORT}
 
 ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
 
 ######################################################################
+# CI image...
+######################################################################
+FROM lean AS ci
+
+COPY --chown=superset ./docker/docker-bootstrap.sh /app/docker/
+COPY --chown=superset ./docker/docker-init.sh /app/docker/
+COPY --chown=superset ./docker/docker-ci.sh /app/docker/
+
+RUN chmod a+x /app/docker/*.sh
+
+CMD /app/docker/docker-ci.sh
+
+######################################################################
 # Dev image...
 ######################################################################
 FROM lean
+ARG GECKODRIVER_VERSION=v0.28.0
+ARG FIREFOX_VERSION=88.0
 
 COPY ./requirements/*.txt ./docker/requirements-*.txt/ /app/requirements/
 
 USER root
+
+RUN apt-get update -y \
+    && apt-get install -y --no-install-recommends libnss3 libdbus-glib-1-2 libgtk-3-0 libx11-xcb1
+
+# Install GeckoDriver WebDriver
+RUN wget https://github.com/mozilla/geckodriver/releases/download/${GECKODRIVER_VERSION}/geckodriver-${GECKODRIVER_VERSION}-linux64.tar.gz -O /tmp/geckodriver.tar.gz && \
+    tar xvfz /tmp/geckodriver.tar.gz -C /tmp && \
+    mv /tmp/geckodriver /usr/local/bin/geckodriver && \
+    rm /tmp/geckodriver.tar.gz
+
+# Install Firefox
+RUN wget https://download-installer.cdn.mozilla.net/pub/firefox/releases/${FIREFOX_VERSION}/linux-x86_64/en-US/firefox-${FIREFOX_VERSION}.tar.bz2 -O /opt/firefox.tar.bz2 && \
+    tar xvf /opt/firefox.tar.bz2 -C /opt && \
+    ln -s /opt/firefox/firefox /usr/local/bin/firefox
+
 # Cache everything for dev purposes...
 RUN cd /app \
     && pip install --no-cache -r requirements/docker.txt || true

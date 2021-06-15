@@ -20,11 +20,16 @@ from typing import Any
 from flask import current_app, url_for
 
 
-def headless_url(path: str) -> str:
-    base_url = current_app.config.get("WEBDRIVER_BASEURL", "")
-    return urllib.parse.urljoin(base_url, path)
+def get_url_host(user_friendly: bool = False) -> str:
+    if user_friendly:
+        return current_app.config["WEBDRIVER_BASEURL_USER_FRIENDLY"]
+    return current_app.config["WEBDRIVER_BASEURL"]
 
 
-def get_url_path(view: str, **kwargs: Any) -> str:
+def headless_url(path: str, user_friendly: bool = False) -> str:
+    return urllib.parse.urljoin(get_url_host(user_friendly=user_friendly), path)
+
+
+def get_url_path(view: str, user_friendly: bool = False, **kwargs: Any) -> str:
     with current_app.test_request_context():
-        return headless_url(url_for(view, **kwargs))
+        return headless_url(url_for(view, **kwargs), user_friendly=user_friendly)

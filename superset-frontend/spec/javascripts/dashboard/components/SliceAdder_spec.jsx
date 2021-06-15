@@ -23,7 +23,7 @@ import sinon from 'sinon';
 import { List } from 'react-virtualized';
 
 import SliceAdder from 'src/dashboard/components/SliceAdder';
-import { sliceEntitiesForDashboard as mockSliceEntities } from '../fixtures/mockSliceEntities';
+import { sliceEntitiesForDashboard as mockSliceEntities } from 'spec/fixtures/mockSliceEntities';
 
 describe('SliceAdder', () => {
   const mockEvent = {
@@ -155,10 +155,10 @@ describe('SliceAdder', () => {
     });
 
     it('handleSelect', () => {
-      const newSortBy = 1;
+      const newSortBy = { value: 'viz_type' };
       wrapper.instance().handleSelect(newSortBy);
       expect(spy.calledOnce).toBe(true);
-      expect(spy.lastCall.args[1]).toBe(newSortBy);
+      expect(spy.lastCall.args[1]).toBe(newSortBy.value);
     });
 
     it('handleKeyPress', () => {

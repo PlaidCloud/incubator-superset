@@ -23,7 +23,7 @@ import { connect } from 'react-redux';
 
 import { logEvent } from 'src/logger/actions';
 import { addDangerToast } from 'src/messageToasts/actions';
-import ComponentLookup from '../components/gridComponents';
+import { componentLookup } from '../components/gridComponents';
 import getDetailedComponentWidth from '../util/getDetailedComponentWidth';
 import { getActiveFilters } from '../util/activeDashboardFilters';
 import { componentShape } from '../util/propShapes';
@@ -35,9 +35,16 @@ import {
   updateComponents,
   handleComponentDrop,
 } from '../actions/dashboardLayout';
-import { setDirectPathToChild, setMountedTab } from '../actions/dashboardState';
+import { setDirectPathToChild } from '../actions/dashboardState';
 
 const propTypes = {
+  id: PropTypes.string,
+  parentId: PropTypes.string,
+  depth: PropTypes.number,
+  index: PropTypes.number,
+  renderHoverMenu: PropTypes.bool,
+  renderTabContent: PropTypes.bool,
+  onChangeTab: PropTypes.func,
   component: componentShape.isRequired,
   parentComponent: componentShape.isRequired,
   createComponent: PropTypes.func.isRequired,
@@ -57,8 +64,42 @@ const defaultProps = {
   isComponentVisible: true,
 };
 
+/**
+ * Selects the chart scope of the filter input that has focus.
+ *
+ * @returns {{chartId: number, scope: { scope: string[], immune: string[] }} | null }
+ * the scope of the currently focused filter, if any
+ */
+function selectFocusedFilterScope(dashboardState, dashboardFilters) {
+  if (!dashboardState.focusedFilterField) return null;
+  const { chartId, column } = dashboardState.focusedFilterField;
+  return {
+    chartId,
+    scope: dashboardFilters[chartId].scopes[column],
+  };
+}
+
+function selectFocusedNativeFilterScope(nativeFilters) {
+  if (!nativeFilters.focusedFilterId) return null;
+  const id = nativeFilters.focusedFilterId;
+  const focusedFilterScope = nativeFilters.filters[id].scope;
+  return {
+    chartId: id,
+    scope: {
+      scope: focusedFilterScope.rootPath,
+      immune: focusedFilterScope.excluded,
+    },
+  };
+}
+
 function mapStateToProps(
-  { dashboardLayout: undoableLayout, dashboardState, dashboardInfo },
+  {
+    dashboardLayout: undoableLayout,
+    dashboardState,
+    dashboardInfo,
+    dashboardFilters,
+    nativeFilters,
+  },
   ownProps,
 ) {
   const dashboardLayout = undoableLayout.present;
@@ -74,10 +115,9 @@ function mapStateToProps(
     directPathToChild: dashboardState.directPathToChild,
     directPathLastUpdated: dashboardState.directPathLastUpdated,
     dashboardId: dashboardInfo.id,
-    filterFieldOnFocus:
-      dashboardState.focusedFilterField.length === 0
-        ? {}
-        : dashboardState.focusedFilterField.slice(-1).pop(),
+    focusedFilterScope:
+      selectFocusedFilterScope(dashboardState, dashboardFilters) ||
+      selectFocusedNativeFilterScope(nativeFilters),
   };
 
   // rows and columns need more data about their child dimensions
@@ -107,7 +147,6 @@ function mapDispatchToProps(dispatch) {
       updateComponents,
       handleComponentDrop,
       setDirectPathToChild,
-      setMountedTab,
       logEvent,
     },
     dispatch,
@@ -117,7 +156,7 @@ function mapDispatchToProps(dispatch) {
 class DashboardComponent extends React.PureComponent {
   render() {
     const { component } = this.props;
-    const Component = component ? ComponentLookup[component.type] : null;
+    const Component = component ? componentLookup[component.type] : null;
     return Component ? <Component {...this.props} /> : null;
   }
 }

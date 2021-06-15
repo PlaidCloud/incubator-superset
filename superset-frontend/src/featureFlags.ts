@@ -16,38 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-// We can codegen the enum definition based on a list of supported flags that we
-// check into source control. We're hardcoding the supported flags for now.
-export enum FeatureFlag {
-  OMNIBAR = 'OMNIBAR',
-  CLIENT_CACHE = 'CLIENT_CACHE',
-  SCHEDULED_QUERIES = 'SCHEDULED_QUERIES',
-  SQL_VALIDATORS_BY_ENGINE = 'SQL_VALIDATORS_BY_ENGINE',
-  ESTIMATE_QUERY_COST = 'ESTIMATE_QUERY_COST',
-  SHARE_QUERIES_VIA_KV_STORE = 'SHARE_QUERIES_VIA_KV_STORE',
-  SQLLAB_BACKEND_PERSISTENCE = 'SQLLAB_BACKEND_PERSISTENCE',
-  THUMBNAILS = 'THUMBNAILS',
-  LISTVIEWS_DEFAULT_CARD_VIEW = 'LISTVIEWS_DEFAULT_CARD_VIEW',
-  ENABLE_REACT_CRUD_VIEWS = 'ENABLE_REACT_CRUD_VIEWS',
-  DISPLAY_MARKDOWN_HTML = 'DISPLAY_MARKDOWN_HTML',
-  ESCAPE_MARKDOWN_HTML = 'ESCAPE_MARKDOWN_HTML',
-}
+import { FeatureFlagMap, FeatureFlag } from '@superset-ui/core';
 
-export type FeatureFlagMap = {
-  [key in FeatureFlag]?: boolean;
-};
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-declare global {
-  interface Window {
-    featureFlags: FeatureFlagMap;
-    $: any;
-    jQuery: any;
-  }
-}
+export { FeatureFlagMap, FeatureFlag } from '@superset-ui/core';
 
 export function initFeatureFlags(featureFlags: FeatureFlagMap) {
-  window.featureFlags = featureFlags || {};
+  if (!window.featureFlags) {
+    window.featureFlags = featureFlags || {};
+  }
 }
 
 export function isFeatureEnabled(feature: FeatureFlag) {
