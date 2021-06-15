@@ -21,12 +21,12 @@ import { t } from '@superset-ui/core';
 export const commonMenuData = {
   name: t('Data'),
   tabs: [
-    {
-      name: 'Databases',
-      label: t('Databases'),
-      url: '/databaseview/list/',
-      usesRouter: true,
-    },
+    // {
+    //   name: 'Databases',
+    //   label: t('Databases'),
+    //   url: '/databaseview/list/',
+    //   usesRouter: true,
+    // },
     {
       name: 'Datasets',
       label: t('Datasets'),

@@ -265,7 +265,7 @@ function SavedQueryList({
       },
       {
         accessor: 'database.database_name',
-        Header: t('Database'),
+        Header: t('Project'),
         size: 'xl',
       },
       {
@@ -412,7 +412,7 @@ function SavedQueryList({
   const filters: Filters = useMemo(
     () => [
       {
-        Header: t('Database'),
+        Header: t('Project'),
         id: 'database',
         input: 'select',
         operator: FilterOperator.relationOneMany,
@@ -431,23 +431,23 @@ function SavedQueryList({
         ),
         paginate: true,
       },
-      {
-        Header: t('Schema'),
-        id: 'schema',
-        input: 'select',
-        operator: FilterOperator.equals,
-        unfilteredLabel: 'All',
-        fetchSelects: createFetchDistinct(
-          'saved_query',
-          'schema',
-          createErrorHandler(errMsg =>
-            addDangerToast(
-              t('An error occurred while fetching schema values: %s', errMsg),
-            ),
-          ),
-        ),
-        paginate: true,
-      },
+      // {
+      //   Header: t('Schema'),
+      //   id: 'schema',
+      //   input: 'select',
+      //   operator: FilterOperator.equals,
+      //   unfilteredLabel: 'All',
+      //   fetchSelects: createFetchDistinct(
+      //     'saved_query',
+      //     'schema',
+      //     createErrorHandler(errMsg =>
+      //       addDangerToast(
+      //         t('An error occurred while fetching schema values: %s', errMsg),
+      //       ),
+      //     ),
+      //   ),
+      //   paginate: true,
+      // },
       {
         Header: t('Search'),
         id: 'label',

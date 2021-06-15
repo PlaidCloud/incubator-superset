@@ -229,7 +229,7 @@ function QueryList({ addDangerToast, addSuccessToast }: QueryListProps) {
       },
       {
         accessor: QueryObjectColumns.database_name,
-        Header: t('Database'),
+        Header: t('Project'),
         size: 'xl',
       },
       {
@@ -337,7 +337,7 @@ function QueryList({ addDangerToast, addSuccessToast }: QueryListProps) {
   const filters: Filters = useMemo(
     () => [
       {
-        Header: t('Database'),
+        Header: t('Project'),
         id: 'database',
         input: 'select',
         operator: FilterOperator.relationOneMany,
