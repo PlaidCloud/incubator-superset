@@ -281,7 +281,7 @@ init:
     {{- end }}
 
 greenplum:
-  host: "192.168.2.206"
+  host: "plaid-postgres-headless"
 
 rpc:
   host: plaid-rpc
