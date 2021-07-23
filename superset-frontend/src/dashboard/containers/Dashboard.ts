@@ -18,21 +18,21 @@
  */
 import { bindActionCreators, Dispatch } from 'redux';
 import { connect } from 'react-redux';
-
-import Dashboard from '../components/Dashboard';
-
+import { RootState } from 'src/dashboard/types';
+import Dashboard from 'src/dashboard/components/Dashboard';
 import {
   addSliceToDashboard,
   removeSliceFromDashboard,
-} from '../actions/dashboardState';
-import { triggerQuery } from '../../chart/chartAction';
-import { logEvent } from '../../logger/actions';
-import { getActiveFilters } from '../util/activeDashboardFilters';
+} from 'src/dashboard/actions/dashboardState';
+import { setDatasources } from 'src/dashboard/actions/datasources';
+
+import { triggerQuery } from 'src/chart/chartAction';
+import { logEvent } from 'src/logger/actions';
+import { getActiveFilters } from 'src/dashboard/util/activeDashboardFilters';
 import {
   getAllActiveFilters,
   getRelevantDataMask,
-} from '../util/activeAllDashboardFilters';
-import { RootState } from '../types';
+} from 'src/dashboard/util/activeAllDashboardFilters';
 
 function mapStateToProps(state: RootState) {
   const {
@@ -66,11 +66,12 @@ function mapStateToProps(state: RootState) {
         // eslint-disable-next-line camelcase
         chartConfiguration: dashboardInfo.metadata?.chart_configuration,
         nativeFilters: nativeFilters.filters,
-        dataMask: getRelevantDataMask(dataMask, 'isApplied'),
+        dataMask,
         layout: dashboardLayout.present,
       }),
     },
-    ownDataCharts: getRelevantDataMask(dataMask, 'ownState', 'ownState'),
+    chartConfiguration: dashboardInfo.metadata?.chart_configuration,
+    ownDataCharts: getRelevantDataMask(dataMask, 'ownState'),
     slices: sliceEntities.slices,
     layout: dashboardLayout.present,
     impressionId,
@@ -81,6 +82,7 @@ function mapDispatchToProps(dispatch: Dispatch) {
   return {
     actions: bindActionCreators(
       {
+        setDatasources,
         addSliceToDashboard,
         removeSliceFromDashboard,
         triggerQuery,

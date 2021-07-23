@@ -41,9 +41,7 @@ export interface Target {
 
 export interface Filter {
   cascadeParentIds: string[];
-  defaultValue: any;
-  dataMask?: DataMask;
-  isInstant: boolean;
+  defaultDataMask: DataMask;
   id: string; // randomly generated at filter creation
   name: string;
   scope: Scope;
@@ -54,8 +52,13 @@ export interface Filter {
   controlValues: {
     [key: string]: any;
   };
+  sortMetric?: string | null;
   adhoc_filters?: AdhocFilter[];
+  granularity_sqla?: string;
   time_range?: string;
+  requiredFirst?: boolean;
+  tabsInScope?: string[];
+  chartsInScope?: number[];
 }
 
 export type FilterConfiguration = Filter[];

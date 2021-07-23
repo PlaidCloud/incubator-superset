@@ -21,7 +21,6 @@ import { NativeFiltersState } from 'src/dashboard/reducers/types';
 import { DataMaskStateWithId } from '../../src/dataMask/types';
 
 export const nativeFilters: NativeFiltersState = {
-  isInitialized: true,
   filterSets: {},
   filters: {
     'NATIVE_FILTER-e7Q8zKixx': {
@@ -36,13 +35,16 @@ export const nativeFilters: NativeFiltersState = {
           },
         },
       ],
-      defaultValue: null,
+      defaultDataMask: {
+        filterState: {
+          value: null,
+        },
+      },
       cascadeParentIds: [],
       scope: {
         rootPath: ['ROOT_ID'],
         excluded: [],
       },
-      isInstant: true,
       controlValues: {
         multiSelect: false,
         enableEmptyFilter: false,
@@ -61,7 +63,11 @@ export const nativeFilters: NativeFiltersState = {
           },
         },
       ],
-      defaultValue: null,
+      defaultDataMask: {
+        filterState: {
+          value: null,
+        },
+      },
       cascadeParentIds: [],
       scope: {
         rootPath: ['ROOT_ID'],
@@ -72,7 +78,6 @@ export const nativeFilters: NativeFiltersState = {
         enableEmptyFilter: false,
         inverseSelection: false,
       },
-      isInstant: true,
     },
   },
 };
@@ -115,18 +120,20 @@ export const extraFormData: ExtraFormData = {
 export const NATIVE_FILTER_ID = 'NATIVE_FILTER-p4LImrSgA';
 
 export const singleNativeFiltersState = {
-  isInitialized: true,
   filters: {
     [NATIVE_FILTER_ID]: {
       id: [NATIVE_FILTER_ID],
       name: 'eth',
       type: 'text',
       targets: [{ datasetId: 13, column: { name: 'ethnic_minority' } }],
-      defaultValue: null,
+      defaultDataMask: {
+        filterState: {
+          value: null,
+        },
+      },
       cascadeParentIds: [],
       scope: { rootPath: ['ROOT_ID'], excluded: [227, 229] },
       inverseSelection: false,
-      isInstant: true,
       allowsMultipleValues: false,
       isRequired: false,
     },

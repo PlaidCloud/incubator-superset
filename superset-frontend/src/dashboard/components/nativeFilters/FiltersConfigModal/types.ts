@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { AdhocFilter } from '@superset-ui/core';
+import { AdhocFilter, DataMask } from '@superset-ui/core';
 import { Scope } from '../types';
 
 export interface NativeFiltersFormItem {
@@ -31,14 +31,19 @@ export interface NativeFiltersFormItem {
   controlValues: {
     [key: string]: any;
   };
+  requiredFirst: {
+    [key: string]: boolean;
+  };
   defaultValue: any;
+  defaultDataMask: DataMask;
   parentFilter: {
     value: string;
     label: string;
   };
-  isInstant: boolean;
+  sortMetric: string | null;
   adhoc_filters?: AdhocFilter[];
   time_range?: string;
+  granularity_sqla?: string;
 }
 
 export interface NativeFiltersForm {

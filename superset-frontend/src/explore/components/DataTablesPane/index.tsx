@@ -93,11 +93,16 @@ const CollapseWrapper = styled.div`
         height: calc(100% - ${({ theme }) => theme.gridUnit * 8}px);
 
         .ant-collapse-content-box {
+          padding-top: 0;
           height: 100%;
         }
       }
     }
   }
+`;
+
+const Error = styled.pre`
+  margin-top: ${({ theme }) => `${theme.gridUnit * 4}px`};
 `;
 
 export const DataTablesPane = ({
@@ -106,12 +111,14 @@ export const DataTablesPane = ({
   onCollapseChange,
   chartStatus,
   ownState,
+  errorMessage,
 }: {
   queryFormData: Record<string, any>;
   tableSectionHeight: number;
   chartStatus: string;
   ownState?: JsonObject;
   onCollapseChange: (openPanelName: string) => void;
+  errorMessage?: JSX.Element;
 }) => {
   const [data, setData] = useState<{
     [RESULT_TYPES.results]?: Record<string, any>[];
@@ -146,9 +153,9 @@ export const DataTablesPane = ({
         resultType,
         ownState,
       })
-        .then(response => {
+        .then(({ json }) => {
           // Only displaying the first query is currently supported
-          const result = response.result[0];
+          const result = json.result[0];
           setData(prevData => ({ ...prevData, [resultType]: result.data }));
           setIsLoading(prevIsLoading => ({
             ...prevIsLoading,
@@ -195,6 +202,17 @@ export const DataTablesPane = ({
 
   useEffect(() => {
     if (panelOpen && isRequestPending[RESULT_TYPES.results]) {
+      if (errorMessage) {
+        setIsRequestPending(prevState => ({
+          ...prevState,
+          [RESULT_TYPES.results]: false,
+        }));
+        setIsLoading(prevIsLoading => ({
+          ...prevIsLoading,
+          [RESULT_TYPES.results]: false,
+        }));
+        return;
+      }
       if (chartStatus === 'loading') {
         setIsLoading(prevIsLoading => ({
           ...prevIsLoading,
@@ -219,7 +237,14 @@ export const DataTablesPane = ({
       }));
       getData(RESULT_TYPES.samples);
     }
-  }, [panelOpen, isRequestPending, getData, activeTabKey, chartStatus]);
+  }, [
+    panelOpen,
+    isRequestPending,
+    getData,
+    activeTabKey,
+    chartStatus,
+    errorMessage,
+  ]);
 
   const filteredData = {
     [RESULT_TYPES.results]: useFilteredTableData(
@@ -242,7 +267,7 @@ export const DataTablesPane = ({
       return <Loading />;
     }
     if (error[type]) {
-      return <pre>{error[type]}</pre>;
+      return <Error>{error[type]}</Error>;
     }
     if (data[type]) {
       if (data[type]?.length === 0) {
@@ -258,8 +283,12 @@ export const DataTablesPane = ({
           className="table-condensed"
           isPaginationSticky
           showRowCount={false}
+          small
         />
       );
+    }
+    if (errorMessage) {
+      return <Error>{errorMessage}</Error>;
     }
     return null;
   };

@@ -27,7 +27,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-from flask import g
+from flask import current_app, g
 from sqlalchemy import Column, text
 from sqlalchemy.engine.base import Engine
 from sqlalchemy.engine.reflection import Inspector
@@ -35,7 +35,6 @@ from sqlalchemy.engine.url import make_url, URL
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.expression import ColumnClause, Select
 
-from superset import app, conf
 from superset.db_engine_specs.base import BaseEngineSpec
 from superset.db_engine_specs.presto import PrestoEngineSpec
 from superset.exceptions import SupersetException
@@ -50,11 +49,7 @@ if TYPE_CHECKING:
 
 
 QueryStatus = utils.QueryStatus
-config = app.config
 logger = logging.getLogger(__name__)
-
-tracking_url_trans = conf.get("TRACKING_URL_TRANSFORMER")
-hive_poll_interval = conf.get("HIVE_POLL_INTERVAL")
 
 
 def upload_to_s3(filename: str, upload_prefix: str, table: Table) -> str:
@@ -70,7 +65,7 @@ def upload_to_s3(filename: str, upload_prefix: str, table: Table) -> str:
     # Optional dependency
     import boto3  # pylint: disable=import-error
 
-    bucket_path = config["CSV_TO_HIVE_UPLOAD_S3_BUCKET"]
+    bucket_path = current_app.config["CSV_TO_HIVE_UPLOAD_S3_BUCKET"]
 
     if not bucket_path:
         logger.info("No upload bucket specified")
@@ -229,7 +224,7 @@ class HiveEngineSpec(PrestoEngineSpec):
         )
 
         with tempfile.NamedTemporaryFile(
-            dir=config["UPLOAD_FOLDER"], suffix=".parquet"
+            dir=current_app.config["UPLOAD_FOLDER"], suffix=".parquet"
         ) as file:
             pq.write_table(pa.Table.from_pandas(df), where=file.name)
 
@@ -243,9 +238,9 @@ class HiveEngineSpec(PrestoEngineSpec):
                 ),
                 location=upload_to_s3(
                     filename=file.name,
-                    upload_prefix=config["CSV_TO_HIVE_UPLOAD_DIRECTORY_FUNC"](
-                        database, g.user, table.schema
-                    ),
+                    upload_prefix=current_app.config[
+                        "CSV_TO_HIVE_UPLOAD_DIRECTORY_FUNC"
+                    ](database, g.user, table.schema),
                     table=table,
                 ),
             )
@@ -336,7 +331,12 @@ class HiveEngineSpec(PrestoEngineSpec):
                 cursor.cancel()
                 break
 
-            log = cursor.fetch_logs() or ""
+            try:
+                log = cursor.fetch_logs() or ""
+            except Exception:  # pylint: disable=broad-except
+                logger.warning("Call to GetLog() failed")
+                log = ""
+
             if log:
                 log_lines = log.splitlines()
                 progress = cls.progress(log_lines)
@@ -356,7 +356,7 @@ class HiveEngineSpec(PrestoEngineSpec):
                             str(query_id),
                             tracking_url,
                         )
-                        tracking_url = tracking_url_trans(tracking_url)
+                        tracking_url = current_app.config["TRACKING_URL_TRANSFORMER"]
                         logger.info(
                             "Query %s: Transformation applied: %s",
                             str(query_id),
@@ -374,7 +374,7 @@ class HiveEngineSpec(PrestoEngineSpec):
                     last_log_line = len(log_lines)
                 if needs_commit:
                     session.commit()
-            time.sleep(hive_poll_interval)
+            time.sleep(current_app.config["HIVE_POLL_INTERVAL"])
             polled = cursor.poll()
 
     @classmethod
@@ -528,6 +528,7 @@ class HiveEngineSpec(PrestoEngineSpec):
             "Expected column `%s`, found: %s.",
             cls._show_functions_column,
             ", ".join(columns),
+            exc_info=True,
         )
         # if the results have a single column, use that
         if len(columns) == 1:
@@ -544,3 +545,8 @@ class HiveEngineSpec(PrestoEngineSpec):
             or parsed_query.is_set()
             or parsed_query.is_show()
         )
+
+
+class SparkEngineSpec(HiveEngineSpec):
+
+    engine_name = "Apache Spark SQL"

@@ -19,11 +19,13 @@
 import { DataMask } from '@superset-ui/core';
 import { FilterConfiguration } from '../dashboard/components/nativeFilters/types';
 import { FeatureFlag, isFeatureEnabled } from '../featureFlags';
+import { Filters } from '../dashboard/reducers/types';
+import { getInitialDataMask } from './reducer';
 
 export const UPDATE_DATA_MASK = 'UPDATE_DATA_MASK';
 export interface UpdateDataMask {
   type: typeof UPDATE_DATA_MASK;
-  filterId: string;
+  filterId: string | number;
   dataMask: DataMask;
 }
 
@@ -33,6 +35,7 @@ export const SET_DATA_MASK_FOR_FILTER_CONFIG_COMPLETE =
 export interface SetDataMaskForFilterConfigComplete {
   type: typeof SET_DATA_MASK_FOR_FILTER_CONFIG_COMPLETE;
   filterConfig: FilterConfiguration;
+  filters?: Filters;
 }
 
 export const SET_DATA_MASK_FOR_FILTER_CONFIG_FAIL =
@@ -42,9 +45,18 @@ export interface SetDataMaskForFilterConfigFail {
   type: typeof SET_DATA_MASK_FOR_FILTER_CONFIG_FAIL;
   filterConfig: FilterConfiguration;
 }
-
+export function setDataMaskForFilterConfigComplete(
+  filterConfig: FilterConfiguration,
+  filters?: Filters,
+): SetDataMaskForFilterConfigComplete {
+  return {
+    type: SET_DATA_MASK_FOR_FILTER_CONFIG_COMPLETE,
+    filterConfig,
+    filters,
+  };
+}
 export function updateDataMask(
-  filterId: string,
+  filterId: string | number,
   dataMask: DataMask,
 ): UpdateDataMask {
   // Only apply data mask if one of the relevant features is enabled
@@ -56,6 +68,17 @@ export function updateDataMask(
     filterId,
     dataMask: isFeatureFlagActive ? dataMask : {},
   };
+}
+
+export function clearDataMask(filterId: string | number) {
+  return updateDataMask(
+    filterId,
+    getInitialDataMask(filterId, {
+      filterState: {
+        value: null,
+      },
+    }),
+  );
 }
 
 export type AnyDataMaskAction =

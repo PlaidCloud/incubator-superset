@@ -21,20 +21,22 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { styled } from '@superset-ui/core';
 
-import { exploreChart, exportChart } from '../../../explore/exploreUtils';
-import SliceHeader from '../SliceHeader';
-import ChartContainer from '../../../chart/ChartContainer';
-import MissingChart from '../MissingChart';
-import { slicePropShape, chartPropShape } from '../../util/propShapes';
+import { exportChart, getExploreLongUrl } from 'src/explore/exploreUtils';
+import ChartContainer from 'src/chart/ChartContainer';
 import {
   LOG_ACTIONS_CHANGE_DASHBOARD_FILTER,
   LOG_ACTIONS_EXPLORE_DASHBOARD_CHART,
   LOG_ACTIONS_EXPORT_CSV_DASHBOARD_CHART,
   LOG_ACTIONS_FORCE_REFRESH_CHART,
-} from '../../../logger/LogUtils';
+} from 'src/logger/LogUtils';
+import { areObjectsEqual } from 'src/reduxUtils';
+
+import SliceHeader from '../SliceHeader';
+import MissingChart from '../MissingChart';
+import { slicePropShape, chartPropShape } from '../../util/propShapes';
+
 import { isFilterBox } from '../../util/activeDashboardFilters';
 import getFilterValuesByFilterId from '../../util/getFilterValuesByFilterId';
-import { areObjectsEqual } from '../../../reduxUtils';
 
 const propTypes = {
   id: PropTypes.number.isRequired,
@@ -49,10 +51,11 @@ const propTypes = {
   // from redux
   chart: chartPropShape.isRequired,
   formData: PropTypes.object.isRequired,
-  datasource: PropTypes.object.isRequired,
+  datasource: PropTypes.object,
   slice: slicePropShape.isRequired,
   sliceName: PropTypes.string.isRequired,
   timeout: PropTypes.number.isRequired,
+  maxRows: PropTypes.number.isRequired,
   // all active filter fields in dashboard
   filters: PropTypes.object.isRequired,
   refreshChart: PropTypes.func.isRequired,
@@ -101,13 +104,14 @@ export default class Chart extends React.Component {
     this.state = {
       width: props.width,
       height: props.height,
+      descriptionHeight: 0,
     };
 
     this.changeFilter = this.changeFilter.bind(this);
     this.handleFilterMenuOpen = this.handleFilterMenuOpen.bind(this);
     this.handleFilterMenuClose = this.handleFilterMenuClose.bind(this);
-    this.exploreChart = this.exploreChart.bind(this);
     this.exportCSV = this.exportCSV.bind(this);
+    this.exportFullCSV = this.exportFullCSV.bind(this);
     this.forceRefresh = this.forceRefresh.bind(this);
     this.resize = this.resize.bind(this);
     this.setDescriptionRef = this.setDescriptionRef.bind(this);
@@ -120,7 +124,9 @@ export default class Chart extends React.Component {
     // which improves performance significantly
     if (
       nextState.width !== this.state.width ||
-      nextState.height !== this.state.height
+      nextState.height !== this.state.height ||
+      nextState.descriptionHeight !== this.state.descriptionHeight ||
+      nextProps.datasource !== this.props.datasource
     ) {
       return true;
     }
@@ -164,14 +170,20 @@ export default class Chart extends React.Component {
     clearTimeout(this.resizeTimeout);
   }
 
+  componentDidUpdate(prevProps) {
+    if (this.props.isExpanded !== prevProps.isExpanded) {
+      const descriptionHeight =
+        this.props.isExpanded && this.descriptionRef
+          ? this.descriptionRef.offsetHeight
+          : 0;
+      // eslint-disable-next-line react/no-did-update-set-state
+      this.setState({ descriptionHeight });
+    }
+  }
+
   getChartHeight() {
     const headerHeight = this.getHeaderHeight();
-    const descriptionHeight =
-      this.props.isExpanded && this.descriptionRef
-        ? this.descriptionRef.offsetHeight
-        : 0;
-
-    return this.state.height - headerHeight - descriptionHeight;
+    return this.state.height - headerHeight - this.state.descriptionHeight;
   }
 
   getHeaderHeight() {
@@ -209,24 +221,31 @@ export default class Chart extends React.Component {
     this.props.unsetFocusedFilterField(chartId, column);
   }
 
-  exploreChart() {
+  logExploreChart = () => {
     this.props.logEvent(LOG_ACTIONS_EXPLORE_DASHBOARD_CHART, {
       slice_id: this.props.slice.slice_id,
       is_cached: this.props.isCached,
     });
-    exploreChart(this.props.formData);
-  }
+  };
 
-  exportCSV() {
+  getChartUrl = () => getExploreLongUrl(this.props.formData);
+
+  exportCSV(isFullCSV = false) {
     this.props.logEvent(LOG_ACTIONS_EXPORT_CSV_DASHBOARD_CHART, {
       slice_id: this.props.slice.slice_id,
       is_cached: this.props.isCached,
     });
     exportChart({
-      formData: this.props.formData,
+      formData: isFullCSV
+        ? { ...this.props.formData, row_limit: this.props.maxRows }
+        : this.props.formData,
       resultType: 'results',
       resultFormat: 'csv',
     });
+  }
+
+  exportFullCSV() {
+    this.exportCSV(true);
   }
 
   forceRefresh() {
@@ -270,7 +289,6 @@ export default class Chart extends React.Component {
     } = this.props;
 
     const { width } = this.state;
-
     // this prevents throwing in the case that a gridComponent
     // references a chart that is not associated with the dashboard
     if (!chart || !slice) {
@@ -310,8 +328,10 @@ export default class Chart extends React.Component {
           forceRefresh={this.forceRefresh}
           editMode={editMode}
           annotationQuery={chart.annotationQuery}
-          exploreChart={this.exploreChart}
+          logExploreChart={this.logExploreChart}
+          exploreUrl={this.getChartUrl()}
           exportCSV={this.exportCSV}
+          exportFullCSV={this.exportFullCSV}
           updateSliceName={updateSliceName}
           sliceName={sliceName}
           supersetCanExplore={supersetCanExplore}
@@ -326,6 +346,7 @@ export default class Chart extends React.Component {
           handleToggleFullSize={handleToggleFullSize}
           isFullSize={isFullSize}
           chartStatus={chart.chartStatus}
+          formData={formData}
         />
 
         {/*
