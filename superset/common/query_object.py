@@ -17,7 +17,7 @@
 # pylint: disable=R
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, NamedTuple, Optional, Union
+from typing import Any, Dict, List, NamedTuple, Optional
 
 from flask_babel import gettext as _
 from pandas import DataFrame
@@ -103,7 +103,7 @@ class QueryObject:
         applied_time_extras: Optional[Dict[str, str]] = None,
         apply_fetch_values_predicate: bool = False,
         granularity: Optional[str] = None,
-        metrics: Optional[List[Union[Dict[str, Any], str]]] = None,
+        metrics: Optional[List[Metric]] = None,
         groupby: Optional[List[str]] = None,
         filters: Optional[List[Dict[str, Any]]] = None,
         time_range: Optional[str] = None,
@@ -170,9 +170,7 @@ class QueryObject:
         #   2. { label: 'label_name' }  - legacy format for a predefined metric
         #   3. { expressionType: 'SIMPLE' | 'SQL', ... } - adhoc metric
         self.metrics = metrics and [
-            x
-            if isinstance(x, str) or is_adhoc_metric(x)
-            else x["label"]  # type: ignore
+            x if isinstance(x, str) or is_adhoc_metric(x) else x["label"]
             for x in metrics
         ]
 
