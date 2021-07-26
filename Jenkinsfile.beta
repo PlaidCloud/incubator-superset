@@ -15,7 +15,6 @@ podTemplate(label: 'superset',
         booleanParam(name: 'skip_lint', defaultValue: true, description: 'Do not lint.'),
         booleanParam(name: 'full_lint', defaultValue: false, description: 'Lint all files.'),
         stringParam(name: 'image_name', defaultValue: 'gcr.io/plaidcloud-build/superset', description: 'Fully-qualified image name for GCR upload.'),
-        stringParam(name: 'chart_name', defaultValue: 'superset', description: 'Name of chart directory.'),
         stringParam(name: 'argo_app', defaultValue: 'beta-superset', description: 'Name of argo application used to deploy/manage this project.'),
         stringParam(name: 'target_lint_dir', defaultValue: 'superset', description: 'Name of directory to run linter against.')
       ])
@@ -31,13 +30,6 @@ podTemplate(label: 'superset',
       ])
 
       branch = env.CHANGE_BRANCH ?: scm_map.GIT_BRANCH.minus(~/^origin\//)
-
-      stage("Test Helm Chart") {
-        withCredentials([usernamePassword(credentialsId: 'plaid-machine-user', usernameVariable: 'user', passwordVariable: 'pass')]) {
-          // This script will lint, check for version increment, and dry-run an install.	
-          sh "check_helm_chart --repo-path=$env.WORKSPACE --chart-path=helm/$params.chart_name"
-        }
-      }
 
       stage("Run Checks") {
         if (!params.skip_lint) {
@@ -126,14 +118,8 @@ podTemplate(label: 'superset',
               withCredentials([string(credentialsId: 'argocd-token', variable: 'ARGOCD_AUTH_TOKEN')]) {
                 sh """
                   export ARGOCD_SERVER=deploy.plaidcloud.io
-
-                  # This script will package and push helm chart, copy chart changes to k8s repo for argo, and deploy newly-built image.
-                  package_helm_chart \
-                    --repo-url=https://$user:$pass@github.com/PlaidCloud/k8s.git \
-                    --chart-path=helm/$params.chart_name \
-                    --argo-app=$params.argo_app
-
-                  argocd app set $params.argo_app -p image.repository="$params.image_name/production:$image_label" -p events.repository="$params.image_name/events:$image_label"
+                  argocd app set $params.argo_app -p image.repository="$params.image_name/production:$image_label"
+                  argocd app set $params.argo_app -p events.repository="$params.image_name/events:$image_label"
                 """
               }
             }
