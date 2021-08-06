@@ -268,6 +268,7 @@ PLAID_BASE_PERMISSIONS = {
     "can_my_queries": {"SqlLab"},
     #"can_override_role_permissions": {"Superset"},
     "can_post": {"TableSchemaView", "TabStateView"},
+    "can_post_data": {"Chart"},
     #"can_profile": {"Superset"},
     "can_publish": {"Superset"},
     "can_put": {"TabStateView"},
