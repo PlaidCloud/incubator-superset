@@ -262,9 +262,14 @@ class EventHandler():
 
                     # Test if source table/view actually exists before we add it.
                     try:
-                        project = db.session.query(Database).filter_by(verbose_name=kwargs['project_id']).one()
+                        project = db.session.query(Database).filter_by(uuid=kwargs['project_id']).one()
                         log.info(project.get_all_view_names_in_schema(schema=new_table.schema))
-                        # TODO: This is pretty dumb. Event is being processed before the DB can create the view. 
+                    except (NoResultFound, NoSuchTableError):
+                        log.warning(f"Project {kwargs['project_id']} doesn't exist. Skipping table insert.")
+                        return
+                    
+                    try:
+                        # TODO: This is pretty dumb. Event is being processed before the DB can create the view, so wait 2 seconds. 
                         time.sleep(2)
                         project.get_table(table_name=new_table.table_name, schema=new_table.schema)
                         new_table.database = project
