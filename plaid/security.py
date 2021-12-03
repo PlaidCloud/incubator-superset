@@ -99,6 +99,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         base_url = "{}{}".format("http://", self.appbuilder.app.config.get("PLAID_RPC"))
         rpc_url = urljoin(base_url, "json-rpc/")
         # if session.get("workspace") is None:
+        log.info(f"Attempting to get RPC. Session is: {session}")
         temp_rpc = SimpleRPC(session["token"]["access_token"], uri=rpc_url, verify_ssl=False)
         session["workspace"] = temp_rpc.identity.me.workspace_id()
         # Specify user's default workspace in token.
