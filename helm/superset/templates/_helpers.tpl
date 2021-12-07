@@ -204,7 +204,7 @@ OIDC_PARAMS = {
     # token_params: {},
     "auth_url": "{{ .Values.oidc.authEndpoint }}",
     "auth_params": {
-        "prompt": "none",
+        "prompt": "login",
     },
     "base_url": "{{ .Values.oidc.baseUrl }}",
     "jwks_uri": "{{ .Values.oidc.jwksEndpoint }}",
