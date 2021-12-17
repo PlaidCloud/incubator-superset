@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+# pylint: disable=too-many-lines
 import logging
 import re
 import textwrap
@@ -51,6 +52,7 @@ from sqlalchemy.sql.expression import ColumnClause, Select
 from sqlalchemy.types import TypeEngine
 
 from superset import cache_manager, is_feature_enabled
+from superset.common.db_query_status import QueryStatus
 from superset.db_engine_specs.base import BaseEngineSpec
 from superset.errors import SupersetErrorType
 from superset.exceptions import SupersetTemplateException
@@ -94,7 +96,6 @@ CONNECTION_UNKNOWN_DATABASE_ERROR = re.compile(
 )
 
 
-QueryStatus = utils.QueryStatus
 logger = logging.getLogger(__name__)
 
 
@@ -157,7 +158,7 @@ class PrestoEngineSpec(BaseEngineSpec):  # pylint: disable=too-many-public-metho
         "P1D": "date_trunc('day', CAST({col} AS TIMESTAMP))",
         "P1W": "date_trunc('week', CAST({col} AS TIMESTAMP))",
         "P1M": "date_trunc('month', CAST({col} AS TIMESTAMP))",
-        "P0.25Y": "date_trunc('quarter', CAST({col} AS TIMESTAMP))",
+        "P3M": "date_trunc('quarter', CAST({col} AS TIMESTAMP))",
         "P1Y": "date_trunc('year', CAST({col} AS TIMESTAMP))",
         "P1W/1970-01-03T00:00:00Z": "date_add('day', 5, date_trunc('week', "
         "date_add('day', 1, CAST({col} AS TIMESTAMP))))",
@@ -234,7 +235,6 @@ class PrestoEngineSpec(BaseEngineSpec):  # pylint: disable=too-many-public-metho
         that can set the correct properties for impersonating users
         :param connect_args: config to be updated
         :param uri: URI string
-        :param impersonate_user: Flag indicating if impersonation is enabled
         :param username: Effective username
         :return: None
         """
@@ -341,7 +341,7 @@ class PrestoEngineSpec(BaseEngineSpec):  # pylint: disable=too-many-public-metho
         )
 
     @classmethod
-    def _parse_structural_column(  # pylint: disable=too-many-locals,too-many-branches
+    def _parse_structural_column(  # pylint: disable=too-many-locals
         cls,
         parent_column_name: str,
         parent_data_type: str,
@@ -508,7 +508,7 @@ class PrestoEngineSpec(BaseEngineSpec):  # pylint: disable=too-many-public-metho
         ),
         (
             re.compile(r"^date.*", re.IGNORECASE),
-            types.DATE(),
+            types.DATETIME(),
             utils.GenericDataType.TEMPORAL,
         ),
         (
@@ -655,16 +655,12 @@ class PrestoEngineSpec(BaseEngineSpec):  # pylint: disable=too-many-public-metho
         )
 
     @classmethod
-    def estimate_statement_cost(  # pylint: disable=too-many-locals
-        cls, statement: str, cursor: Any
-    ) -> Dict[str, Any]:
+    def estimate_statement_cost(cls, statement: str, cursor: Any) -> Dict[str, Any]:
         """
         Run a SQL query that estimates the cost of a given statement.
 
         :param statement: A single SQL statement
-        :param database: Database instance
         :param cursor: Cursor instance
-        :param username: Effective username
         :return: JSON response from Presto
         """
         sql = f"EXPLAIN (TYPE IO, FORMAT JSON) {statement}"
@@ -744,12 +740,14 @@ class PrestoEngineSpec(BaseEngineSpec):  # pylint: disable=too-many-public-metho
             uri.database = database
 
     @classmethod
-    def convert_dttm(cls, target_type: str, dttm: datetime) -> Optional[str]:
+    def convert_dttm(
+        cls, target_type: str, dttm: datetime, db_extra: Optional[Dict[str, Any]] = None
+    ) -> Optional[str]:
         tt = target_type.upper()
         if tt == utils.TemporalType.DATE:
             return f"""from_iso8601_date('{dttm.date().isoformat()}')"""
         if tt == utils.TemporalType.TIMESTAMP:
-            return f"""from_iso8601_timestamp('{dttm.isoformat(timespec="microseconds")}')"""  # pylint: disable=line-too-long
+            return f"""from_iso8601_timestamp('{dttm.isoformat(timespec="microseconds")}')"""  # pylint: disable=line-too-long,useless-suppression
         return None
 
     @classmethod
@@ -777,7 +775,7 @@ class PrestoEngineSpec(BaseEngineSpec):  # pylint: disable=too-many-public-metho
         return datasource_names
 
     @classmethod
-    def expand_data(  # pylint: disable=too-many-locals,too-many-branches
+    def expand_data(  # pylint: disable=too-many-locals
         cls, columns: List[Dict[Any, Any]], data: List[Dict[Any, Any]]
     ) -> Tuple[List[Dict[Any, Any]], List[Dict[Any, Any]], List[Dict[Any, Any]]]:
         """
@@ -872,8 +870,9 @@ class PrestoEngineSpec(BaseEngineSpec):  # pylint: disable=too-many-public-metho
                 for row in data:
                     values = row.get(name) or []
                     if isinstance(values, str):
-                        row[name] = values = cast(List[Any], destringify(values))
-                    for value, col in zip(values, expanded):
+                        values = cast(Optional[List[Any]], destringify(values))
+                        row[name] = values
+                    for value, col in zip(values or [], expanded):
                         row[col["name"]] = value
 
         data = [
@@ -925,6 +924,7 @@ class PrestoEngineSpec(BaseEngineSpec):  # pylint: disable=too-many-public-metho
         :param schema: Schema name
         :param table: Table (view) name
         """
+        # pylint: disable=import-outside-toplevel
         from pyhive.exc import DatabaseError
 
         engine = cls.get_engine(database, schema)
@@ -1215,6 +1215,7 @@ class PrestoEngineSpec(BaseEngineSpec):  # pylint: disable=too-many-public-metho
     def get_column_spec(
         cls,
         native_type: Optional[str],
+        db_extra: Optional[Dict[str, Any]] = None,
         source: utils.ColumnTypeSource = utils.ColumnTypeSource.GET_TABLE,
         column_type_mappings: Tuple[
             Tuple[
@@ -1234,3 +1235,15 @@ class PrestoEngineSpec(BaseEngineSpec):  # pylint: disable=too-many-public-metho
             return column_spec
 
         return super().get_column_spec(native_type)
+
+    @classmethod
+    def has_implicit_cancel(cls) -> bool:
+        """
+        Return True if the live cursor handles the implicit cancelation of the query,
+        False otherise.
+
+        :return: Whether the live cursor implicitly cancels the query
+        :see: handle_cursor
+        """
+
+        return True

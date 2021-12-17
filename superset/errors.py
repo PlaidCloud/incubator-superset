@@ -14,8 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-# pylint: disable=too-few-public-methods,invalid-name
-from dataclasses import dataclass  # pylint: disable=wrong-import-order
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Optional
 
@@ -64,6 +63,7 @@ class SupersetErrorType(str, Enum):
     DATABASE_SECURITY_ACCESS_ERROR = "DATABASE_SECURITY_ACCESS_ERROR"
     QUERY_SECURITY_ACCESS_ERROR = "QUERY_SECURITY_ACCESS_ERROR"
     MISSING_OWNERSHIP_ERROR = "MISSING_OWNERSHIP_ERROR"
+    USER_ACTIVITY_SECURITY_ACCESS_ERROR = "USER_ACTIVITY_SECURITY_ACCESS_ERROR"
 
     # Other errors
     BACKEND_TIMEOUT_ERROR = "BACKEND_TIMEOUT_ERROR"
@@ -219,3 +219,9 @@ class SupersetError:
                     ]
                 }
             )
+
+    def to_dict(self) -> Dict[str, Any]:
+        rv = {"message": self.message, "error_type": self.error_type}
+        if self.extra:
+            rv["extra"] = self.extra  # type: ignore
+        return rv

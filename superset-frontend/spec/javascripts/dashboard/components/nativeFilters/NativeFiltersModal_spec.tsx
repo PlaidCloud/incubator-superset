@@ -16,14 +16,17 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
-import { styledMount as mount } from 'spec/helpers/theming';
-import { act } from 'react-dom/test-utils';
 import { ReactWrapper } from 'enzyme';
+import React from 'react';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
+import { act } from 'react-dom/test-utils';
 import { Provider } from 'react-redux';
-import Alert from 'src/components/Alert';
-import waitForComponentToPaint from 'spec/helpers/waitForComponentToPaint';
 import { mockStore } from 'spec/fixtures/mockStore';
+import { styledMount as mount } from 'spec/helpers/theming';
+import waitForComponentToPaint from 'spec/helpers/waitForComponentToPaint';
+import { Dropdown, Menu } from 'src/common/components';
+import Alert from 'src/components/Alert';
 import { FiltersConfigModal } from 'src/dashboard/components/nativeFilters/FiltersConfigModal/FiltersConfigModal';
 
 Object.defineProperty(window, 'matchMedia', {
@@ -58,7 +61,7 @@ jest.mock('@superset-ui/core', () => ({
 describe('FiltersConfigModal', () => {
   const mockedProps = {
     isOpen: true,
-    initialFilterId: 'DefaultsID',
+    initialFilterId: 'NATIVE_FILTER-1',
     createNewOnOpen: true,
     onCancel: jest.fn(),
     onSave: jest.fn(),
@@ -66,7 +69,9 @@ describe('FiltersConfigModal', () => {
   function setup(overridesProps?: any) {
     return mount(
       <Provider store={mockStore}>
-        <FiltersConfigModal {...mockedProps} {...overridesProps} />
+        <DndProvider backend={HTML5Backend}>
+          <FiltersConfigModal {...mockedProps} {...overridesProps} />
+        </DndProvider>
       </Provider>,
     );
   }
@@ -108,9 +113,13 @@ describe('FiltersConfigModal', () => {
       await waitForComponentToPaint(wrapper);
     }
 
-    function addFilter() {
+    async function addFilter() {
       act(() => {
-        wrapper.find('[aria-label="Add filter"]').at(0).simulate('click');
+        wrapper.find(Dropdown).at(0).simulate('mouseEnter');
+      });
+      await waitForComponentToPaint(wrapper, 300);
+      act(() => {
+        wrapper.find(Menu.Item).at(0).simulate('click');
       });
     }
 
@@ -119,22 +128,12 @@ describe('FiltersConfigModal', () => {
       expect(onCancel.mock.calls).toHaveLength(1);
     });
 
-    it('shows correct alert message for an unsaved filter', async () => {
-      addFilter();
+    it('shows correct alert message for unsaved filters', async () => {
+      await addFilter();
       await clickCancel();
       expect(onCancel.mock.calls).toHaveLength(0);
       expect(wrapper.find(Alert).text()).toContain(
-        'Are you sure you want to cancel? "New filter" will not be saved.',
-      );
-    });
-
-    it('shows correct alert message for 2 unsaved filters', async () => {
-      addFilter();
-      addFilter();
-      await clickCancel();
-      expect(onCancel.mock.calls).toHaveLength(0);
-      expect(wrapper.find(Alert).text()).toContain(
-        'Are you sure you want to cancel? "New filter" and "New filter" will not be saved.',
+        'There are unsaved changes.',
       );
     });
   });

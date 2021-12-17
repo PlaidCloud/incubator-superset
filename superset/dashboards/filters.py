@@ -36,7 +36,7 @@ from superset.views.base_api import BaseFavoriteFilter
 
 logger = logging.getLogger(__name__)
 
-class DashboardTitleOrSlugFilter(BaseFilter):
+class DashboardTitleOrSlugFilter(BaseFilter):  # pylint: disable=too-few-public-methods
     name = _("Title or Slug")
     arg_name = "title_or_slug"
 
@@ -52,7 +52,9 @@ class DashboardTitleOrSlugFilter(BaseFilter):
         )
 
 
-class DashboardFavoriteFilter(BaseFavoriteFilter):
+class DashboardFavoriteFilter(  # pylint: disable=too-few-public-methods
+    BaseFavoriteFilter
+):
     """
     Custom filter for the GET list that filters all dashboards that a user has favored
     """
@@ -62,7 +64,7 @@ class DashboardFavoriteFilter(BaseFavoriteFilter):
     model = Dashboard
 
 
-class DashboardAccessFilter(BaseFilter):
+class DashboardAccessFilter(BaseFilter):  # pylint: disable=too-few-public-methods
     """
     List dashboards with the following criteria:
         1. Those which the user owns
@@ -150,7 +152,7 @@ class DashboardAccessFilter(BaseFilter):
         return query
 
 
-class FilterRelatedRoles(BaseFilter):
+class FilterRelatedRoles(BaseFilter):  # pylint: disable=too-few-public-methods
     """
     A filter to allow searching for related roles of a resource.
 
@@ -167,4 +169,20 @@ class FilterRelatedRoles(BaseFilter):
         role_model = security_manager.role_model
         if value:
             return query.filter(role_model.name.ilike(f"%{value}%"),)
+        return query
+
+
+class DashboardCertifiedFilter(BaseFilter):  # pylint: disable=too-few-public-methods
+    """
+    Custom filter for the GET list that filters all certified dashboards
+    """
+
+    name = _("Is certified")
+    arg_name = "dashboard_is_certified"
+
+    def apply(self, query: Query, value: Any) -> Query:
+        if value is True:
+            return query.filter(and_(Dashboard.certified_by.isnot(None),))
+        if value is False:
+            return query.filter(and_(Dashboard.certified_by.is_(None),))
         return query

@@ -39,15 +39,17 @@ import ListView, {
 } from 'src/components/ListView';
 import { getFromLocalStorage } from 'src/utils/localStorageHelpers';
 import Owner from 'src/types/Owner';
-import withToasts from 'src/messageToasts/enhancers/withToasts';
+import withToasts from 'src/components/MessageToasts/withToasts';
 import FacePile from 'src/components/FacePile';
 import Icons from 'src/components/Icons';
 import FaveStar from 'src/components/FaveStar';
 import PropertiesModal from 'src/dashboard/components/PropertiesModal';
 import { Tooltip } from 'src/components/Tooltip';
 import ImportModelsModal from 'src/components/ImportModal/index';
+import OmniContainer from 'src/components/OmniContainer';
 
 import Dashboard from 'src/dashboard/containers/Dashboard';
+import CertifiedBadge from 'src/components/CertifiedBadge';
 import DashboardCard from './DashboardCard';
 import { DashboardStatus } from './types';
 
@@ -70,6 +72,8 @@ interface DashboardListProps {
   addSuccessToast: (msg: string) => void;
   user: {
     userId: string | number;
+    firstName: string;
+    lastName: string;
   };
 }
 
@@ -139,10 +143,13 @@ function DashboardList(props: DashboardListProps) {
     refreshData();
   };
 
+  const { userId } = props.user;
+  const userKey = getFromLocalStorage(userId?.toString(), null);
+
   const canCreate = hasPerm('can_write');
   const canEdit = hasPerm('can_write');
   const canDelete = hasPerm('can_write');
-  const canExport = hasPerm('can_read');
+  const canExport = hasPerm('can_export');
 
   const initialSort = [{ id: 'changed_on_delta_humanized', desc: true }];
 
@@ -166,6 +173,9 @@ function DashboardList(props: DashboardListProps) {
                 slug = '',
                 json_metadata = '',
                 changed_on_delta_humanized,
+                url = '',
+                certified_by = '',
+                certification_details = '',
               } = json.result;
               return {
                 ...dashboard,
@@ -176,6 +186,9 @@ function DashboardList(props: DashboardListProps) {
                 slug,
                 json_metadata,
                 changed_on_delta_humanized,
+                url,
+                certified_by,
+                certification_details,
               };
             }
             return dashboard;
@@ -242,9 +255,26 @@ function DashboardList(props: DashboardListProps) {
       {
         Cell: ({
           row: {
-            original: { url, dashboard_title: dashboardTitle },
+            original: {
+              url,
+              dashboard_title: dashboardTitle,
+              certified_by: certifiedBy,
+              certification_details: certificationDetails,
+            },
           },
-        }: any) => <Link to={url}>{dashboardTitle}</Link>,
+        }: any) => (
+          <Link to={url}>
+            {certifiedBy && (
+              <>
+                <CertifiedBadge
+                  certifiedBy={certifiedBy}
+                  details={certificationDetails}
+                />{' '}
+              </>
+            )}
+            {dashboardTitle}
+          </Link>
+        ),
         Header: t('Title'),
         accessor: 'dashboard_title',
       },
@@ -398,81 +428,99 @@ function DashboardList(props: DashboardListProps) {
     ],
   );
 
-  const favoritesFilter: Filter = {
-    Header: t('Favorite'),
-    id: 'id',
-    urlDisplay: 'favorite',
-    input: 'select',
-    operator: FilterOperator.dashboardIsFav,
-    unfilteredLabel: t('Any'),
-    selects: [
-      { label: t('Yes'), value: true },
-      { label: t('No'), value: false },
-    ],
-  };
-
-  const filters: Filters = [
-    {
-      Header: t('Owner'),
-      id: 'owners',
+  const favoritesFilter: Filter = useMemo(
+    () => ({
+      Header: t('Favorite'),
+      id: 'id',
+      urlDisplay: 'favorite',
       input: 'select',
-      operator: FilterOperator.relationManyMany,
-      unfilteredLabel: t('All'),
-      fetchSelects: createFetchRelated(
-        'dashboard',
-        'owners',
-        createErrorHandler(errMsg =>
-          addDangerToast(
-            t(
-              'An error occurred while fetching dashboard owner values: %s',
-              errMsg,
-            ),
-          ),
-        ),
-        props.user.userId,
-      ),
-      paginate: true,
-    },
-    {
-      Header: t('Created by'),
-      id: 'created_by',
-      input: 'select',
-      operator: FilterOperator.relationOneMany,
-      unfilteredLabel: t('All'),
-      fetchSelects: createFetchRelated(
-        'dashboard',
-        'created_by',
-        createErrorHandler(errMsg =>
-          addDangerToast(
-            t(
-              'An error occurred while fetching dashboard created by values: %s',
-              errMsg,
-            ),
-          ),
-        ),
-        props.user.userId,
-      ),
-      paginate: true,
-    },
-    {
-      Header: t('Status'),
-      id: 'published',
-      input: 'select',
-      operator: FilterOperator.equals,
+      operator: FilterOperator.dashboardIsFav,
       unfilteredLabel: t('Any'),
       selects: [
-        { label: t('Published'), value: true },
-        { label: t('Draft'), value: false },
+        { label: t('Yes'), value: true },
+        { label: t('No'), value: false },
       ],
-    },
-    ...(props.user.userId ? [favoritesFilter] : []),
-    {
-      Header: t('Search'),
-      id: 'dashboard_title',
-      input: 'search',
-      operator: FilterOperator.titleOrSlug,
-    },
-  ];
+    }),
+    [],
+  );
+
+  const filters: Filters = useMemo(
+    () => [
+      {
+        Header: t('Owner'),
+        id: 'owners',
+        input: 'select',
+        operator: FilterOperator.relationManyMany,
+        unfilteredLabel: t('All'),
+        fetchSelects: createFetchRelated(
+          'dashboard',
+          'owners',
+          createErrorHandler(errMsg =>
+            addDangerToast(
+              t(
+                'An error occurred while fetching dashboard owner values: %s',
+                errMsg,
+              ),
+            ),
+          ),
+          props.user,
+        ),
+        paginate: true,
+      },
+      {
+        Header: t('Created by'),
+        id: 'created_by',
+        input: 'select',
+        operator: FilterOperator.relationOneMany,
+        unfilteredLabel: t('All'),
+        fetchSelects: createFetchRelated(
+          'dashboard',
+          'created_by',
+          createErrorHandler(errMsg =>
+            addDangerToast(
+              t(
+                'An error occurred while fetching dashboard created by values: %s',
+                errMsg,
+              ),
+            ),
+          ),
+          props.user,
+        ),
+        paginate: true,
+      },
+      {
+        Header: t('Status'),
+        id: 'published',
+        input: 'select',
+        operator: FilterOperator.equals,
+        unfilteredLabel: t('Any'),
+        selects: [
+          { label: t('Published'), value: true },
+          { label: t('Draft'), value: false },
+        ],
+      },
+      ...(props.user.userId ? [favoritesFilter] : []),
+      {
+        Header: t('Certified'),
+        id: 'id',
+        urlDisplay: 'certified',
+        input: 'select',
+        operator: FilterOperator.dashboardIsCertified,
+        unfilteredLabel: t('Any'),
+        selects: [
+          { label: t('Yes'), value: true },
+          { label: t('No'), value: false },
+        ],
+      },
+      {
+        Header: t('Search'),
+        id: 'dashboard_title',
+        input: 'search',
+        operator: FilterOperator.titleOrSlug,
+      },
+    ],
+    [addDangerToast, favoritesFilter, props.user],
+  );
 
   const sortTypes = [
     {
@@ -496,8 +544,6 @@ function DashboardList(props: DashboardListProps) {
   ];
 
   function renderCard(dashboard: Dashboard) {
-    const { userId } = props.user;
-    const userKey = getFromLocalStorage(userId.toString(), null);
     return (
       <DashboardCard
         dashboard={dashboard}
@@ -541,21 +587,22 @@ function DashboardList(props: DashboardListProps) {
         window.location.assign('/dashboard/new');
       },
     });
-  }
-  if (isFeatureEnabled(FeatureFlag.VERSIONED_EXPORT)) {
-    subMenuButtons.push({
-      name: (
-        <Tooltip
-          id="import-tooltip"
-          title={t('Import dashboards')}
-          placement="bottomRight"
-        >
-          <Icons.Import data-test="import-button" />
-        </Tooltip>
-      ),
-      buttonStyle: 'link',
-      onClick: openDashboardImportModal,
-    });
+
+    if (isFeatureEnabled(FeatureFlag.VERSIONED_EXPORT)) {
+      subMenuButtons.push({
+        name: (
+          <Tooltip
+            id="import-tooltip"
+            title={t('Import dashboards')}
+            placement="bottomRight"
+          >
+            <Icons.Import data-test="import-button" />
+          </Tooltip>
+        ),
+        buttonStyle: 'link',
+        onClick: openDashboardImportModal,
+      });
+    }
   }
   return (
     <>
@@ -609,6 +656,11 @@ function DashboardList(props: DashboardListProps) {
                 initialSort={initialSort}
                 loading={loading}
                 pageSize={PAGE_SIZE}
+                showThumbnails={
+                  userKey
+                    ? userKey.thumbnails
+                    : isFeatureEnabled(FeatureFlag.THUMBNAILS)
+                }
                 renderCard={renderCard}
                 defaultViewMode={
                   isFeatureEnabled(FeatureFlag.LISTVIEWS_DEFAULT_CARD_VIEW)
@@ -634,6 +686,9 @@ function DashboardList(props: DashboardListProps) {
         passwordFields={passwordFields}
         setPasswordFields={setPasswordFields}
       />
+
+      <OmniContainer />
+
       {preparingExport && <Loading />}
     </>
   );
