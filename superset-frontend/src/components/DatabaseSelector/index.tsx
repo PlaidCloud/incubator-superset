@@ -259,22 +259,6 @@ export default function DatabaseSelector({
         ariaLabel={t('Select database or type database name')}
         optionFilterProps={['database_name', 'value']}
         data-test="select-database"
-        dataEndpoint={`/api/v1/database/?q=${queryParams}`}
-        onAsyncError={() =>
-          handleError(t('Error while fetching database list'))
-        }
-        clearable={false}
-        valueKey="id"
-        valueRenderer={(db: any) => (
-          <div>
-            <span className="text-muted m-r-5">{t('Project:')}</span>
-            {renderDatabaseOption(db)}
-          </div>
-        )}
-        optionRenderer={renderDatabaseOption}
-        mutator={dbMutator}
-        autoSelect
-        isDisabled={!isDatabaseSelectEnabled || readOnly}
         header={<FormLabel>{t('Database')}</FormLabel>}
         lazyLoading={false}
         onChange={changeDataBase}
