@@ -92,7 +92,7 @@ podTemplate(label: 'superset',
                     docker_args += ' --no-cache'
                   }
 
-                  python_version="3.7.9"
+                  python_version="3.8.12"
                   sh "docker pull python:${python_version}"
                   image = docker.build("${params.image_name}/production:latest", "--build-arg PY_VER=${python_version} --target=lean --pull ${docker_args} .")
                   events_image = docker.build("${params.image_name}/events:latest", "--build-arg PY_VER=${python_version} --pull ${docker_args} -f Dockerfile.events .")
