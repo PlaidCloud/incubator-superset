@@ -28,14 +28,15 @@ import {
   JsonObject,
   getChartMetadataRegistry,
 } from '@superset-ui/core';
-import { useDispatch } from 'react-redux';
-import { areObjectsEqual } from 'src/reduxUtils';
+import { useDispatch, useSelector } from 'react-redux';
+import { isEqual, isEqualWith } from 'lodash';
 import { getChartDataRequest } from 'src/chart/chartAction';
 import Loading from 'src/components/Loading';
 import BasicErrorAlert from 'src/components/ErrorMessage/BasicErrorAlert';
 import { FeatureFlag, isFeatureEnabled } from 'src/featureFlags';
 import { waitForAsyncData } from 'src/middleware/asyncEvent';
 import { ClientErrorObject } from 'src/utils/getClientErrorObject';
+import { RootState } from 'src/dashboard/types';
 import { dispatchFocusAction } from './utils';
 import { FilterProps } from './types';
 import { getFormData } from '../../utils';
@@ -62,6 +63,9 @@ const FilterValue: React.FC<FilterProps> = ({
   const { id, targets, filterType, adhoc_filters, time_range } = filter;
   const metadata = getChartMetadataRegistry().get(filterType);
   const cascadingFilters = useCascadingFilters(id, dataMaskSelected);
+  const isDashboardRefreshing = useSelector<RootState, boolean>(
+    state => state.dashboardState.isRefreshing,
+  );
   const [state, setState] = useState<ChartDataResponseResult[]>([]);
   const [error, setError] = useState<string>('');
   const [formData, setFormData] = useState<Partial<QueryFormData>>({
@@ -78,7 +82,7 @@ const FilterValue: React.FC<FilterProps> = ({
   const { name: groupby } = column;
   const hasDataSource = !!datasetId;
   const [isLoading, setIsLoading] = useState<boolean>(hasDataSource);
-  const [isRefreshing, setIsRefreshing] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const dispatch = useDispatch();
 
   useEffect(() => {
@@ -101,9 +105,18 @@ const FilterValue: React.FC<FilterProps> = ({
       time_range,
     });
     const filterOwnState = filter.dataMask?.ownState || {};
+    // TODO: We should try to improve our useEffect hooks to depend more on
+    // granular information instead of big objects that require deep comparison.
+    const customizer = (
+      objValue: Partial<QueryFormData>,
+      othValue: Partial<QueryFormData>,
+      key: string,
+    ) => (key === 'url_params' ? true : undefined);
     if (
-      !areObjectsEqual(formData, newFormData) ||
-      !areObjectsEqual(ownState, filterOwnState)
+      !isRefreshing &&
+      (!isEqualWith(formData, newFormData, customizer) ||
+        !isEqual(ownState, filterOwnState) ||
+        isDashboardRefreshing)
     ) {
       setFormData(newFormData);
       setOwnState(filterOwnState);
@@ -165,6 +178,8 @@ const FilterValue: React.FC<FilterProps> = ({
     groupby,
     JSON.stringify(filter),
     hasDataSource,
+    isRefreshing,
+    isDashboardRefreshing,
   ]);
 
   useEffect(() => {
