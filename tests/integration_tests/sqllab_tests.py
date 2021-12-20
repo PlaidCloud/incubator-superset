@@ -30,12 +30,16 @@ import prison
 from superset import db, security_manager
 from superset.connectors.sqla.models import SqlaTable
 from superset.db_engine_specs import BaseEngineSpec
+from superset.db_engine_specs.hive import HiveEngineSpec
+from superset.db_engine_specs.presto import PrestoEngineSpec
 from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
 from superset.exceptions import SupersetErrorException
 from superset.models.core import Database
-from superset.models.sql_lab import LimitingFactor, Query, SavedQuery
+from superset.models.sql_lab import Query, SavedQuery
 from superset.result_set import SupersetResultSet
+from superset.sqllab.limiting_factor import LimitingFactor
 from superset.sql_lab import (
+    cancel_query,
     execute_sql_statements,
     execute_sql_statement,
     get_sql_results,
@@ -185,7 +189,7 @@ class TestSqlLab(SupersetTestCase):
             return
 
         with mock.patch(
-            "superset.views.core.get_cta_schema_name",
+            "superset.sqllab.sqllab_execution_context.get_cta_schema_name",
             lambda d, u, s, sql: f"{u.username}_database",
         ):
             old_allow_ctas = examples_db.allow_ctas
@@ -985,3 +989,10 @@ class TestSqlLab(SupersetTestCase):
                 }
             ]
         }
+
+
+@pytest.mark.parametrize("spec", [HiveEngineSpec, PrestoEngineSpec])
+def test_cancel_query_implicit(spec: BaseEngineSpec) -> None:
+    query = mock.MagicMock()
+    query.database.db_engine_spec = spec
+    assert cancel_query(query)

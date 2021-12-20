@@ -88,16 +88,16 @@ export const hydrateDashboard = (dashboardData, chartData) => (
   // Priming the color palette with user's label-color mapping provided in
   // the dashboard's JSON metadata
   if (metadata?.label_colors) {
-    const scheme = metadata.color_scheme;
     const namespace = metadata.color_namespace;
     const colorMap = isString(metadata.label_colors)
       ? JSON.parse(metadata.label_colors)
       : metadata.label_colors;
+    const categoricalNamespace = CategoricalColorNamespace.getNamespace(
+      namespace,
+    );
+
     Object.keys(colorMap).forEach(label => {
-      CategoricalColorNamespace.getScale(scheme, namespace).setColor(
-        label,
-        colorMap[label],
-      );
+      categoricalNamespace.setColor(label, colorMap[label]);
     });
   }
 
@@ -335,7 +335,7 @@ export const hydrateDashboard = (dashboardData, chartData) => (
       dashboardInfo: {
         ...dashboardData,
         metadata,
-        userId: String(user.userId), // legacy, please use state.user instead
+        userId: user.userId ? String(user.userId) : null, // legacy, please use state.user instead
         dash_edit_perm: canEdit,
         dash_save_perm: findPermission('can_save_dash', 'Superset', roles),
         dash_share_perm: findPermission(
@@ -378,6 +378,7 @@ export const hydrateDashboard = (dashboardData, chartData) => (
         hasUnsavedChanges: false,
         maxUndoHistoryExceeded: false,
         lastModifiedTime: dashboardData.changed_on,
+        isRefreshing: false,
         activeTabs: [],
       },
       dashboardLayout,
