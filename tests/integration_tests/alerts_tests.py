@@ -76,7 +76,7 @@ def setup_database():
 def create_alert(
     db_session: Session,
     sql: str,
-    validator_type: AlertValidatorType = AlertValidatorType.operator,
+    validator_type: AlertValidatorType = AlertValidatorType.OPERATOR,
     validator_config: str = "",
 ) -> Alert:
     db_session.commit()
@@ -265,6 +265,9 @@ def test_operator_validator(setup_database):
 
     # Test passing with result that equals threshold
     assert operator_validator(alert2, '{"op": "==", "threshold": 55}') is True
+
+    # Test passing with result that equals decimal threshold
+    assert operator_validator(alert2, '{"op": ">", "threshold": 54.999}') is True
 
 
 @pytest.mark.parametrize(

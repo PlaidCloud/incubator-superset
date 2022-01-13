@@ -38,15 +38,21 @@ from superset.exceptions import SupersetSecurityException
 from superset.models.core import Database
 from superset.models.slice import Slice
 from superset.sql_parse import Table
-from superset.utils.core import get_example_database
+from superset.utils.core import (
+    backend,
+    get_example_database,
+    get_example_default_schema,
+)
 from superset.views.access_requests import AccessRequestsModelView
 
 from .base_tests import SupersetTestCase
 from tests.integration_tests.fixtures.birth_names_dashboard import (
     load_birth_names_dashboard_with_slices,
+    load_birth_names_data,
 )
 from tests.integration_tests.fixtures.energy_dashboard import (
     load_energy_table_with_slice,
+    load_energy_table_data,
 )
 from tests.integration_tests.fixtures.public_role import (
     public_role_like_gamma,
@@ -54,9 +60,11 @@ from tests.integration_tests.fixtures.public_role import (
 )
 from tests.integration_tests.fixtures.unicode_dashboard import (
     load_unicode_dashboard_with_slice,
+    load_unicode_data,
 )
 from tests.integration_tests.fixtures.world_bank_dashboard import (
     load_world_bank_dashboard_with_slices,
+    load_world_bank_data,
 )
 
 NEW_SECURITY_CONVERGE_VIEWS = (
@@ -104,13 +112,14 @@ class TestRolePermission(SupersetTestCase):
     """Testing export role permissions."""
 
     def setUp(self):
+        schema = get_example_default_schema()
         session = db.session
         security_manager.add_role(SCHEMA_ACCESS_ROLE)
         session.commit()
 
         ds = (
             db.session.query(SqlaTable)
-            .filter_by(table_name="wb_health_population")
+            .filter_by(table_name="wb_health_population", schema=schema)
             .first()
         )
         ds.schema = "temp_schema"
@@ -133,11 +142,11 @@ class TestRolePermission(SupersetTestCase):
         session = db.session
         ds = (
             session.query(SqlaTable)
-            .filter_by(table_name="wb_health_population")
+            .filter_by(table_name="wb_health_population", schema="temp_schema")
             .first()
         )
         schema_perm = ds.schema_perm
-        ds.schema = None
+        ds.schema = get_example_default_schema()
         ds.schema_perm = None
         ds_slices = (
             session.query(Slice)
@@ -466,13 +475,13 @@ class TestRolePermission(SupersetTestCase):
         table.table_name = "tmp_perm_table_v2"
         session.commit()
         # TODO(bogdan): modify slice permissions on the table update.
-        self.assertNotEquals(slice.perm, table.perm)
+        self.assertNotEqual(slice.perm, table.perm)
         self.assertEqual(slice.perm, f"[tmp_database].[tmp_perm_table](id:{table.id})")
         self.assertEqual(
             table.perm, f"[tmp_database].[tmp_perm_table_v2](id:{table.id})"
         )
         # TODO(bogdan): modify slice schema permissions on the table update.
-        self.assertNotEquals(slice.schema_perm, table.schema_perm)
+        self.assertNotEqual(slice.schema_perm, table.schema_perm)
         self.assertIsNone(slice.schema_perm)
 
         # updating slice refreshes the permissions
@@ -831,11 +840,11 @@ class TestRolePermission(SupersetTestCase):
         self.assert_can_alpha(alpha_perm_tuples)
         self.assert_cannot_alpha(alpha_perm_tuples)
 
-    @unittest.skipUnless(
-        SupersetTestCase.is_module_installed("pydruid"), "pydruid not installed"
-    )
     @pytest.mark.usefixtures("load_world_bank_dashboard_with_slices")
     def test_admin_permissions(self):
+        if backend() == "hive":
+            return
+
         self.assert_can_gamma(get_perm_tuples("Admin"))
         self.assert_can_alpha(get_perm_tuples("Admin"))
         self.assert_can_admin(get_perm_tuples("Admin"))
@@ -1151,7 +1160,7 @@ class TestRowLevelSecurity(SupersetTestCase):
     @pytest.mark.usefixtures("load_energy_table_with_slice")
     def test_rls_filter_alters_energy_query(self):
         g.user = self.get_user(username="alpha")
-        tbl = self.get_table_by_name("energy_usage")
+        tbl = self.get_table(name="energy_usage")
         sql = tbl.get_query_str(self.query_obj)
         assert tbl.get_extra_cache_keys(self.query_obj) == [1]
         assert "value > 1" in sql
@@ -1161,7 +1170,7 @@ class TestRowLevelSecurity(SupersetTestCase):
         g.user = self.get_user(
             username="admin"
         )  # self.login() doesn't actually set the user
-        tbl = self.get_table_by_name("energy_usage")
+        tbl = self.get_table(name="energy_usage")
         sql = tbl.get_query_str(self.query_obj)
         assert tbl.get_extra_cache_keys(self.query_obj) == []
         assert "value > 1" not in sql
@@ -1171,7 +1180,7 @@ class TestRowLevelSecurity(SupersetTestCase):
         g.user = self.get_user(
             username="alpha"
         )  # self.login() doesn't actually set the user
-        tbl = self.get_table_by_name("unicode_test")
+        tbl = self.get_table(name="unicode_test")
         sql = tbl.get_query_str(self.query_obj)
         assert tbl.get_extra_cache_keys(self.query_obj) == [1]
         assert "value > 1" in sql
@@ -1179,7 +1188,7 @@ class TestRowLevelSecurity(SupersetTestCase):
     @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
     def test_rls_filter_alters_gamma_birth_names_query(self):
         g.user = self.get_user(username="gamma")
-        tbl = self.get_table_by_name("birth_names")
+        tbl = self.get_table(name="birth_names")
         sql = tbl.get_query_str(self.query_obj)
 
         # establish that the filters are grouped together correctly with
@@ -1192,7 +1201,7 @@ class TestRowLevelSecurity(SupersetTestCase):
     @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
     def test_rls_filter_alters_no_role_user_birth_names_query(self):
         g.user = self.get_user(username="NoRlsRoleUser")
-        tbl = self.get_table_by_name("birth_names")
+        tbl = self.get_table(name="birth_names")
         sql = tbl.get_query_str(self.query_obj)
 
         # gamma's filters should not be present query
@@ -1205,7 +1214,7 @@ class TestRowLevelSecurity(SupersetTestCase):
     @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
     def test_rls_filter_doesnt_alter_admin_birth_names_query(self):
         g.user = self.get_user(username="admin")
-        tbl = self.get_table_by_name("birth_names")
+        tbl = self.get_table(name="birth_names")
         sql = tbl.get_query_str(self.query_obj)
 
         # no filters are applied for admin user

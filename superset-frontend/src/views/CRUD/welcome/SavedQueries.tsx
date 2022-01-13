@@ -17,24 +17,28 @@
  * under the License.
  */
 import React, { useState } from 'react';
-import { t, SupersetClient, styled, useTheme } from '@superset-ui/core';
+import { styled, SupersetClient, t, useTheme } from '@superset-ui/core';
 import SyntaxHighlighter from 'react-syntax-highlighter/dist/cjs/light';
 import sql from 'react-syntax-highlighter/dist/cjs/languages/hljs/sql';
 import github from 'react-syntax-highlighter/dist/cjs/styles/hljs/github';
-import withToasts from 'src/messageToasts/enhancers/withToasts';
-import Loading from 'src/components/Loading';
+import { LoadingCards } from 'src/views/CRUD/welcome/Welcome';
+import withToasts from 'src/components/MessageToasts/withToasts';
 import { Dropdown, Menu } from 'src/common/components';
-import { useListViewResource, copyQueryLink } from 'src/views/CRUD/hooks';
+import { copyQueryLink, useListViewResource } from 'src/views/CRUD/hooks';
 import ListViewCard from 'src/components/ListViewCard';
 import DeleteModal from 'src/components/DeleteModal';
 import Icons from 'src/components/Icons';
-import SubMenu from 'src/components/Menu/SubMenu';
+import SubMenu from 'src/views/components/SubMenu';
 import EmptyState from './EmptyState';
-import { CardContainer, createErrorHandler, shortenSQL } from '../utils';
+import {
+  CardContainer,
+  createErrorHandler,
+  PAGE_SIZE,
+  shortenSQL,
+} from '../utils';
+import { WelcomeTable } from './types';
 
 SyntaxHighlighter.registerLanguage('sql', sql);
-
-const PAGE_SIZE = 3;
 
 interface Query {
   id?: number;
@@ -237,7 +241,7 @@ const SavedQueries = ({
     </Menu>
   );
 
-  if (loading) return <Loading position="inline" />;
+  if (loading) return <LoadingCards cover={showThumbnails} />;
   return (
     <>
       {queryDeleteModal && (
@@ -280,7 +284,7 @@ const SavedQueries = ({
             name: (
               <>
                 <i className="fa fa-plus" />
-                SQL Query
+                {t('SQL Query')}
               </>
             ),
             buttonStyle: 'tertiary',
@@ -289,7 +293,7 @@ const SavedQueries = ({
             },
           },
           {
-            name: 'View All »',
+            name: t('View All »'),
             buttonStyle: 'link',
             onClick: () => {
               window.location.href = '/savedqueryview/list';
@@ -298,7 +302,7 @@ const SavedQueries = ({
         ]}
       />
       {queries.length > 0 ? (
-        <CardContainer>
+        <CardContainer showThumbnails={showThumbnails}>
           {queries.map(q => (
             <CardStyles
               onClick={() => {
@@ -311,7 +315,7 @@ const SavedQueries = ({
                 url={`/superset/sqllab?savedQueryId=${q.id}`}
                 title={q.label}
                 imgFallbackURL="/static/assets/images/empty-query.svg"
-                description={t('Last run %s', q.changed_on_delta_humanized)}
+                description={t('Ran %s', q.changed_on_delta_humanized)}
                 cover={
                   q?.sql?.length && showThumbnails && featureFlag ? (
                     <QueryContainer>
@@ -349,7 +353,7 @@ const SavedQueries = ({
                       }}
                     >
                       <Dropdown overlay={renderMenu(q)}>
-                        <Icons.MoreHoriz
+                        <Icons.MoreVert
                           iconColor={theme.colors.grayscale.base}
                         />
                       </Dropdown>
@@ -361,7 +365,7 @@ const SavedQueries = ({
           ))}
         </CardContainer>
       ) : (
-        <EmptyState tableName="SAVED_QUERIES" tab={queryFilter} />
+        <EmptyState tableName={WelcomeTable.SavedQueries} tab={queryFilter} />
       )}
     </>
   );

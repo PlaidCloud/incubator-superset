@@ -17,7 +17,7 @@
  * under the License.
  */
 /* eslint camelcase: 0 */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import { bindActionCreators } from 'redux';
 import { connect } from 'react-redux';
@@ -28,11 +28,13 @@ import { Resizable } from 're-resizable';
 import { usePluginContext } from 'src/components/DynamicPlugins';
 import { Global } from '@emotion/react';
 import { Tooltip } from 'src/components/Tooltip';
-import { usePrevious } from 'src/common/hooks/usePrevious';
+import { usePrevious } from 'src/hooks/usePrevious';
+import { useComponentDidMount } from 'src/hooks/useComponentDidMount';
 import Icons from 'src/components/Icons';
 import {
-  getFromLocalStorage,
-  setInLocalStorage,
+  getItem,
+  setItem,
+  LocalStorageKeys,
 } from 'src/utils/localStorageHelpers';
 import { URL_PARAMS } from 'src/constants';
 import cx from 'classnames';
@@ -71,6 +73,7 @@ const propTypes = {
   forcedHeight: PropTypes.string,
   form_data: PropTypes.object.isRequired,
   standalone: PropTypes.number.isRequired,
+  force: PropTypes.bool,
   timeout: PropTypes.number,
   impressionId: PropTypes.string,
   vizType: PropTypes.string,
@@ -81,7 +84,7 @@ const Styles = styled.div`
   text-align: left;
   position: relative;
   width: 100%;
-  height: 100%;
+  max-height: 100%;
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
@@ -164,7 +167,12 @@ function ExploreViewContainer(props) {
   const isDynamicPluginLoading = dynamicPlugin && dynamicPlugin.mounting;
   const wasDynamicPluginLoading = usePrevious(isDynamicPluginLoading);
 
+  /** the state of controls in the previous render */
   const previousControls = usePrevious(props.controls);
+  /** the state of controls last time a query was triggered */
+  const [lastQueriedControls, setLastQueriedControls] = useState(
+    props.controls,
+  );
   const windowSize = useWindowSize();
 
   const [showingModal, setShowingModal] = useState(false);
@@ -177,82 +185,93 @@ function ExploreViewContainer(props) {
     ? `${props.forcedHeight}px`
     : `${windowSize.height - navHeight}px`;
 
-  const storageKeys = {
-    controlsWidth: 'controls_width',
-    dataSourceWidth: 'datasource_width',
-  };
-
   const defaultSidebarsWidth = {
     controls_width: 320,
     datasource_width: 300,
   };
 
-  function addHistory({ isReplace = false, title } = {}) {
-    const payload = { ...props.form_data };
-    const longUrl = getExploreLongUrl(
-      props.form_data,
-      props.standalone ? URL_PARAMS.standalone.name : null,
-      false,
-    );
-    try {
-      if (isReplace) {
-        window.history.replaceState(payload, title, longUrl);
-      } else {
-        window.history.pushState(payload, title, longUrl);
-      }
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        'Failed at altering browser history',
-        payload,
-        title,
-        longUrl,
+  const addHistory = useCallback(
+    ({ isReplace = false, title } = {}) => {
+      const formData = props.dashboardId
+        ? {
+            ...props.form_data,
+            dashboardId: props.dashboardId,
+          }
+        : props.form_data;
+      const payload = { ...formData };
+      const longUrl = getExploreLongUrl(
+        formData,
+        props.standalone ? URL_PARAMS.standalone.name : null,
+        false,
+        {},
+        props.force,
       );
-    }
-  }
 
-  function handlePopstate() {
+      try {
+        if (isReplace) {
+          window.history.replaceState(payload, title, longUrl);
+        } else {
+          window.history.pushState(payload, title, longUrl);
+        }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          'Failed at altering browser history',
+          payload,
+          title,
+          longUrl,
+        );
+      }
+    },
+    [props.form_data, props.standalone, props.force],
+  );
+
+  const handlePopstate = useCallback(() => {
     const formData = window.history.state;
     if (formData && Object.keys(formData).length) {
       props.actions.setExploreControls(formData);
       props.actions.postChartFormData(
         formData,
-        false,
+        props.force,
         props.timeout,
         props.chart.id,
       );
     }
-  }
+  }, [props.actions, props.chart.id, props.timeout]);
 
-  function onQuery() {
+  const onQuery = useCallback(() => {
     props.actions.triggerQuery(true, props.chart.id);
     addHistory();
-  }
+    setLastQueriedControls(props.controls);
+  }, [props.controls, addHistory, props.actions, props.chart.id]);
 
-  function handleKeydown(event) {
-    const controlOrCommand = event.ctrlKey || event.metaKey;
-    if (controlOrCommand) {
-      const isEnter = event.key === 'Enter' || event.keyCode === 13;
-      const isS = event.key === 's' || event.keyCode === 83;
-      if (isEnter) {
-        onQuery();
-      } else if (isS) {
-        if (props.slice) {
-          props.actions
-            .saveSlice(props.form_data, {
-              action: 'overwrite',
-              slice_id: props.slice.slice_id,
-              slice_name: props.slice.slice_name,
-              add_to_dash: 'noSave',
-              goto_dash: false,
-            })
-            .then(({ data }) => {
-              window.location = data.slice.slice_url;
-            });
+  const handleKeydown = useCallback(
+    event => {
+      const controlOrCommand = event.ctrlKey || event.metaKey;
+      if (controlOrCommand) {
+        const isEnter = event.key === 'Enter' || event.keyCode === 13;
+        const isS = event.key === 's' || event.keyCode === 83;
+        if (isEnter) {
+          onQuery();
+        } else if (isS) {
+          if (props.slice) {
+            props.actions
+              .saveSlice(props.form_data, {
+                action: 'overwrite',
+                slice_id: props.slice.slice_id,
+                slice_name: props.slice.slice_name,
+                add_to_dash: 'noSave',
+                goto_dash: false,
+              })
+              .then(({ data }) => {
+                window.location = data.slice.slice_url;
+              });
+          }
         }
       }
-    }
-  }
+    },
+    [onQuery, props.actions, props.form_data, props.slice],
+  );
 
   function onStop() {
     if (props.chart && props.chart.queryController) {
@@ -268,17 +287,32 @@ function ExploreViewContainer(props) {
     setIsCollapsed(!isCollapsed);
   }
 
-  // effect to run on mount
-  useEffect(() => {
+  useComponentDidMount(() => {
     props.actions.logEvent(LOG_ACTIONS_MOUNT_EXPLORER);
     addHistory({ isReplace: true });
+  });
+
+  const previousHandlePopstate = usePrevious(handlePopstate);
+  useEffect(() => {
+    if (previousHandlePopstate) {
+      window.removeEventListener('popstate', previousHandlePopstate);
+    }
     window.addEventListener('popstate', handlePopstate);
-    document.addEventListener('keydown', handleKeydown);
     return () => {
       window.removeEventListener('popstate', handlePopstate);
+    };
+  }, [handlePopstate, previousHandlePopstate]);
+
+  const previousHandleKeyDown = usePrevious(handleKeydown);
+  useEffect(() => {
+    if (previousHandleKeyDown) {
+      window.removeEventListener('keydown', previousHandleKeyDown);
+    }
+    document.addEventListener('keydown', handleKeydown);
+    return () => {
       document.removeEventListener('keydown', handleKeydown);
     };
-  }, []);
+  }, [handleKeydown, previousHandleKeyDown]);
 
   useEffect(() => {
     if (wasDynamicPluginLoading && !isDynamicPluginLoading) {
@@ -338,13 +372,13 @@ function ExploreViewContainer(props) {
   }, [props.controls, props.ownState]);
 
   const chartIsStale = useMemo(() => {
-    if (previousControls) {
+    if (lastQueriedControls) {
       const changedControlKeys = Object.keys(props.controls).filter(
         key =>
-          typeof previousControls[key] !== 'undefined' &&
+          typeof lastQueriedControls[key] !== 'undefined' &&
           !areObjectsEqual(
             props.controls[key].value,
-            previousControls[key].value,
+            lastQueriedControls[key].value,
           ),
       );
 
@@ -355,7 +389,7 @@ function ExploreViewContainer(props) {
       );
     }
     return false;
-  }, [previousControls, props.controls]);
+  }, [lastQueriedControls, props.controls]);
 
   useEffect(() => {
     if (props.ownState !== undefined) {
@@ -420,12 +454,12 @@ function ExploreViewContainer(props) {
   }
 
   function getSidebarWidths(key) {
-    return getFromLocalStorage(key, defaultSidebarsWidth[key]);
+    return getItem(key, defaultSidebarsWidth[key]);
   }
 
   function setSidebarWidths(key, dimension) {
     const newDimension = Number(getSidebarWidths(key)) + dimension.width;
-    setInLocalStorage(key, newDimension);
+    setItem(key, newDimension);
   }
 
   if (props.standalone) {
@@ -440,6 +474,7 @@ function ExploreViewContainer(props) {
             margin-bottom: 0;
           }
           body {
+            height: 100vh;
             max-height: 100vh;
             overflow: hidden;
           }
@@ -450,7 +485,7 @@ function ExploreViewContainer(props) {
           #app {
             flex-basis: 100%;
             overflow: hidden;
-            height: 100vh;
+            height: 100%;
           }
           #app-menu {
             flex-shrink: 0;
@@ -468,13 +503,13 @@ function ExploreViewContainer(props) {
       )}
       <Resizable
         onResizeStop={(evt, direction, ref, d) =>
-          setSidebarWidths(storageKeys.dataSourceWidth, d)
+          setSidebarWidths(LocalStorageKeys.datasource_width, d)
         }
         defaultSize={{
-          width: getSidebarWidths(storageKeys.dataSourceWidth),
+          width: getSidebarWidths(LocalStorageKeys.datasource_width),
           height: '100%',
         }}
-        minWidth={defaultSidebarsWidth[storageKeys.dataSourceWidth]}
+        minWidth={defaultSidebarsWidth[LocalStorageKeys.datasource_width]}
         maxWidth="33%"
         enable={{ right: true }}
         className={
@@ -528,13 +563,13 @@ function ExploreViewContainer(props) {
       ) : null}
       <Resizable
         onResizeStop={(evt, direction, ref, d) =>
-          setSidebarWidths(storageKeys.controlsWidth, d)
+          setSidebarWidths(LocalStorageKeys.controls_width, d)
         }
         defaultSize={{
-          width: getSidebarWidths(storageKeys.controlsWidth),
+          width: getSidebarWidths(LocalStorageKeys.controls_width),
           height: '100%',
         }}
-        minWidth={defaultSidebarsWidth[storageKeys.controlsWidth]}
+        minWidth={defaultSidebarsWidth[LocalStorageKeys.controls_width]}
         maxWidth="33%"
         enable={{ right: true }}
         className="col-sm-3 explore-column controls-column"
@@ -572,7 +607,7 @@ function ExploreViewContainer(props) {
 ExploreViewContainer.propTypes = propTypes;
 
 function mapStateToProps(state) {
-  const { explore, charts, impressionId, dataMask } = state;
+  const { explore, charts, impressionId, dataMask, reports } = state;
   const form_data = getFormDataFromControls(explore.controls);
   form_data.extra_form_data = mergeExtraFormData(
     { ...form_data.extra_form_data },
@@ -582,6 +617,7 @@ function mapStateToProps(state) {
   );
   const chartKey = Object.keys(charts)[0];
   const chart = charts[chartKey];
+
   return {
     isDatasourceMetaLoading: explore.isDatasourceMetaLoading,
     datasource: explore.datasource,
@@ -606,12 +642,14 @@ function mapStateToProps(state) {
     table_name: form_data.datasource_name,
     vizType: form_data.viz_type,
     standalone: explore.standalone,
+    force: explore.force,
     forcedHeight: explore.forced_height,
     chart,
     timeout: explore.common.conf.SUPERSET_WEBSERVER_TIMEOUT,
     ownState: dataMask[form_data.slice_id ?? 0]?.ownState, // 0 - unsaved chart
     impressionId,
-    userId: explore.user_id,
+    user: explore.user,
+    reports,
   };
 }
 

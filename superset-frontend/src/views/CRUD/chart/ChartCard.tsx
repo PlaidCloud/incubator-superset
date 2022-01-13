@@ -66,7 +66,7 @@ export default function ChartCard({
   const canEdit = hasPerm('can_write');
   const canDelete = hasPerm('can_write');
   const canExport =
-    hasPerm('can_read') && isFeatureEnabled(FeatureFlag.VERSIONED_EXPORT);
+    hasPerm('can_export') && isFeatureEnabled(FeatureFlag.VERSIONED_EXPORT);
   const theme = useTheme();
 
   const menu = (
@@ -142,6 +142,8 @@ export default function ChartCard({
       <ListViewCard
         loading={loading}
         title={chart.slice_name}
+        certifiedBy={chart.certified_by}
+        certificationDetails={chart.certification_details}
         cover={
           !isFeatureEnabled(FeatureFlag.THUMBNAILS) || !showThumbnails ? (
             <></>
@@ -150,7 +152,7 @@ export default function ChartCard({
         url={bulkSelectEnabled ? undefined : chart.url}
         imgURL={chart.thumbnail_url || ''}
         imgFallbackURL="/static/assets/images/chart-card-fallback.svg"
-        description={t('Last modified %s', chart.changed_on_delta_humanized)}
+        description={t('Modified %s', chart.changed_on_delta_humanized)}
         coverLeft={<FacePile users={chart.owners || []} />}
         coverRight={
           <Label type="secondary">{chart.datasource_name_text}</Label>
@@ -168,7 +170,7 @@ export default function ChartCard({
               isStarred={favoriteStatus}
             />
             <Dropdown overlay={menu}>
-              <Icons.MoreHoriz iconColor={theme.colors.grayscale.base} />
+              <Icons.MoreVert iconColor={theme.colors.grayscale.base} />
             </Dropdown>
           </ListViewCard.Actions>
         }

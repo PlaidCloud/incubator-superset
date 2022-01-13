@@ -22,18 +22,22 @@ import Collapse from 'src/components/Collapse';
 import { User } from 'src/types/bootstrapTypes';
 import { reject } from 'lodash';
 import {
-  getFromLocalStorage,
-  setInLocalStorage,
+  getItem,
+  dangerouslyGetItemDoNotUse,
+  setItem,
+  dangerouslySetItemDoNotUse,
+  LocalStorageKeys,
 } from 'src/utils/localStorageHelpers';
-import withToasts from 'src/messageToasts/enhancers/withToasts';
-import Loading from 'src/components/Loading';
+import ListViewCard from 'src/components/ListViewCard';
+import withToasts from 'src/components/MessageToasts/withToasts';
 import {
   createErrorHandler,
   getRecentAcitivtyObjs,
   mq,
+  CardContainer,
   getUserOwnedObjects,
+  loadingCardCount,
 } from 'src/views/CRUD/utils';
-import { HOMEPAGE_ACTIVITY_FILTER } from 'src/views/CRUD/storageKeys';
 import { FeatureFlag, isFeatureEnabled } from 'src/featureFlags';
 import { Switch } from 'src/common/components';
 
@@ -52,6 +56,10 @@ export interface ActivityData {
   Edited?: Array<object>;
   Viewed?: Array<object>;
   Examples?: Array<object>;
+}
+
+interface LoadingProps {
+  cover?: boolean;
 }
 
 const DEFAULT_TAB_ARR = ['2', '3'];
@@ -74,14 +82,33 @@ const WelcomeContainer = styled.div`
       }
     }
     .ant-menu.ant-menu-light.ant-menu-root.ant-menu-horizontal {
-      padding-left: ${({ theme }) => theme.gridUnit * 10}px;
+      padding-left: ${({ theme }) => theme.gridUnit * 8}px;
     }
     button {
       padding: 3px 21px;
     }
   }
+  .ant-card-meta-description {
+    margin-top: ${({ theme }) => theme.gridUnit}px;
+  }
   .ant-card.ant-card-bordered {
     border: 1px solid ${({ theme }) => theme.colors.grayscale.light2};
+  }
+  .ant-collapse-item .ant-collapse-content {
+    margin-bottom: ${({ theme }) => theme.gridUnit * -6}px;
+  }
+  div.ant-collapse-item:last-child.ant-collapse-item-active
+    .ant-collapse-header {
+    padding-bottom: ${({ theme }) => theme.gridUnit * 3}px;
+  }
+  div.ant-collapse-item:last-child .ant-collapse-header {
+    padding-bottom: ${({ theme }) => theme.gridUnit * 9}px;
+  }
+  .loading-cards {
+    margin-top: ${({ theme }) => theme.gridUnit * 8}px;
+    .ant-card-cover > div {
+      height: 168px;
+    }
   }
 `;
 
@@ -105,10 +132,26 @@ const WelcomeNav = styled.div`
   }
 `;
 
+export const LoadingCards = ({ cover }: LoadingProps) => (
+  <CardContainer showThumbnails={cover} className="loading-cards">
+    {[...new Array(loadingCardCount)].map(() => (
+      <ListViewCard cover={cover ? false : <></>} description="" loading />
+    ))}
+  </CardContainer>
+);
+
 function Welcome({ user, addDangerToast }: WelcomeProps) {
+  const userid = user.userId;
+  const id = userid.toString();
   const recent = `/superset/recent_activity/${user.userId}/?limit=6`;
   const [activeChild, setActiveChild] = useState('Loading');
-  const [checked, setChecked] = useState(true);
+  const userKey = dangerouslyGetItemDoNotUse(id, null);
+  let defaultChecked = false;
+  if (isFeatureEnabled(FeatureFlag.THUMBNAILS)) {
+    defaultChecked =
+      userKey?.thumbnails === undefined ? true : userKey?.thumbnails;
+  }
+  const [checked, setChecked] = useState(defaultChecked);
   const [activityData, setActivityData] = useState<ActivityData | null>(null);
   const [chartData, setChartData] = useState<Array<object> | null>(null);
   const [queryData, setQueryData] = useState<Array<object> | null>(null);
@@ -116,23 +159,22 @@ function Welcome({ user, addDangerToast }: WelcomeProps) {
     null,
   );
   const [loadedCount, setLoadedCount] = useState(0);
-  const [activeState, setActiveState] = useState<Array<string>>(
-    DEFAULT_TAB_ARR,
-  );
-  const userid = user.userId;
-  const id = userid.toString();
+
+  const collapseState = getItem(LocalStorageKeys.homepage_collapse_state, []);
+  const [activeState, setActiveState] = useState<Array<string>>(collapseState);
 
   const handleCollapse = (state: Array<string>) => {
     setActiveState(state);
+    setItem(LocalStorageKeys.homepage_collapse_state, state);
   };
 
   useEffect(() => {
-    const userKey = getFromLocalStorage(id, null);
-    const activeTab = getFromLocalStorage(HOMEPAGE_ACTIVITY_FILTER, null);
-    if (userKey && !userKey.thumbnails) setChecked(false);
+    const activeTab = getItem(LocalStorageKeys.homepage_activity_filter, null);
+    setActiveState(collapseState.length > 0 ? collapseState : DEFAULT_TAB_ARR);
     getRecentAcitivtyObjs(user.userId, recent, addDangerToast)
       .then(res => {
         const data: ActivityData | null = {};
+        data.Examples = res.examples;
         if (res.viewed) {
           const filtered = reject(res.viewed, ['item_url', null]).map(r => r);
           data.Viewed = filtered;
@@ -140,12 +182,9 @@ function Welcome({ user, addDangerToast }: WelcomeProps) {
             setActiveChild('Viewed');
           } else if (!activeTab && !data.Viewed) {
             setActiveChild('Created');
-          } else setActiveChild(activeTab);
-        } else {
-          if (!activeTab) setActiveChild('Created');
-          else setActiveChild(activeTab);
-          data.Examples = res.examples;
-        }
+          } else setActiveChild(activeTab || 'Created');
+        } else if (!activeTab) setActiveChild('Created');
+        else setActiveChild(activeTab);
         setActivityData(activityData => ({ ...activityData, ...data }));
       })
       .catch(
@@ -197,27 +236,28 @@ function Welcome({ user, addDangerToast }: WelcomeProps) {
 
   const handleToggle = () => {
     setChecked(!checked);
-    setInLocalStorage(id, { thumbnails: !checked });
+    dangerouslySetItemDoNotUse(id, { thumbnails: !checked });
   };
 
   useEffect(() => {
-    const defaultArr = DEFAULT_TAB_ARR;
-    if (activityData?.Viewed) {
-      defaultArr.push('1');
+    if (!collapseState && queryData?.length) {
+      setActiveState(activeState => [...activeState, '4']);
     }
-    if (queryData?.length) {
-      defaultArr.push('4');
-    }
-    setActiveState(defaultArr);
     setActivityData(activityData => ({
       ...activityData,
       Created: [
-        ...(chartData || []),
-        ...(dashboardData || []),
-        ...(queryData || []),
+        ...(chartData?.slice(0, 3) || []),
+        ...(dashboardData?.slice(0, 3) || []),
+        ...(queryData?.slice(0, 3) || []),
       ],
     }));
   }, [chartData, queryData, dashboardData]);
+
+  useEffect(() => {
+    if (!collapseState && activityData?.Viewed?.length) {
+      setActiveState(activeState => ['1', ...activeState]);
+    }
+  }, [activityData]);
 
   const isRecentActivityLoading =
     !activityData?.Examples && !activityData?.Viewed;
@@ -247,12 +287,12 @@ function Welcome({ user, addDangerToast }: WelcomeProps) {
               loadedCount={loadedCount}
             />
           ) : (
-            <Loading position="inline" />
+            <LoadingCards />
           )}
         </Collapse.Panel>
         <Collapse.Panel header={t('Dashboards')} key="2">
           {!dashboardData || isRecentActivityLoading ? (
-            <Loading position="inline" />
+            <LoadingCards cover={checked} />
           ) : (
             <DashboardTable
               user={user}
@@ -264,7 +304,7 @@ function Welcome({ user, addDangerToast }: WelcomeProps) {
         </Collapse.Panel>
         <Collapse.Panel header={t('Charts')} key="3">
           {!chartData || isRecentActivityLoading ? (
-            <Loading position="inline" />
+            <LoadingCards cover={checked} />
           ) : (
             <ChartTable
               showThumbnails={checked}
@@ -276,7 +316,7 @@ function Welcome({ user, addDangerToast }: WelcomeProps) {
         </Collapse.Panel>
         <Collapse.Panel header={t('Saved queries')} key="4">
           {!queryData ? (
-            <Loading position="inline" />
+            <LoadingCards cover={checked} />
           ) : (
             <SavedQueries
               showThumbnails={checked}

@@ -33,44 +33,68 @@ import { FetchDataConfig } from 'src/components/ListView';
 import SupersetText from 'src/utils/textUtils';
 import { Dashboard, Filters } from './types';
 
-const createFetchResourceMethod = (method: string) => (
-  resource: string,
-  relation: string,
-  handleError: (error: Response) => void,
-  userId?: string | number,
-) => async (filterValue = '', pageIndex?: number, pageSize?: number) => {
-  const resourceEndpoint = `/api/v1/${resource}/${method}/${relation}`;
-  const options =
-    userId && pageIndex === 0 ? [{ label: 'me', value: userId }] : [];
-  try {
+const createFetchResourceMethod =
+  (method: string) =>
+  (
+    resource: string,
+    relation: string,
+    handleError: (error: Response) => void,
+    user?: { userId: string | number; firstName: string; lastName: string },
+  ) =>
+  async (filterValue = '', page: number, pageSize: number) => {
+    const resourceEndpoint = `/api/v1/${resource}/${method}/${relation}`;
     const queryParams = rison.encode({
-      ...(pageIndex ? { page: pageIndex } : {}),
-      ...(pageSize ? { page_size: pageSize } : {}),
-      ...(filterValue ? { filter: filterValue } : {}),
+      filter: filterValue,
+      page,
+      page_size: pageSize,
     });
     const { json = {} } = await SupersetClient.get({
       endpoint: `${resourceEndpoint}?q=${queryParams}`,
     });
-    const data = json?.result?.map(
-      ({ text: label, value }: { text: string; value: any }) => ({
-        label,
-        value,
-      }),
+
+    let fetchedLoggedUser = false;
+    const loggedUser = user
+      ? {
+          label: `${user.firstName} ${user.lastName}`,
+          value: user.userId,
+        }
+      : undefined;
+
+    const data: { label: string; value: string | number }[] = [];
+    json?.result?.forEach(
+      ({ text, value }: { text: string; value: string | number }) => {
+        if (
+          loggedUser &&
+          value === loggedUser.value &&
+          text === loggedUser.label
+        ) {
+          fetchedLoggedUser = true;
+        } else {
+          data.push({
+            label: text,
+            value,
+          });
+        }
+      },
     );
 
-    return options.concat(data);
-  } catch (e) {
-    handleError(e);
-  }
-  return [];
-};
+    if (loggedUser && (!filterValue || fetchedLoggedUser)) {
+      data.unshift(loggedUser);
+    }
 
+    return {
+      data,
+      totalCount: json?.count,
+    };
+  };
+
+export const PAGE_SIZE = 5;
 const getParams = (filters?: Array<Filters>) => {
   const params = {
     order_column: 'changed_on_delta_humanized',
     order_direction: 'desc',
     page: 0,
-    page_size: 3,
+    page_size: PAGE_SIZE,
     filters,
   };
   if (!filters) delete params.filters;
@@ -131,27 +155,33 @@ export const getRecentAcitivtyObjs = (
 ) =>
   SupersetClient.get({ endpoint: recent }).then(recentsRes => {
     const res: any = {};
-    if (recentsRes.json.length === 0) {
-      const newBatch = [
-        SupersetClient.get({ endpoint: `/api/v1/chart/?q=${getParams()}` }),
-        SupersetClient.get({
-          endpoint: `/api/v1/dashboard/?q=${getParams()}`,
-        }),
-      ];
-      return Promise.all(newBatch)
-        .then(([chartRes, dashboardRes]) => {
-          res.examples = [...chartRes.json.result, ...dashboardRes.json.result];
-          return res;
-        })
-        .catch(errMsg =>
-          addDangerToast(
-            t('There was an error fetching your recent activity:'),
-            errMsg,
-          ),
-        );
-    }
-    res.viewed = recentsRes.json;
-    return res;
+    const filters = [
+      {
+        col: 'created_by',
+        opr: 'rel_o_m',
+        value: 0,
+      },
+    ];
+    const newBatch = [
+      SupersetClient.get({
+        endpoint: `/api/v1/chart/?q=${getParams(filters)}`,
+      }),
+      SupersetClient.get({
+        endpoint: `/api/v1/dashboard/?q=${getParams(filters)}`,
+      }),
+    ];
+    return Promise.all(newBatch)
+      .then(([chartRes, dashboardRes]) => {
+        res.examples = [...chartRes.json.result, ...dashboardRes.json.result];
+        res.viewed = recentsRes.json;
+        return res;
+      })
+      .catch(errMsg =>
+        addDangerToast(
+          t('There was an error fetching your recent activity:'),
+          errMsg,
+        ),
+      );
   });
 
 export const createFetchRelated = createFetchResourceMethod('related');
@@ -192,7 +222,7 @@ export function handleChartDelete(
 ) {
   const filters = {
     pageIndex: 0,
-    pageSize: 3,
+    pageSize: PAGE_SIZE,
     sortBy: [
       {
         id: 'changed_on_delta_humanized',
@@ -235,7 +265,7 @@ export function handleDashboardDelete(
     () => {
       const filters = {
         pageIndex: 0,
-        pageSize: 3,
+        pageSize: PAGE_SIZE,
         sortBy: [
           {
             id: 'changed_on_delta_humanized',
@@ -271,31 +301,38 @@ export function shortenSQL(sql: string, maxLines: number) {
   return lines.join('\n');
 }
 
+// loading card count for homepage
+export const loadingCardCount = 5;
+
 const breakpoints = [576, 768, 992, 1200];
 export const mq = breakpoints.map(bp => `@media (max-width: ${bp}px)`);
 
-export const CardContainer = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(31%, 31%));
-  ${mq[3]} {
-    grid-template-columns: repeat(auto-fit, minmax(31%, 31%));
-  }
-  ${mq[2]} {
-    grid-template-columns: repeat(auto-fit, minmax(48%, 48%));
-  }
-  ${mq[1]} {
-    grid-template-columns: repeat(auto-fit, minmax(50%, 80%));
-  }
-  grid-gap: ${({ theme }) => theme.gridUnit * 8}px;
-  justify-content: left;
-  padding: ${({ theme }) => theme.gridUnit * 6}px;
-  padding-top: ${({ theme }) => theme.gridUnit * 2}px;
+export const CardContainer = styled.div<{
+  showThumbnails?: boolean | undefined;
+}>`
+  ${({ showThumbnails, theme }) => `
+    overflow: hidden;
+    display: grid;
+    grid-gap: ${theme.gridUnit * 12}px ${theme.gridUnit * 4}px;
+    grid-template-columns: repeat(auto-fit, 300px);
+    max-height: ${showThumbnails ? '314' : '148'}px;
+    margin-top: ${theme.gridUnit * -6}px;
+    padding: ${
+      showThumbnails
+        ? `${theme.gridUnit * 8 + 3}px ${theme.gridUnit * 9}px`
+        : `${theme.gridUnit * 8 + 1}px ${theme.gridUnit * 9}px`
+    };
+  `}
 `;
 
 export const CardStyles = styled.div`
   cursor: pointer;
   a {
     text-decoration: none;
+  }
+  .ant-card-cover > div {
+    /* Height is calculated based on 300px width, to keep the same aspect ratio as the 800*450 thumbnails */
+    height: 168px;
   }
 `;
 
@@ -336,7 +373,10 @@ export const getAlreadyExists = (errors: Record<string, any>[]) =>
 export const hasTerminalValidation = (errors: Record<string, any>[]) =>
   errors.some(
     error =>
-      !Object.values(error.extra).some(
-        payload => isNeedsPassword(payload) || isAlreadyExists(payload),
-      ),
+      !Object.entries(error.extra)
+        .filter(([key, _]) => key !== 'issue_codes')
+        .every(
+          ([_, payload]) =>
+            isNeedsPassword(payload) || isAlreadyExists(payload),
+        ),
   );

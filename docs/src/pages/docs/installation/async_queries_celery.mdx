@@ -2,7 +2,7 @@
 name: Async Queries via Celery
 menu: Installation and Configuration
 route: /docs/installation/async-queries-celery
-index: 9
+index: 10
 version: 1
 ---
 
@@ -114,5 +114,5 @@ pip install flower
 You can run flower using:
 
 ```
-celery flower --app=superset.tasks.celery_app:app
+celery --app=superset.tasks.celery_app:app flower
 ```

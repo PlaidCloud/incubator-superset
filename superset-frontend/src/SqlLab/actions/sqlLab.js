@@ -23,15 +23,15 @@ import invert from 'lodash/invert';
 import mapKeys from 'lodash/mapKeys';
 import { isFeatureEnabled, FeatureFlag } from 'src/featureFlags';
 
-import { now } from '../../modules/dates';
+import { now } from 'src/modules/dates';
 import {
   addDangerToast as addDangerToastAction,
   addInfoToast as addInfoToastAction,
   addSuccessToast as addSuccessToastAction,
   addWarningToast as addWarningToastAction,
-} from '../../messageToasts/actions/index';
-import { getClientErrorObject } from '../../utils/getClientErrorObject';
-import COMMON_ERR_MESSAGES from '../../utils/errorMessages';
+} from 'src/components/MessageToasts/actions';
+import { getClientErrorObject } from 'src/utils/getClientErrorObject';
+import COMMON_ERR_MESSAGES from 'src/utils/errorMessages';
 
 export const RESET_STATE = 'RESET_STATE';
 export const ADD_QUERY_EDITOR = 'ADD_QUERY_EDITOR';
@@ -406,9 +406,7 @@ export function postStopQuery(query) {
       .then(() => dispatch(stopQuery(query)))
       .then(() => dispatch(addSuccessToast(t('Query was stopped.'))))
       .catch(() =>
-        dispatch(
-          addDangerToast(`${t('Failed at stopping query. ')}'${query.id}'`),
-        ),
+        dispatch(addDangerToast(t('Failed at stopping query. %s', query.id))),
       );
   };
 }
@@ -898,16 +896,13 @@ export function updateSavedQuery(query) {
 
 export function queryEditorSetSql(queryEditor, sql) {
   return function (dispatch) {
-    const sync = isFeatureEnabled(FeatureFlag.SQLLAB_BACKEND_PERSISTENCE)
-      ? SupersetClient.put({
-          endpoint: encodeURI(`/tabstateview/${queryEditor.id}`),
-          postPayload: { sql, latest_query_id: queryEditor.latestQueryId },
-        })
-      : Promise.resolve();
-
-    return sync
-      .then(() => dispatch({ type: QUERY_EDITOR_SET_SQL, queryEditor, sql }))
-      .catch(() =>
+    // saved query and set tab state use this action
+    dispatch({ type: QUERY_EDITOR_SET_SQL, queryEditor, sql });
+    if (isFeatureEnabled(FeatureFlag.SQLLAB_BACKEND_PERSISTENCE)) {
+      return SupersetClient.put({
+        endpoint: encodeURI(`/tabstateview/${queryEditor.id}`),
+        postPayload: { sql, latest_query_id: queryEditor.latestQueryId },
+      }).catch(() =>
         dispatch(
           addDangerToast(
             t(
@@ -918,6 +913,8 @@ export function queryEditorSetSql(queryEditor, sql) {
           ),
         ),
       );
+    }
+    return Promise.resolve();
   };
 }
 
@@ -952,6 +949,11 @@ export function queryEditorSetQueryLimit(queryEditor, queryLimit) {
 
 export function queryEditorSetTemplateParams(queryEditor, templateParams) {
   return function (dispatch) {
+    dispatch({
+      type: QUERY_EDITOR_SET_TEMPLATE_PARAMS,
+      queryEditor,
+      templateParams,
+    });
     const sync = isFeatureEnabled(FeatureFlag.SQLLAB_BACKEND_PERSISTENCE)
       ? SupersetClient.put({
           endpoint: encodeURI(`/tabstateview/${queryEditor.id}`),
@@ -959,24 +961,16 @@ export function queryEditorSetTemplateParams(queryEditor, templateParams) {
         })
       : Promise.resolve();
 
-    return sync
-      .then(() =>
-        dispatch({
-          type: QUERY_EDITOR_SET_TEMPLATE_PARAMS,
-          queryEditor,
-          templateParams,
-        }),
-      )
-      .catch(() =>
-        dispatch(
-          addDangerToast(
-            t(
-              'An error occurred while setting the tab template parameters. ' +
-                'Please contact your administrator.',
-            ),
+    return sync.catch(() =>
+      dispatch(
+        addDangerToast(
+          t(
+            'An error occurred while setting the tab template parameters. ' +
+              'Please contact your administrator.',
           ),
         ),
-      );
+      ),
+    );
   };
 }
 
