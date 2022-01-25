@@ -41,7 +41,6 @@ RUN cd /app \
     && touch superset/static/version_info.json \
     && pip install --no-cache -r requirements/local.txt
 
-
 ######################################################################
 # Node stage to deal with static asset construction
 ######################################################################
