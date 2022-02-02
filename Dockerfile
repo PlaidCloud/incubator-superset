@@ -108,6 +108,7 @@ COPY setup.py MANIFEST.in README.md /app/
 RUN cd /app \
         && chown -R superset:superset * \
         && pip install -e .
+        
 COPY plaid /plaid/plaid/
 COPY ./docker/docker-entrypoint.sh /usr/bin/
 
