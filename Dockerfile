@@ -18,7 +18,7 @@
 ######################################################################
 # PY stage that simply does a pip install on our requirements
 ######################################################################
-ARG PY_VER=3.7.9
+ARG PY_VER=3.8.12
 FROM python:${PY_VER} AS superset-py
 
 RUN mkdir /app \
@@ -44,7 +44,7 @@ RUN cd /app \
 ######################################################################
 # Node stage to deal with static asset construction
 ######################################################################
-FROM node:14 AS superset-node
+FROM node:16 AS superset-node
 
 ARG NPM_VER=7
 RUN npm install -g npm@${NPM_VER}
@@ -56,14 +56,12 @@ ENV BUILD_CMD=${NPM_BUILD_CMD}
 RUN mkdir -p /app/superset-frontend
 RUN mkdir -p /app/superset/assets
 COPY ./docker/frontend-mem-nag.sh /
-COPY ./superset-frontend/package* /app/superset-frontend/
+COPY ./superset-frontend /app/superset-frontend
 RUN /frontend-mem-nag.sh \
         && cd /app/superset-frontend \
         && npm ci
 
-# Next, copy in the rest and let webpack do its thing
-COPY ./superset-frontend /app/superset-frontend
-# This is BY FAR the most expensive step (thanks Terser!)
+# This seems to be the most expensive step
 RUN cd /app/superset-frontend \
         && npm run ${BUILD_CMD} \
         && rm -rf node_modules
@@ -75,7 +73,7 @@ ENTRYPOINT ["/app/docker/docker-frontend.sh"]
 ######################################################################
 # Final lean image...
 ######################################################################
-ARG PY_VER=3.7.9
+ARG PY_VER=3.8.12
 FROM python:${PY_VER} AS lean
 
 ENV LANG=C.UTF-8 \
@@ -94,9 +92,10 @@ RUN mkdir -p ${PYTHONPATH} \
             default-libmysqlclient-dev \
             libsasl2-modules-gssapi-mit \
             libpq-dev \
+            libecpg-dev \
         && rm -rf /var/lib/apt/lists/*
 
-COPY --from=superset-py /usr/local/lib/python3.7/site-packages/ /usr/local/lib/python3.7/site-packages/
+COPY --from=superset-py /usr/local/lib/python3.8/site-packages/ /usr/local/lib/python3.8/site-packages/
 # Copying site-packages doesn't move the CLIs, so let's copy them one by one
 COPY --from=superset-py /usr/local/bin/gunicorn /usr/local/bin/celery /usr/local/bin/flask /usr/bin/
 COPY --from=superset-node /app/superset/static/assets /app/superset/static/assets
@@ -108,8 +107,14 @@ COPY setup.py MANIFEST.in README.md /app/
 RUN cd /app \
         && chown -R superset:superset * \
         && pip install -e .
+        && flask fab babel-compile --target superset/translations
+
 COPY plaid /plaid/plaid/
 COPY ./docker/docker-entrypoint.sh /usr/bin/
+COPY ./docker/run-server.sh /usr/bin/
+
+RUN chmod a+x /usr/bin/run-server.sh
+
 
 WORKDIR /app
 
@@ -119,7 +124,7 @@ HEALTHCHECK CMD curl -f "http://localhost:$SUPERSET_PORT/health"
 
 EXPOSE ${SUPERSET_PORT}
 
-ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
+CMD /usr/bin/run-server.sh
 
 ######################################################################
 # CI image...
