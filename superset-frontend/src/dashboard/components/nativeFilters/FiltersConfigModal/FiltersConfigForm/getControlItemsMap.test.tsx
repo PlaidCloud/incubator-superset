@@ -16,13 +16,16 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { render, screen } from 'spec/helpers/testing-library';
-import userEvent from '@testing-library/user-event';
-import { Filter } from 'src/dashboard/components/nativeFilters/types';
 import { FormInstance } from 'src/common/components';
-import { getControlItems, setNativeFilterFieldValues } from './utils';
+import {
+  Filter,
+  NativeFilterType,
+} from 'src/dashboard/components/nativeFilters/types';
 import getControlItemsMap, { ControlItemsProps } from './getControlItemsMap';
+import { getControlItems, setNativeFilterFieldValues } from './utils';
 
 jest.mock('./utils', () => ({
   getControlItems: jest.fn(),
@@ -60,6 +63,8 @@ const filterMock: Filter = {
   filterType: '',
   targets: [{}],
   controlValues: {},
+  type: NativeFilterType.NATIVE_FILTER,
+  description: '',
 };
 
 const createProps: () => ControlItemsProps = () => ({
@@ -115,6 +120,16 @@ test('Should render null when has no "formFilter.filterType" is falsy value', ()
 test('Should render null empty when "getControlItems" return []', () => {
   const props = createProps();
   (getControlItems as jest.Mock).mockReturnValue([]);
+  const controlItemsMap = getControlItemsMap(props);
+  const { container } = renderControlItems(controlItemsMap);
+  expect(container.children).toHaveLength(0);
+});
+
+test('Should render null empty when "getControlItems" return enableSingleValue', () => {
+  const props = createProps();
+  (getControlItems as jest.Mock).mockReturnValue([
+    { name: 'enableSingleValue', config: { renderTrigger: true } },
+  ]);
   const controlItemsMap = getControlItemsMap(props);
   const { container } = renderControlItems(controlItemsMap);
   expect(container.children).toHaveLength(0);

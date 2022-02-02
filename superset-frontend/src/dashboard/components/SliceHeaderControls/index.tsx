@@ -27,8 +27,6 @@ import {
 import { Menu, NoAnimationDropdown } from 'src/common/components';
 import ShareMenuItems from 'src/dashboard/components/menu/ShareMenuItems';
 import downloadAsImage from 'src/utils/downloadAsImage';
-import getDashboardUrl from 'src/dashboard/util/getDashboardUrl';
-import { getActiveFilters } from 'src/dashboard/util/activeDashboardFilters';
 import { FeatureFlag, isFeatureEnabled } from 'src/featureFlags';
 import CrossFilterScopingModal from 'src/dashboard/components/CrossFilterScopingModal/CrossFilterScopingModal';
 import Icons from 'src/components/Icons';
@@ -88,6 +86,7 @@ export interface SliceHeaderControlsProps {
     slice_name: string;
     slice_id: number;
     slice_description: string;
+    form_data?: { emit_filter?: boolean };
   };
 
   componentId: string;
@@ -98,8 +97,8 @@ export interface SliceHeaderControlsProps {
   isExpanded?: boolean;
   updatedDttm: number | null;
   isFullSize?: boolean;
-  formData: object;
-  exploreUrl?: string;
+  formData: { slice_id: number; datasource: string };
+  onExploreChart: () => void;
 
   forceRefresh: (sliceId: number, dashboardId: number) => void;
   logExploreChart?: (sliceId: number) => void;
@@ -162,6 +161,7 @@ class SliceHeaderControls extends React.PureComponent<
     switch (key) {
       case MENU_KEYS.FORCE_REFRESH:
         this.refreshChart();
+        this.props.addSuccessToast(t('Data refreshed'));
         break;
       case MENU_KEYS.CROSS_FILTER_SCOPING:
         this.setState({ showCrossFilterScopingModal: true });
@@ -213,13 +213,13 @@ class SliceHeaderControls extends React.PureComponent<
     const {
       slice,
       isFullSize,
-      componentId,
       cachedDttm = [],
       updatedDttm = null,
       addSuccessToast = () => {},
       addDangerToast = () => {},
       supersetCanShare = false,
       isCached = [],
+      formData,
     } = this.props;
     const crossFilterItems = getChartMetadataRegistry().items;
     const isTable = slice.viz_type === 'table';
@@ -229,6 +229,7 @@ class SliceHeaderControls extends React.PureComponent<
         value.behaviors?.includes(Behavior.INTERACTIVE_CHART),
       )
       .find(([key]) => key === slice.viz_type);
+    const canEmitCrossFilter = slice.form_data?.emit_filter;
 
     const cachedWhen = (cachedDttm || []).map(itemCachedDttm =>
       moment.utc(itemCachedDttm).fromNow(),
@@ -248,7 +249,7 @@ class SliceHeaderControls extends React.PureComponent<
     const refreshTooltip = refreshTooltipData.map((item, index) => (
       <div key={`tooltip-${index}`}>
         {refreshTooltipData.length > 1
-          ? `${t('Query')} ${index + 1}: ${item}`
+          ? t('Query %s: %s', index + 1, item)
           : item}
       </div>
     ));
@@ -280,10 +281,11 @@ class SliceHeaderControls extends React.PureComponent<
         )}
 
         {this.props.supersetCanExplore && (
-          <Menu.Item key={MENU_KEYS.EXPLORE_CHART}>
-            <a href={this.props.exploreUrl} rel="noopener noreferrer">
-              {t('View chart in Explore')}
-            </a>
+          <Menu.Item
+            key={MENU_KEYS.EXPLORE_CHART}
+            onClick={this.props.onExploreChart}
+          >
+            {t('View chart in Explore')}
           </Menu.Item>
         )}
 
@@ -297,6 +299,8 @@ class SliceHeaderControls extends React.PureComponent<
               modalBody={
                 <ViewQueryModal latestQueryFormData={this.props.formData} />
               }
+              draggable
+              resizable
               responsive
             />
           </Menu.Item>
@@ -304,17 +308,13 @@ class SliceHeaderControls extends React.PureComponent<
 
         {supersetCanShare && (
           <ShareMenuItems
-            url={getDashboardUrl({
-              pathname: window.location.pathname,
-              filters: getActiveFilters(),
-              hash: componentId,
-            })}
             copyMenuItemTitle={t('Copy chart URL')}
             emailMenuItemTitle={t('Share chart by email')}
             emailSubject={t('Superset chart')}
             emailBody={t('Check out this chart: ')}
             addSuccessToast={addSuccessToast}
             addDangerToast={addDangerToast}
+            formData={formData}
           />
         )}
 
@@ -324,18 +324,23 @@ class SliceHeaderControls extends React.PureComponent<
           {t('Download as image')}
         </Menu.Item>
 
-        {this.props.supersetCanCSV && (
-          <Menu.Item key={MENU_KEYS.EXPORT_CSV}>{t('Export CSV')}</Menu.Item>
-        )}
-        {isFeatureEnabled(FeatureFlag.ALLOW_FULL_CSV_EXPORT) &&
+        {this.props.slice.viz_type !== 'filter_box' &&
+          this.props.supersetCanCSV && (
+            <Menu.Item key={MENU_KEYS.EXPORT_CSV}>{t('Export CSV')}</Menu.Item>
+          )}
+
+        {this.props.slice.viz_type !== 'filter_box' &&
+          isFeatureEnabled(FeatureFlag.ALLOW_FULL_CSV_EXPORT) &&
           this.props.supersetCanCSV &&
           isTable && (
             <Menu.Item key={MENU_KEYS.EXPORT_FULL_CSV}>
               {t('Export full CSV')}
             </Menu.Item>
           )}
+
         {isFeatureEnabled(FeatureFlag.DASHBOARD_CROSS_FILTERS) &&
-          isCrossFilter && (
+          isCrossFilter &&
+          canEmitCrossFilter && (
             <Menu.Item key={MENU_KEYS.CROSS_FILTER_SCOPING}>
               {t('Cross-filter scoping')}
             </Menu.Item>

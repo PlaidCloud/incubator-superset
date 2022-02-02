@@ -20,6 +20,7 @@ from typing import Any
 # pylint: disable=too-few-public-methods
 from typing import Any, Optional
 
+from flask import g
 from flask_appbuilder.security.sqla.models import Role
 from flask_babel import lazy_gettext as _
 from sqlalchemy import and_, or_
@@ -30,7 +31,8 @@ from superset.connectors.sqla.models import SqlaTable
 from superset.models.core import FavStar
 from superset.models.dashboard import Dashboard
 from superset.models.slice import Slice
-from superset.views.base import BaseFilter, get_user_roles, is_user_admin
+from superset.security.guest_token import GuestTokenResourceType, GuestUser
+from superset.views.base import BaseFilter, is_user_admin
 from superset.views.base_api import BaseFavoriteFilter
 
 
@@ -52,7 +54,9 @@ class DashboardTitleOrSlugFilter(BaseFilter):
         )
 
 
-class DashboardFavoriteFilter(BaseFavoriteFilter):
+class DashboardFavoriteFilter(  # pylint: disable=too-few-public-methods
+    BaseFavoriteFilter
+):
     """
     Custom filter for the GET list that filters all dashboards that a user has favored
     """
@@ -62,7 +66,7 @@ class DashboardFavoriteFilter(BaseFavoriteFilter):
     model = Dashboard
 
 
-class DashboardAccessFilter(BaseFilter):
+class DashboardAccessFilter(BaseFilter):  # pylint: disable=too-few-public-methods
     """
     List dashboards with the following criteria:
         1. Those which the user owns
@@ -122,7 +126,7 @@ class DashboardAccessFilter(BaseFilter):
             )
         )
 
-        dashboard_rbac_or_filters = []
+        feature_flagged_filters = []
         if is_feature_enabled("DASHBOARD_RBAC"):
             roles_based_query = (
                 db.session.query(Dashboard.id)
@@ -131,26 +135,38 @@ class DashboardAccessFilter(BaseFilter):
                     and_(
                         Dashboard.published.is_(True),
                         dashboard_has_roles,
-                        Role.id.in_([x.id for x in get_user_roles()]),
+                        Role.id.in_([x.id for x in security_manager.get_user_roles()]),
                     ),
                 )
             )
 
-            dashboard_rbac_or_filters.append(Dashboard.id.in_(roles_based_query))
+            feature_flagged_filters.append(Dashboard.id.in_(roles_based_query))
+
+        if is_feature_enabled("EMBEDDED_SUPERSET") and security_manager.is_guest_user(
+            g.user
+        ):
+            guest_user: GuestUser = g.user
+            embedded_dashboard_ids = [
+                r["id"]
+                for r in guest_user.resources
+                if r["type"] == GuestTokenResourceType.DASHBOARD.value
+            ]
+            if len(embedded_dashboard_ids) != 0:
+                feature_flagged_filters.append(Dashboard.id.in_(embedded_dashboard_ids))
 
         query = query.filter(
             or_(
                 Dashboard.id.in_(owner_ids_query),
                 Dashboard.id.in_(datasource_perm_query),
                 Dashboard.id.in_(users_favorite_dash_query),
-                *dashboard_rbac_or_filters,
+                *feature_flagged_filters,
             )
         )
 
         return query
 
 
-class FilterRelatedRoles(BaseFilter):
+class FilterRelatedRoles(BaseFilter):  # pylint: disable=too-few-public-methods
     """
     A filter to allow searching for related roles of a resource.
 
@@ -167,4 +183,20 @@ class FilterRelatedRoles(BaseFilter):
         role_model = security_manager.role_model
         if value:
             return query.filter(role_model.name.ilike(f"%{value}%"),)
+        return query
+
+
+class DashboardCertifiedFilter(BaseFilter):  # pylint: disable=too-few-public-methods
+    """
+    Custom filter for the GET list that filters all certified dashboards
+    """
+
+    name = _("Is certified")
+    arg_name = "dashboard_is_certified"
+
+    def apply(self, query: Query, value: Any) -> Query:
+        if value is True:
+            return query.filter(and_(Dashboard.certified_by.isnot(None),))
+        if value is False:
+            return query.filter(and_(Dashboard.certified_by.is_(None),))
         return query
