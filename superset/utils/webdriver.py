@@ -16,6 +16,7 @@
 # under the License.
 
 import logging
+from enum import Enum
 from time import sleep
 from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
 
@@ -25,7 +26,7 @@ from selenium.common.exceptions import (
     TimeoutException,
     WebDriverException,
 )
-from selenium.webdriver import chrome, firefox
+from selenium.webdriver import chrome, firefox, FirefoxProfile
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.support import expected_conditions as EC
@@ -42,23 +43,33 @@ if TYPE_CHECKING:
     from flask_appbuilder.security.sqla.models import User
 
 
+class DashboardStandaloneMode(Enum):
+    HIDE_NAV = 1
+    HIDE_NAV_AND_TITLE = 2
+    REPORT = 3
+
+
 class WebDriverProxy:
-    def __init__(
-        self, driver_type: str, window: Optional[WindowSize] = None,
-    ):
+    def __init__(self, driver_type: str, window: Optional[WindowSize] = None):
         self._driver_type = driver_type
         self._window: WindowSize = window or (800, 600)
         self._screenshot_locate_wait = current_app.config["SCREENSHOT_LOCATE_WAIT"]
         self._screenshot_load_wait = current_app.config["SCREENSHOT_LOAD_WAIT"]
 
     def create(self) -> WebDriver:
+        pixel_density = current_app.config["WEBDRIVER_WINDOW"].get("pixel_density", 1)
         if self._driver_type == "firefox":
             driver_class = firefox.webdriver.WebDriver
             options = firefox.options.Options()
+            profile = FirefoxProfile()
+            profile.set_preference("layout.css.devPixelsPerPx", str(pixel_density))
+            kwargs: Dict[Any, Any] = dict(options=options, firefox_profile=profile)
         elif self._driver_type == "chrome":
             driver_class = chrome.webdriver.WebDriver
             options = chrome.options.Options()
+            options.add_argument(f"--force-device-scale-factor={pixel_density}")
             options.add_argument(f"--window-size={self._window[0]},{self._window[1]}")
+            kwargs = dict(options=options)
         else:
             raise Exception(f"Webdriver name ({self._driver_type}) not supported")
         # Prepare args for the webdriver init
@@ -67,7 +78,6 @@ class WebDriverProxy:
         for arg in current_app.config["WEBDRIVER_OPTION_ARGS"]:
             options.add_argument(arg)
 
-        kwargs: Dict[Any, Any] = dict(options=options)
         kwargs.update(current_app.config["WEBDRIVER_CONFIGURATION"])
         logger.info("Init selenium driver")
 
@@ -94,9 +104,8 @@ class WebDriverProxy:
             pass
 
     def get_screenshot(
-        self, url: str, element_name: str, user: "User",
+        self, url: str, element_name: str, user: "User"
     ) -> Optional[bytes]:
-
         driver = self.auth(user)
         driver.set_window_size(*self._window)
         driver.get(url)
@@ -125,10 +134,11 @@ class WebDriverProxy:
             ]
             logger.debug("Wait %i seconds for chart animation", selenium_animation_wait)
             sleep(selenium_animation_wait)
-            logger.info("Taking a PNG screenshot or url %s", url)
+            logger.info("Taking a PNG screenshot of url %s", url)
             img = element.screenshot_as_png
         except TimeoutException:
             logger.warning("Selenium timed out requesting url %s", url, exc_info=True)
+            img = element.screenshot_as_png
         except StaleElementReferenceException:
             logger.error(
                 "Selenium got a stale element while requesting url %s",

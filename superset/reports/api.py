@@ -53,6 +53,7 @@ from superset.reports.schemas import (
 from superset.views.base_api import (
     BaseSupersetModelRestApi,
     RelatedFieldFilter,
+    requires_json,
     statsd_metrics,
 )
 from superset.views.filters import FilterRelatedOwners
@@ -83,6 +84,7 @@ class ReportScheduleRestApi(BaseSupersetModelRestApi):
         "active",
         "chart.id",
         "chart.slice_name",
+        "chart.viz_type",
         "context_markdown",
         "creation_method",
         "crontab",
@@ -91,6 +93,7 @@ class ReportScheduleRestApi(BaseSupersetModelRestApi):
         "database.database_name",
         "database.id",
         "description",
+        "force_screenshot",
         "grace_period",
         "last_eval_dttm",
         "last_state",
@@ -106,6 +109,7 @@ class ReportScheduleRestApi(BaseSupersetModelRestApi):
         "recipients.type",
         "report_format",
         "sql",
+        "timezone",
         "type",
         "validator_config_json",
         "validator_type",
@@ -127,6 +131,7 @@ class ReportScheduleRestApi(BaseSupersetModelRestApi):
         "creation_method",
         "crontab",
         "crontab_humanized",
+        "description",
         "id",
         "last_eval_dttm",
         "last_state",
@@ -136,6 +141,7 @@ class ReportScheduleRestApi(BaseSupersetModelRestApi):
         "owners.last_name",
         "recipients.id",
         "recipients.type",
+        "timezone",
         "type",
     ]
     add_columns = [
@@ -147,6 +153,7 @@ class ReportScheduleRestApi(BaseSupersetModelRestApi):
         "dashboard",
         "database",
         "description",
+        "force_screenshot",
         "grace_period",
         "log_retention",
         "name",
@@ -154,6 +161,7 @@ class ReportScheduleRestApi(BaseSupersetModelRestApi):
         "recipients",
         "report_format",
         "sql",
+        "timezone",
         "type",
         "validator_config_json",
         "validator_type",
@@ -165,6 +173,7 @@ class ReportScheduleRestApi(BaseSupersetModelRestApi):
 
     order_columns = [
         "active",
+        "description",
         "created_by.first_name",
         "changed_by.first_name",
         "changed_on",
@@ -265,9 +274,9 @@ class ReportScheduleRestApi(BaseSupersetModelRestApi):
 
     @expose("/", methods=["POST"])
     @protect()
-    @safe
     @statsd_metrics
     @permission_name("post")
+    @requires_json
     def post(self) -> Response:
         """Creates a new Report Schedule
         ---
@@ -302,8 +311,6 @@ class ReportScheduleRestApi(BaseSupersetModelRestApi):
             500:
               $ref: '#/components/responses/500'
         """
-        if not request.is_json:
-            return self.response_400(message="Request is not JSON")
         try:
             item = self.add_model_schema.load(request.json)
         # This validates custom Schema with custom validations
@@ -330,7 +337,8 @@ class ReportScheduleRestApi(BaseSupersetModelRestApi):
     @safe
     @statsd_metrics
     @permission_name("put")
-    def put(self, pk: int) -> Response:  # pylint: disable=too-many-return-statements
+    @requires_json
+    def put(self, pk: int) -> Response:
         """Updates an Report Schedule
         ---
         put:
@@ -372,8 +380,6 @@ class ReportScheduleRestApi(BaseSupersetModelRestApi):
             500:
               $ref: '#/components/responses/500'
         """
-        if not request.is_json:
-            return self.response_400(message="Request is not JSON")
         try:
             item = self.edit_model_schema.load(request.json)
         # This validates custom Schema with custom validations

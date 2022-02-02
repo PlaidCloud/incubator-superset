@@ -14,10 +14,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-# pylint: disable=too-few-public-methods
+# pylint: disable=too-many-lines
 """A set of constants and methods to manage permissions and security"""
 import logging
 import re
+import time
 from collections import defaultdict
 from typing import (
     Any,
@@ -32,7 +33,8 @@ from typing import (
     Union,
 )
 
-from flask import current_app, g
+import jwt
+from flask import current_app, Flask, g, Request
 from flask_appbuilder import Model
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.security.sqla.manager import SecurityManager
@@ -51,7 +53,7 @@ from flask_appbuilder.security.views import (
     ViewMenuModelView,
 )
 from flask_appbuilder.widgets import ListWidget
-from flask_login import AnonymousUserMixin
+from flask_login import AnonymousUserMixin, LoginManager
 from sqlalchemy import and_, or_
 from sqlalchemy.engine.base import Connection
 from sqlalchemy.orm import Session
@@ -63,14 +65,22 @@ from superset.connectors.connector_registry import ConnectorRegistry
 from superset.constants import RouteMethod
 from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
 from superset.exceptions import SupersetSecurityException
+from superset.security.guest_token import (
+    GuestToken,
+    GuestTokenResources,
+    GuestTokenResourceType,
+    GuestTokenRlsRule,
+    GuestTokenUser,
+    GuestUser,
+)
 from superset.utils.core import DatasourceName, RowLevelSecurityFilterType
 
 if TYPE_CHECKING:
     from superset.common.query_context import QueryContext
     from superset.connectors.base.models import BaseDatasource
     from superset.connectors.druid.models import DruidCluster
-    from superset.models.dashboard import Dashboard
     from superset.models.core import Database
+    from superset.models.dashboard import Dashboard
     from superset.models.sql_lab import Query
     from superset.sql_parse import Table
     from superset.viz import BaseViz
@@ -78,7 +88,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class SupersetSecurityListWidget(ListWidget):
+class SupersetSecurityListWidget(ListWidget):  # pylint: disable=too-few-public-methods
     """
     Redeclaring to avoid circular imports
     """
@@ -86,7 +96,7 @@ class SupersetSecurityListWidget(ListWidget):
     template = "superset/fab_overrides/list.html"
 
 
-class SupersetRoleListWidget(ListWidget):
+class SupersetRoleListWidget(ListWidget):  # pylint: disable=too-few-public-methods
     """
     Role model view from FAB already uses a custom list widget override
     So we override the override
@@ -172,6 +182,7 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         "can_approve",
         "can_update_role",
         "all_query_access",
+        "can_grant_guest_token",
     }
 
     READ_ONLY_PERMISSION = {
@@ -179,6 +190,7 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         "can_list",
         "can_get",
         "can_external_metadata",
+        "can_external_metadata_by_name",
         "can_read",
     }
 
@@ -219,6 +231,17 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         "all_database_access",
         "all_query_access",
     )
+
+    guest_user_cls = GuestUser
+
+    def create_login_manager(self, app: Flask) -> LoginManager:
+        # pylint: disable=import-outside-toplevel
+        from superset.extensions import feature_flag_manager
+
+        lm = super().create_login_manager(app)
+        if feature_flag_manager.is_feature_enabled("EMBEDDED_SUPERSET"):
+            lm.request_loader(self.get_guest_user_from_request)
+        return lm
 
     def get_schema_perm(  # pylint: disable=no-self-use
         self, database: Union["Database", str], schema: Optional[str] = None
@@ -363,9 +386,7 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         :returns: The access URL
         """
 
-        from superset import conf
-
-        return conf.get("PERMISSION_INSTRUCTIONS_LINK")
+        return current_app.config.get("PERMISSION_INSTRUCTIONS_LINK")
 
     def get_datasource_access_error_object(  # pylint: disable=invalid-name
         self, datasource: "BaseDatasource"
@@ -427,9 +448,7 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         :returns: The access URL
         """
 
-        from superset import conf
-
-        return conf.get("PERMISSION_INSTRUCTIONS_LINK")
+        return current_app.config.get("PERMISSION_INSTRUCTIONS_LINK")
 
     def get_user_datasources(self) -> List["BaseDatasource"]:
         """
@@ -527,6 +546,7 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         :returns: The list of accessible SQL schemas
         """
 
+        # pylint: disable=import-outside-toplevel
         from superset.connectors.sqla.models import SqlaTable
 
         if hierarchical and self.can_access_database(database):
@@ -628,6 +648,7 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         Creates missing FAB permissions for datasources, schemas and metrics.
         """
 
+        # pylint: disable=import-outside-toplevel
         from superset.models import core as models
 
         logger.info("Fetching a set of all perms to lookup which ones are missing")
@@ -677,8 +698,6 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         Initialize the Superset application with security roles and such.
         """
 
-        from superset import conf
-
         logger.info("Syncing role definition")
 
         self.create_custom_permissions()
@@ -691,9 +710,13 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         self.set_role("sql_lab", self._is_sql_lab_pvm)
 
         # Configure public role
-        if conf["PUBLIC_ROLE_LIKE"]:
-            self.copy_role(conf["PUBLIC_ROLE_LIKE"], self.auth_role_public, merge=True)
-        if conf.get("PUBLIC_ROLE_LIKE_GAMMA", False):
+        if current_app.config["PUBLIC_ROLE_LIKE"]:
+            self.copy_role(
+                current_app.config["PUBLIC_ROLE_LIKE"],
+                self.auth_role_public,
+                merge=True,
+            )
+        if current_app.config.get("PUBLIC_ROLE_LIKE_GAMMA", False):
             logger.warning(
                 "The config `PUBLIC_ROLE_LIKE_GAMMA` is deprecated and will be removed "
                 "in Superset 1.0. Please use `PUBLIC_ROLE_LIKE` instead."
@@ -899,7 +922,7 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
 
         return pvm.permission.name in {"can_override_role_permissions", "can_approve"}
 
-    def set_perm(  # pylint: disable=no-self-use,unused-argument
+    def set_perm(  # pylint: disable=unused-argument
         self, mapper: Mapper, connection: Connection, target: "BaseDatasource"
     ) -> None:
         """
@@ -909,7 +932,7 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         :param connection: The DB-API connection
         :param target: The mapped instance being persisted
         """
-        link_table = target.__table__  # pylint: disable=no-member
+        link_table = target.__table__
         if target.perm != target.get_perm():
             connection.execute(
                 link_table.update()
@@ -973,8 +996,7 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
                 )
 
     def raise_for_access(
-        # pylint: disable=too-many-arguments,too-many-branches,
-        # pylint: disable=too-many-locals
+        # pylint: disable=too-many-arguments,too-many-locals
         self,
         database: Optional["Database"] = None,
         datasource: Optional["BaseDatasource"] = None,
@@ -995,7 +1017,9 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         :raises SupersetSecurityException: If the user cannot access the resource
         """
 
+        # pylint: disable=import-outside-toplevel
         from superset.connectors.sqla.models import SqlaTable
+        from superset.extensions import feature_flag_manager
         from superset.sql_parse import Table
 
         if database and table or query:
@@ -1045,13 +1069,16 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
 
             assert datasource
 
-            from superset.extensions import feature_flag_manager
+            should_check_dashboard_access = (
+                feature_flag_manager.is_feature_enabled("DASHBOARD_RBAC")
+                or self.is_guest_user()
+            )
 
             if not (
                 self.can_access_schema(datasource)
                 or self.can_access("datasource_access", datasource.perm or "")
                 or (
-                    feature_flag_manager.is_feature_enabled("DASHBOARD_RBAC")
+                    should_check_dashboard_access
                     and self.can_access_based_on_dashboard(datasource)
                 )
             ):
@@ -1077,6 +1104,33 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
     def get_anonymous_user(self) -> User:  # pylint: disable=no-self-use
         return AnonymousUserMixin()
 
+    def get_user_roles(self, user: Optional[User] = None) -> List[Role]:
+        if not user:
+            user = g.user
+        if user.is_anonymous:
+            public_role = current_app.config.get("AUTH_ROLE_PUBLIC")
+            return [self.get_public_role()] if public_role else []
+        return user.roles
+
+    def get_guest_rls_filters(
+        self, dataset: "BaseDatasource"
+    ) -> List[GuestTokenRlsRule]:
+        """
+        Retrieves the row level security filters for the current user and the dataset,
+        if the user is authenticated with a guest token.
+        :param dataset: The dataset to check against
+        :return: A list of filters
+        """
+        guest_user = self.get_current_guest_user_if_guest()
+        if guest_user:
+            return [
+                rule
+                for rule in guest_user.rls
+                if not rule.get("dataset")
+                or str(rule.get("dataset")) == str(dataset.id)
+            ]
+        return []
+
     def get_rls_filters(self, table: "BaseDatasource") -> List[SqlaQuery]:
         """
         Retrieves the appropriate row level security filters for the current user and
@@ -1085,18 +1139,15 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         :param table: The table to check against
         :returns: A list of filters
         """
-        if hasattr(g, "user") and hasattr(g.user, "id"):
+        if hasattr(g, "user"):
+            # pylint: disable=import-outside-toplevel
             from superset.connectors.sqla.models import (
                 RLSFilterRoles,
                 RLSFilterTables,
                 RowLevelSecurityFilter,
             )
 
-            user_roles = (
-                self.get_session.query(assoc_user_role.c.role_id)
-                .filter(assoc_user_role.c.user_id == g.user.get_id())
-                .subquery()
-            )
+            user_roles = [role.id for role in self.get_user_roles()]
             regular_filter_roles = (
                 self.get_session.query(RLSFilterRoles.c.rls_filter_id)
                 .join(RowLevelSecurityFilter)
@@ -1160,38 +1211,64 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         return ids
 
     @staticmethod
-    def raise_for_dashboard_access(dashboard: "Dashboard") -> None:
+    def raise_for_user_activity_access(user_id: int) -> None:
+        user = g.user if g.user and g.user.get_id() else None
+        if not user or (
+            not current_app.config["ENABLE_BROAD_ACTIVITY_ACCESS"]
+            and user_id != user.id
+        ):
+            raise SupersetSecurityException(
+                SupersetError(
+                    error_type=SupersetErrorType.USER_ACTIVITY_SECURITY_ACCESS_ERROR,
+                    message="Access to user's activity data is restricted",
+                    level=ErrorLevel.ERROR,
+                )
+            )
+
+    def raise_for_dashboard_access(self, dashboard: "Dashboard") -> None:
         """
         Raise an exception if the user cannot access the dashboard.
+        This does not check for the required role/permission pairs,
+        it only concerns itself with entity relationships.
 
         :param dashboard: Dashboard the user wants access to
         :raises DashboardAccessDeniedError: If the user cannot access the resource
         """
-        from superset.dashboards.commands.exceptions import DashboardAccessDeniedError
-        from superset.views.base import get_user_roles, is_user_admin
-        from superset.views.utils import is_owner
+        # pylint: disable=import-outside-toplevel
         from superset import is_feature_enabled
+        from superset.dashboards.commands.exceptions import DashboardAccessDeniedError
+        from superset.views.base import is_user_admin
+        from superset.views.utils import is_owner
 
-        if is_feature_enabled("DASHBOARD_RBAC"):
-            has_rbac_access = any(
-                dashboard_role.id in [user_role.id for user_role in get_user_roles()]
+        def has_rbac_access() -> bool:
+            return (not is_feature_enabled("DASHBOARD_RBAC")) or any(
+                dashboard_role.id
+                in [user_role.id for user_role in self.get_user_roles()]
                 for dashboard_role in dashboard.roles
             )
+
+        if self.is_guest_user():
+            can_access = self.has_guest_access(
+                GuestTokenResourceType.DASHBOARD, dashboard.id
+            )
+        else:
             can_access = (
                 is_user_admin()
                 or is_owner(dashboard, g.user)
-                or (dashboard.published and has_rbac_access)
+                or (dashboard.published and has_rbac_access())
+                or (not dashboard.published and not dashboard.roles)
             )
 
-            if not can_access:
-                raise DashboardAccessDeniedError()
+        if not can_access:
+            raise DashboardAccessDeniedError()
 
     @staticmethod
     def can_access_based_on_dashboard(datasource: "BaseDatasource") -> bool:
+        # pylint: disable=import-outside-toplevel
         from superset import db
         from superset.dashboards.filters import DashboardAccessFilter
-        from superset.models.slice import Slice
         from superset.models.dashboard import Dashboard
+        from superset.models.slice import Slice
 
         datasource_class = type(datasource)
         query = (
@@ -1206,3 +1283,107 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
 
         exists = db.session.query(query.exists()).scalar()
         return exists
+
+    @staticmethod
+    def _get_current_epoch_time() -> float:
+        """ This is used so the tests can mock time """
+        return time.time()
+
+    def create_guest_access_token(
+        self,
+        user: GuestTokenUser,
+        resources: GuestTokenResources,
+        rls: List[GuestTokenRlsRule],
+    ) -> bytes:
+        secret = current_app.config["GUEST_TOKEN_JWT_SECRET"]
+        algo = current_app.config["GUEST_TOKEN_JWT_ALGO"]
+        exp_seconds = current_app.config["GUEST_TOKEN_JWT_EXP_SECONDS"]
+
+        # calculate expiration time
+        now = self._get_current_epoch_time()
+        exp = now + (exp_seconds * 1000)
+        claims = {
+            "user": user,
+            "resources": resources,
+            "rls_rules": rls,
+            # standard jwt claims:
+            "iat": now,  # issued at
+            "exp": exp,  # expiration time
+        }
+        token = jwt.encode(claims, secret, algorithm=algo)
+        return token
+
+    def get_guest_user_from_request(self, req: Request) -> Optional[GuestUser]:
+        """
+        If there is a guest token in the request (used for embedded),
+        parses the token and returns the guest user.
+        This is meant to be used as a request loader for the LoginManager.
+        The LoginManager will only call this if an active session cannot be found.
+
+        :return: A guest user object
+        """
+        raw_token = req.headers.get(current_app.config["GUEST_TOKEN_HEADER_NAME"])
+        if raw_token is None:
+            return None
+
+        try:
+            token = self.parse_jwt_guest_token(raw_token)
+            if token.get("user") is None:
+                raise ValueError("Guest token does not contain a user claim")
+            if token.get("resources") is None:
+                raise ValueError("Guest token does not contain a resources claim")
+            if token.get("rls_rules") is None:
+                raise ValueError("Guest token does not contain an rls_rules claim")
+        except Exception:  # pylint: disable=broad-except
+            # The login manager will handle sending 401s.
+            # We don't need to send a special error message.
+            logger.warning("Invalid guest token", exc_info=True)
+            return None
+        else:
+            return self.get_guest_user_from_token(cast(GuestToken, token))
+
+    def get_guest_user_from_token(self, token: GuestToken) -> GuestUser:
+        return self.guest_user_cls(
+            token=token, roles=[self.find_role(current_app.config["GUEST_ROLE_NAME"])],
+        )
+
+    @staticmethod
+    def parse_jwt_guest_token(raw_token: str) -> Dict[str, Any]:
+        """
+        Parses a guest token. Raises an error if the jwt fails standard claims checks.
+        :param raw_token: the token gotten from the request
+        :return: the same token that was passed in, tested but unchanged
+        """
+        secret = current_app.config["GUEST_TOKEN_JWT_SECRET"]
+        algo = current_app.config["GUEST_TOKEN_JWT_ALGO"]
+        return jwt.decode(raw_token, secret, algorithms=[algo])
+
+    @staticmethod
+    def is_guest_user(user: Optional[Any] = None) -> bool:
+        # pylint: disable=import-outside-toplevel
+        from superset import is_feature_enabled
+
+        if not is_feature_enabled("EMBEDDED_SUPERSET"):
+            return False
+        if not user:
+            user = g.user
+        return hasattr(user, "is_guest_user") and user.is_guest_user
+
+    def get_current_guest_user_if_guest(self) -> Optional[GuestUser]:
+
+        if self.is_guest_user():
+            return g.user
+        return None
+
+    def has_guest_access(
+        self, resource_type: GuestTokenResourceType, resource_id: Union[str, int]
+    ) -> bool:
+        user = self.get_current_guest_user_if_guest()
+        if not user:
+            return False
+
+        strid = str(resource_id)
+        for resource in user.resources:
+            if resource["type"] == resource_type.value and str(resource["id"]) == strid:
+                return True
+        return False
