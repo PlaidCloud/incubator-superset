@@ -26,16 +26,11 @@ import DatabaseSelector from '.';
 const SupersetClientGet = jest.spyOn(SupersetClient, 'get');
 
 const createProps = () => ({
-  db: {
-    id: 1,
-    database_name: 'test',
-    backend: 'test-postgresql',
-    allow_multi_schema_metadata_fetch: false,
-  },
+  dbId: 1,
   formMode: false,
   isDatabaseSelectEnabled: true,
   readOnly: false,
-  schema: undefined,
+  schema: 'public',
   sqlLabMode: true,
   getDbList: jest.fn(),
   getTableList: jest.fn(),
@@ -62,11 +57,11 @@ beforeEach(() => {
       }
       return {
         json: {
-          count: 2,
+          count: 1,
           description_columns: {},
-          ids: [1, 2],
+          ids: [1],
           label_columns: {
-            allow_file_upload: 'Allow Csv Upload',
+            allow_csv_upload: 'Allow Csv Upload',
             allow_ctas: 'Allow Ctas',
             allow_cvas: 'Allow Cvas',
             allow_dml: 'Allow Dml',
@@ -88,7 +83,7 @@ beforeEach(() => {
             id: 'Id',
           },
           list_columns: [
-            'allow_file_upload',
+            'allow_csv_upload',
             'allow_ctas',
             'allow_cvas',
             'allow_dml',
@@ -110,7 +105,7 @@ beforeEach(() => {
           ],
           list_title: 'List Database',
           order_columns: [
-            'allow_file_upload',
+            'allow_csv_upload',
             'allow_dml',
             'allow_run_async',
             'changed_on',
@@ -121,7 +116,7 @@ beforeEach(() => {
           ],
           result: [
             {
-              allow_file_upload: false,
+              allow_csv_upload: false,
               allow_ctas: false,
               allow_cvas: false,
               allow_dml: false,
@@ -134,31 +129,11 @@ beforeEach(() => {
               changed_on: '2021-03-09T19:02:07.141095',
               changed_on_delta_humanized: 'a day ago',
               created_by: null,
-              database_name: 'test-postgres',
+              database_name: 'examples',
               explore_database_id: 1,
               expose_in_sqllab: true,
               force_ctas_schema: null,
               id: 1,
-            },
-            {
-              allow_csv_upload: false,
-              allow_ctas: false,
-              allow_cvas: false,
-              allow_dml: false,
-              allow_multi_schema_metadata_fetch: false,
-              allow_run_async: false,
-              allows_cost_estimate: null,
-              allows_subquery: true,
-              allows_virtual_table_explore: true,
-              backend: 'mysql',
-              changed_on: '2021-03-09T19:02:07.141095',
-              changed_on_delta_humanized: 'a day ago',
-              created_by: null,
-              database_name: 'test-mysql',
-              explore_database_id: 1,
-              expose_in_sqllab: true,
-              force_ctas_schema: null,
-              id: 2,
             },
           ],
         },
@@ -169,105 +144,59 @@ beforeEach(() => {
 
 test('Should render', async () => {
   const props = createProps();
-  render(<DatabaseSelector {...props} />, { useRedux: true });
+  render(<DatabaseSelector {...props} />);
   expect(await screen.findByTestId('DatabaseSelector')).toBeInTheDocument();
 });
 
 test('Refresh should work', async () => {
   const props = createProps();
 
-  render(<DatabaseSelector {...props} />, { useRedux: true });
-
-  const select = screen.getByRole('combobox', {
-    name: 'Select schema or type schema name',
-  });
-
-  userEvent.click(select);
+  render(<DatabaseSelector {...props} />);
 
   await waitFor(() => {
     expect(SupersetClientGet).toBeCalledTimes(2);
-    expect(props.getDbList).toBeCalledTimes(0);
+    expect(props.getDbList).toBeCalledTimes(1);
     expect(props.getTableList).toBeCalledTimes(0);
     expect(props.handleError).toBeCalledTimes(0);
     expect(props.onDbChange).toBeCalledTimes(0);
     expect(props.onSchemaChange).toBeCalledTimes(0);
-    expect(props.onSchemasLoad).toBeCalledTimes(0);
+    expect(props.onSchemasLoad).toBeCalledTimes(1);
     expect(props.onUpdate).toBeCalledTimes(0);
   });
 
-  userEvent.click(screen.getByRole('button', { name: 'refresh' }));
+  userEvent.click(screen.getByRole('button'));
 
   await waitFor(() => {
     expect(SupersetClientGet).toBeCalledTimes(3);
     expect(props.getDbList).toBeCalledTimes(1);
     expect(props.getTableList).toBeCalledTimes(0);
     expect(props.handleError).toBeCalledTimes(0);
-    expect(props.onDbChange).toBeCalledTimes(0);
-    expect(props.onSchemaChange).toBeCalledTimes(0);
+    expect(props.onDbChange).toBeCalledTimes(1);
+    expect(props.onSchemaChange).toBeCalledTimes(1);
     expect(props.onSchemasLoad).toBeCalledTimes(2);
-    expect(props.onUpdate).toBeCalledTimes(0);
+    expect(props.onUpdate).toBeCalledTimes(1);
   });
 });
 
 test('Should database select display options', async () => {
   const props = createProps();
-  render(<DatabaseSelector {...props} />, { useRedux: true });
-  const select = screen.getByRole('combobox', {
-    name: 'Select database or type database name',
-  });
-  expect(select).toBeInTheDocument();
-  userEvent.click(select);
-  expect(await screen.findByText('test-mysql')).toBeInTheDocument();
+  render(<DatabaseSelector {...props} />);
+  const selector = await screen.findByText('Database:');
+  expect(selector).toBeInTheDocument();
+  expect(selector.parentElement).toHaveTextContent(
+    'Database:postgresql examples',
+  );
 });
 
 test('Should schema select display options', async () => {
   const props = createProps();
-  render(<DatabaseSelector {...props} />, { useRedux: true });
-  const select = screen.getByRole('combobox', {
-    name: 'Select schema or type schema name',
-  });
-  expect(select).toBeInTheDocument();
-  userEvent.click(select);
-  expect(
-    await screen.findByRole('option', { name: 'public' }),
-  ).toBeInTheDocument();
-  expect(
-    await screen.findByRole('option', { name: 'information_schema' }),
-  ).toBeInTheDocument();
-});
+  render(<DatabaseSelector {...props} />);
 
-test('Sends the correct db when changing the database', async () => {
-  const props = createProps();
-  render(<DatabaseSelector {...props} />, { useRedux: true });
-  const select = screen.getByRole('combobox', {
-    name: 'Select database or type database name',
-  });
-  expect(select).toBeInTheDocument();
-  userEvent.click(select);
-  userEvent.click(await screen.findByText('test-mysql'));
-  await waitFor(() =>
-    expect(props.onDbChange).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 2,
-        database_name: 'test-mysql',
-        backend: 'mysql',
-        allow_multi_schema_metadata_fetch: false,
-      }),
-    ),
-  );
-});
+  const selector = await screen.findByText('Schema:');
+  expect(selector).toBeInTheDocument();
+  expect(selector.parentElement).toHaveTextContent('Schema: public');
 
-test('Sends the correct schema when changing the schema', async () => {
-  const props = createProps();
-  render(<DatabaseSelector {...props} />, { useRedux: true });
-  const select = screen.getByRole('combobox', {
-    name: 'Select schema or type schema name',
-  });
-  expect(select).toBeInTheDocument();
-  userEvent.click(select);
-  const schemaOption = await screen.findAllByText('information_schema');
-  userEvent.click(schemaOption[1]);
-  await waitFor(() =>
-    expect(props.onSchemaChange).toHaveBeenCalledWith('information_schema'),
-  );
+  userEvent.click(screen.getByRole('button'));
+
+  expect(await screen.findByText('Select a schema (2)')).toBeInTheDocument();
 });
