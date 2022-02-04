@@ -13,7 +13,7 @@ steps:
         -t gcr.io/plaidcloud-build/superset/py:$TAG_NAME \
         --cache-from gcr.io/plaidcloud-build/superset/py:$(cat tmp/py) \
         --target=superset-py \
-        --build-arg PY_VER=3.7.9 \
+        --build-arg PY_VER=3.8.12 \
         .
 
       (docker pull "gcr.io/plaidcloud-build/superset/node:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/node) ||
@@ -24,7 +24,7 @@ steps:
         --cache-from gcr.io/plaidcloud-build/superset/py:$TAG_NAME \
         --cache-from gcr.io/plaidcloud-build/superset/node:$(cat tmp/node) \
         --target=superset-node \
-        --build-arg PY_VER=3.7.9 \
+        --build-arg PY_VER=3.8.12 \
         .
 
       (docker pull "gcr.io/plaidcloud-build/superset/production:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/production) ||
@@ -36,7 +36,7 @@ steps:
         --cache-from gcr.io/plaidcloud-build/superset/node:$TAG_NAME \
         --cache-from gcr.io/plaidcloud-build/superset/production:$(cat tmp/production) \
         --target lean \
-        --build-arg PY_VER=3.7.9 \
+        --build-arg PY_VER=3.8.12 \
         .
 
       (docker pull "gcr.io/plaidcloud-build/superset/ci:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/ci) ||
@@ -49,7 +49,7 @@ steps:
         --cache-from gcr.io/plaidcloud-build/superset/production:$TAG_NAME \
         --cache-from gcr.io/plaidcloud-build/superset/ci:$(cat tmp/ci) \
         --target lean \
-        --build-arg PY_VER=3.7.9 \
+        --build-arg PY_VER=3.8.12 \
         .
 
       (docker pull "gcr.io/plaidcloud-build/superset/dev:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/dev) ||
@@ -62,7 +62,7 @@ steps:
         --cache-from gcr.io/plaidcloud-build/superset/production:$TAG_NAME \
         --cache-from gcr.io/plaidcloud-build/superset/ci:$TAG_NAME \
         --cache-from gcr.io/plaidcloud-build/superset/dev:$(cat tmp/dev) \
-        --build-arg PY_VER=3.7.9 \
+        --build-arg PY_VER=3.8.12 \
         .
 
 substitutions:
