@@ -22,6 +22,7 @@ import rison from 'rison';
 import { Select } from 'src/components/Select';
 import Label from 'src/components/Label';
 import RefreshLabel from 'src/components/RefreshLabel';
+import { useToasts } from 'src/components/MessageToasts/withToasts';
 import SupersetAsyncSelect from 'src/components/AsyncSelect';
 
 const FieldTitle = styled.p`
@@ -53,6 +54,29 @@ const DatabaseSelectorWrapper = styled.div`
     flex-grow: 1;
   }
 `;
+
+const DatabaseOption = styled.span`
+  display: inline-flex;
+  align-items: center;
+`;
+
+type DatabaseValue = {
+  label: React.ReactNode;
+  value: number;
+  id: number;
+  database_name: string;
+  backend: string;
+  allow_multi_schema_metadata_fetch: boolean;
+};
+
+export type DatabaseObject = {
+  id: number;
+  database_name: string;
+  backend: string;
+  allow_multi_schema_metadata_fetch: boolean;
+};
+
+type SchemaValue = { label: string; value: string };
 
 const DatabaseOption = styled.span`
   display: inline-flex;
@@ -97,12 +121,85 @@ export default function DatabaseSelector({
   schema,
   sqlLabMode = false,
 }: DatabaseSelectorProps) {
-  const [currentDbId, setCurrentDbId] = useState(dbId);
-  const [currentSchema, setCurrentSchema] = useState<string | undefined>(
-    schema,
+  const [loadingSchemas, setLoadingSchemas] = useState(false);
+  const [schemaOptions, setSchemaOptions] = useState<SchemaValue[]>([]);
+  const [currentDb, setCurrentDb] = useState<DatabaseValue | undefined>(
+    db
+      ? {
+          label: (
+            <SelectLabel backend={db.backend} databaseName={db.database_name} />
+          ),
+          value: db.id,
+          ...db,
+        }
+      : undefined,
   );
-  const [schemaLoading, setSchemaLoading] = useState(false);
-  const [schemaOptions, setSchemaOptions] = useState([]);
+  const [currentSchema, setCurrentSchema] = useState<SchemaValue | undefined>(
+    schema ? { label: schema, value: schema } : undefined,
+  );
+  const [refresh, setRefresh] = useState(0);
+  const { addSuccessToast } = useToasts();
+  /*
+  const loadDatabases = useMemo(
+    () =>
+      async (
+        search: string,
+        page: number,
+        pageSize: number,
+      ): Promise<{
+        data: DatabaseValue[];
+        totalCount: number;
+      }> => {
+        const queryParams = rison.encode({
+          order_columns: 'database_name',
+          order_direction: 'asc',
+          page,
+          page_size: pageSize,
+          ...(formMode || !sqlLabMode
+            ? { filters: [{ col: 'database_name', opr: 'ct', value: search }] }
+            : {
+                filters: [
+                  { col: 'database_name', opr: 'ct', value: search },
+                  {
+                    col: 'expose_in_sqllab',
+                    opr: 'eq',
+                    value: true,
+                  },
+                ],
+              }),
+        });
+        const endpoint = `/api/v1/database/?q=${queryParams}`;
+        return SupersetClient.get({ endpoint }).then(({ json }) => {
+          const { result } = json;
+          if (getDbList) {
+            getDbList(result);
+          }
+          if (result.length === 0) {
+            handleError(t("It seems you don't have access to any database"));
+          }
+          const options = result.map((row: DatabaseObject) => ({
+            label: (
+              <SelectLabel
+                backend={row.backend}
+                databaseName={row.database_name}
+              />
+            ),
+            value: row.id,
+            id: row.id,
+            database_name: row.database_name,
+            backend: row.backend,
+            allow_multi_schema_metadata_fetch:
+              row.allow_multi_schema_metadata_fetch,
+          }));
+          return {
+            data: options,
+            totalCount: options.length,
+          };
+        });
+      },
+    [formMode, getDbList, handleError, sqlLabMode],
+  );
+  */
 
   function fetchSchemas(databaseId: number, forceRefresh = false) {
     const actualDbId = databaseId || dbId;
@@ -134,9 +231,30 @@ export default function DatabaseSelector({
     return Promise.resolve();
   }
 
-  useEffect(() => {
-    if (currentDbId) {
-      fetchSchemas(currentDbId);
+  function dbMutator(data: any) {
+    if (getDbList) {
+      getDbList(data.result);
+    }
+    if (data.result.length === 0) {
+      handleError(t("It seems you don't have access to any database"));
+    }
+    return data.result.map((row: DatabaseObject) => ({
+      ...row,
+      // label is used for the typeahead
+      // ADT2022: I think row should maybe actually be a database value?
+      // Actually, maybe this should match the other place where we map across a list of DatabaseObjects
+      label: `${row.backend} ${row.database_name}`,
+    }));
+  }
+
+  function changeDataBase(
+    value: { label: string; value: number },
+    database: DatabaseValue,
+  ) {
+    setCurrentDb(database);
+    setCurrentSchema(undefined);
+    if (onDbChange) {
+      onDbChange(database);
     }
   }, [currentDbId]);
 
@@ -195,6 +313,14 @@ export default function DatabaseSelector({
     );
   }
 
+  function renderDatabaseOption(db: DatabaseValue) {
+    return (
+      <DatabaseOption title={db.database_name}>
+        <Label type="default">{db.backend}</Label> {db.database_name}
+      </DatabaseOption>
+    );
+  }
+
   function renderSelectRow(select: ReactNode, refreshBtn: ReactNode) {
     return (
       <div className="section">
@@ -225,16 +351,18 @@ export default function DatabaseSelector({
 
     return renderSelectRow(
       <SupersetAsyncSelect
+        ariaLabel={t('Select database or type database name')}
+        optionFilterProps={['database_name', 'value']}
         data-test="select-database"
         dataEndpoint={`/api/v1/database/?q=${queryParams}`}
-        onChange={(db: any) => changeDataBase(db)}
+        onChange={changeDataBase}
         onAsyncError={() =>
           handleError(t('Error while fetching database list'))
         }
         clearable={false}
-        value={currentDbId}
+        value={currentDb}
         valueKey="id"
-        valueRenderer={(db: any) => (
+        valueRenderer={(db: DatabaseValue) => (
           <div>
             <span className="text-muted m-r-5">{t('Project:')}</span>
             {renderDatabaseOption(db)}
@@ -242,9 +370,11 @@ export default function DatabaseSelector({
         )}
         optionRenderer={renderDatabaseOption}
         mutator={dbMutator}
-        placeholder={t('Select a database')}
-        autoSelect
-        isDisabled={!isDatabaseSelectEnabled || readOnly}
+        header={<FormLabel>{t('Database')}</FormLabel>}
+        lazyLoading={false}
+        placeholder={t('Select database or type database name')}
+        disabled={!isDatabaseSelectEnabled || readOnly}
+        // options={loadDatabases}
       />,
       null,
     );

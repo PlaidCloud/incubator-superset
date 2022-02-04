@@ -108,7 +108,22 @@ RUN cd /app \
         && flask fab babel-compile --target superset/translations
 
 COPY plaid /plaid/plaid/
-COPY ./docker/docker-entrypoint.sh /usr/bin/
+
+# COPY ./docker/docker-entrypoint.sh /usr/bin/
+
+# WORKDIR /app
+
+# USER superset
+
+# HEALTHCHECK CMD curl -f "http://localhost:$SUPERSET_PORT/health"
+
+# EXPOSE ${SUPERSET_PORT}
+
+# ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
+
+COPY ./docker/run-server.sh /usr/bin/
+
+RUN chmod a+x /usr/bin/run-server.sh
 
 WORKDIR /app
 
@@ -118,7 +133,7 @@ HEALTHCHECK CMD curl -f "http://localhost:$SUPERSET_PORT/health"
 
 EXPOSE ${SUPERSET_PORT}
 
-ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
+CMD /usr/bin/run-server.sh
 
 ######################################################################
 # Dev image...
