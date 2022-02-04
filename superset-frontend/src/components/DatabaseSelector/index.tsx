@@ -247,10 +247,11 @@ export default function DatabaseSelector({
     if (data.result.length === 0) {
       handleError(t("It seems you don't have access to any database"));
     }
-    return data.result.map((row: any) => ({
+    return data.result.map((row: DatabaseObject) => ({
       ...row,
       // label is used for the typeahead
-      // ADT2022: I think maybe this should actually be returning a DatabaseValue?
+      // ADT2022: I think row should maybe actually be a database value?
+      // Actually, maybe this should match the other place where we map across a list of DatabaseObjects
       label: `${row.backend} ${row.database_name}`,
     }));
   }
@@ -294,6 +295,24 @@ export default function DatabaseSelector({
   }
 
   function renderDatabaseSelect() {
+    const queryParams = rison.encode({
+      order_columns: 'database_name',
+      order_direction: 'asc',
+      page: 0,
+      page_size: -1,
+      ...(formMode || !sqlLabMode
+        ? {}
+        : {
+            filters: [
+              {
+                col: 'expose_in_sqllab',
+                opr: 'eq',
+                value: true,
+              },
+            ],
+          }),
+    });
+
     return renderSelectRow(
       <SupersetAsyncSelect
         ariaLabel={t('Select database or type database name')}
@@ -319,7 +338,7 @@ export default function DatabaseSelector({
         lazyLoading={false}
         placeholder={t('Select database or type database name')}
         disabled={!isDatabaseSelectEnabled || readOnly}
-        options={loadDatabases}
+        //options={loadDatabases}
       />,
       null,
     );
