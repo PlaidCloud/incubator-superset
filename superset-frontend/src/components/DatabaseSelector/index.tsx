@@ -234,6 +234,21 @@ export default function DatabaseSelector({
     }
   }, [currentDb, onSchemasLoad, refresh]);
 
+  function dbMutator(data: any) {
+    if (getDbList) {
+      getDbList(data.result);
+    }
+    if (data.result.length === 0) {
+      handleError(t("It seems you don't have access to any database"));
+    }
+    return data.result.map((row: any) => ({
+      ...row,
+      // label is used for the typeahead
+      // ADT2022: I think maybe this should actually be returning a DatabaseValue?
+      label: `${row.backend} ${row.database_name}`,
+    }));
+  }
+
   function changeDataBase(
     value: { label: string; value: number },
     database: DatabaseValue,
@@ -255,6 +270,14 @@ export default function DatabaseSelector({
     }
   }
 
+  function renderDatabaseOption(db: DatabaseValue) {
+    return (
+      <DatabaseOption title={db.database_name}>
+        <Label type="default">{db.backend}</Label> {db.database_name}
+      </DatabaseOption>
+    );
+  }
+
   function renderSelectRow(select: ReactNode, refreshBtn: ReactNode) {
     return (
       <div className="section">
@@ -266,19 +289,19 @@ export default function DatabaseSelector({
 
   function renderDatabaseSelect() {
     return renderSelectRow(
-      <Select
+      <SupersetAsyncSelect
         ariaLabel={t('Select database or type database name')}
         optionFilterProps={['database_name', 'value']}
         data-test="select-database"
         dataEndpoint={`/api/v1/database/?q=${queryParams}`}
-        onChange={(db: any) => changeDataBase(db)}
+        onChange={changeDatabase}
         onAsyncError={() =>
           handleError(t('Error while fetching database list'))
         }
         clearable={false}
-        value={currentDbId}
+        value={currentDb}
         valueKey="id"
-        valueRenderer={(db: any) => (
+        valueRenderer={(db: DatabaseValue) => (
           <div>
             <span className="text-muted m-r-5">{t('Project:')}</span>
             {renderDatabaseOption(db)}
@@ -286,9 +309,6 @@ export default function DatabaseSelector({
         )}
         optionRenderer={renderDatabaseOption}
         mutator={dbMutator}
-        placeholder={t('Select a database')}
-        autoSelect
-        isDisabled={!isDatabaseSelectEnabled || readOnly}
         header={<FormLabel>{t('Database')}</FormLabel>}
         lazyLoading={false}
         placeholder={t('Select database or type database name')}
