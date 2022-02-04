@@ -24,6 +24,7 @@ import Label from 'src/components/Label';
 import { FormLabel } from 'src/components/Form';
 import RefreshLabel from 'src/components/RefreshLabel';
 import { useToasts } from 'src/components/MessageToasts/withToasts';
+import SupersetAsyncSelect from 'src/components/AsyncSelect';
 
 const DatabaseSelectorWrapper = styled.div`
   ${({ theme }) => `
@@ -85,6 +86,11 @@ export type DatabaseObject = {
 };
 
 type SchemaValue = { label: string; value: string };
+
+const DatabaseOption = styled.span`
+  display: inline-flex;
+  align-items: center;
+`;
 
 interface DatabaseSelectorProps {
   db?: DatabaseObject;
@@ -249,7 +255,7 @@ export default function DatabaseSelector({
     }));
   }
 
-  function changeDataBase(
+  function changeDatabase(
     value: { label: string; value: number },
     database: DatabaseValue,
   ) {
