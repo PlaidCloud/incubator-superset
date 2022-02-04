@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -17,6 +17,33 @@
  * under the License.
  */
 
-const breakpoints = [576, 768, 992, 1200];
+const path = require('path');
 
-export const mq = breakpoints.map((bp) => `@media (max-width: ${bp}px)`);
+module.exports = {
+  entry: './src/index.ts',
+  output: {
+    filename: 'index.js',
+    path: path.resolve(__dirname, 'bundle'),
+
+    // this exposes the library's exports under a global variable
+    library: {
+      name: "supersetEmbeddedSdk",
+      type: "umd"
+    }
+  },
+  devtool: "source-map",
+  module: {
+    rules: [
+      {
+        test: /\.ts$/,
+        // babel-loader is faster than ts-loader because it ignores types.
+        // We do type checking in a separate process, so that's fine.
+        use: 'babel-loader',
+        exclude: /node_modules/,
+      },
+    ],
+  },
+  resolve: {
+    extensions: ['.ts'],
+  },
+};
