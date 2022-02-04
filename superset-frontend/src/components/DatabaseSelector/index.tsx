@@ -255,7 +255,7 @@ export default function DatabaseSelector({
     }));
   }
 
-  function changeDatabase(
+  function changeDataBase(
     value: { label: string; value: number },
     database: DatabaseValue,
   ) {
@@ -300,7 +300,7 @@ export default function DatabaseSelector({
         optionFilterProps={['database_name', 'value']}
         data-test="select-database"
         dataEndpoint={`/api/v1/database/?q=${queryParams}`}
-        onChange={changeDatabase}
+        onChange={changeDataBase}
         onAsyncError={() =>
           handleError(t('Error while fetching database list'))
         }
