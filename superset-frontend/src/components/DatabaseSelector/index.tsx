@@ -152,6 +152,7 @@ export default function DatabaseSelector({
   );
   const [refresh, setRefresh] = useState(0);
   const { addSuccessToast } = useToasts();
+  /*
   const loadDatabases = useMemo(
     () =>
       async (
@@ -211,6 +212,7 @@ export default function DatabaseSelector({
       },
     [formMode, getDbList, handleError, sqlLabMode],
   );
+  */
 
   useEffect(() => {
     if (currentDb) {
@@ -338,7 +340,7 @@ export default function DatabaseSelector({
         lazyLoading={false}
         placeholder={t('Select database or type database name')}
         disabled={!isDatabaseSelectEnabled || readOnly}
-        //options={loadDatabases}
+        // options={loadDatabases}
       />,
       null,
     );
