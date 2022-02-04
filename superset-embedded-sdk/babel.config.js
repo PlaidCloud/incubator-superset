@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -17,6 +17,10 @@
  * under the License.
  */
 
-const breakpoints = [576, 768, 992, 1200];
-
-export const mq = breakpoints.map((bp) => `@media (max-width: ${bp}px)`);
+module.exports = {
+  presets: [
+    "@babel/preset-typescript",
+    "@babel/preset-env"
+  ],
+  sourceMaps: true,
+};
