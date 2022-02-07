@@ -94,7 +94,12 @@ podTemplate(label: 'superset',
 
                   python_version="3.8.12"
                   sh "docker pull python:${python_version}"
-                  image = docker.build("${params.image_name}/production:latest", "--build-arg PY_VER=${python_version} --target=lean --pull ${docker_args} .")
+                  if (branch ==~ /^beta-.*/) {
+                    image_env = "production"
+                  } else {
+                    image_env = "dev"
+                  }
+                  image = docker.build("${params.image_name}/${image_env}:latest", "--build-arg PY_VER=${python_version} --target=lean --pull ${docker_args} .")
                   events_image = docker.build("${params.image_name}/events:latest", "--build-arg PY_VER=${python_version} --pull ${docker_args} -f Dockerfile.events .")
 
                   if (branch == 'master' || branch == 'develop') { // Push 'latest' tag on master branch.
@@ -112,7 +117,7 @@ podTemplate(label: 'superset',
           }
         }
 
-        if (branch == 'master' || branch == 'develop' || branch ==~ /^beta-.*/) {
+        if (branch ==~ /^beta-.*/) {
           stage("Deploy to Kubernetes") {
             withCredentials([usernamePassword(credentialsId: 'plaid-machine-user', usernameVariable: 'user', passwordVariable: 'pass')]) {
               withCredentials([string(credentialsId: 'argocd-token', variable: 'ARGOCD_AUTH_TOKEN')]) {
