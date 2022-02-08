@@ -37,7 +37,7 @@ podTemplate(label: 'superset',
             lint --target-dir=$params.target_lint_dir --branch=$branch --full-lint=$params.full_lint
           """
 
-          if (branch == 'master') {
+          if (branch == 'master' || branch == 'develop') {
             recordIssues tool: pyLint(pattern: 'pylint.log')
           } else {
             recordIssues tool: pyLint(pattern: 'pylint.log'), qualityGates: [[threshold: 1, type: 'TOTAL_HIGH', unstable: true]]
@@ -94,10 +94,15 @@ podTemplate(label: 'superset',
 
                   python_version="3.8.12"
                   sh "docker pull python:${python_version}"
-                  image = docker.build("${params.image_name}/production:latest", "--build-arg PY_VER=${python_version} --target=lean --pull ${docker_args} .")
+                  if (branch ==~ /^beta-.*/) {
+                    image_env = "production"
+                  } else {
+                    image_env = "dev"
+                  }
+                  image = docker.build("${params.image_name}/${image_env}:latest", "--build-arg PY_VER=${python_version} --target=lean --pull ${docker_args} .")
                   events_image = docker.build("${params.image_name}/events:latest", "--build-arg PY_VER=${python_version} --pull ${docker_args} -f Dockerfile.events .")
 
-                  if (branch == 'master') { // Push 'latest' tag on master branch.
+                  if (branch == 'master' || branch == 'develop') { // Push 'latest' tag on master branch.
                     image.push()
                     events_image.push()
                     image.push(image_label)
@@ -112,7 +117,7 @@ podTemplate(label: 'superset',
           }
         }
 
-        if (branch == 'master' || branch ==~ /^beta-.*/) {
+        if (branch ==~ /^beta-.*/) {
           stage("Deploy to Kubernetes") {
             withCredentials([usernamePassword(credentialsId: 'plaid-machine-user', usernameVariable: 'user', passwordVariable: 'pass')]) {
               withCredentials([string(credentialsId: 'argocd-token', variable: 'ARGOCD_AUTH_TOKEN')]) {
