@@ -77,6 +77,8 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 #ROW_LIMIT = 5000
 #SUPERSET_WORKERS = 4
 
+SECRET_KEY = '{{ .Values.secretKey }}'
+
 # I created a mapbox account under garrett.bates@tartansolutions.com
 MAPBOX_API_KEY = '{{ .Values.mapbox.apiKey }}'
 
