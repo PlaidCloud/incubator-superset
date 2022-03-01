@@ -23,7 +23,6 @@ metadata:
     chart: {{ template "superset.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
-    component: superset
 {{- if .Values.supersetNode.deploymentAnnotations }}
   annotations:
     {{ toYaml .Values.supersetNode.deploymentAnnotations | nindent 4 }}
@@ -34,7 +33,6 @@ spec:
     matchLabels:
       app: {{ template "superset.name" . }}
       release: {{ .Release.Name }}
-      component: superset
   template:
     metadata:
       annotations:
@@ -58,7 +56,6 @@ spec:
       labels:
         app: {{ template "superset.name" . }}
         release: {{ .Release.Name }}
-        component: superset
     spec:
       {{- if or (.Values.serviceAccount.create) (.Values.serviceAccountName) }}
       serviceAccountName: {{ template "superset.serviceAccountName" . }}
@@ -74,7 +71,7 @@ spec:
       {{- end }}
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}"
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: {{  tpl (toJson .Values.supersetNode.command) . }}
           env:
@@ -102,37 +99,6 @@ spec:
             - name: superset-config
               mountPath: {{ .Values.configMountPath | quote }}
               readOnly: true
-            {{- if .Values.devMode }}
-            - name: superset-frontend
-              mountPath: /app/superset/static/assets
-            {{- end }}
-          ports:
-            - name: http
-              containerPort: {{ .Values.service.port }}
-              protocol: TCP
-          resources:
-{{ toYaml .Values.resources | indent 12 }}
-        {{- if .Values.devMode }}
-        - name: node
-          image: "{{ .Values.node.repository }}"
-          imagePullPolicy: IfNotPresent
-          command: ["sleep", "infinity"]
-          env:
-          {{ if .Values.extraEnv }}
-            {{- range $key, $value := .Values.extraEnv }}
-            - name: {{ $key | quote}}
-              value: {{ $value | quote }}
-            {{- end }}
-          {{- end }}
-          envFrom:
-            - secretRef:
-                name: {{ tpl .Values.envFromSecret . | quote }}
-          volumeMounts:
-            - name: superset-config
-              mountPath: {{ .Values.configMountPath | quote }}
-              readOnly: true
-            - name: superset-frontend
-              mountPath: /app/superset/static/assets
           {{- if .Values.extraConfigs }}
             - name: superset-extra-config
               mountPath: {{ .Values.extraConfigMountPath | quote }}
@@ -147,12 +113,6 @@ spec:
               protocol: TCP
           resources:
 {{ toYaml .Values.resources | indent 12 }}
-        {{- end }}
-
-    {{- if .Values.image.pullSecret }}
-      imagePullSecrets:
-      - name: {{ .Values.image.pullSecret }}
-    {{- end }}
     {{- with .Values.nodeSelector }}
       nodeSelector:
 {{ toYaml . | indent 8 }}
@@ -174,10 +134,6 @@ spec:
         - name: superset-config
           secret:
             secretName: {{ tpl .Values.configFromSecret . }}
-        {{- if .Values.devMode }}
-        - name: superset-frontend
-          emptyDir: {}
-        {{- end }}
         {{- if .Values.extraConfigs }}
         - name: superset-extra-config
           configMap:
