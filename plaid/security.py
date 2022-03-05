@@ -97,7 +97,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         temp_rpc = SimpleRPC(session["token"]["access_token"], uri=rpc_url, verify_ssl=False)
         current_user = temp_rpc.identity.me.info()
         session["workspace"] = current_user["default_workspace"]
-        log.debug(f"{current_user['user_name']}'s default plaid group ID is {session['workspace']}({current_user['default_workspace']})")
+        log.debug(f"{current_user['username']}'s default plaid group ID is {session['workspace']}({current_user['default_workspace']})")
         token = f"{session['token']['access_token']}_ws{session['workspace']}"
         return SimpleRPC(token, uri=rpc_url, verify_ssl=False)
 
