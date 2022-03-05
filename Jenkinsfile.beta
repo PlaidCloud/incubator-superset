@@ -118,8 +118,8 @@ podTemplate(label: 'superset',
               withCredentials([string(credentialsId: 'argocd-token', variable: 'ARGOCD_AUTH_TOKEN')]) {
                 sh """
                   export ARGOCD_SERVER=deploy.plaidcloud.io
-                  argocd app set $params.argo_app -p image.repository="$params.image_name/production:$image_label"
-                  argocd app set $params.argo_app -p events.repository="$params.image_name/events:$image_label"
+                  argocd app set $params.argo_app -p image.repository="$params.image_name/production"
+                  argocd app set $params.argo_app -p image.tag="$image_label"
                 """
               }
             }
