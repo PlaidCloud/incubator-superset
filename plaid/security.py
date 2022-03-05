@@ -9,9 +9,6 @@ from pprint import pprint
 from typing import Union
 from urllib.parse import urljoin
 from superset.security import SupersetSecurityManager
-from superset.connectors.base.models import BaseDatasource
-from superset.connectors.sqla.models import Database
-from superset.connectors.druid.models import DruidCluster
 from flask import session
 from flask_appbuilder.security.manager import AUTH_OID
 from authlib.integrations.flask_client import OAuth
