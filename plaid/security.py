@@ -92,6 +92,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
 
     def get_rpc(self):
+        log.debug(f"Current user's token is {session['token']['access_token']}")
         base_url = f"http://{self.appbuilder.app.config.get('PLAID_RPC')}"
         rpc_url = urljoin(base_url, "json-rpc/")
         temp_rpc = SimpleRPC(session["token"]["access_token"], uri=rpc_url, verify_ssl=False)
