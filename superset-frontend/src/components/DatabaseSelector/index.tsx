@@ -16,11 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { ReactNode, useEffect, useState } from 'react';
+// import React, { ReactNode, useEffect, useState } from 'react';
+import React, { ReactNode, useState, useMemo } from 'react';
 import { styled, SupersetClient, t } from '@superset-ui/core';
 import rison from 'rison';
 import { Select } from 'src/components/Select';
 import Label from 'src/components/Label';
+import { FormLabel } from 'src/components/Form';
 import RefreshLabel from 'src/components/RefreshLabel';
 import { useToasts } from 'src/components/MessageToasts/withToasts';
 import SupersetAsyncSelect from 'src/components/AsyncSelect';
@@ -55,11 +57,6 @@ const DatabaseSelectorWrapper = styled.div`
   }
 `;
 
-const DatabaseOption = styled.span`
-  display: inline-flex;
-  align-items: center;
-`;
-
 type DatabaseValue = {
   label: React.ReactNode;
   value: number;
@@ -83,31 +80,63 @@ const DatabaseOption = styled.span`
   align-items: center;
 `;
 
+/*
 interface DatabaseSelectorProps {
-  dbId: number;
+ db?: DatabaseObject;
+ formMode?: boolean;
+ getDbList?: (arg0: any) => {};
+ getTableList?: (dbId: number, schema: string, force: boolean) => {};
+ handleError: (msg: string) => void;
+ isDatabaseSelectEnabled?: boolean;
+ onDbChange?: (db: any) => void;
+ onSchemaChange?: (arg0?: any) => {};
+ onSchemasLoad?: (schemas: Array<object>) => void;
+ readOnly?: boolean;
+ schema?: string;
+ sqlLabMode?: boolean;
+ onUpdate?: ({
+   dbId,
+   schema,
+ }: {
+   dbId: number;
+   schema?: string;
+   tableName?: string;
+ }) => void;
+}
+*/
+
+interface DatabaseSelectorProps {
+  db?: DatabaseObject;
   formMode?: boolean;
   getDbList?: (arg0: any) => {};
-  getTableList?: (dbId: number, schema: string, force: boolean) => {};
   handleError: (msg: string) => void;
   isDatabaseSelectEnabled?: boolean;
-  onDbChange?: (db: any) => void;
-  onSchemaChange?: (arg0?: any) => {};
+  onDbChange?: (db: DatabaseObject) => void;
+  onSchemaChange?: (schema?: string) => void;
   onSchemasLoad?: (schemas: Array<object>) => void;
   readOnly?: boolean;
   schema?: string;
   sqlLabMode?: boolean;
-  onUpdate?: ({
-    dbId,
-    schema,
-  }: {
-    dbId: number;
-    schema?: string;
-    tableName?: string;
-  }) => void;
 }
 
+const SelectLabel = ({
+  backend,
+  databaseName,
+}: {
+  backend: string;
+  databaseName: string;
+}) => (
+  <LabelStyle>
+    <Label className="backend">{backend}</Label>
+    <span className="name" title={databaseName}>
+      {databaseName}
+    </span>
+  </LabelStyle>
+);
+
+
 export default function DatabaseSelector({
-  dbId,
+  db,
   formMode = false,
   getDbList,
   getTableList,
@@ -137,8 +166,8 @@ export default function DatabaseSelector({
   const [currentSchema, setCurrentSchema] = useState<SchemaValue | undefined>(
     schema ? { label: schema, value: schema } : undefined,
   );
-  const [refresh, setRefresh] = useState(0);
-  const { addSuccessToast } = useToasts();
+  // const [refresh, setRefresh] = useState(0);
+  // const { addSuccessToast } = useToasts();
   /*
   const loadDatabases = useMemo(
     () =>
@@ -204,7 +233,7 @@ export default function DatabaseSelector({
   function fetchSchemas(databaseId: number, forceRefresh = false) {
     const actualDbId = databaseId || dbId;
     if (actualDbId) {
-      setSchemaLoading(true);
+      setLoadingSchemas(true);
       const queryParams = rison.encode({
         force: Boolean(forceRefresh),
       });
@@ -217,14 +246,14 @@ export default function DatabaseSelector({
             title: s,
           }));
           setSchemaOptions(options);
-          setSchemaLoading(false);
+          setLoadingSchemas(false);
           if (onSchemasLoad) {
             onSchemasLoad(options);
           }
         })
         .catch(() => {
           setSchemaOptions([]);
-          setSchemaLoading(false);
+          setLoadingSchemas(false);
           handleError(t('Error while fetching schema list'));
         });
     }
@@ -256,64 +285,63 @@ export default function DatabaseSelector({
     if (onDbChange) {
       onDbChange(database);
     }
-  }, [currentDbId]);
+  };
 
-  function onSelectChange({ dbId, schema }: { dbId: number; schema?: string }) {
-    setCurrentDbId(dbId);
+  // function onSelectChange({ dbId, schema }: { dbId: number; schema?: string }) {
+  //   setCurrentDb(dbId);
+  //   setCurrentSchema(schema);
+  //   if (onUpdate) {
+  //     onUpdate({ dbId, schema, tableName: undefined });
+  //   }
+  // }
+
+  // function dbMutator(data: any) {
+  //   if (getDbList) {
+  //     getDbList(data.result);
+  //   }
+  //   if (data.result.length === 0) {
+  //     handleError(t("It seems you don't have access to any database"));
+  //   }
+  //   return data.result.map((row: any) => ({
+  //     ...row,
+  //     // label is used for the typeahead
+  //     label: `${row.backend} ${row.database_name}`,
+  //   }));
+  // }
+
+  // function changeDataBase(db: any, force = false) {
+  //   const dbId = db ? db.id : null;
+  //   setSchemaOptions([]);
+  //   if (onSchemaChange) {
+  //     onSchemaChange(null);
+  //   }
+  //   if (onDbChange) {
+  //     onDbChange(db);
+  //   }
+  //   fetchSchemas(dbId, force);
+  //   onSelectChange({ dbId, schema: undefined });
+  // }
+
+  // function changeSchema(schemaOpt: any, force = false) {
+  //   const schema = schemaOpt ? schemaOpt.value : null;
+  //   if (onSchemaChange) {
+  //     onSchemaChange(schema);
+  //   }
+  //   setCurrentSchema(schema);
+  //   onSelectChange({ dbId: currentDb, schema });
+  //   if (getTableList) {
+  //     getTableList(currentDb, schema, force);
+  //   }
+  // }
+
+  function changeSchema(schema: SchemaValue) {
     setCurrentSchema(schema);
-    if (onUpdate) {
-      onUpdate({ dbId, schema, tableName: undefined });
-    }
-  }
-
-  function dbMutator(data: any) {
-    if (getDbList) {
-      getDbList(data.result);
-    }
-    if (data.result.length === 0) {
-      handleError(t("It seems you don't have access to any database"));
-    }
-    return data.result.map((row: any) => ({
-      ...row,
-      // label is used for the typeahead
-      label: `${row.backend} ${row.database_name}`,
-    }));
-  }
-
-  function changeDataBase(db: any, force = false) {
-    const dbId = db ? db.id : null;
-    setSchemaOptions([]);
     if (onSchemaChange) {
-      onSchemaChange(null);
-    }
-    if (onDbChange) {
-      onDbChange(db);
-    }
-    fetchSchemas(dbId, force);
-    onSelectChange({ dbId, schema: undefined });
-  }
-
-  function changeSchema(schemaOpt: any, force = false) {
-    const schema = schemaOpt ? schemaOpt.value : null;
-    if (onSchemaChange) {
-      onSchemaChange(schema);
-    }
-    setCurrentSchema(schema);
-    onSelectChange({ dbId: currentDbId, schema });
-    if (getTableList) {
-      getTableList(currentDbId, schema, force);
+      onSchemaChange(schema.value);
     }
   }
 
   function renderDatabaseOption(db: any) {
-    return (
-      <DatabaseOption title={db.database_name}>
-        <Label type="default">{db.backend}</Label> {db.database_name}
-      </DatabaseOption>
-    );
-  }
-
-  function renderDatabaseOption(db: DatabaseValue) {
     return (
       <DatabaseOption title={db.database_name}>
         <Label type="default">{db.backend}</Label> {db.database_name}
@@ -380,32 +408,59 @@ export default function DatabaseSelector({
     );
   }
 
+  // function renderSchemaSelect() {
+  //   const value = schemaOptions.filter(({ value }) => currentSchema === value);
+  //   const refresh = !formMode && !readOnly && (
+  //     <RefreshLabel
+  //       onClick={() => changeDataBase({ id: dbId }, true)}
+  //       tooltipContent={t('Force refresh schema list')}
+  //     />
+  //   );
+
+  //   return renderSelectRow(
+  //     <Select
+  //       name="select-schema"
+  //       placeholder={t('Select a schema (%s)', schemaOptions.length)}
+  //       options={schemaOptions}
+  //       value={value}
+  //       valueRenderer={o => (
+  //         <div>
+  //           <span className="text-muted">{t('Schema:')}</span> {o.label}
+  //         </div>
+  //       )}
+  //       isLoading={schemaLoading}
+  //       autosize={false}
+  //       onChange={item => changeSchema(item)}
+  //       isDisabled={readOnly}
+  //     />,
+  //     refresh,
+  //   );
+  // }
+
   function renderSchemaSelect() {
-    const value = schemaOptions.filter(({ value }) => currentSchema === value);
-    const refresh = !formMode && !readOnly && (
+    const refreshIcon = !formMode && !readOnly && (
       <RefreshLabel
-        onClick={() => changeDataBase({ id: dbId }, true)}
+        onClick={() => setRefresh(refresh + 1)}
         tooltipContent={t('Force refresh schema list')}
       />
     );
 
     return renderSelectRow(
       <Select
+        ariaLabel={t('Select schema or type schema name')}
+        disabled={readOnly}
+        header={<FormLabel>{t('Schema')}</FormLabel>}
+        labelInValue
+        lazyLoading={false}
+        loading={loadingSchemas}
         name="select-schema"
-        placeholder={t('Select a schema (%s)', schemaOptions.length)}
+        placeholder={t('Select schema or type schema name')}
+        onChange={item => changeSchema(item as SchemaValue)}
         options={schemaOptions}
-        value={value}
-        valueRenderer={o => (
-          <div>
-            <span className="text-muted">{t('Schema:')}</span> {o.label}
-          </div>
-        )}
-        isLoading={schemaLoading}
-        autosize={false}
-        onChange={item => changeSchema(item)}
-        isDisabled={readOnly}
+        showSearch
+        value={currentSchema}
       />,
-      refresh,
+      refreshIcon,
     );
   }
 
