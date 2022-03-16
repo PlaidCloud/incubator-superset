@@ -17,14 +17,15 @@
  * under the License.
  */
 // import React, { ReactNode, useEffect, useState } from 'react';
-import React, { ReactNode, useState, useMemo } from 'react';
+// import React, { ReactNode, useState, useMemo } from 'react';
+import React, { ReactNode, useState } from 'react';
 import { styled, SupersetClient, t } from '@superset-ui/core';
 import rison from 'rison';
 import { Select } from 'src/components/Select';
 import Label from 'src/components/Label';
 import { FormLabel } from 'src/components/Form';
 import RefreshLabel from 'src/components/RefreshLabel';
-import { useToasts } from 'src/components/MessageToasts/withToasts';
+// import { useToasts } from 'src/components/MessageToasts/withToasts';
 import SupersetAsyncSelect from 'src/components/AsyncSelect';
 
 const FieldTitle = styled.p`
@@ -54,6 +55,20 @@ const DatabaseSelectorWrapper = styled.div`
 
   .select {
     flex-grow: 1;
+  }
+`;
+
+const LabelStyle = styled.div`
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-left: ${({ theme }) => theme.gridUnit - 2}px;
+  .backend {
+    overflow: visible;
+  }
+  .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 `;
 
@@ -134,15 +149,14 @@ const SelectLabel = ({
   </LabelStyle>
 );
 
-
 export default function DatabaseSelector({
   db,
   formMode = false,
   getDbList,
-  getTableList,
+  // getTableList,
   handleError,
   isDatabaseSelectEnabled = true,
-  onUpdate,
+  // onUpdate,
   onDbChange,
   onSchemaChange,
   onSchemasLoad,
@@ -166,7 +180,7 @@ export default function DatabaseSelector({
   const [currentSchema, setCurrentSchema] = useState<SchemaValue | undefined>(
     schema ? { label: schema, value: schema } : undefined,
   );
-  // const [refresh, setRefresh] = useState(0);
+  const [refresh, setRefresh] = useState(0);
   // const { addSuccessToast } = useToasts();
   /*
   const loadDatabases = useMemo(
@@ -230,35 +244,35 @@ export default function DatabaseSelector({
   );
   */
 
-  function fetchSchemas(databaseId: number, forceRefresh = false) {
-    const actualDbId = databaseId || dbId;
-    if (actualDbId) {
-      setLoadingSchemas(true);
-      const queryParams = rison.encode({
-        force: Boolean(forceRefresh),
-      });
-      const endpoint = `/api/v1/database/${actualDbId}/schemas/?q=${queryParams}`;
-      return SupersetClient.get({ endpoint })
-        .then(({ json }) => {
-          const options = json.result.map((s: string) => ({
-            value: s,
-            label: s,
-            title: s,
-          }));
-          setSchemaOptions(options);
-          setLoadingSchemas(false);
-          if (onSchemasLoad) {
-            onSchemasLoad(options);
-          }
-        })
-        .catch(() => {
-          setSchemaOptions([]);
-          setLoadingSchemas(false);
-          handleError(t('Error while fetching schema list'));
-        });
-    }
-    return Promise.resolve();
-  }
+  // function fetchSchemas(databaseId: number, forceRefresh = false) {
+  //   const actualDbId = databaseId || dbId;
+  //   if (actualDbId) {
+  //     setLoadingSchemas(true);
+  //     const queryParams = rison.encode({
+  //       force: Boolean(forceRefresh),
+  //     });
+  //     const endpoint = `/api/v1/database/${actualDbId}/schemas/?q=${queryParams}`;
+  //     return SupersetClient.get({ endpoint })
+  //       .then(({ json }) => {
+  //         const options = json.result.map((s: string) => ({
+  //           value: s,
+  //           label: s,
+  //           title: s,
+  //         }));
+  //         setSchemaOptions(options);
+  //         setLoadingSchemas(false);
+  //         if (onSchemasLoad) {
+  //           onSchemasLoad(options);
+  //         }
+  //       })
+  //       .catch(() => {
+  //         setSchemaOptions([]);
+  //         setLoadingSchemas(false);
+  //         handleError(t('Error while fetching schema list'));
+  //       });
+  //   }
+  //   return Promise.resolve();
+  // }
 
   function dbMutator(data: any) {
     if (getDbList) {
@@ -285,7 +299,7 @@ export default function DatabaseSelector({
     if (onDbChange) {
       onDbChange(database);
     }
-  };
+  }
 
   // function onSelectChange({ dbId, schema }: { dbId: number; schema?: string }) {
   //   setCurrentDb(dbId);
