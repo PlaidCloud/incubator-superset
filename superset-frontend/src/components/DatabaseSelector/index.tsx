@@ -19,7 +19,8 @@
 // import React, { ReactNode, useEffect, useState } from 'react';
 // import React, { ReactNode, useState, useMemo } from 'react';
 import React, { ReactNode, useState } from 'react';
-import { styled, SupersetClient, t } from '@superset-ui/core';
+// import { styled, SupersetClient, t } from '@superset-ui/core';
+import { styled, t } from '@superset-ui/core';
 import rison from 'rison';
 import { Select } from 'src/components/Select';
 import Label from 'src/components/Label';
@@ -164,8 +165,10 @@ export default function DatabaseSelector({
   schema,
   sqlLabMode = false,
 }: DatabaseSelectorProps) {
-  const [loadingSchemas, setLoadingSchemas] = useState(false);
-  const [schemaOptions, setSchemaOptions] = useState<SchemaValue[]>([]);
+  // const [loadingSchemas, setLoadingSchemas] = useState(false);
+  const loadingSchemas = false;
+  // const [schemaOptions, setSchemaOptions] = useState<SchemaValue[]>([]);
+  const schemaOptions = [];
   const [currentDb, setCurrentDb] = useState<DatabaseValue | undefined>(
     db
       ? {
