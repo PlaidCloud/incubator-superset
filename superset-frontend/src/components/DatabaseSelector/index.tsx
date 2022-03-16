@@ -168,7 +168,7 @@ export default function DatabaseSelector({
   // const [loadingSchemas, setLoadingSchemas] = useState(false);
   const loadingSchemas = false;
   // const [schemaOptions, setSchemaOptions] = useState<SchemaValue[]>([]);
-  const schemaOptions = [];
+  const schemaOptions: SchemaValue[] = [];
   const [currentDb, setCurrentDb] = useState<DatabaseValue | undefined>(
     db
       ? {
