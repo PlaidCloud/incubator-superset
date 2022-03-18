@@ -16,47 +16,40 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-// import React, { ReactNode, useEffect, useState } from 'react';
-// import React, { ReactNode, useState, useMemo } from 'react';
-import React, { ReactNode, useState } from 'react';
-// import { styled, SupersetClient, t } from '@superset-ui/core';
-import { styled, t } from '@superset-ui/core';
+import React, { ReactNode, useState, useMemo, useEffect } from 'react';
+import { styled, SupersetClient, t } from '@superset-ui/core';
 import rison from 'rison';
-import { Select } from 'src/components/Select';
+import { Select } from 'src/components';
 import Label from 'src/components/Label';
 import { FormLabel } from 'src/components/Form';
 import RefreshLabel from 'src/components/RefreshLabel';
-// import { useToasts } from 'src/components/MessageToasts/withToasts';
-import SupersetAsyncSelect from 'src/components/AsyncSelect';
-
-const FieldTitle = styled.p`
-  color: ${({ theme }) => theme.colors.secondary.light2};
-  font-size: ${({ theme }) => theme.typography.sizes.s}px;
-  margin: 20px 0 10px 0;
-  text-transform: uppercase;
-`;
+import { useToasts } from 'src/components/MessageToasts/withToasts';
 
 const DatabaseSelectorWrapper = styled.div`
-  .fa-refresh {
-    padding-left: 9px;
-  }
+  ${({ theme }) => `
+    .refresh {
+      display: flex;
+      align-items: center;
+      width: 30px;
+      margin-left: ${theme.gridUnit}px;
+      margin-top: ${theme.gridUnit * 5}px;
+    }
 
-  .refresh-col {
-    display: flex;
-    align-items: center;
-    width: 30px;
-    margin-left: ${({ theme }) => theme.gridUnit}px;
-  }
+    .section {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+    }
 
-  .section {
-    padding-bottom: 5px;
-    display: flex;
-    flex-direction: row;
-  }
+    .select {
+      width: calc(100% - 30px - ${theme.gridUnit}px);
+      flex: 1;
+    }
 
-  .select {
-    flex-grow: 1;
-  }
+    & > div {
+      margin-bottom: ${theme.gridUnit * 4}px;
+    }
+  `}
 `;
 
 const LabelStyle = styled.div`
@@ -64,9 +57,11 @@ const LabelStyle = styled.div`
   flex-direction: row;
   align-items: center;
   margin-left: ${({ theme }) => theme.gridUnit - 2}px;
+
   .backend {
     overflow: visible;
   }
+
   .name {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -90,36 +85,6 @@ export type DatabaseObject = {
 };
 
 type SchemaValue = { label: string; value: string };
-
-const DatabaseOption = styled.span`
-  display: inline-flex;
-  align-items: center;
-`;
-
-/*
-interface DatabaseSelectorProps {
- db?: DatabaseObject;
- formMode?: boolean;
- getDbList?: (arg0: any) => {};
- getTableList?: (dbId: number, schema: string, force: boolean) => {};
- handleError: (msg: string) => void;
- isDatabaseSelectEnabled?: boolean;
- onDbChange?: (db: any) => void;
- onSchemaChange?: (arg0?: any) => {};
- onSchemasLoad?: (schemas: Array<object>) => void;
- readOnly?: boolean;
- schema?: string;
- sqlLabMode?: boolean;
- onUpdate?: ({
-   dbId,
-   schema,
- }: {
-   dbId: number;
-   schema?: string;
-   tableName?: string;
- }) => void;
-}
-*/
 
 interface DatabaseSelectorProps {
   db?: DatabaseObject;
@@ -154,10 +119,8 @@ export default function DatabaseSelector({
   db,
   formMode = false,
   getDbList,
-  // getTableList,
   handleError,
   isDatabaseSelectEnabled = true,
-  // onUpdate,
   onDbChange,
   onSchemaChange,
   onSchemasLoad,
@@ -165,10 +128,8 @@ export default function DatabaseSelector({
   schema,
   sqlLabMode = false,
 }: DatabaseSelectorProps) {
-  // const [loadingSchemas, setLoadingSchemas] = useState(false);
-  const loadingSchemas = false;
-  // const [schemaOptions, setSchemaOptions] = useState<SchemaValue[]>([]);
-  const schemaOptions: SchemaValue[] = [];
+  const [loadingSchemas, setLoadingSchemas] = useState(false);
+  const [schemaOptions, setSchemaOptions] = useState<SchemaValue[]>([]);
   const [currentDb, setCurrentDb] = useState<DatabaseValue | undefined>(
     db
       ? {
@@ -184,8 +145,7 @@ export default function DatabaseSelector({
     schema ? { label: schema, value: schema } : undefined,
   );
   const [refresh, setRefresh] = useState(0);
-  // const { addSuccessToast } = useToasts();
-  /*
+  const { addSuccessToast } = useToasts();
   const loadDatabases = useMemo(
     () =>
       async (
@@ -245,53 +205,34 @@ export default function DatabaseSelector({
       },
     [formMode, getDbList, handleError, sqlLabMode],
   );
-  */
 
-  // function fetchSchemas(databaseId: number, forceRefresh = false) {
-  //   const actualDbId = databaseId || dbId;
-  //   if (actualDbId) {
-  //     setLoadingSchemas(true);
-  //     const queryParams = rison.encode({
-  //       force: Boolean(forceRefresh),
-  //     });
-  //     const endpoint = `/api/v1/database/${actualDbId}/schemas/?q=${queryParams}`;
-  //     return SupersetClient.get({ endpoint })
-  //       .then(({ json }) => {
-  //         const options = json.result.map((s: string) => ({
-  //           value: s,
-  //           label: s,
-  //           title: s,
-  //         }));
-  //         setSchemaOptions(options);
-  //         setLoadingSchemas(false);
-  //         if (onSchemasLoad) {
-  //           onSchemasLoad(options);
-  //         }
-  //       })
-  //       .catch(() => {
-  //         setSchemaOptions([]);
-  //         setLoadingSchemas(false);
-  //         handleError(t('Error while fetching schema list'));
-  //       });
-  //   }
-  //   return Promise.resolve();
-  // }
+  useEffect(() => {
+    if (currentDb) {
+      setLoadingSchemas(true);
+      const queryParams = rison.encode({ force: refresh > 0 });
+      const endpoint = `/api/v1/database/${currentDb.value}/schemas/?q=${queryParams}`;
 
-  function dbMutator(data: any) {
-    if (getDbList) {
-      getDbList(data.result);
+      // TODO: Would be nice to add pagination in a follow-up. Needs endpoint changes.
+      SupersetClient.get({ endpoint })
+        .then(({ json }) => {
+          const options = json.result.map((s: string) => ({
+            value: s,
+            label: s,
+            title: s,
+          }));
+          if (onSchemasLoad) {
+            onSchemasLoad(options);
+          }
+          setSchemaOptions(options);
+          setLoadingSchemas(false);
+          if (refresh > 0) addSuccessToast('List refreshed');
+        })
+        .catch(() => {
+          setLoadingSchemas(false);
+          handleError(t('There was an error loading the schemas'));
+        });
     }
-    if (data.result.length === 0) {
-      handleError(t("It seems you don't have access to any database"));
-    }
-    return data.result.map((row: DatabaseObject) => ({
-      ...row,
-      // label is used for the typeahead
-      // ADT2022: I think row should maybe actually be a database value?
-      // Actually, maybe this should match the other place where we map across a list of DatabaseObjects
-      label: `${row.backend} ${row.database_name}`,
-    }));
-  }
+  }, [currentDb, onSchemasLoad, refresh]);
 
   function changeDataBase(
     value: { label: string; value: number },
@@ -302,54 +243,10 @@ export default function DatabaseSelector({
     if (onDbChange) {
       onDbChange(database);
     }
+    if (onSchemaChange) {
+      onSchemaChange(undefined);
+    }
   }
-
-  // function onSelectChange({ dbId, schema }: { dbId: number; schema?: string }) {
-  //   setCurrentDb(dbId);
-  //   setCurrentSchema(schema);
-  //   if (onUpdate) {
-  //     onUpdate({ dbId, schema, tableName: undefined });
-  //   }
-  // }
-
-  // function dbMutator(data: any) {
-  //   if (getDbList) {
-  //     getDbList(data.result);
-  //   }
-  //   if (data.result.length === 0) {
-  //     handleError(t("It seems you don't have access to any database"));
-  //   }
-  //   return data.result.map((row: any) => ({
-  //     ...row,
-  //     // label is used for the typeahead
-  //     label: `${row.backend} ${row.database_name}`,
-  //   }));
-  // }
-
-  // function changeDataBase(db: any, force = false) {
-  //   const dbId = db ? db.id : null;
-  //   setSchemaOptions([]);
-  //   if (onSchemaChange) {
-  //     onSchemaChange(null);
-  //   }
-  //   if (onDbChange) {
-  //     onDbChange(db);
-  //   }
-  //   fetchSchemas(dbId, force);
-  //   onSelectChange({ dbId, schema: undefined });
-  // }
-
-  // function changeSchema(schemaOpt: any, force = false) {
-  //   const schema = schemaOpt ? schemaOpt.value : null;
-  //   if (onSchemaChange) {
-  //     onSchemaChange(schema);
-  //   }
-  //   setCurrentSchema(schema);
-  //   onSelectChange({ dbId: currentDb, schema });
-  //   if (getTableList) {
-  //     getTableList(currentDb, schema, force);
-  //   }
-  // }
 
   function changeSchema(schema: SchemaValue) {
     setCurrentSchema(schema);
@@ -358,102 +255,32 @@ export default function DatabaseSelector({
     }
   }
 
-  function renderDatabaseOption(db: any) {
-    return (
-      <DatabaseOption title={db.database_name}>
-        <Label type="default">{db.backend}</Label> {db.database_name}
-      </DatabaseOption>
-    );
-  }
-
   function renderSelectRow(select: ReactNode, refreshBtn: ReactNode) {
     return (
       <div className="section">
         <span className="select">{select}</span>
-        <span className="refresh-col">{refreshBtn}</span>
+        <span className="refresh">{refreshBtn}</span>
       </div>
     );
   }
 
   function renderDatabaseSelect() {
-    const queryParams = rison.encode({
-      order_columns: 'database_name',
-      order_direction: 'asc',
-      page: 0,
-      page_size: -1,
-      ...(formMode || !sqlLabMode
-        ? {}
-        : {
-            filters: [
-              {
-                col: 'expose_in_sqllab',
-                opr: 'eq',
-                value: true,
-              },
-            ],
-          }),
-    });
-
     return renderSelectRow(
-      <SupersetAsyncSelect
-      // <Select
+      <Select
         ariaLabel={t('Select database or type database name')}
         optionFilterProps={['database_name', 'value']}
         data-test="select-database"
-        dataEndpoint={`/api/v1/database/?q=${queryParams}`}
-        onChange={changeDataBase}
-        onAsyncError={() =>
-          handleError(t('Error while fetching database list'))
-        }
-        clearable={false}
-        value={currentDb}
-        valueKey="id"
-        valueRenderer={(db: DatabaseValue) => (
-          <div>
-            <span className="text-muted m-r-5">{t('Project:')}</span>
-            {renderDatabaseOption(db)}
-          </div>
-        )}
-        optionRenderer={renderDatabaseOption}
-        mutator={dbMutator}
         header={<FormLabel>{t('Database')}</FormLabel>}
         lazyLoading={false}
+        onChange={changeDataBase}
+        value={currentDb}
         placeholder={t('Select database or type database name')}
         disabled={!isDatabaseSelectEnabled || readOnly}
-        // options={loadDatabases}
+        options={loadDatabases}
       />,
       null,
     );
   }
-
-  // function renderSchemaSelect() {
-  //   const value = schemaOptions.filter(({ value }) => currentSchema === value);
-  //   const refresh = !formMode && !readOnly && (
-  //     <RefreshLabel
-  //       onClick={() => changeDataBase({ id: dbId }, true)}
-  //       tooltipContent={t('Force refresh schema list')}
-  //     />
-  //   );
-
-  //   return renderSelectRow(
-  //     <Select
-  //       name="select-schema"
-  //       placeholder={t('Select a schema (%s)', schemaOptions.length)}
-  //       options={schemaOptions}
-  //       value={value}
-  //       valueRenderer={o => (
-  //         <div>
-  //           <span className="text-muted">{t('Schema:')}</span> {o.label}
-  //         </div>
-  //       )}
-  //       isLoading={schemaLoading}
-  //       autosize={false}
-  //       onChange={item => changeSchema(item)}
-  //       isDisabled={readOnly}
-  //     />,
-  //     refresh,
-  //   );
-  // }
 
   function renderSchemaSelect() {
     const refreshIcon = !formMode && !readOnly && (
@@ -484,9 +311,7 @@ export default function DatabaseSelector({
 
   return (
     <DatabaseSelectorWrapper data-test="DatabaseSelector">
-      {formMode && <FieldTitle>{t('datasource')}</FieldTitle>}
       {renderDatabaseSelect()}
-      {formMode && <FieldTitle>{t('schema')}</FieldTitle>}
       {renderSchemaSelect()}
     </DatabaseSelectorWrapper>
   );
