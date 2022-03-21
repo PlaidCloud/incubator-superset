@@ -267,14 +267,14 @@ export default function DatabaseSelector({
   function renderDatabaseSelect() {
     return renderSelectRow(
       <Select
-        ariaLabel={t('Select database or type database name')}
+        ariaLabel={t('Select project or type project name')}
         optionFilterProps={['database_name', 'value']}
         data-test="select-database"
-        header={<FormLabel>{t('Database')}</FormLabel>}
+        header={<FormLabel>{t('Project')}</FormLabel>}
         lazyLoading={false}
         onChange={changeDataBase}
         value={currentDb}
-        placeholder={t('Select database or type database name')}
+        placeholder={t('Select project or type project name')}
         disabled={!isDatabaseSelectEnabled || readOnly}
         options={loadDatabases}
       />,
