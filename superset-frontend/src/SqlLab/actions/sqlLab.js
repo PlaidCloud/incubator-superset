@@ -789,7 +789,8 @@ export function queryEditorSetSchema(queryEditor, schema) {
       .then(() =>
         dispatch({ type: QUERY_EDITOR_SET_SCHEMA, queryEditor, schema }),
       )
-      .catch(() =>
+      .catch((error) =>
+        console.error(error);
         dispatch(
           addDangerToast(
             t(
