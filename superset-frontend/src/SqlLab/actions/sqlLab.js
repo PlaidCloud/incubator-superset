@@ -775,6 +775,9 @@ export function queryEditorSetDb(queryEditor, dbId) {
 }
 
 export function queryEditorSetSchema(queryEditor, schema) {
+  if (queryEditor === undefined || schema === undefined) {
+    return (dispatch) => undefined;
+  }
   return function (dispatch) {
     const sync =
       isFeatureEnabled(FeatureFlag.SQLLAB_BACKEND_PERSISTENCE) &&
@@ -789,8 +792,7 @@ export function queryEditorSetSchema(queryEditor, schema) {
       .then(() =>
         dispatch({ type: QUERY_EDITOR_SET_SCHEMA, queryEditor, schema }),
       )
-      .catch((error) => {
-        console.error(error);
+      .catch(() => {
         dispatch(
           addDangerToast(
             t(
