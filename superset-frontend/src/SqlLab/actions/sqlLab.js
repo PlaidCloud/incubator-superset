@@ -789,7 +789,7 @@ export function queryEditorSetSchema(queryEditor, schema) {
       .then(() =>
         dispatch({ type: QUERY_EDITOR_SET_SCHEMA, queryEditor, schema }),
       )
-      .catch((error) =>
+      .catch((error) => {
         console.error(error);
         dispatch(
           addDangerToast(
@@ -797,7 +797,7 @@ export function queryEditorSetSchema(queryEditor, schema) {
               'An error occurred while setting the tab schema. Please contact your administrator.',
             ),
           ),
-        ),
+        )},
       );
   };
 }
