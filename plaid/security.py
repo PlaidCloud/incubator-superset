@@ -7,7 +7,7 @@ import redis
 import uuid
 import time
 from sqlalchemy import func, Table, MetaData
-from typing import Union
+from typing import Union, List
 from urllib.parse import urljoin
 from superset.extensions import cache_manager
 from superset.security import SupersetSecurityManager
