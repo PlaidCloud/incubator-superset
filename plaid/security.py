@@ -152,11 +152,12 @@ class PlaidSecurityManager(SupersetSecurityManager):
     def get_schemas_accessible_by_user(
             self, database: "Database", schemas: List[str], hierarchical: bool = True
     ) -> List[str]:
-        SCHEMA_PREFIX = 'anlz'
+        # SCHEMA_PREFIX = 'anlz'
+        REPORTING_SCHEMA_PREFIX = 'report'
 
         schema = str(database.uuid)
-        if not schema.startswith(SCHEMA_PREFIX):
-            schema = f'{SCHEMA_PREFIX}{schema}'
+        if not schema.startswith(REPORTING_SCHEMA_PREFIX):
+            schema = f'{REPORTING_SCHEMA_PREFIX}{schema}'
 
         if schema in schemas:
             return [schema]
