@@ -22,7 +22,7 @@ import PropTypes from 'prop-types';
 import { Select } from 'src/components/Select';
 import { t, SupersetClient } from '@superset-ui/core';
 import { getClientErrorObject } from '../../utils/getClientErrorObject';
-import LabeledValue from 'antd/lib/select';
+// import LabeledValue from 'antd/lib/select';
 
 const propTypes = {
   dataEndpoint: PropTypes.string.isRequired,
@@ -32,7 +32,7 @@ const propTypes = {
   value: PropTypes.oneOfType([
     PropTypes.number,
     PropTypes.arrayOf(PropTypes.number),
-    LabeledValue,
+    // LabeledValue,
   ]),
   valueRenderer: PropTypes.func,
   placeholder: PropTypes.string,

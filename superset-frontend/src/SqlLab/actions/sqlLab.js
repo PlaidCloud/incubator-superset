@@ -776,7 +776,7 @@ export function queryEditorSetDb(queryEditor, dbId) {
 
 export function queryEditorSetSchema(queryEditor, schema) {
   if (queryEditor === undefined || schema === undefined) {
-    return (dispatch) => undefined;
+    return () => undefined;
   }
   return function (dispatch) {
     const sync =
@@ -792,14 +792,14 @@ export function queryEditorSetSchema(queryEditor, schema) {
       .then(() =>
         dispatch({ type: QUERY_EDITOR_SET_SCHEMA, queryEditor, schema }),
       )
-      .catch(() => {
+      .catch(() =>
         dispatch(
           addDangerToast(
             t(
               'An error occurred while setting the tab schema. Please contact your administrator.',
             ),
           ),
-        )},
+        ),
       );
   };
 }
