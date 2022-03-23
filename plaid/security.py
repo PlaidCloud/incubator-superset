@@ -149,10 +149,10 @@ class PlaidSecurityManager(SupersetSecurityManager):
         log.error(project_uuids)
         return self.get_session.query(Database.id).filter(Database.uuid.in_(project_uuids))
 
+
     def get_schemas_accessible_by_user(
             self, database: "Database", schemas: List[str], hierarchical: bool = True
     ) -> List[str]:
-        # SCHEMA_PREFIX = 'anlz'
         REPORTING_SCHEMA_PREFIX = 'report'
 
         schema = str(database.uuid)
@@ -163,6 +163,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
             return [schema]
 
         return []
+
 
     def get_table_ids(self):
         rpc = self.get_rpc()
