@@ -30,11 +30,9 @@ from superset.datasets.commands.exceptions import DatasetNotFoundError
 from superset.datasets.commands.export import ExportDatasetsCommand
 from superset.datasets.commands.importers import v0, v1
 from superset.models.core import Database
-from superset.utils.core import get_example_default_schema
-from superset.utils.database import get_example_database
+from superset.utils.core import get_example_database, get_example_default_schema
 from tests.integration_tests.base_tests import SupersetTestCase
 from tests.integration_tests.fixtures.energy_dashboard import (
-    load_energy_table_data,
     load_energy_table_with_slice,
 )
 from tests.integration_tests.fixtures.importexport import (
@@ -47,7 +45,6 @@ from tests.integration_tests.fixtures.importexport import (
 )
 from tests.integration_tests.fixtures.world_bank_dashboard import (
     load_world_bank_dashboard_with_slices,
-    load_world_bank_data,
 )
 
 
@@ -326,10 +323,7 @@ class TestImportDatasetsCommand(SupersetTestCase):
         assert dataset.template_params == "{}"
         assert dataset.filter_select_enabled
         assert dataset.fetch_values_predicate is None
-        assert (
-            dataset.extra
-            == '{"certification": {"certified_by": "Data Platform Team", "details": "This table is the source of truth."}, "warning_markdown": "This is a warning."}'
-        )
+        assert dataset.extra == "dttm > sysdate() -10 "
 
         # user should be included as one of the owners
         assert dataset.owners == [mock_g.user]

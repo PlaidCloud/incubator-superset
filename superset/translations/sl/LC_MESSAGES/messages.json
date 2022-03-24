@@ -1562,7 +1562,7 @@
       "When allowing CREATE TABLE AS option in SQL Lab, this option forces the table to be created in this schema": [
         "Z dovolitvijo opcije CREATE TABLE AS v SQL laboratoriju se tabele ustvarjajo s to shemo"
       ],
-      "If Presto, all the queries in SQL Lab are going to be executed as the currently logged on user who must have permission to run them.<br/>If Hive and hive.server2.enable.doAs is enabled, will run the queries as service account, but impersonate the currently logged on user via hive.server2.proxy.user property.": [
+      "If Presto, Trino or Drill all the queries in SQL Lab are going to be executed as the currently logged on user who must have permission to run them.<br/>If Hive and hive.server2.enable.doAs is enabled, will run the queries as service account, but impersonate the currently logged on user via hive.server2.proxy.user property.": [
         "V primeru Presto se vse poizvedbe v SQL laboratoriju zaženejo pod trenutno prijavljenim uporabnikom, ki mora imeti pravice za poganjanje.<br/>Če je omogočen Hive in hive.server2.enable.doAs, poizvedbe tečejo pod servisnim računom, vendar je trenutno prijavljen uporabnik predstavljen z lastnostjo hive.server2.proxy.user."
       ],
       "Allow SQL Lab to fetch a list of all tables and all views across all database schemas. For large data warehouse with thousands of tables, this can be expensive and put strain on the system.": [
@@ -3418,15 +3418,11 @@
       "Optional CA_BUNDLE contents to validate HTTPS requests. Only available on certain database engines.": [
         "Opcijska CA_BUNDLE vsebina, za potrjevanje HTTPS zahtev. Razpoložljivo le na določenih sistemih podatkovnih baz."
       ],
-      "Schemas allowed for CSV upload": ["Dovoljene sheme za nalaganje CSV"],
-      "A comma-separated list of schemas that CSVs are allowed to upload to.": [
-        "Z vejicami ločen seznam shem, kjer je dovoljeno nalaganje CSV-jev."
+      "Impersonate Logged In User (Presto, Trino, Drill, Hive, and GSheets)": [
+        "Predstavljanje kot prijavljeni uporabnik (Presto, Hive in GSheets)"
       ],
-      "Impersonate logged in user (Presto, Trino, Drill, Hive, and GSheets)": [
-        "Predstavljanje kot prijavljeni uporabnik (Presto, Trino, Drill, Hive in GSheets)"
-      ],
-      "If Presto or Trino, all the queries in SQL Lab are going to be executed as the currently logged on user who must have permission to run them. If Hive and hive.server2.enable.doAs is enabled, will run the queries as service account, but impersonate the currently logged on user via hive.server2.proxy.user property.": [
-        "V primeru Presto ali Trino se vse poizvedbe v SQL laboratoriju zaženejo pod trenutno prijavljenim uporabnikom, ki mora imeti pravice za poganjanje. Če je omogočen Hive in hive.server2.enable.doAs, poizvedbe tečejo pod servisnim računom, vendar je trenutno prijavljen uporabnik predstavljen z lastnostjo hive.server2.proxy.user."
+      "If Presto, Trino or Drill all the queries in SQL Lab are going to be executed as the currently logged on user who must have permission to run them. If Hive and hive.server2.enable.doAs is enabled, will run the queries as service account, but impersonate the currently logged on user via hive.server2.proxy.user property.": [
+        "V Presto se vse poizvedbe v SQL laboratoriju zaženejo pod trenutno prijavljenim uporabnikom, ki mora imeti pravice za poganjanje. Če je omogočen Hive in hive.server2.enable.doAs, poizvedbe tečejo pod servisnim računom, vendar je trenutno prijavljen uporabnik predstavljen z lastnostjo hive.server2.proxy.user."
       ],
       "Allow data upload": ["Dovoli nalaganje podatkov"],
       "If selected, please set the schemas allowed for data upload in Extra.": [

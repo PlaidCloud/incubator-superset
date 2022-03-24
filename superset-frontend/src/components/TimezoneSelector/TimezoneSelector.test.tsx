@@ -54,13 +54,9 @@ describe('TimezoneSelector', () => {
     });
     expect(select).toBeInTheDocument();
     userEvent.click(select);
-
-    const isDaylight = moment('now').isDST();
-    let findTitle = 'GMT -07:00 (Mountain Standard Time)';
-    if (isDaylight) {
-      findTitle = 'GMT -06:00 (Mountain Daylight Time)';
-    }
-    const selection = await screen.findByTitle(findTitle);
+    const selection = await screen.findByTitle(
+      'GMT -10:00 (Hawaii Standard Time)',
+    );
     expect(selection).toBeInTheDocument();
     userEvent.click(selection);
     expect(selection).toBeVisible();

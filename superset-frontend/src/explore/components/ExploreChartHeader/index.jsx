@@ -44,9 +44,9 @@ import Timer from 'src/components/Timer';
 import CachedLabel from 'src/components/CachedLabel';
 import PropertiesModal from 'src/explore/components/PropertiesModal';
 import { sliceUpdated } from 'src/explore/actions/exploreActions';
-import CertifiedBadge from 'src/components/CertifiedBadge';
-import ExploreActionButtons from '../ExploreActionButtons';
-import RowCountLabel from '../RowCountLabel';
+import CertifiedIcon from 'src/components/CertifiedIcon';
+import ExploreActionButtons from './ExploreActionButtons';
+import RowCountLabel from './RowCountLabel';
 
 const CHART_STATUS_MAP = {
   failed: 'danger',
@@ -56,6 +56,7 @@ const CHART_STATUS_MAP = {
 
 const propTypes = {
   actions: PropTypes.object.isRequired,
+  addHistory: PropTypes.func,
   can_overwrite: PropTypes.bool.isRequired,
   can_download: PropTypes.bool.isRequired,
   dashboardId: PropTypes.number,
@@ -142,32 +143,26 @@ export class ExploreChartHeader extends React.PureComponent {
 
   async fetchChartDashboardData() {
     const { dashboardId, slice } = this.props;
-    await SupersetClient.get({
+    const response = await SupersetClient.get({
       endpoint: `/api/v1/chart/${slice.slice_id}`,
-    })
-      .then(res => {
-        const response = res?.json?.result;
-        if (response && response.dashboards && response.dashboards.length) {
-          const { dashboards } = response;
-          const dashboard =
-            dashboardId &&
-            dashboards.length &&
-            dashboards.find(d => d.id === dashboardId);
+    });
+    const chart = response.json.result;
+    const dashboards = chart.dashboards || [];
+    const dashboard =
+      dashboardId &&
+      dashboards.length &&
+      dashboards.find(d => d.id === dashboardId);
 
-          if (dashboard && dashboard.json_metadata) {
-            // setting the chart to use the dashboard custom label colors if any
-            const labelColors =
-              JSON.parse(dashboard.json_metadata).label_colors || {};
-            const categoricalNamespace =
-              CategoricalColorNamespace.getNamespace();
+    if (dashboard && dashboard.json_metadata) {
+      // setting the chart to use the dashboard custom label colors if any
+      const labelColors =
+        JSON.parse(dashboard.json_metadata).label_colors || {};
+      const categoricalNamespace = CategoricalColorNamespace.getNamespace();
 
-            Object.keys(labelColors).forEach(label => {
-              categoricalNamespace.setColor(label, labelColors[label]);
-            });
-          }
-        }
-      })
-      .catch(() => {});
+      Object.keys(labelColors).forEach(label => {
+        categoricalNamespace.setColor(label, labelColors[label]);
+      });
+    }
   }
 
   getSliceName() {
@@ -236,7 +231,7 @@ export class ExploreChartHeader extends React.PureComponent {
       return false;
     }
     const { user } = this.props;
-    if (!user?.userId) {
+    if (!user) {
       // this is in the case that there is an anonymous user.
       return false;
     }
@@ -268,7 +263,7 @@ export class ExploreChartHeader extends React.PureComponent {
         <div className="title-panel">
           {slice?.certified_by && (
             <>
-              <CertifiedBadge
+              <CertifiedIcon
                 certifiedBy={slice.certified_by}
                 details={slice.certification_details}
               />{' '}
@@ -276,13 +271,7 @@ export class ExploreChartHeader extends React.PureComponent {
           )}
           <EditableTitle
             title={this.getSliceName()}
-            canEdit={
-              !this.props.slice ||
-              this.props.can_overwrite ||
-              (this.props.slice?.owners || []).includes(
-                this.props?.user?.userId,
-              )
-            }
+            canEdit={!this.props.slice || this.props.can_overwrite}
             onSaveTitle={this.props.actions.updateChartTitle}
           />
 
@@ -297,20 +286,17 @@ export class ExploreChartHeader extends React.PureComponent {
                   showTooltip
                 />
               )}
-              {this.state.isPropertiesModalOpen && (
-                <PropertiesModal
-                  show={this.state.isPropertiesModalOpen}
-                  onHide={this.closePropertiesModal}
-                  onSave={this.props.sliceUpdated}
-                  slice={this.props.slice}
-                />
-              )}
+              <PropertiesModal
+                show={this.state.isPropertiesModalOpen}
+                onHide={this.closePropertiesModal}
+                onSave={this.props.sliceUpdated}
+                slice={this.props.slice}
+              />
               <Tooltip
                 id="edit-desc-tooltip"
                 title={t('Edit chart properties')}
               >
                 <span
-                  aria-label={t('Edit chart properties')}
                   role="button"
                   tabIndex={0}
                   className="edit-desc-icon"

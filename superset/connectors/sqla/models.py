@@ -36,7 +36,6 @@ from typing import (
 )
 
 import dateutil.parser
-import numpy as np
 import pandas as pd
 import sqlalchemy as sa
 import sqlparse
@@ -78,7 +77,10 @@ from superset.connectors.sqla.utils import (
     get_virtual_table_metadata,
 )
 from superset.db_engine_specs.base import BaseEngineSpec, TimestampExpression
-from superset.exceptions import QueryObjectValidationError
+from superset.exceptions import (
+    QueryClauseValidationException,
+    QueryObjectValidationError,
+)
 from superset.jinja_context import (
     BaseTemplateProcessor,
     ExtraCache,
@@ -87,13 +89,11 @@ from superset.jinja_context import (
 from superset.models.annotations import Annotation
 from superset.models.core import Database
 from superset.models.helpers import AuditMixinNullable, CertificationMixin, QueryResult
-from superset.sql_parse import ParsedQuery
-from superset.typing import AdhocColumn, AdhocMetric, Metric, OrderBy, QueryObjectDict
+from superset.sql_parse import ParsedQuery, sanitize_clause
+from superset.typing import AdhocMetric, Metric, OrderBy, QueryObjectDict
 from superset.utils import core as utils
 from superset.utils.core import (
     GenericDataType,
-    get_column_name,
-    is_adhoc_column,
     QueryObjectFilterClause,
     remove_duplicates,
 )
@@ -253,22 +253,16 @@ class TableColumn(Model, BaseColumn, CertificationMixin):
         return self.table.db_engine_spec
 
     @property
-    def db_extra(self) -> Dict[str, Any]:
-        return self.table.database.get_extra()
-
-    @property
     def type_generic(self) -> Optional[utils.GenericDataType]:
         if self.is_dttm:
             return GenericDataType.TEMPORAL
-        column_spec = self.db_engine_spec.get_column_spec(
-            self.type, db_extra=self.db_extra
-        )
+        column_spec = self.db_engine_spec.get_column_spec(self.type)
         return column_spec.generic_type if column_spec else None
 
     def get_sqla_col(self, label: Optional[str] = None) -> Column:
         label = label or self.column_name
         db_engine_spec = self.db_engine_spec
-        column_spec = db_engine_spec.get_column_spec(self.type, db_extra=self.db_extra)
+        column_spec = db_engine_spec.get_column_spec(self.type)
         type_ = column_spec.sqla_type if column_spec else None
         if self.expression:
             tp = self.table.get_template_processor()
@@ -316,10 +310,7 @@ class TableColumn(Model, BaseColumn, CertificationMixin):
         return and_(*l)
 
     def get_timestamp_expression(
-        self,
-        time_grain: Optional[str],
-        label: Optional[str] = None,
-        template_processor: Optional[BaseTemplateProcessor] = None,
+        self, time_grain: Optional[str], label: Optional[str] = None
     ) -> Union[TimestampExpression, Label]:
         """
         Return a SQLAlchemy Core element representation of self to be used in a query.
@@ -332,18 +323,13 @@ class TableColumn(Model, BaseColumn, CertificationMixin):
 
         pdf = self.python_date_format
         is_epoch = pdf in ("epoch_s", "epoch_ms")
-        column_spec = self.db_engine_spec.get_column_spec(
-            self.type, db_extra=self.db_extra
-        )
+        column_spec = self.db_engine_spec.get_column_spec(self.type)
         type_ = column_spec.sqla_type if column_spec else DateTime
         if not self.expression and not time_grain and not is_epoch:
             sqla_col = column(self.column_name, type_=type_)
             return self.table.make_sqla_column_compatible(sqla_col, label)
         if self.expression:
-            expression = self.expression
-            if template_processor:
-                expression = template_processor.process_template(self.expression)
-            col = literal_column(expression, type_=type_)
+            col = literal_column(self.expression, type_=type_)
         else:
             col = column(self.column_name, type_=type_)
         time_expr = self.db_engine_spec.get_timestamp_expr(
@@ -359,11 +345,8 @@ class TableColumn(Model, BaseColumn, CertificationMixin):
         ],
     ) -> str:
         """Convert datetime object to a SQL expression string"""
-        sql = (
-            self.db_engine_spec.convert_dttm(self.type, dttm, db_extra=self.db_extra)
-            if self.type
-            else None
-        )
+        dttm_type = self.type or ("DATETIME" if self.is_dttm else None)
+        sql = self.db_engine_spec.convert_dttm(dttm_type, dttm) if dttm_type else None
 
         if sql:
             return sql
@@ -376,8 +359,10 @@ class TableColumn(Model, BaseColumn, CertificationMixin):
             utils.TimeRangeEndpoint.INCLUSIVE,
             utils.TimeRangeEndpoint.EXCLUSIVE,
         ):
-            tf = self.db_extra.get("python_date_format_by_column_name", {}).get(
-                self.column_name
+            tf = (
+                self.table.database.get_extra()
+                .get("python_date_format_by_column_name", {})
+                .get(self.column_name)
             )
 
         if tf:
@@ -635,7 +620,9 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
 
     @property
     def name(self) -> str:
-        return self.table_name
+        if not self.schema:
+            return self.table_name
+        return "{}.{}".format(self.schema, self.table_name)
 
     @property
     def full_name(self) -> str:
@@ -870,30 +857,14 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
         elif expression_type == utils.AdhocMetricExpressionType.SQL:
             tp = self.get_template_processor()
             expression = tp.process_template(cast(str, metric["sqlExpression"]))
+            try:
+                expression = sanitize_clause(expression)
+            except QueryClauseValidationException as ex:
+                raise QueryObjectValidationError(ex.message) from ex
             sqla_metric = literal_column(expression)
         else:
             raise QueryObjectValidationError("Adhoc metric expressionType is invalid")
 
-        return self.make_sqla_column_compatible(sqla_metric, label)
-
-    def adhoc_column_to_sqla(
-        self,
-        col: AdhocColumn,
-        template_processor: Optional[BaseTemplateProcessor] = None,
-    ) -> ColumnElement:
-        """
-        Turn an adhoc column into a sqlalchemy column.
-
-        :param col: Adhoc column definition
-        :param template_processor: template_processor instance
-        :returns: The metric defined as a sqlalchemy column
-        :rtype: sqlalchemy.sql.column
-        """
-        label = utils.get_column_name(col)
-        expression = col["sqlExpression"]
-        if template_processor and expression:
-            expression = template_processor.process_template(expression)
-        sqla_metric = literal_column(expression)
         return self.make_sqla_column_compatible(sqla_metric, label)
 
     def make_sqla_column_compatible(
@@ -954,28 +925,14 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
         :returns: A list of SQL clauses to be ANDed together.
         :rtype: List[str]
         """
-        all_filters: List[TextClause] = []
-        filter_groups: Dict[Union[int, str], List[TextClause]] = defaultdict(list)
+        filters_grouped: Dict[Union[int, str], List[str]] = defaultdict(list)
         try:
             for filter_ in security_manager.get_rls_filters(self):
                 clause = self.text(
                     f"({template_processor.process_template(filter_.clause)})"
                 )
-                if filter_.group_key:
-                    filter_groups[filter_.group_key].append(clause)
-                else:
-                    all_filters.append(clause)
-
-            if is_feature_enabled("EMBEDDED_SUPERSET"):
-                for rule in security_manager.get_guest_rls_filters(self):
-                    clause = self.text(
-                        f"({template_processor.process_template(rule['clause'])})"
-                    )
-                    all_filters.append(clause)
-
-            grouped_filters = [or_(*clauses) for clauses in filter_groups.values()]
-            all_filters.extend(grouped_filters)
-            return all_filters
+                filters_grouped[filter_.group_key or filter_.id].append(clause)
+            return [or_(*clauses) for clauses in filters_grouped.values()]
         except TemplateError as ex:
             raise QueryObjectValidationError(
                 _("Error in jinja expression in RLS filters: %(msg)s", msg=ex.message,)
@@ -987,14 +944,14 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
     def get_sqla_query(  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches,too-many-statements
         self,
         apply_fetch_values_predicate: bool = False,
-        columns: Optional[List[Column]] = None,
+        columns: Optional[List[str]] = None,
         extras: Optional[Dict[str, Any]] = None,
         filter: Optional[  # pylint: disable=redefined-builtin
             List[QueryObjectFilterClause]
         ] = None,
         from_dttm: Optional[datetime] = None,
         granularity: Optional[str] = None,
-        groupby: Optional[List[Column]] = None,
+        groupby: Optional[List[str]] = None,
         inner_from_dttm: Optional[datetime] = None,
         inner_to_dttm: Optional[datetime] = None,
         is_rowcount: bool = False,
@@ -1003,7 +960,7 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
         orderby: Optional[List[OrderBy]] = None,
         order_desc: bool = True,
         to_dttm: Optional[datetime] = None,
-        series_columns: Optional[List[Column]] = None,
+        series_columns: Optional[List[str]] = None,
         series_limit: Optional[int] = None,
         series_limit_metric: Optional[Metric] = None,
         row_limit: Optional[int] = None,
@@ -1031,9 +988,7 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
             "table_columns": [col.column_name for col in self.columns],
             "filter": filter,
         }
-        columns = columns or []
-        groupby = groupby or []
-        series_column_names = utils.get_column_names(series_columns or [])
+        series_columns = series_columns or []
         # deprecated, to be removed in 2.0
         if is_timeseries and timeseries_limit:
             series_limit = timeseries_limit
@@ -1059,7 +1014,6 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
         columns_by_name: Dict[str, TableColumn] = {
             col.column_name: col for col in self.columns
         }
-
         metrics_by_name: Dict[str, SqlMetric] = {m.metric_name: m for m in self.metrics}
 
         if not granularity and is_timeseries:
@@ -1131,6 +1085,7 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
         groupby_series_columns = {}
 
         # filter out the pseudo column  __timestamp from columns
+        columns = columns or []
         columns = [col for col in columns if col != utils.DTTM_ALIAS]
         dttm_col = columns_by_name.get(granularity) if granularity else None
 
@@ -1138,27 +1093,18 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
             # dedup columns while preserving order
             columns = groupby or columns
             for selected in columns:
-                if isinstance(selected, str):
-                    # if groupby field/expr equals granularity field/expr
-                    if selected == granularity:
-                        table_col = columns_by_name[selected]
-                        outer = table_col.get_timestamp_expression(
-                            time_grain=time_grain,
-                            label=selected,
-                            template_processor=template_processor,
-                        )
-                    # if groupby field equals a selected column
-                    elif selected in columns_by_name:
-                        outer = columns_by_name[selected].get_sqla_col()
-                    else:
-                        outer = literal_column(f"({selected})")
-                        outer = self.make_sqla_column_compatible(outer, selected)
+                # if groupby field/expr equals granularity field/expr
+                table_col = columns_by_name.get(selected)
+                if table_col and table_col.type_generic == GenericDataType.TEMPORAL:
+                    outer = table_col.get_timestamp_expression(time_grain, selected)
+                # if groupby field equals a selected column
+                elif table_col:
+                    outer = table_col.get_sqla_col()
                 else:
-                    outer = self.adhoc_column_to_sqla(
-                        col=selected, template_processor=template_processor
-                    )
+                    outer = literal_column(f"({selected})")
+                    outer = self.make_sqla_column_compatible(outer, selected)
                 groupby_all_columns[outer.name] = outer
-                if not series_column_names or outer.name in series_column_names:
+                if not series_columns or outer.name in series_columns:
                     groupby_series_columns[outer.name] = outer
                 select_exprs.append(outer)
         elif columns:
@@ -1183,9 +1129,7 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
             time_filters = []
 
             if is_timeseries:
-                timestamp = dttm_col.get_timestamp_expression(
-                    time_grain=time_grain, template_processor=template_processor
-                )
+                timestamp = dttm_col.get_timestamp_expression(time_grain)
                 # always put timestamp as the first column
                 select_exprs.insert(0, timestamp)
                 groupby_all_columns[timestamp.name] = timestamp
@@ -1233,36 +1177,27 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
         for flt in filter:  # type: ignore
             if not all(flt.get(s) for s in ["col", "op"]):
                 continue
-            flt_col = flt["col"]
+            col = flt["col"]
             val = flt.get("val")
             op = flt["op"].upper()
-            col_obj: Optional[TableColumn] = None
-            sqla_col: Optional[Column] = None
-            if flt_col == utils.DTTM_ALIAS and is_timeseries and dttm_col:
-                col_obj = dttm_col
-            elif is_adhoc_column(flt_col):
-                sqla_col = self.adhoc_column_to_sqla(flt_col)
-            else:
-                col_obj = columns_by_name.get(flt_col)
+            col_obj = (
+                dttm_col
+                if col == utils.DTTM_ALIAS and is_timeseries and dttm_col
+                else columns_by_name.get(col)
+            )
             filter_grain = flt.get("grain")
 
             if is_feature_enabled("ENABLE_TEMPLATE_REMOVE_FILTERS"):
-                if get_column_name(flt_col) in removed_filters:
+                if col in removed_filters:
                     # Skip generating SQLA filter when the jinja template handles it.
                     continue
 
-            if col_obj or sqla_col is not None:
-                if sqla_col is not None:
-                    pass
-                elif col_obj and filter_grain:
-                    sqla_col = col_obj.get_timestamp_expression(
-                        time_grain=filter_grain, template_processor=template_processor
-                    )
-                elif col_obj:
+            if col_obj:
+                if filter_grain:
+                    sqla_col = col_obj.get_timestamp_expression(filter_grain)
+                else:
                     sqla_col = col_obj.get_sqla_col()
-                col_spec = db_engine_spec.get_column_spec(
-                    col_obj.type if col_obj else None
-                )
+                col_spec = db_engine_spec.get_column_spec(col_obj.type)
                 is_list_target = op in (
                     utils.FilterOperator.IN.value,
                     utils.FilterOperator.NOT_IN.value,
@@ -1336,7 +1271,7 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
             where = extras.get("where")
             if where:
                 try:
-                    where = template_processor.process_template(where)
+                    where = template_processor.process_template(f"({where})")
                 except TemplateError as ex:
                     raise QueryObjectValidationError(
                         _(
@@ -1344,11 +1279,11 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
                             msg=ex.message,
                         )
                     ) from ex
-                where_clause_and += [self.text(f"({where})")]
+                where_clause_and += [self.text(where)]
             having = extras.get("having")
             if having:
                 try:
-                    having = template_processor.process_template(having)
+                    having = template_processor.process_template(f"({having})")
                 except TemplateError as ex:
                     raise QueryObjectValidationError(
                         _(
@@ -1356,7 +1291,7 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
                             msg=ex.message,
                         )
                     ) from ex
-                having_clause_and += [self.text(f"({having})")]
+                having_clause_and += [self.text(having)]
         if apply_fetch_values_predicate and self.fetch_values_predicate:
             qry = qry.where(self.get_fetch_values_predicate())
         if granularity:
@@ -1372,13 +1307,6 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
                 # if engine does not allow using SELECT alias in ORDER BY
                 # revert to the underlying column
                 col = col.element
-
-            if (
-                db_engine_spec.allows_alias_in_select
-                and db_engine_spec.allows_hidden_cc_in_orderby
-                and col.name in [select_col.name for select_col in select_exprs]
-            ):
-                col = literal_column(col.name)
             direction = asc if ascending else desc
             qry = qry.order_by(direction(col))
 
@@ -1398,7 +1326,6 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
                 inner_groupby_exprs = []
                 inner_select_exprs = []
                 for gby_name, gby_obj in groupby_series_columns.items():
-                    label = get_column_name(gby_name)
                     inner = self.make_sqla_column_compatible(gby_obj, gby_name + "__")
                     inner_groupby_exprs.append(inner)
                     inner_select_exprs.append(inner)
@@ -1443,7 +1370,7 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
                             self._get_series_orderby(
                                 series_limit_metric, metrics_by_name, columns_by_name,
                             ),
-                            not order_desc,
+                            False,
                         )
                     ]
 
@@ -1471,7 +1398,7 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
                     if c not in metrics and c in groupby_series_columns
                 ]
                 top_groups = self._get_top_groups(
-                    result.df, dimensions, groupby_series_columns, columns_by_name
+                    result.df, dimensions, groupby_series_columns
                 )
                 qry = qry.where(top_groups)
 
@@ -1515,54 +1442,25 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
             )
         return ob
 
-    def _normalize_prequery_result_type(
-        self, row: pd.Series, dimension: str, columns_by_name: Dict[str, TableColumn],
-    ) -> Union[str, int, float, bool, Text]:
-        """
-        Convert a prequery result type to its equivalent Python type.
-
-        Some databases like Druid will return timestamps as strings, but do not perform
-        automatic casting when comparing these strings to a timestamp. For cases like
-        this we convert the value via the appropriate SQL transform.
-
-        :param row: A prequery record
-        :param dimension: The dimension name
-        :param columns_by_name: The mapping of columns by name
-        :return: equivalent primitive python type
-        """
-
-        value = row[dimension]
-
-        if isinstance(value, np.generic):
-            value = value.item()
-
-        column_ = columns_by_name[dimension]
-        db_extra: Dict[str, Any] = self.database.get_extra()
-
-        if column_.type and column_.is_temporal and isinstance(value, str):
-            sql = self.db_engine_spec.convert_dttm(
-                column_.type, dateutil.parser.parse(value), db_extra=db_extra
-            )
-
-            if sql:
-                value = self.text(sql)
-
-        return value
-
     def _get_top_groups(
-        self,
-        df: pd.DataFrame,
-        dimensions: List[str],
-        groupby_exprs: Dict[str, Any],
-        columns_by_name: Dict[str, TableColumn],
+        self, df: pd.DataFrame, dimensions: List[str], groupby_exprs: Dict[str, Any],
     ) -> ColumnElement:
+        column_map = {column.column_name: column for column in self.columns}
         groups = []
         for _unused, row in df.iterrows():
             group = []
             for dimension in dimensions:
-                value = self._normalize_prequery_result_type(
-                    row, dimension, columns_by_name,
-                )
+                value = row[dimension]
+
+                # Some databases like Druid will return timestamps as strings, but
+                # do not perform automatic casting when comparing these strings to
+                # a timestamp. For cases like this we convert the value from a
+                # string into a timestamp.
+                if column_map[dimension].is_temporal and isinstance(value, str):
+                    dttm = dateutil.parser.parse(value)
+                    value = text(
+                        str(self.db_engine_spec.convert_dttm("TIMESTAMP", dttm))
+                    )
 
                 group.append(groupby_exprs[dimension] == value)
             groups.append(and_(*group))
@@ -1794,13 +1692,14 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
 
         for attr in ["database_id", "schema", "table_name"]:
             history = state.get_history(attr, True)
+
             if history.has_changes():
                 break
         else:
             return None
 
         if not DatasetDAO.validate_uniqueness(
-            target.database_id, target.schema, target.table_name, target.id
+            target.database_id, target.schema, target.table_name
         ):
             raise Exception(get_dataset_exist_error_msg(target.full_name))
 

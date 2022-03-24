@@ -15,8 +15,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-# pylint: disable=invalid-name
-
 import unittest
 from typing import Set
 
@@ -26,9 +24,9 @@ import sqlparse
 from superset.exceptions import QueryClauseValidationException
 from superset.sql_parse import (
     ParsedQuery,
+    sanitize_clause,
     strip_comments_from_sql,
     Table,
-    validate_filter_clause,
 )
 
 
@@ -45,11 +43,11 @@ def test_table() -> None:
 
     Special characters in the table, schema, or catalog name should be escaped correctly.
     """
-    assert str(Table("tbname")) == "tbname"
-    assert str(Table("tbname", "schemaname")) == "schemaname.tbname"
+    assert str(Table("table_name")) == "table_name"
+    assert str(Table("table_name", "schema_name")) == "schema_name.table_name"
     assert (
-        str(Table("tbname", "schemaname", "catalogname"))
-        == "catalogname.schemaname.tbname"
+        str(Table("table_name", "schema_name", "catalog_name"))
+        == "catalog_name.schema_name.table_name"
     )
     assert (
         str(Table("table.name", "schema/name", "catalog\nname"))
@@ -951,9 +949,6 @@ INSERT INTO TABLE (foo) VALUES (42);
 
 
 def test_is_select_cte_with_comments() -> None:
-    """
-    Some CTES with comments are not correctly identified as SELECTS.
-    """
     sql = ParsedQuery(
         """WITH blah AS
   (SELECT * FROM core_dev.manager_team),
@@ -979,46 +974,6 @@ SELECT * FROM blah
 INNER JOIN blah2 ON blah2.team_id = blah.team_id"""
     )
     assert sql.is_select()
-
-
-def test_cte_is_select() -> None:
-    """
-    Some CTEs are not correctly identified as SELECTS.
-    """
-    # `AS(` gets parsed as a function
-    sql = ParsedQuery(
-        """WITH foo AS(
-SELECT
-  FLOOR(__time TO WEEK) AS "week",
-  name,
-  COUNT(DISTINCT user_id) AS "unique_users"
-FROM "druid"."my_table"
-GROUP BY 1,2
-)
-SELECT
-  f.week,
-  f.name,
-  f.unique_users
-FROM foo f"""
-    )
-    assert sql.is_select()
-
-
-def test_unknown_select() -> None:
-    """
-    Test that `is_select` works when sqlparse fails to identify the type.
-    """
-    sql = "WITH foo AS(SELECT 1) SELECT 1"
-    assert sqlparse.parse(sql)[0].get_type() == "UNKNOWN"
-    assert ParsedQuery(sql).is_select()
-
-    sql = "WITH foo AS(SELECT 1) INSERT INTO my_table (a) VALUES (1)"
-    assert sqlparse.parse(sql)[0].get_type() == "UNKNOWN"
-    assert not ParsedQuery(sql).is_select()
-
-    sql = "WITH foo AS(SELECT 1) DELETE FROM my_table"
-    assert sqlparse.parse(sql)[0].get_type() == "UNKNOWN"
-    assert not ParsedQuery(sql).is_select()
 
 
 def test_get_query_with_new_limit_comment() -> None:
@@ -1137,55 +1092,43 @@ def test_strip_comments_from_sql() -> None:
     )
 
 
-def test_validate_filter_clause_valid():
+def test_sanitize_clause_valid():
     # regular clauses
-    assert validate_filter_clause("col = 1") is None
-    assert validate_filter_clause("1=\t\n1") is None
-    assert validate_filter_clause("(col = 1)") is None
-    assert validate_filter_clause("(col1 = 1) AND (col2 = 2)") is None
+    assert sanitize_clause("col = 1") == "col = 1"
+    assert sanitize_clause("1=\t\n1") == "1=\t\n1"
+    assert sanitize_clause("(col = 1)") == "(col = 1)"
+    assert sanitize_clause("(col1 = 1) AND (col2 = 2)") == "(col1 = 1) AND (col2 = 2)"
+    assert sanitize_clause("col = 'abc' -- comment") == "col = 'abc' -- comment\n"
 
-    # Valid literal values that appear to be invalid
-    assert validate_filter_clause("col = 'col1 = 1) AND (col2 = 2'") is None
-    assert validate_filter_clause("col = 'select 1; select 2'") is None
-    assert validate_filter_clause("col = 'abc -- comment'") is None
+    # Valid literal values that at could be flagged as invalid by a naive query parser
+    assert (
+        sanitize_clause("col = 'col1 = 1) AND (col2 = 2'")
+        == "col = 'col1 = 1) AND (col2 = 2'"
+    )
+    assert sanitize_clause("col = 'select 1; select 2'") == "col = 'select 1; select 2'"
+    assert sanitize_clause("col = 'abc -- comment'") == "col = 'abc -- comment'"
 
 
-def test_validate_filter_clause_closing_unclosed():
+def test_sanitize_clause_closing_unclosed():
     with pytest.raises(QueryClauseValidationException):
-        validate_filter_clause("col1 = 1) AND (col2 = 2)")
+        sanitize_clause("col1 = 1) AND (col2 = 2)")
 
 
-def test_validate_filter_clause_unclosed():
+def test_sanitize_clause_unclosed():
     with pytest.raises(QueryClauseValidationException):
-        validate_filter_clause("(col1 = 1) AND (col2 = 2")
+        sanitize_clause("(col1 = 1) AND (col2 = 2")
 
 
-def test_validate_filter_clause_closing_and_unclosed():
+def test_sanitize_clause_closing_and_unclosed():
     with pytest.raises(QueryClauseValidationException):
-        validate_filter_clause("col1 = 1) AND (col2 = 2")
+        sanitize_clause("col1 = 1) AND (col2 = 2")
 
 
-def test_validate_filter_clause_closing_and_unclosed_nested():
+def test_sanitize_clause_closing_and_unclosed_nested():
     with pytest.raises(QueryClauseValidationException):
-        validate_filter_clause("(col1 = 1)) AND ((col2 = 2)")
+        sanitize_clause("(col1 = 1)) AND ((col2 = 2)")
 
 
-def test_validate_filter_clause_multiple():
+def test_sanitize_clause_multiple():
     with pytest.raises(QueryClauseValidationException):
-        validate_filter_clause("TRUE; SELECT 1")
-
-
-def test_validate_filter_clause_comment():
-    with pytest.raises(QueryClauseValidationException):
-        validate_filter_clause("1 = 1 -- comment")
-
-
-def test_validate_filter_clause_subquery_comment():
-    with pytest.raises(QueryClauseValidationException):
-        validate_filter_clause("(1 = 1 -- comment\n)")
-
-
-def test_sqlparse_issue_652():
-    stmt = sqlparse.parse(r"foo = '\' AND bar = 'baz'")[0]
-    assert len(stmt.tokens) == 5
-    assert str(stmt.tokens[0]) == "foo = '\\'"
+        sanitize_clause("TRUE; SELECT 1")

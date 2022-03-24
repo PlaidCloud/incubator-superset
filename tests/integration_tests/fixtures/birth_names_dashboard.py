@@ -23,11 +23,8 @@ from superset.connectors.sqla.models import SqlaTable
 from superset.models.core import Database
 from superset.models.dashboard import Dashboard
 from superset.models.slice import Slice
-from superset.utils.core import get_example_default_schema
-from superset.utils.database import get_example_database
-from tests.example_data.data_loading.base_data_loader import DataLoader
-from tests.example_data.data_loading.data_definitions.types import Table
-from tests.integration_tests.dashboard_utils import create_table_metadata
+from superset.utils.core import get_example_database, get_example_default_schema
+from tests.integration_tests.dashboard_utils import create_table_for_dashboard
 from tests.integration_tests.test_app import app
 
 BIRTH_NAMES_TBL_NAME = "birth_names"

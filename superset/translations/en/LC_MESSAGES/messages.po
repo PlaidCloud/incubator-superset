@@ -14148,7 +14148,11 @@ msgid ""
 "\"%(columnar_table.schema)s\". Please remove one"
 msgstr ""
 
-#: superset/views/database/views.py:146
+#: superset-frontend/src/views/CRUD/data/database/DatabaseModal.tsx:608
+msgid "Impersonate Logged In User (Presto, Trino, Drill & Hive)"
+msgstr ""
+
+#: superset-frontend/src/views/CRUD/data/database/DatabaseModal.tsx:610
 msgid ""
 "You cannot specify a namespace both in the name of the table: "
 "\"%(csv_table.table)s\" and in the schema field: "

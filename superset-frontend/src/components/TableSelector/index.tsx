@@ -214,7 +214,6 @@ const TableSelector: FunctionComponent<TableSelectorProps> = ({
           setTableOptions(options);
           setCurrentTable(currentTable);
           setLoadingTables(false);
-          if (forceRefresh) addSuccessToast('List updated');
         })
         .catch(e => {
           setLoadingTables(false);

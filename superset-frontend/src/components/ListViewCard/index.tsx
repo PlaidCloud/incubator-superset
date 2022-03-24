@@ -21,7 +21,7 @@ import { styled, useTheme } from '@superset-ui/core';
 import { AntdCard, Skeleton, ThinSkeleton } from 'src/common/components';
 import { Tooltip } from 'src/components/Tooltip';
 import ImageLoader, { BackgroundPosition } from './ImageLoader';
-import CertifiedBadge from '../CertifiedBadge';
+import CertifiedIcon from '../CertifiedIcon';
 
 const ActionsWrapper = styled.div`
   width: 64px;
@@ -257,7 +257,7 @@ function ListViewCard({
                   <Link to={url!}>
                     {certifiedBy && (
                       <>
-                        <CertifiedBadge
+                        <CertifiedIcon
                           certifiedBy={certifiedBy}
                           details={certificationDetails}
                         />{' '}

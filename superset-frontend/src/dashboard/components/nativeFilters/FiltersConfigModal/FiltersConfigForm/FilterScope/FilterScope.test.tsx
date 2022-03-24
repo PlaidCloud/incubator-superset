@@ -27,24 +27,18 @@ import {
 import { mockStoreWithChartsInTabsAndRoot } from 'spec/fixtures/mockStore';
 import { Form, FormInstance } from 'src/common/components';
 import { NativeFiltersForm } from 'src/dashboard/components/nativeFilters/FiltersConfigModal/types';
-import FiltersConfigForm, {
-  FilterPanels,
-} from 'src/dashboard/components/nativeFilters/FiltersConfigModal/FiltersConfigForm/FiltersConfigForm';
+import FiltersConfigForm from 'src/dashboard/components/nativeFilters/FiltersConfigModal/FiltersConfigForm/FiltersConfigForm';
 
 describe('FilterScope', () => {
   const save = jest.fn();
   let form: FormInstance<NativeFiltersForm>;
   const mockedProps = {
     filterId: 'DefaultFilterId',
-    parentFilters: [],
-    setErroredFilters: jest.fn(),
-    onFilterHierarchyChange: jest.fn(),
     restoreFilter: jest.fn(),
+    setErroredFilters: jest.fn(),
+    parentFilters: [],
     save,
     removedFilters: {},
-    handleActiveFilterPanelChange: jest.fn(),
-    activeFilterPanelKeys: `DefaultFilterId-${FilterPanels.basic.key}`,
-    isActive: true,
   };
 
   const MockModal = ({ scope }: { scope?: object }) => {

@@ -147,62 +147,61 @@ export default function DatabaseSelector({
   const [refresh, setRefresh] = useState(0);
   const { addSuccessToast } = useToasts();
   const loadDatabases = useMemo(
-    () =>
-      async (
-        search: string,
-        page: number,
-        pageSize: number,
-      ): Promise<{
-        data: DatabaseValue[];
-        totalCount: number;
-      }> => {
-        const queryParams = rison.encode({
-          order_columns: 'database_name',
-          order_direction: 'asc',
-          page,
-          page_size: pageSize,
-          ...(formMode || !sqlLabMode
-            ? { filters: [{ col: 'database_name', opr: 'ct', value: search }] }
-            : {
-                filters: [
-                  { col: 'database_name', opr: 'ct', value: search },
-                  {
-                    col: 'expose_in_sqllab',
-                    opr: 'eq',
-                    value: true,
-                  },
-                ],
-              }),
-        });
-        const endpoint = `/api/v1/database/?q=${queryParams}`;
-        return SupersetClient.get({ endpoint }).then(({ json }) => {
-          const { result } = json;
-          if (getDbList) {
-            getDbList(result);
-          }
-          if (result.length === 0) {
-            handleError(t("It seems you don't have access to any database"));
-          }
-          const options = result.map((row: DatabaseObject) => ({
-            label: (
-              <SelectLabel
-                backend={row.backend}
-                databaseName={row.database_name}
-              />
-            ),
-            value: row.id,
-            id: row.id,
-            database_name: row.database_name,
-            backend: row.backend,
-            allow_multi_schema_metadata_fetch:
-              row.allow_multi_schema_metadata_fetch,
-          }));
-          return {
-            data: options,
-            totalCount: options.length,
-          };
-        });
-      },
+    () => async (
+      search: string,
+      page: number,
+      pageSize: number,
+    ): Promise<{
+      data: DatabaseValue[];
+      totalCount: number;
+    }> => {
+      const queryParams = rison.encode({
+        order_columns: 'database_name',
+        order_direction: 'asc',
+        page,
+        page_size: pageSize,
+        ...(formMode || !sqlLabMode
+          ? { filters: [{ col: 'database_name', opr: 'ct', value: search }] }
+          : {
+              filters: [
+                { col: 'database_name', opr: 'ct', value: search },
+                {
+                  col: 'expose_in_sqllab',
+                  opr: 'eq',
+                  value: true,
+                },
+              ],
+            }),
+      });
+      const endpoint = `/api/v1/database/?q=${queryParams}`;
+      return SupersetClient.get({ endpoint }).then(({ json }) => {
+        const { result } = json;
+        if (getDbList) {
+          getDbList(result);
+        }
+        if (result.length === 0) {
+          handleError(t("It seems you don't have access to any database"));
+        }
+        const options = result.map((row: DatabaseObject) => ({
+          label: (
+            <SelectLabel
+              backend={row.backend}
+              databaseName={row.database_name}
+            />
+          ),
+          value: row.id,
+          id: row.id,
+          database_name: row.database_name,
+          backend: row.backend,
+          allow_multi_schema_metadata_fetch:
+            row.allow_multi_schema_metadata_fetch,
+        }));
+        return {
+          data: options,
+          totalCount: options.length,
+        };
+      });
+    },
     [formMode, getDbList, handleError, sqlLabMode],
   );
 
@@ -215,19 +214,22 @@ export default function DatabaseSelector({
       // TODO: Would be nice to add pagination in a follow-up. Needs endpoint changes.
       SupersetClient.get({ endpoint })
         .then(({ json }) => {
-          const options = json.result.map((s: string) => ({
-            value: s,
-            label: s,
-            title: s,
-          }));
+          const options = json.result
+            .map((s: string) => ({
+              value: s,
+              label: s,
+              title: s,
+            }))
+            .sort((a: { label: string }, b: { label: string }) =>
+              a.label.localeCompare(b.label),
+            );
           if (onSchemasLoad) {
             onSchemasLoad(options);
           }
           setSchemaOptions(options);
           setLoadingSchemas(false);
-          if (refresh > 0) addSuccessToast('List refreshed');
         })
-        .catch(() => {
+        .catch(e => {
           setLoadingSchemas(false);
           handleError(t('There was an error loading the schemas'));
         });

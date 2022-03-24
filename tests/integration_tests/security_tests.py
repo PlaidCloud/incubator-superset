@@ -39,11 +39,7 @@ from superset.exceptions import SupersetSecurityException
 from superset.models.core import Database
 from superset.models.slice import Slice
 from superset.sql_parse import Table
-from superset.utils.core import (
-    backend,
-    get_example_default_schema,
-)
-from superset.utils.database import get_example_database
+from superset.utils.core import get_example_database, get_example_default_schema
 from superset.views.access_requests import AccessRequestsModelView
 
 from .base_tests import SupersetTestCase

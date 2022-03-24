@@ -117,6 +117,14 @@ const plugins = [
     'process.env.WEBPACK_MODE': JSON.stringify(mode),
   }),
 
+  // runs type checking on a separate process to speed up the build
+  new ForkTsCheckerWebpackPlugin({
+    eslint: {
+      files: './src/**/*.{ts,tsx,js,jsx}',
+      memoryLimit: 4096,
+    },
+  }),
+
   new CopyPlugin({
     patterns: [
       'package.json',
@@ -150,19 +158,6 @@ if (!isDevMode) {
     new MiniCssExtractPlugin({
       filename: '[name].[chunkhash].entry.css',
       chunkFilename: '[name].[chunkhash].chunk.css',
-    }),
-  );
-
-  plugins.push(
-    // runs type checking on a separate process to speed up the build
-    new ForkTsCheckerWebpackPlugin({
-      eslint: {
-        files: './{src,packages,plugins}/**/*.{ts,tsx,js,jsx}',
-        memoryLimit: 4096,
-        options: {
-          ignorePath: './.eslintignore',
-        },
-      },
     }),
   );
 }
@@ -208,7 +203,6 @@ const config = {
     theme: path.join(APP_DIR, '/src/theme.ts'),
     menu: addPreamble('src/views/menu.tsx'),
     spa: addPreamble('/src/views/index.tsx'),
-    embedded: addPreamble('/src/embedded/index.tsx'),
     addSlice: addPreamble('/src/addSlice/index.tsx'),
     explore: addPreamble('/src/explore/index.jsx'),
     sqllab: addPreamble('/src/SqlLab/index.tsx'),
@@ -280,16 +274,23 @@ const config = {
       },
     },
     usedExports: 'global',
-    minimizer: [new CssMinimizerPlugin(), '...'],
+    minimizer: [new CssMinimizerPlugin()],
   },
   resolve: {
-    // resolve modules from `/superset_frontend/node_modules` and `/superset_frontend`
-    modules: ['node_modules', APP_DIR],
+    modules: [APP_DIR, 'node_modules', ROOT_DIR],
     alias: {
-      // TODO: remove aliases once React has been upgraded to v. 17 and
-      //  AntD version conflict has been resolved
-      antd: path.resolve(path.join(APP_DIR, './node_modules/antd')),
-      react: path.resolve(path.join(APP_DIR, './node_modules/react')),
+      'react-dom': '@hot-loader/react-dom',
+      // Force using absolute import path of some packages in the root node_modules,
+      // as they can be dependencies of other packages via `npm link`.
+      '@superset-ui/core': path.resolve(
+        APP_DIR,
+        './node_modules/@superset-ui/core',
+      ),
+      '@superset-ui/chart-controls': path.resolve(
+        APP_DIR,
+        './node_modules/@superset-ui/chart-controls',
+      ),
+      react: path.resolve('./node_modules/react'),
     },
     extensions: ['.ts', '.tsx', '.js', '.jsx', '.yml'],
     fallback: {
@@ -339,7 +340,9 @@ const config = {
         // include source code for plugins, but exclude node_modules and test files within them
         exclude: [/superset-ui.*\/node_modules\//, /\.test.jsx?$/],
         include: [
-          new RegExp(`${APP_DIR}/(src|.storybook|plugins|packages)`),
+          new RegExp(`${APP_DIR}/src`),
+          /superset-ui.*\/src/,
+          new RegExp(`${APP_DIR}/.storybook`),
           /@encodable/,
         ],
         use: [babelLoader],
@@ -415,10 +418,6 @@ const config = {
         include: ROOT_DIR,
         loader: 'js-yaml-loader',
       },
-      {
-        test: /\.geojson$/,
-        type: 'asset/resource',
-      },
     ],
   },
   externals: {
@@ -429,18 +428,6 @@ const config = {
   plugins,
   devtool: false,
 };
-
-// find all the symlinked plugins and use their source code for imports
-Object.entries(packageConfig.dependencies).forEach(([pkg, relativeDir]) => {
-  const srcPath = path.join(APP_DIR, `./node_modules/${pkg}/src`);
-  const dir = relativeDir.replace('file:', '');
-
-  if (/^@superset-ui/.test(pkg) && fs.existsSync(srcPath)) {
-    console.log(`[Superset Plugin] Use symlink source for ${pkg} @ ${dir}`);
-    config.resolve.alias[pkg] = path.resolve(APP_DIR, `${dir}/src`);
-  }
-});
-console.log(''); // pure cosmetic new line
 
 let proxyConfig = getProxyConfig();
 
@@ -469,6 +456,34 @@ if (isDevMode) {
     },
     static: path.join(process.cwd(), '../static/assets'),
   };
+
+  // make sure to use @emotion/* modules in the root directory
+  fs.readdirSync(path.resolve(APP_DIR, './node_modules/@emotion'), pkg => {
+    config.resolve.alias[pkg] = path.resolve(
+      APP_DIR,
+      './node_modules/@emotion',
+      pkg,
+    );
+  });
+
+  // find all the symlinked plugins and use their source code for imports
+  let hasSymlink = false;
+  Object.entries(packageConfig.dependencies).forEach(([pkg, version]) => {
+    const srcPath = `./node_modules/${pkg}/src`;
+    if (/superset-ui/.test(pkg) && fs.existsSync(srcPath)) {
+      console.log(
+        `[Superset Plugin] Use symlink source for ${pkg} @ ${version}`,
+      );
+      // only allow exact match so imports like `@superset-ui/plugin-name/lib`
+      // and `@superset-ui/plugin-name/esm` can still work.
+      config.resolve.alias[`${pkg}$`] = `${pkg}/src`;
+      delete config.resolve.alias[pkg];
+      hasSymlink = true;
+    }
+  });
+  if (hasSymlink) {
+    console.log(''); // pure cosmetic new line
+  }
 }
 
 // Bundle analyzer is disabled by default

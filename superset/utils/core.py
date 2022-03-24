@@ -96,6 +96,7 @@ from superset.exceptions import (
     SupersetException,
     SupersetTimeoutException,
 )
+from superset.sql_parse import sanitize_clause
 from superset.typing import (
     AdhocColumn,
     AdhocMetric,
@@ -1214,6 +1215,15 @@ def get_example_default_schema() -> Optional[str]:
     return inspect(engine).default_schema_name
 
 
+def get_example_default_schema() -> Optional[str]:
+    """
+    Return the default schema of the examples database, if any.
+    """
+    database = get_example_database()
+    engine = database.get_sqla_engine()
+    return inspect(engine).default_schema_name
+
+
 def backend() -> str:
     return get_example_database().backend
 
@@ -1353,10 +1363,12 @@ def split_adhoc_filters_into_base_filters(  # pylint: disable=invalid-name
                         }
                     )
             elif expression_type == "SQL":
+                sql_expression = adhoc_filter.get("sqlExpression")
+                sql_expression = sanitize_clause(sql_expression)
                 if clause == "WHERE":
-                    sql_where_filters.append(adhoc_filter.get("sqlExpression"))
+                    sql_where_filters.append(sql_expression)
                 elif clause == "HAVING":
-                    sql_having_filters.append(adhoc_filter.get("sqlExpression"))
+                    sql_having_filters.append(sql_expression)
         form_data["where"] = " AND ".join(
             ["({})".format(sql) for sql in sql_where_filters]
         )

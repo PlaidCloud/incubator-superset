@@ -25,6 +25,7 @@ import { t, SafeMarkdown } from '@superset-ui/core';
 import { Logger, LOG_ACTIONS_RENDER_CHART } from 'src/logger/LogUtils';
 import { MarkdownEditor } from 'src/components/AsyncAceEditor';
 
+import HoverMenu from 'src/dashboard/components/menu/HoverMenu';
 import DeleteComponentButton from 'src/dashboard/components/DeleteComponentButton';
 import DragDroppable from 'src/dashboard/components/dnd/DragDroppable';
 import HoverMenu from 'src/dashboard/components/menu/HoverMenu';

@@ -151,13 +151,7 @@ export interface SelectProps extends PickedSelectProps {
    * Undefined by default.
    */
   fetchOnlyOnSearch?: boolean;
-  /**
-   * It provides a callback function when an error
-   * is generated after a request is fired.
-   * Works in async mode only (See the options property).
-   */
   onError?: (error: string) => void;
-  sortComparator?: (a: AntdLabeledValue, b: AntdLabeledValue) => number;
 }
 
 const StyledContainer = styled.div`
@@ -448,6 +442,13 @@ const Select = ({
     [onError],
   );
 
+        if (onError) {
+          onError(error);
+        }
+      }),
+    [onError],
+  );
+
   const handleData = useCallback(
     (data: OptionsType) => {
       let mergedData: OptionsType = [];
@@ -513,7 +514,7 @@ const Select = ({
           setIsTyping(false);
         });
     },
-    [allValuesLoaded, fetchOnlyOnSearch, handleData, internalOnError, options],
+    [allValuesLoaded, fetchOnlyOnSearch, internalOnError, options],
   );
 
   const handleOnSearch = useMemo(

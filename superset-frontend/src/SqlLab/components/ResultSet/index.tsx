@@ -162,7 +162,6 @@ const updateDataset = async (
     sql,
     columns,
     owners,
-    database_id: dbId,
   });
 
   const data: JsonResponse = await SupersetClient.put({

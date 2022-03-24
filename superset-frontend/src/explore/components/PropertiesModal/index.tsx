@@ -26,16 +26,14 @@ import rison from 'rison';
 import { t, SupersetClient, styled } from '@superset-ui/core';
 import Chart, { Slice } from 'src/types/Chart';
 import { getClientErrorObject } from 'src/utils/getClientErrorObject';
-import withToasts from 'src/components/MessageToasts/withToasts';
 
-export type PropertiesModalProps = {
+type PropertiesModalProps = {
   slice: Slice;
   show: boolean;
   onHide: () => void;
   onSave: (chart: Chart) => void;
   permissionsError?: string;
   existingOwners?: SelectValue;
-  addSuccessToast: (msg: string) => void;
 };
 
 const FormItem = Form.Item;
@@ -48,12 +46,11 @@ const StyledHelpBlock = styled.span`
   margin-bottom: 0;
 `;
 
-function PropertiesModal({
+export default function PropertiesModal({
   slice,
   onHide,
   onSave,
   show,
-  addSuccessToast,
 }: PropertiesModalProps) {
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
@@ -97,25 +94,24 @@ function PropertiesModal({
   );
 
   const loadOptions = useMemo(
-    () =>
-      (input = '', page: number, pageSize: number) => {
-        const query = rison.encode({
-          filter: input,
-          page,
-          page_size: pageSize,
-        });
-        return SupersetClient.get({
-          endpoint: `/api/v1/chart/related/owners?q=${query}`,
-        }).then(response => ({
-          data: response.json.result.map(
-            (item: { value: number; text: string }) => ({
-              value: item.value,
-              label: item.text,
-            }),
-          ),
-          totalCount: response.json.count,
-        }));
-      },
+    () => (input = '', page: number, pageSize: number) => {
+      const query = rison.encode({
+        filter: input,
+        page,
+        page_size: pageSize,
+      });
+      return SupersetClient.get({
+        endpoint: `/api/v1/chart/related/owners?q=${query}`,
+      }).then(response => ({
+        data: response.json.result.map(
+          (item: { value: number; text: string }) => ({
+            value: item.value,
+            label: item.text,
+          }),
+        ),
+        totalCount: response.json.count,
+      }));
+    },
     [],
   );
 
@@ -141,12 +137,10 @@ function PropertiesModal({
         certifiedBy && certificationDetails ? certificationDetails : null,
     };
     if (selectedOwners) {
-      payload.owners = (
-        selectedOwners as {
-          value: number;
-          label: string;
-        }[]
-      ).map(o => o.value);
+      payload.owners = (selectedOwners as {
+        value: number;
+        label: string;
+      }[]).map(o => o.value);
     }
     try {
       const res = await SupersetClient.put({
@@ -160,7 +154,6 @@ function PropertiesModal({
         id: slice.slice_id,
       };
       onSave(updatedChart);
-      addSuccessToast(t('Chart properties updated'));
       onHide();
     } catch (res) {
       const clientError = await getClientErrorObject(res);
@@ -233,7 +226,6 @@ function PropertiesModal({
             <h3>{t('Basic information')}</h3>
             <FormItem label={t('Name')} required>
               <Input
-                aria-label={t('Name')}
                 name="name"
                 data-test="properties-modal-name-input"
                 type="text"
@@ -312,5 +304,3 @@ function PropertiesModal({
     </Modal>
   );
 }
-
-export default withToasts(PropertiesModal);
