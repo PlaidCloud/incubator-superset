@@ -16,8 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-// import React, { ReactNode, useState, useMemo, useEffect } from 'react';
-import React, { ReactNode, useState, useEffect } from 'react';
+import React, { ReactNode, useState, useMemo, useEffect } from 'react';
 import { styled, SupersetClient, t } from '@superset-ui/core';
 import rison from 'rison';
 import { Select } from 'src/components';
@@ -25,7 +24,6 @@ import Label from 'src/components/Label';
 import { FormLabel } from 'src/components/Form';
 import RefreshLabel from 'src/components/RefreshLabel';
 import { useToasts } from 'src/components/MessageToasts/withToasts';
-import SupersetAsyncSelect from 'src/components/AsyncSelect';
 
 const DatabaseSelectorWrapper = styled.div`
   ${({ theme }) => `
@@ -88,11 +86,6 @@ export type DatabaseObject = {
 
 type SchemaValue = { label: string; value: string };
 
-const DatabaseOption = styled.span`
-  display: inline-flex;
-  align-items: center;
-`;
-
 interface DatabaseSelectorProps {
   db?: DatabaseObject;
   formMode?: boolean;
@@ -153,7 +146,6 @@ export default function DatabaseSelector({
   );
   const [refresh, setRefresh] = useState(0);
   const { addSuccessToast } = useToasts();
-  /*
   const loadDatabases = useMemo(
     () =>
       async (
@@ -213,7 +205,6 @@ export default function DatabaseSelector({
       },
     [formMode, getDbList, handleError, sqlLabMode],
   );
-  */
 
   useEffect(() => {
     if (currentDb) {
@@ -243,22 +234,6 @@ export default function DatabaseSelector({
     }
   }, [currentDb, onSchemasLoad, refresh]);
 
-  function dbMutator(data: any) {
-    if (getDbList) {
-      getDbList(data.result);
-    }
-    if (data.result.length === 0) {
-      handleError(t("It seems you don't have access to any database"));
-    }
-    return data.result.map((row: DatabaseObject) => ({
-      ...row,
-      // label is used for the typeahead
-      // ADT2022: I think row should maybe actually be a database value?
-      // Actually, maybe this should match the other place where we map across a list of DatabaseObjects
-      label: `${row.backend} ${row.database_name}`,
-    }));
-  }
-
   function changeDataBase(
     value: { label: string; value: number },
     database: DatabaseValue,
@@ -280,14 +255,6 @@ export default function DatabaseSelector({
     }
   }
 
-  function renderDatabaseOption(db: DatabaseValue) {
-    return (
-      <DatabaseOption title={db.database_name}>
-        <Label type="default">{db.backend}</Label> {db.database_name}
-      </DatabaseOption>
-    );
-  }
-
   function renderSelectRow(select: ReactNode, refreshBtn: ReactNode) {
     return (
       <div className="section">
@@ -298,50 +265,18 @@ export default function DatabaseSelector({
   }
 
   function renderDatabaseSelect() {
-    const queryParams = rison.encode({
-      order_columns: 'database_name',
-      order_direction: 'asc',
-      page: 0,
-      page_size: -1,
-      ...(formMode || !sqlLabMode
-        ? {}
-        : {
-            filters: [
-              {
-                col: 'expose_in_sqllab',
-                opr: 'eq',
-                value: true,
-              },
-            ],
-          }),
-    });
-
     return renderSelectRow(
-      <SupersetAsyncSelect
-        ariaLabel={t('Select database or type database name')}
+      <Select
+        ariaLabel={t('Select project or type project name')}
         optionFilterProps={['database_name', 'value']}
         data-test="select-database"
-        dataEndpoint={`/api/v1/database/?q=${queryParams}`}
-        onChange={changeDataBase}
-        onAsyncError={() =>
-          handleError(t('Error while fetching database list'))
-        }
-        clearable={false}
-        value={currentDb}
-        valueKey="id"
-        valueRenderer={(db: DatabaseValue) => (
-          <div>
-            <span className="text-muted m-r-5">{t('Project:')}</span>
-            {renderDatabaseOption(db)}
-          </div>
-        )}
-        optionRenderer={renderDatabaseOption}
-        mutator={dbMutator}
-        header={<FormLabel>{t('Database')}</FormLabel>}
+        header={<FormLabel>{t('Project')}</FormLabel>}
         lazyLoading={false}
-        placeholder={t('Select database or type database name')}
+        onChange={changeDataBase}
+        value={currentDb}
+        placeholder={t('Select project or type project name')}
         disabled={!isDatabaseSelectEnabled || readOnly}
-        // options={loadDatabases}
+        options={loadDatabases}
       />,
       null,
     );

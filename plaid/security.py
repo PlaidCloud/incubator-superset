@@ -7,7 +7,7 @@ import redis
 import uuid
 import time
 from sqlalchemy import func, Table, MetaData
-from typing import Union
+from typing import Union, List
 from urllib.parse import urljoin
 from superset.extensions import cache_manager
 from superset.security import SupersetSecurityManager
@@ -133,10 +133,10 @@ class PlaidSecurityManager(SupersetSecurityManager):
         table = rpc.analyze.table.table(project_id=datasource.schema.replace("report", ""), table_id=table_id)
         log.debug(table)
         if table["id"] is None:
-            table = rpc.analyze.table.table(project_id=datasource.schema.replace("report", ""), table_id=table_id_without_dashes)            
+            table = rpc.analyze.table.table(project_id=datasource.schema.replace("report", ""), table_id=table_id_without_dashes)
             log.debug(table)
         return table.get('id', None) is not None
-        
+
 
     def get_project_ids(self):
         from superset.models.core import Database
@@ -148,6 +148,21 @@ class PlaidSecurityManager(SupersetSecurityManager):
         project_uuids = {str(uuid.UUID(project['id'])) for project in projects}
         log.error(project_uuids)
         return self.get_session.query(Database.id).filter(Database.uuid.in_(project_uuids))
+
+
+    def get_schemas_accessible_by_user(
+            self, database: "Database", schemas: List[str], hierarchical: bool = True
+    ) -> List[str]:
+        REPORTING_SCHEMA_PREFIX = 'report'
+
+        schema = str(database.uuid)
+        if not schema.startswith(REPORTING_SCHEMA_PREFIX):
+            schema = f'{REPORTING_SCHEMA_PREFIX}{schema}'
+
+        if schema in schemas:
+            return [schema]
+
+        return []
 
 
     def get_table_ids(self):
