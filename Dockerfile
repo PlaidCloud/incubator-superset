@@ -61,8 +61,7 @@ COPY ./docker/frontend-mem-nag.sh /
 COPY ./superset-frontend /app/superset-frontend
 RUN /frontend-mem-nag.sh \
         && cd /app/superset-frontend \
-        # && npm ci
-        && npm install
+        && npm ci
 
 # This seems to be the most expensive step
 RUN cd /app/superset-frontend \
