@@ -5,8 +5,8 @@ Plaid Security Class for Superset
 import logging
 import uuid
 import time
-from pprint import pprint
-from typing import Union
+from typing import Union, List
+from sqlalchemy import func, Table, MetaData
 from urllib.parse import urljoin
 from superset.security import SupersetSecurityManager
 from flask import session
@@ -131,7 +131,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
             table = rpc.analyze.table.table(project_id=datasource.schema.replace("report", ""), table_id=table_id_without_dashes)            
         log.debug(f"Underlying table for datasource {datasource.uuid}: {table}")
         return table.get('id', None) is not None
-        
+
 
     def get_project_ids(self):
         from superset.models.core import Database
@@ -143,6 +143,21 @@ class PlaidSecurityManager(SupersetSecurityManager):
         project_uuids = {str(uuid.UUID(project['id'])) for project in projects}
         log.debug(f"Project IDs: {project_uuids}")
         return self.get_session.query(Database.id).filter(Database.uuid.in_(project_uuids))
+
+
+    def get_schemas_accessible_by_user(
+            self, database: "Database", schemas: List[str], hierarchical: bool = True
+    ) -> List[str]:
+        REPORTING_SCHEMA_PREFIX = 'report'
+
+        schema = str(database.uuid)
+        if not schema.startswith(REPORTING_SCHEMA_PREFIX):
+            schema = f'{REPORTING_SCHEMA_PREFIX}{schema}'
+
+        if schema in schemas:
+            return [schema]
+
+        return []
 
 
     def get_table_ids(self):
