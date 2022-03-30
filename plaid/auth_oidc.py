@@ -1,4 +1,5 @@
 import sys
+import logging
 from uuid import uuid4
 from urllib.parse import urljoin, urlparse
 from flask import redirect, url_for, session, make_response
@@ -6,7 +7,7 @@ from flask_appbuilder.security.views import AuthOIDView
 from flask_appbuilder import expose
 from flask_login import login_user, logout_user
 
-
+log = logging.getLogger(__name__)
 class AuthOIDCView(AuthOIDView):
 
     @expose('/login/', methods=['GET', 'POST'])
@@ -20,7 +21,7 @@ class AuthOIDCView(AuthOIDView):
         oauth = self.appbuilder.sm.oauth
         token = oauth.plaid.authorize_access_token()
         userinfo = oauth.plaid.parse_id_token(token)
-        print(userinfo, file=sys.stderr)
+        log.debug(f"Fetched user info from token: {userinfo}")
         user = self.appbuilder.sm.find_user(email=userinfo['email'].lower())
         if not user:
             plaid_role = self.appbuilder.sm.find_role("Plaid")

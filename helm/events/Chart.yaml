@@ -1,0 +1,9 @@
+apiVersion: v2
+appVersion: "1.0"
+description: PlaidCloud API events processing for Superset instances.
+name: events
+maintainers:
+  - name: gbates101
+    email: garrett.bates@tartansolutions.com
+    url: https://github.com/PlaidCloud
+version: 0.1.0

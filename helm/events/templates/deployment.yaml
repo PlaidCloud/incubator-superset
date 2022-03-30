@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "events.fullname" . }}
+  labels:
+    app.kubernetes.io/component: superset-events
+    app.kubernetes.io/name: {{ include "events.fullname" . }}
+    app.kubernetes.io/version: {{ .Values.image.tag }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/part-of: {{ template "events.name" . }}
+    helm.sh/chart: {{ template "events.chartref" . }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ template "events.name" . }}
+      release: {{ .Release.Name }}
+      component: superset-events
+  template:
+    metadata:
+      labels:
+        app: {{ template "events.name" . }}
+        release: {{ .Release.Name }}
+        component: superset-events
+    spec:
+      containers:
+        - name: events
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: {{  tpl (toJson .Values.entrypoint ) . }}
+          {{- if .Values.extraEnv }}
+          env:
+            {{- range $key, $value := .Values.extraEnv }}
+            - name: {{ $key | quote}}
+              value: {{ $value | quote }}
+            {{- end }}
+          {{- end }}
+          volumeMounts:
+            - name: superset-config
+              mountPath: {{ .Values.configMountPath | quote }}
+              readOnly: true
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+    {{- if .Values.image.pullSecret }}
+      imagePullSecrets:
+      - name: {{ .Values.image.pullSecret }}
+    {{- end }}
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+      volumes:
+        - name: superset-config
+          secret:
+            secretName: {{ .Values.configSecretName }}

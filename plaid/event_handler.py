@@ -180,7 +180,7 @@ class EventHandler():
 
 
         def insert_project(event_data):
-            if not db.session.query(db.session.query(Database).filter_by(verbose_name=event_data['id']).exists()).scalar():
+            if not db.session.query(db.session.query(Database).filter_by(uuid=event_data['id']).exists()).scalar():
                 # Project doesn't exist, so make a new one.
                 log.info(f"Inserting project {event_data['name']} ({event_data['id']}).")
                 new_project = map_data_to_row(event_data)
@@ -194,7 +194,7 @@ class EventHandler():
         def update_project(event_data):
             try:
                 log.info(f"Updating project {event_data['name']} ({event_data['id']}).")
-                existing_project = db.session.query(Database).filter_by(verbose_name=event_data['id']).one()
+                existing_project = db.session.query(Database).filter_by(uuid=event_data['id']).one()
             except NoResultFound:
                 # TODO: Log a warning here. A project should exist.
                 insert_project(event_data)
@@ -207,7 +207,7 @@ class EventHandler():
             # TODO: Deleting a table associated with a chart breaks UI (can't set new datasource, can only delete chart)
             # Need to figure out how to handle this circumstance (delete charts too? update dataousrce to placeholder?)
             # If update to placeholder, how to regulate perms?
-            project = db.session.query(Database).filter_by(verbose_name=event_data['id']).one()
+            project = db.session.query(Database).filter_by(uuid=event_data['id']).one()
             for table in project.tables:
                 log.info(f"Deleting table {table.table_name} ({table.uuid}).")
                 db.session.delete(table)
@@ -262,7 +262,7 @@ class EventHandler():
 
                     # Test if source table/view actually exists before we add it.
                     try:
-                        project = db.session.query(Database).filter_by(verbose_name=kwargs['project_id']).one()
+                        project = db.session.query(Database).filter_by(uuid=kwargs['project_id']).one()
                         log.info(project.get_all_view_names_in_schema(schema=new_table.schema))
                         # TODO: This is pretty dumb. Event is being processed before the DB can create the view. 
                         time.sleep(2)
