@@ -36,6 +36,7 @@ REQUIRED_FIELDS = {'event', 'type', 'data'}
 User = security_manager.user_model
 Role = security_manager.role_model
 
+
 class BaseEnum(Enum):
     # TODO: Figure out how to avoid copy/pasting this class (and subclasses) from plaid.
     # maybe add it to plaidtools somehow?
@@ -68,7 +69,8 @@ class EventType(BaseEnum):
     WorkspaceAccessChange = 'workspace-access-change'
     ProjectAccessChange = 'project-access-change'
 
-class EventHandler():
+
+class EventHandler:
     """Handles plaid-sourced events from a message queue."""
 
     def __init__(self):
@@ -84,7 +86,6 @@ class EventHandler():
         password = rmq_connection_info.get('password', 'cocoa puffs')
         self.credentials = pika.PlainCredentials(username, password)
 
-
     def _connect(self):
         """Docstring"""
         connection = pika.BlockingConnection(
@@ -98,7 +99,6 @@ class EventHandler():
         )
         return connection.channel()
 
-
     def consume(self):
         """Docstring"""
         channel = self._connect()
@@ -110,7 +110,6 @@ class EventHandler():
             # Comment this out for debugging so messages aren't requeued.
             channel.basic_ack(method.delivery_tag)
             self.process_event(data)
-
 
     def process_event(self, info):
         try:
@@ -152,7 +151,6 @@ class EventHandler():
         
         db.session.commit()
 
-
     def _handle_project_event(self, event_type, data, **kwargs):
         def map_data_to_row(event_data, existing_project=None):
             if isinstance(existing_project, Database):
@@ -178,7 +176,6 @@ class EventHandler():
 
             return proj
 
-
         def insert_project(event_data):
             if not db.session.query(db.session.query(Database).filter_by(verbose_name=event_data['id']).exists()).scalar():
                 # Project doesn't exist, so make a new one.
@@ -190,7 +187,6 @@ class EventHandler():
                 # TODO: Log a warning here. No project should exist.
                 update_project(event_data)
 
-
         def update_project(event_data):
             try:
                 log.info(f"Updating project {event_data['name']} ({event_data['id']}).")
@@ -201,7 +197,6 @@ class EventHandler():
             else:
                 map_data_to_row(event_data, existing_project)
                 db.session.commit()
-
 
         def delete_project(event_data):
             # TODO: Deleting a table associated with a chart breaks UI (can't set new datasource, can only delete chart)
@@ -215,14 +210,12 @@ class EventHandler():
             db.session.delete(project)
             db.session.commit()
 
-
         if event_type is EventType.Create:
             insert_project(data)
         elif event_type is EventType.Update:
             update_project(data)
         elif event_type is EventType.Delete:
             delete_project(data)
-
 
     def _handle_table_event(self, event_type, data, **kwargs):
 
@@ -238,7 +231,6 @@ class EventHandler():
             table.schema = f"report{kwargs['project_id']}"
 
             return table
-
 
         def insert_table(event_data):
             if not event_data.get("published_name"):
@@ -288,7 +280,6 @@ class EventHandler():
                 log.warning("Received a create event for a table, but the table already exists.")
                 update_table(event_data)
 
-
         def update_table(event_data):
             try:
                 log.info(f"Updating table {event_data['published_name']} ({event_data['id']}) for project {kwargs['project_id']}.")
@@ -312,12 +303,11 @@ class EventHandler():
                 log.exception("Error occurred while updating a table.")
                 db.session.rollback()
 
-
         def delete_table(event_data):
             try:
-                log.info(f"Deleting table {event_data['published_name']} for project {kwargs['project_id']}.")
+                log.info(f"Deleting table {event_data['published_name']} ({event_data['id']}) for project {kwargs['project_id']}.")
                 table = db.session.query(SqlaTable).filter(
-                    SqlaTable.uuid == event_data['id'],
+                    SqlaTable.uuid == event_data['id'].replace('analyzetable_', ''),
                     SqlaTable.schema == f"report{kwargs['project_id']}",
                 ).one()
 
@@ -342,7 +332,6 @@ class EventHandler():
                 log.exception("Error occurred while deleting a table.")
                 db.session.rollback()
 
-
         if event_type is EventType.Create:
             insert_table(data)
         elif event_type is EventType.Update:
@@ -350,11 +339,9 @@ class EventHandler():
         elif event_type is EventType.Delete:
             delete_table(data)
 
-
     # TODO: Do we even care about views here? Are views what I think they are?
     def _handle_view_event(self, event_type, data, **kwargs):
         raise NotImplementedError()
-
 
     def _handle_passthrough(self, event_type, data, **kwargs):
         # TODO: Should we debug log unhandled events?
