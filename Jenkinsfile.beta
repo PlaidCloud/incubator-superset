@@ -11,7 +11,7 @@ podTemplate(label: 'superset',
     properties([
       [$class: 'JiraProjectProperty'], buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '10', daysToKeepStr: '', numToKeepStr: '50')),
       parameters([
-        booleanParam(name: 'no_cache', defaultValue: true, description: 'Adds --no-cache flag to docker build command(s).'),
+        booleanParam(name: 'no_cache', defaultValue: false, description: 'Adds --no-cache flag to docker build command(s).'),
         booleanParam(name: 'skip_lint', defaultValue: true, description: 'Do not lint.'),
         booleanParam(name: 'full_lint', defaultValue: false, description: 'Lint all files.'),
         stringParam(name: 'image_name', defaultValue: 'gcr.io/plaidcloud-build/superset', description: 'Fully-qualified image name for GCR upload.'),
@@ -118,8 +118,8 @@ podTemplate(label: 'superset',
               withCredentials([string(credentialsId: 'argocd-token', variable: 'ARGOCD_AUTH_TOKEN')]) {
                 sh """
                   export ARGOCD_SERVER=deploy.plaidcloud.io
-                  argocd app set $params.argo_app -p image.repository="$params.image_name/production:$image_label"
-                  argocd app set $params.argo_app -p events.repository="$params.image_name/events:$image_label"
+                  argocd app set $params.argo_app -p image.tag="$image_label"
+                  argocd app set $params.argo_app-events -p image.tag="$image_label"
                 """
               }
             }

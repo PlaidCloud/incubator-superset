@@ -1,0 +1,32 @@
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: gcr.io/plaidcloud-build/superset/events
+  tag: beta-202201-2
+  pullPolicy: IfNotPresent
+  pullSecret: gcr-key
+
+entrypoint:
+  - python
+  - /plaid/plaid/event_handler.py
+
+configSecretName: plaid-superset-config-override
+
+extraEnv:
+  REDIS_HOST: plaid-superset-redis-headless
+  REDIS_PORT: 6379
+
+configMountPath: /app/pythonpath
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 1
+    memory: 1Gi
+
+nodeSelector: {}
+affinity: {}
+tolerations: []
