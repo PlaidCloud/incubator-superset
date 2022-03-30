@@ -125,9 +125,11 @@ class ChartRestApi(BaseSupersetModelRestApi):
         "slice_name",
         "viz_type",
         "query_context",
+        "is_managed_externally",
     ]
     show_select_columns = show_columns + ["table.id"]
     list_columns = [
+        "is_managed_externally",
         "certified_by",
         "certification_details",
         "cache_timeout",
@@ -838,10 +840,15 @@ class ChartRestApi(BaseSupersetModelRestApi):
                       type: string
                       format: binary
                     passwords:
-                      description: JSON map of passwords for each file
+                      description: >-
+                        JSON map of passwords for each featured database in the
+                        ZIP file. If the ZIP includes a database config in the path
+                        `databases/MyDatabase.yaml`, the password should be provided
+                        in the following format:
+                        `{"databases/MyDatabase.yaml": "my_password"}`.
                       type: string
                     overwrite:
-                      description: overwrite existing databases?
+                      description: overwrite existing charts?
                       type: boolean
           responses:
             200:

@@ -332,8 +332,9 @@ export function runQuery(query) {
       expand_data: true,
     };
 
+    const search = window.location.search || '';
     return SupersetClient.post({
-      endpoint: '/superset/sql_json/',
+      endpoint: `/superset/sql_json/${search}`,
       body: JSON.stringify(postPayload),
       headers: { 'Content-Type': 'application/json' },
       parseMethod: 'text',
@@ -790,7 +791,11 @@ export function queryEditorSetSchema(queryEditor, schema) {
 
     return sync
       .then(() =>
-        dispatch({ type: QUERY_EDITOR_SET_SCHEMA, queryEditor, schema }),
+        dispatch({
+          type: QUERY_EDITOR_SET_SCHEMA,
+          queryEditor: queryEditor || {},
+          schema: schema || {},
+        }),
       )
       .catch(() =>
         dispatch(
@@ -1003,8 +1008,8 @@ export function queryEditorSetSelectedText(queryEditor, sql) {
   return { type: QUERY_EDITOR_SET_SELECTED_TEXT, queryEditor, sql };
 }
 
-export function mergeTable(table, query) {
-  return { type: MERGE_TABLE, table, query };
+export function mergeTable(table, query, prepend) {
+  return { type: MERGE_TABLE, table, query, prepend };
 }
 
 function getTableMetadata(table, query, dispatch) {
@@ -1016,28 +1021,13 @@ function getTableMetadata(table, query, dispatch) {
     ),
   })
     .then(({ json }) => {
-      const dataPreviewQuery = {
-        id: shortid.generate(),
-        dbId: query.dbId,
-        sql: json.selectStar,
-        tableName: table.name,
-        sqlEditorId: null,
-        tab: '',
-        runAsync: false,
-        ctas: false,
-        isDataPreview: true,
-      };
       const newTable = {
         ...table,
         ...json,
         expanded: true,
         isMetadataLoading: false,
-        dataPreviewQueryId: dataPreviewQuery.id,
       };
-      Promise.all([
-        dispatch(mergeTable(newTable, dataPreviewQuery)), // Merge table to tables in state
-        dispatch(runQuery(dataPreviewQuery)), // Run query to get preview data for table
-      ]);
+      dispatch(mergeTable(newTable)); // Merge table to tables in state
       return newTable;
     })
     .catch(() =>
@@ -1080,7 +1070,7 @@ function getTableExtendedMetadata(table, query, dispatch) {
     );
 }
 
-export function addTable(query, tableName, schemaName) {
+export function addTable(query, database, tableName, schemaName) {
   return function (dispatch) {
     const table = {
       dbId: query.dbId,
@@ -1089,12 +1079,16 @@ export function addTable(query, tableName, schemaName) {
       name: tableName,
     };
     dispatch(
-      mergeTable({
-        ...table,
-        isMetadataLoading: true,
-        isExtraMetadataLoading: true,
-        expanded: true,
-      }),
+      mergeTable(
+        {
+          ...table,
+          isMetadataLoading: true,
+          isExtraMetadataLoading: true,
+          expanded: true,
+        },
+        null,
+        true,
+      ),
     );
 
     return Promise.all([
@@ -1107,6 +1101,32 @@ export function addTable(query, tableName, schemaName) {
             postPayload: { table: { ...newTable, ...json } },
           })
         : Promise.resolve({ json: { id: shortid.generate() } });
+
+      if (!database.disable_data_preview && database.id === query.dbId) {
+        const dataPreviewQuery = {
+          id: shortid.generate(),
+          dbId: query.dbId,
+          sql: newTable.selectStar,
+          tableName: table.name,
+          sqlEditorId: null,
+          tab: '',
+          runAsync: database.allow_run_async,
+          ctas: false,
+          isDataPreview: true,
+        };
+        Promise.all([
+          dispatch(
+            mergeTable(
+              {
+                ...newTable,
+                dataPreviewQueryId: dataPreviewQuery.id,
+              },
+              dataPreviewQuery,
+            ),
+          ),
+          dispatch(runQuery(dataPreviewQuery)),
+        ]);
+      }
 
       return sync
         .then(({ json: resultJson }) =>

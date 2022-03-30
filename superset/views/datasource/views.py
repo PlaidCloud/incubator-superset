@@ -38,7 +38,7 @@ from superset.datasets.commands.exceptions import (
 from superset.exceptions import SupersetException, SupersetSecurityException
 from superset.extensions import security_manager
 from superset.models.core import Database
-from superset.typing import FlaskResponse
+from superset.superset_typing import FlaskResponse
 from superset.views.base import (
     api,
     BaseSupersetView,
@@ -161,8 +161,8 @@ class Datasource(BaseSupersetView):
     def external_metadata_by_name(self, **kwargs: Any) -> FlaskResponse:
         """Gets table metadata from the source system and SQLAlchemy inspector"""
         try:
-            params: ExternalMetadataParams = (
-                ExternalMetadataSchema().load(kwargs.get("rison"))
+            params: ExternalMetadataParams = ExternalMetadataSchema().load(
+                kwargs.get("rison")
             )
         except ValidationError as err:
             return json_error_response(str(err), status=400)
