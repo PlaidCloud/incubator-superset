@@ -70,12 +70,12 @@ googleapis-common-protos==1.56.0
     # via
     #   google-api-core
     #   grpcio-status
-grpcio==1.45.0
+grpcio==1.44.0
     # via
     #   google-api-core
     #   google-cloud-bigquery
     #   grpcio-status
-grpcio-status==1.45.0
+grpcio-status==1.44.0
     # via google-api-core
 ipdb==0.13.9
     # via -r requirements/testing.in
