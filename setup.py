@@ -85,6 +85,7 @@ setup(
         "flask-talisman",
         "flask-migrate",
         "flask-wtf",
+        "flask-openid",
         "func_timeout",
         "geopy",
         "graphlib-backport",
@@ -93,6 +94,7 @@ setup(
         "holidays==0.10.3",  # PINNED! https://github.com/dr-prodigy/python-holidays/issues/406
         "humanize",
         "isodate",
+        "jinja2<3.1",
         "markdown>=3.0",
         "msgpack>=1.0.0, <1.1",
         "pandas>=1.3.0, <1.4",
@@ -120,6 +122,7 @@ setup(
         # needed to support Literal (3.8) and TypeGuard (3.10)
         "typing-extensions>=3.10, <4",
         "wtforms-json",
+        "werkzeug<2.1",
     ],
     extras_require={
         "athena": ["pyathena>=1.10.8, <1.11"],

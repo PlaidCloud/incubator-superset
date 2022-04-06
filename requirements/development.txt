@@ -8,7 +8,7 @@
 -r base.txt
 -e file:.
     # via -r requirements/base.in
-boto3==1.21.33
+boto3==1.21.34
     # via tabulator
 botocore==1.24.34
     # via

@@ -28,7 +28,7 @@ pep517==0.12.0
     # via pip-tools
 pip-compile-multi==2.4.5
     # via -r requirements/integration.in
-pip-tools==6.5.1
+pip-tools==6.6.0
     # via pip-compile-multi
 platformdirs==2.5.1
     # via virtualenv
