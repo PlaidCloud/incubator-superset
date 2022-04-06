@@ -672,673 +672,24 @@ DEFAULT_MODULE_DS_MAP = OrderedDict(
 ADDITIONAL_MODULE_DS_MAP: Dict[str, List[str]] = {}
 ADDITIONAL_MIDDLEWARE: List[Callable[..., Any]] = []
 
----------------------------------------------------
-List of modules to add as subcommands to superset CLI.
-Useful for extending the CLI without modifying source.
-CLI module must assign an AppGroup instance to a 'group'
-variable (http://flask.pocoo.org/docs/1.0/cli/#custom-commands):
- group = AppGroup('name_of_my_subcommand')
-
- @group.command()
- def my_cli_magic():
----------------------------------------------------
-          CLI_MODULES = []
-
-"""
-1) https://docs.python-guide.org/writing/logging/
-2) https://docs.python.org/2/library/logging.config.html
-"""
-          # 1) https://docs.python-guide.org/writing/logging/
-          # 2) https://docs.python.org/2/library/logging.config.html
-
-# Default configurator will consume the LOG_* settings below
-LOGGING_CONFIGURATOR = DefaultLoggingConfigurator()
-
-# Console Log Settings
-
-LOG_FORMAT = "%(asctime)s:%(levelname)s:%(name)s:%(message)s"
-          LOG_LEVEL = "DEBUG"
-
 # ---------------------------------------------------
-          # Enable Time Rotate Log Handler
-          # ---------------------------------------------------
-          # LOG_LEVEL = DEBUG, INFO, WARNING, ERROR, CRITICAL
-
-ENABLE_TIME_ROTATE = False
-          TIME_ROTATE_LOG_LEVEL = "DEBUG"
-          FILENAME = os.path.join(DATA_DIR, "superset.log")
-          ROLLOVER = "midnight"
-          INTERVAL = 1
-          BACKUP_COUNT = 30
-
-# Custom logger for auditing queries. This can be used to send ran queries to a
-          # structured immutable store for auditing purposes. The function is called for
-          # every query ran, in both SQL Lab and charts/dashboards.
-          # def QUERY_LOGGER(
-          #     database,
-          #     query,
-          #     schema=None,
-          #     user=None,
-          #     client=None,
-          #     security_manager=None,
-          #     log_params=None,
-          # ):
-          #     pass
-QUERY_LOGGER = None
-
-# Set this API key to enable Mapbox visualizations
-MAPBOX_API_KEY = os.environ.get("MAPBOX_API_KEY", "")
-
-# Maximum number of rows returned for any analytical database query
-SQL_MAX_ROW = 100000
-
-# Maximum number of rows displayed in SQL Lab UI
-          # Is set to avoid out of memory/localstorage issues in browsers. Does not affect
-          # exported CSVs
-DISPLAY_MAX_ROW = 10000
-
-# Default row limit for SQL Lab queries. Is overridden by setting a new limit in
-          # the SQL Lab UI
-DEFAULT_SQLLAB_LIMIT = 1000
-
-# Maximum number of tables/views displayed in the dropdown window in SQL Lab.
-MAX_TABLE_NAMES = 3000
-
-# Adds a warning message on sqllab save query and schedule query modals.
-SQLLAB_SAVE_WARNING_MESSAGE = None
-          SQLLAB_SCHEDULE_WARNING_MESSAGE = None
-
-# Force refresh while auto-refresh in dashboard
-DASHBOARD_AUTO_REFRESH_MODE: Literal["fetch", "force"] = "force"
-
-
-# Default celery config is to use SQLA as a broker, in a production setting
-          # you'll want to use a proper broker as specified here:
-          # http://docs.celeryproject.org/en/latest/getting-started/brokers/index.html
-
-
-class CeleryConfig:  # pylint: disable=too-few-public-methods
-          broker_url = "sqla+sqlite:///celerydb.sqlite"
-          imports = ("superset.sql_lab",)
-          result_backend = "db+sqlite:///celery_results.sqlite"
-          worker_log_level = "DEBUG"
-          worker_prefetch_multiplier = 1
-          task_acks_late = False
-          task_annotations = {
-              "sql_lab.get_sql_results": {"rate_limit": "100/s"},
-              "email_reports.send": {
-                  "rate_limit": "1/s",
-                  "time_limit": int(timedelta(seconds=120).total_seconds()),
-                  "soft_time_limit": int(timedelta(seconds=150).total_seconds()),
-                  "ignore_result": True,
-              },
-          }
-          beat_schedule = {
-              "email_reports.schedule_hourly": {
-                  "task": "email_reports.schedule_hourly",
-                  "schedule": crontab(minute=1, hour="*"),
-              },
-              "reports.scheduler": {
-                  "task": "reports.scheduler",
-                  "schedule": crontab(minute="*", hour="*"),
-              },
-              "reports.prune_log": {
-                  "task": "reports.prune_log",
-                  "schedule": crontab(minute=0, hour=0),
-              },
-          }
-
-
-CELERY_CONFIG = CeleryConfig  # pylint: disable=invalid-name
-
-# Set celery config to None to disable all the above configuration
-          # CELERY_CONFIG = None
-
-# Additional static HTTP headers to be served by your Superset server. Note
-          # Flask-Talisman applies the relevant security HTTP headers.
-          #
-          # DEFAULT_HTTP_HEADERS: sets default values for HTTP headers. These may be overridden
-          # within the app
-          # OVERRIDE_HTTP_HEADERS: sets override values for HTTP headers. These values will
-          # override anything set within the app
-DEFAULT_HTTP_HEADERS: Dict[str, Any] = {}
-          OVERRIDE_HTTP_HEADERS: Dict[str, Any] = {}
-          HTTP_HEADERS: Dict[str, Any] = {}
-
-# The db id here results in selecting this one as a default in SQL Lab
-DEFAULT_DB_ID = None
-
-# Timeout duration for SQL Lab synchronous queries
-SQLLAB_TIMEOUT = int(timedelta(seconds=30).total_seconds())
-
-# Timeout duration for SQL Lab query validation
-SQLLAB_VALIDATION_TIMEOUT = int(timedelta(seconds=10).total_seconds())
-
-# SQLLAB_DEFAULT_DBID
-SQLLAB_DEFAULT_DBID = None
-
-# The MAX duration a query can run for before being killed by celery.
-SQLLAB_ASYNC_TIME_LIMIT_SEC = int(timedelta(hours=6).total_seconds())
-
-# Some databases support running EXPLAIN queries that allow users to estimate
-          # query costs before they run. These EXPLAIN queries should have a small
-          # timeout.
-SQLLAB_QUERY_COST_ESTIMATE_TIMEOUT = int(timedelta(seconds=10).total_seconds())
-          # The feature is off by default, and currently only supported in Presto and Postgres.
-          # It also need to be enabled on a per-database basis, by adding the key/value pair
-          # `cost_estimate_enabled: true` to the database `extra` attribute.
-ESTIMATE_QUERY_COST = False
-          # The cost returned by the databases is a relative value; in order to map the cost to
-          # a tangible value you need to define a custom formatter that takes into consideration
-          # your specific infrastructure. For example, you could analyze queries a posteriori by
-          # running EXPLAIN on them, and compute a histogram of relative costs to present the
-          # cost as a percentile:
-          #
-          # def postgres_query_cost_formatter(
-          #     result: List[Dict[str, Any]]
-          # ) -> List[Dict[str, str]]:
-          #     # 25, 50, 75% percentiles
-          #     percentile_costs = [100.0, 1000.0, 10000.0]
-          #
-          #     out = []
-          #     for row in result:
-          #         relative_cost = row["Total cost"]
-          #         percentile = bisect.bisect_left(percentile_costs, relative_cost) + 1
-          #         out.append({
-          #             "Relative cost": relative_cost,
-          #             "Percentile": str(percentile * 25) + "%",
-          #         })
-          #
-          #     return out
-          #
-          #  Then on define the formatter on the config:
-          #
-          # "QUERY_COST_FORMATTERS_BY_ENGINE": {"postgresql": postgres_query_cost_formatter},
-QUERY_COST_FORMATTERS_BY_ENGINE: Dict[
-    str, Callable[[List[Dict[str, Any]]], List[Dict[str, Any]]]
-] = {}
-
-# Flag that controls if limit should be enforced on the CTA (create table as queries).
-SQLLAB_CTAS_NO_LIMIT = False
-
-# This allows you to define custom logic around the "CREATE TABLE AS" or CTAS feature
-          # in SQL Lab that defines where the target schema should be for a given user.
-          # Database `CTAS Schema` has a precedence over this setting.
-          # Example below returns a username and CTA queries will write tables into the schema
-          # name `username`
-          # SQLLAB_CTAS_SCHEMA_NAME_FUNC = lambda database, user, schema, sql: user.username
-          # This is move involved example where depending on the database you can leverage data
-          # available to assign schema for the CTA query:
-          # def compute_schema_name(database: Database, user: User, schema: str, sql: str) -> str:
-          #     if database.name == 'mysql_payments_slave':
-          #         return 'tmp_superset_schema'
-          #     if database.name == 'presto_gold':
-          #         return user.username
-          #     if database.name == 'analytics':
-          #         if 'analytics' in [r.name for r in user.roles]:
-          #             return 'analytics_cta'
-          #         else:
-          #             return f'tmp_{schema}'
-          # Function accepts database object, user object, schema name and sql that will be run.
-SQLLAB_CTAS_SCHEMA_NAME_FUNC: Optional[
-    Callable[["Database", "models.User", str, str], str]
-] = None
-
-# If enabled, it can be used to store the results of long-running queries
-          # in SQL Lab by using the "Run Async" button/feature
-RESULTS_BACKEND: Optional[BaseCache] = None
-
-# Use PyArrow and MessagePack for async query results serialization,
-          # rather than JSON. This feature requires additional testing from the
-          # community before it is fully adopted, so this config option is provided
-          # in order to disable should breaking issues be discovered.
-RESULTS_BACKEND_USE_MSGPACK = True
-
-# The S3 bucket where you want to store your external hive tables created
-          # from CSV files. For example, 'companyname-superset'
-CSV_TO_HIVE_UPLOAD_S3_BUCKET = None
-
-# The directory within the bucket specified above that will
-          # contain all the external tables
-CSV_TO_HIVE_UPLOAD_DIRECTORY = "EXTERNAL_HIVE_TABLES/"
-
-
-# Function that creates upload directory dynamically based on the
-          # database used, user and schema provided.
-def CSV_TO_HIVE_UPLOAD_DIRECTORY_FUNC(  # pylint: disable=invalid-name
-        database: "Database",
-        user: "models.User",  # pylint: disable=unused-argument
-        schema: Optional[str],
-) -> str:
-          # Note the final empty path enforces a trailing slash.
-    return os.path.join(
-        CSV_TO_HIVE_UPLOAD_DIRECTORY, str(database.id), schema or "", ""
-    )
-
-
-# The namespace within hive where the tables created from
-          # uploading CSVs will be stored.
-UPLOADED_CSV_HIVE_NAMESPACE: Optional[str] = None
-
-# Function that computes the allowed schemas for the CSV uploads.
-          # Allowed schemas will be a union of schemas_allowed_for_file_upload
-          # db configuration and a result of this function.
-
-# mypy doesn't catch that if case ensures list content being always str
-ALLOWED_USER_CSV_SCHEMA_FUNC: Callable[["Database", "models.User"], List[str]] = (
-    lambda database, user: [UPLOADED_CSV_HIVE_NAMESPACE]
-    if UPLOADED_CSV_HIVE_NAMESPACE
-    else []
-)
-
-# Values that should be treated as nulls for the csv uploads.
-CSV_DEFAULT_NA_NAMES = list(STR_NA_VALUES)
-
-# A dictionary of items that gets merged into the Jinja context for
-          # SQL Lab. The existing context gets updated with this dictionary,
-          # meaning values for existing keys get overwritten by the content of this
-          # dictionary. Exposing functionality through JINJA_CONTEXT_ADDONS has security
-          # implications as it opens a window for a user to execute untrusted code.
-          # It's important to make sure that the objects exposed (as well as objects attached
-          # to those objets) are harmless. We recommend only exposing simple/pure functions that
-          # return native types.
-JINJA_CONTEXT_ADDONS: Dict[str, Callable[..., Any]] = {}
-
-# A dictionary of macro template processors (by engine) that gets merged into global
-          # template processors. The existing template processors get updated with this
-          # dictionary, which means the existing keys get overwritten by the content of this
-          # dictionary. The customized addons don't necessarily need to use Jinja templating
-          # language. This allows you to define custom logic to process templates on a per-engine
-          # basis. Example value = `{"presto": CustomPrestoTemplateProcessor}`
-CUSTOM_TEMPLATE_PROCESSORS: Dict[str, Type[BaseTemplateProcessor]] = {}
-
-# Roles that are controlled by the API / Superset and should not be changes
-          # by humans.
-ROBOT_PERMISSION_ROLES = ["Public", "Gamma", "Alpha", "Admin", "sql_lab"]
-
-CONFIG_PATH_ENV_VAR = "SUPERSET_CONFIG_PATH"
-
-# If a callable is specified, it will be called at app startup while passing
-          # a reference to the Flask app. This can be used to alter the Flask app
-          # in whatever way.
-          # example: FLASK_APP_MUTATOR = lambda x: x.before_request = f
-FLASK_APP_MUTATOR = None
-
-# Set this to false if you don't want users to be able to request/grant
-          # datasource access requests from/to other users.
-ENABLE_ACCESS_REQUEST = False
-
-# smtp server configuration
-EMAIL_NOTIFICATIONS = False  # all the emails are sent using dryrun
-          SMTP_HOST = "localhost"
-          SMTP_STARTTLS = True
-          SMTP_SSL = False
-          SMTP_USER = "superset"
-          SMTP_PORT = 25
-          SMTP_PASSWORD = "superset"
-          SMTP_MAIL_FROM = "superset@superset.com"
-
-ENABLE_CHUNK_ENCODING = False
-
-# Whether to bump the logging level to ERROR on the flask_appbuilder package
-          # Set to False if/when debugging FAB related issues like
-          # permission management
-SILENCE_FAB = True
-
-FAB_ADD_SECURITY_VIEWS = True
-          FAB_ADD_SECURITY_PERMISSION_VIEW = False
-          FAB_ADD_SECURITY_VIEW_MENU_VIEW = False
-          FAB_ADD_SECURITY_PERMISSION_VIEWS_VIEW = False
-
-# The link to a page containing common errors and their resolutions
-          # It will be appended at the bottom of sql_lab errors.
-TROUBLESHOOTING_LINK = ""
-
-# CSRF token timeout, set to None for a token that never expires
-WTF_CSRF_TIME_LIMIT = int(timedelta(weeks=1).total_seconds())
-
-# This link should lead to a page with instructions on how to gain access to a
-          # Datasource. It will be placed at the bottom of permissions errors.
-PERMISSION_INSTRUCTIONS_LINK = ""
-
-# Integrate external Blueprints to the app by passing them to your
-          # configuration. These blueprints will get integrated in the app
-BLUEPRINTS: List[Blueprint] = []
-
-# Provide a callable that receives a tracking_url and returns another
-          # URL. This is used to translate internal Hadoop job tracker URL
-          # into a proxied one
-TRACKING_URL_TRANSFORMER = lambda x: x
-
-# Interval between consecutive polls when using Hive Engine
-HIVE_POLL_INTERVAL = int(timedelta(seconds=5).total_seconds())
-
-# Interval between consecutive polls when using Presto Engine
-          # See here: https://github.com/dropbox/PyHive/blob/8eb0aeab8ca300f3024655419b93dad926c1a351/pyhive/presto.py#L93  # pylint: disable=line-too-long,useless-suppression
-PRESTO_POLL_INTERVAL = int(timedelta(seconds=1).total_seconds())
-
-# Allow list of custom authentications for each DB engine.
-          # Example:
-          # from your.module import AuthClass
-          # from another.extra import auth_method
-          #
-          # ALLOWED_EXTRA_AUTHENTICATIONS: Dict[str, Dict[str, Callable[..., Any]]] = {
-          #     "trino": {
-          #         "custom_auth": AuthClass,
-          #         "another_auth_method": auth_method,
-          #     },
-          # }
-ALLOWED_EXTRA_AUTHENTICATIONS: Dict[str, Dict[str, Callable[..., Any]]] = {}
-
-# The id of a template dashboard that should be copied to every new user
-DASHBOARD_TEMPLATE_ID = None
-
-# A callable that allows altering the database connection URL and params
-          # on the fly, at runtime. This allows for things like impersonation or
-          # arbitrary logic. For instance you can wire different users to
-          # use different connection parameters, or pass their email address as the
-          # username. The function receives the connection uri object, connection
-          # params, the username, and returns the mutated uri and params objects.
-          # Example:
-          #   def DB_CONNECTION_MUTATOR(uri, params, username, security_manager, source):
-          #       user = security_manager.find_user(username=username)
-          #       if user and user.email:
-          #           uri.username = user.email
-          #       return uri, params
-          #
-          # Note that the returned uri and params are passed directly to sqlalchemy's
-          # as such `create_engine(url, **params)`
-DB_CONNECTION_MUTATOR = None
-
-
-# A function that intercepts the SQL to be executed and can alter it.
-          # The use case is can be around adding some sort of comment header
-          # with information such as the username and worker node information
-          #
-          #    def SQL_QUERY_MUTATOR(sql, user_name=user_name, security_manager=security_manager, database=database):
-          #        dttm = datetime.now().isoformat()
-          #        return f"-- [SQL LAB] {username} {dttm}\n{sql}"
-          # For backward compatibility, you can unpack any of the above arguments in your
-          # function definition, but keep the **kwargs as the last argument to allow new args
-          # to be added later without any errors.
-def SQL_QUERY_MUTATOR(  # pylint: disable=invalid-name,unused-argument
-        sql: str, **kwargs: Any
-) -> str:
-    return sql
-
-
-# This auth provider is used by background (offline) tasks that need to access
-          # protected resources. Can be overridden by end users in order to support
-          # custom auth mechanisms
-MACHINE_AUTH_PROVIDER_CLASS = "superset.utils.machine_auth.MachineAuthProvider"
-
-# ---------------------------------------------------
-          # Alerts & Reports
-          # ---------------------------------------------------
-          # Used for Alerts/Reports (Feature flask ALERT_REPORTS) to set the size for the
-          # sliding cron window size, should be synced with the celery beat config minus 1 second
-ALERT_REPORTS_CRON_WINDOW_SIZE = 59
-          ALERT_REPORTS_WORKING_TIME_OUT_KILL = True
-          # if ALERT_REPORTS_WORKING_TIME_OUT_KILL is True, set a celery hard timeout
-          # Equal to working timeout + ALERT_REPORTS_WORKING_TIME_OUT_LAG
-ALERT_REPORTS_WORKING_TIME_OUT_LAG = int(timedelta(seconds=10).total_seconds())
-          # if ALERT_REPORTS_WORKING_TIME_OUT_KILL is True, set a celery hard timeout
-          # Equal to working timeout + ALERT_REPORTS_WORKING_SOFT_TIME_OUT_LAG
-ALERT_REPORTS_WORKING_SOFT_TIME_OUT_LAG = int(timedelta(seconds=1).total_seconds())
-          # If set to true no notification is sent, the worker will just log a message.
-          # Useful for debugging
-ALERT_REPORTS_NOTIFICATION_DRY_RUN = False
-
-# A custom prefix to use on all Alerts & Reports emails
-EMAIL_REPORTS_SUBJECT_PREFIX = "[Report] "
-
-# Slack API token for the superset reports, either string or callable
-SLACK_API_TOKEN: Optional[Union[Callable[[], str], str]] = None
-          SLACK_PROXY = None
-
-# The webdriver to use for generating reports. Use one of the following
-          # firefox
-          #   Requires: geckodriver and firefox installations
-          #   Limitations: can be buggy at times
-          # chrome:
-          #   Requires: headless chrome
-          #   Limitations: unable to generate screenshots of elements
-WEBDRIVER_TYPE = "firefox"
-
-# Window size - this will impact the rendering of the data
-WEBDRIVER_WINDOW = {
-    "dashboard": (1600, 2000),
-    "slice": (3000, 1200),
-    "pixel_density": 1,
-}
-
-# An optional override to the default auth hook used to provide auth to the
-          # offline webdriver
-WEBDRIVER_AUTH_FUNC = None
-
-# Any config options to be passed as-is to the webdriver
-WEBDRIVER_CONFIGURATION: Dict[Any, Any] = {"service_log_path": "/dev/null"}
-
-# Additional args to be passed as arguments to the config object
-          # Note: these options are Chrome-specific. For FF, these should
-          # only include the "--headless" arg
-WEBDRIVER_OPTION_ARGS = ["--headless", "--marionette"]
-
-# The base URL to query for accessing the user interface
-WEBDRIVER_BASEURL = "http://0.0.0.0:8080/"
-          # The base URL for the email report hyperlinks.
-WEBDRIVER_BASEURL_USER_FRIENDLY = WEBDRIVER_BASEURL
-          # Time selenium will wait for the page to load and render for the email report.
-EMAIL_PAGE_RENDER_WAIT = int(timedelta(seconds=30).total_seconds())
-
-# Send user to a link where they can report bugs
-BUG_REPORT_URL = None
-
-# Send user to a link where they can read more about Superset
-DOCUMENTATION_URL = None
-          DOCUMENTATION_TEXT = "Documentation"
-          DOCUMENTATION_ICON = None  # Recommended size: 16x16
-
-# What is the Last N days relative in the time selector to:
-          # 'today' means it is midnight (00:00:00) in the local timezone
-          # 'now' means it is relative to the query issue time
-          # If both start and end time is set to now, this will make the time
-          # filter a moving window. By only setting the end time to now,
-          # start time will be set to midnight, while end will be relative to
-          # the query issue time.
-DEFAULT_RELATIVE_START_TIME = "today"
-          DEFAULT_RELATIVE_END_TIME = "today"
-
-# Configure which SQL validator to use for each engine
-SQL_VALIDATORS_BY_ENGINE = {
-    "presto": "PrestoDBSQLValidator",
-    "postgresql": "PostgreSQLValidator",
-}
-
-# A list of preferred databases, in order. These databases will be
-          # displayed prominently in the "Add Database" dialog. You should
-          # use the "engine_name" attribute of the corresponding DB engine spec
-          # in `superset/db_engine_specs/`.
-PREFERRED_DATABASES: List[str] = [
-    "PostgreSQL",
-    "Presto",
-    "MySQL",
-    "SQLite",
-    # etc.
-]
-          # When adding a new database we try to connect to it. Depending on which parameters are
-          # incorrect this could take a couple minutes, until the SQLAlchemy driver pinging the
-          # database times out. Instead of relying on the driver timeout we can specify a shorter
-          # one here.
-TEST_DATABASE_CONNECTION_TIMEOUT = timedelta(seconds=30)
-
-# Do you want Talisman enabled?
-TALISMAN_ENABLED = False
-          # If you want Talisman, how do you want it configured??
-TALISMAN_CONFIG = {
-    "content_security_policy": None,
-    "force_https": True,
-    "force_https_permanent": False,
-}
-
-# It is possible to customize which tables and roles are featured in the RLS
-          # dropdown. When set, this dict is assigned to `add_form_query_rel_fields` and
-          # `edit_form_query_rel_fields` on `RowLevelSecurityFiltersModelView`. Example:
-          #
-          # from flask_appbuilder.models.sqla import filters
-          # RLS_FORM_QUERY_REL_FIELDS = {
-          #     "roles": [["name", filters.FilterStartsWith, "RlsRole"]]
-          #     "tables": [["table_name", filters.FilterContains, "rls"]]
-          # }
-RLS_FORM_QUERY_REL_FIELDS: Optional[Dict[str, List[List[Any]]]] = None
-
+# List of modules to add as subcommands to superset CLI.
+# Useful for extending the CLI without modifying source.
+# CLI module must assign an AppGroup instance to a 'group'
+# variable (http://flask.pocoo.org/docs/1.0/cli/#custom-commands):
+#  group = AppGroup('name_of_my_subcommand')
 #
-          # Flask session cookie options
-          #
-          # See https://flask.palletsprojects.com/en/1.1.x/security/#set-cookie-options
-          # for details
-          #
-SESSION_COOKIE_HTTPONLY = True  # Prevent cookie from being read by frontend JS?
-          SESSION_COOKIE_SECURE = False  # Prevent cookie from being transmitted over non-tls?
-          SESSION_COOKIE_SAMESITE = "Lax"  # One of [None, 'None', 'Lax', 'Strict']
-
-# Cache static resources.
-SEND_FILE_MAX_AGE_DEFAULT = int(timedelta(days=365).total_seconds())
-
-# URI to database storing the example data, points to
-          # SQLALCHEMY_DATABASE_URI by default if set to `None`
-SQLALCHEMY_EXAMPLES_URI = None
-
-# Optional prefix to be added to all static asset paths when rendering the UI.
-          # This is useful for hosting assets in an external CDN, for example
-STATIC_ASSETS_PREFIX = ""
-
-# Some sqlalchemy connection strings can open Superset to security risks.
-          # Typically these should not be allowed.
-PREVENT_UNSAFE_DB_CONNECTIONS = True
-
-# Path used to store SSL certificates that are generated when using custom certs.
-          # Defaults to temporary directory.
-          # Example: SSL_CERT_PATH = "/certs"
-SSL_CERT_PATH: Optional[str] = None
-
-# SQLA table mutator, every time we fetch the metadata for a certain table
-          # (superset.connectors.sqla.models.SqlaTable), we call this hook
-          # to allow mutating the object with this callback.
-          # This can be used to set any properties of the object based on naming
-          # conventions and such. You can find examples in the tests.
-SQLA_TABLE_MUTATOR = lambda table: table
-
-# Global async query config options.
-          # Requires GLOBAL_ASYNC_QUERIES feature flag to be enabled.
-GLOBAL_ASYNC_QUERIES_REDIS_CONFIG = {
-    "port": 6379,
-    "host": "127.0.0.1",
-    "password": "",
-    "db": 0,
-    "ssl": False,
-}
-          GLOBAL_ASYNC_QUERIES_REDIS_STREAM_PREFIX = "async-events-"
-          GLOBAL_ASYNC_QUERIES_REDIS_STREAM_LIMIT = 1000
-          GLOBAL_ASYNC_QUERIES_REDIS_STREAM_LIMIT_FIREHOSE = 1000000
-          GLOBAL_ASYNC_QUERIES_JWT_COOKIE_NAME = "async-token"
-          GLOBAL_ASYNC_QUERIES_JWT_COOKIE_SECURE = False
-          GLOBAL_ASYNC_QUERIES_JWT_COOKIE_DOMAIN = None
-          GLOBAL_ASYNC_QUERIES_JWT_SECRET = "test-secret-change-me"
-          GLOBAL_ASYNC_QUERIES_TRANSPORT = "polling"
-          GLOBAL_ASYNC_QUERIES_POLLING_DELAY = int(
-              timedelta(milliseconds=500).total_seconds() * 1000
-          )
-          GLOBAL_ASYNC_QUERIES_WEBSOCKET_URL = "ws://127.0.0.1:8080/"
-
-# Embedded config options
-GUEST_ROLE_NAME = "Public"
-          GUEST_TOKEN_JWT_SECRET = "test-guest-secret-change-me"
-          GUEST_TOKEN_JWT_ALGO = "HS256"
-          GUEST_TOKEN_HEADER_NAME = "X-GuestToken"
-          GUEST_TOKEN_JWT_EXP_SECONDS = 300  # 5 minutes
-          # Guest token audience for the embedded superset, either string or callable
-GUEST_TOKEN_JWT_AUDIENCE: Optional[Union[Callable[[], str], str]] = None
-
-# A SQL dataset health check. Note if enabled it is strongly advised that the callable
-          # be memoized to aid with performance, i.e.,
-          #
-          #    @cache_manager.cache.memoize(timeout=0)
-          #    def DATASET_HEALTH_CHECK(datasource: SqlaTable) -> Optional[str]:
-          #        if (
-          #            datasource.sql and
-          #            len(sql_parse.ParsedQuery(datasource.sql, strip_comments=True).tables) == 1
-          #        ):
-          #            return (
-          #                "This virtual dataset queries only one table and therefore could be "
-          #                "replaced by querying the table directly."
-          #            )
-          #
-          #        return None
-          #
-          # Within the FLASK_APP_MUTATOR callable, i.e., once the application and thus cache have
-          # been initialized it is also necessary to add the following logic to blow the cache for
-          # all datasources if the callback function changed.
-          #
-          #    def FLASK_APP_MUTATOR(app: Flask) -> None:
-          #        name = "DATASET_HEALTH_CHECK"
-          #        func = app.config[name]
-          #        code = func.uncached.__code__.co_code
-          #
-          #        if cache_manager.cache.get(name) != code:
-          #            cache_manager.cache.delete_memoized(func)
-          #            cache_manager.cache.set(name, code, timeout=0)
-          #
-DATASET_HEALTH_CHECK: Optional[Callable[["SqlaTable"], str]] = None
-
-# Do not show user info or profile in the menu
-MENU_HIDE_USER_INFO = False
-
-# Set to False to only allow viewing own recent activity
-ENABLE_BROAD_ACTIVITY_ACCESS = True
-
-# -------------------------------------------------------------------
-          # *                WARNING:  STOP EDITING  HERE                    *
-          # -------------------------------------------------------------------
-          # Don't add config values below this line since local configs won't be
-          # able to override them.
-if CONFIG_PATH_ENV_VAR in os.environ:
-          # Explicitly import config module that is not necessarily in pythonpath; useful
-          # for case where app is being executed via pex.
-    cfg_path = os.environ[CONFIG_PATH_ENV_VAR]
-    try:
-          module = sys.modules[__name__]
-          override_conf = imp.load_source("superset_config", cfg_path)
-        for key in dir(override_conf):
-            if key.isupper():
-          setattr(module, key, getattr(override_conf, key))
-
-        print(f"Loaded your LOCAL configuration at [{cfg_path}]")
-    except Exception:
-          logger.exception(
-              "Failed to import config for %s=%s", CONFIG_PATH_ENV_VAR, cfg_path
-          )
-        raise
-elif importlib.util.find_spec("superset_config") and not is_test():
-    try:
-          # pylint: disable=import-error,wildcard-import,unused-wildcard-import
-        import superset_config
-          from superset_config import *  # type:ignore
-
-        print(f"Loaded your LOCAL configuration at [{superset_config.__file__}]")
-    except Exception:
-          logger.exception("Found but failed to import local superset_config")
-        raise
-
-          
+#  @group.command()
+#  def my_cli_magic():
+# ---------------------------------------------------
 CLI_MODULES = []
 
 """
 1) https://docs.python-guide.org/writing/logging/
 2) https://docs.python.org/2/library/logging.config.html
 """
-          # 1) https://docs.python-guide.org/writing/logging/
-          # 2) https://docs.python.org/2/library/logging.config.html
+# 1) https://docs.python-guide.org/writing/logging/
+# 2) https://docs.python.org/2/library/logging.config.html
 
 # Default configurator will consume the LOG_* settings below
 LOGGING_CONFIGURATOR = DefaultLoggingConfigurator()
@@ -1346,33 +697,33 @@ LOGGING_CONFIGURATOR = DefaultLoggingConfigurator()
 # Console Log Settings
 
 LOG_FORMAT = "%(asctime)s:%(levelname)s:%(name)s:%(message)s"
-          LOG_LEVEL = "DEBUG"
+LOG_LEVEL = "DEBUG"
 
 # ---------------------------------------------------
-          # Enable Time Rotate Log Handler
-          # ---------------------------------------------------
-          # LOG_LEVEL = DEBUG, INFO, WARNING, ERROR, CRITICAL
+# Enable Time Rotate Log Handler
+# ---------------------------------------------------
+# LOG_LEVEL = DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 ENABLE_TIME_ROTATE = False
-          TIME_ROTATE_LOG_LEVEL = "DEBUG"
-          FILENAME = os.path.join(DATA_DIR, "superset.log")
-          ROLLOVER = "midnight"
-          INTERVAL = 1
-          BACKUP_COUNT = 30
+TIME_ROTATE_LOG_LEVEL = "DEBUG"
+FILENAME = os.path.join(DATA_DIR, "superset.log")
+ROLLOVER = "midnight"
+INTERVAL = 1
+BACKUP_COUNT = 30
 
 # Custom logger for auditing queries. This can be used to send ran queries to a
-          # structured immutable store for auditing purposes. The function is called for
-          # every query ran, in both SQL Lab and charts/dashboards.
-          # def QUERY_LOGGER(
-          #     database,
-          #     query,
-          #     schema=None,
-          #     user=None,
-          #     client=None,
-          #     security_manager=None,
-          #     log_params=None,
-          # ):
-          #     pass
+# structured immutable store for auditing purposes. The function is called for
+# every query ran, in both SQL Lab and charts/dashboards.
+# def QUERY_LOGGER(
+#     database,
+#     query,
+#     schema=None,
+#     user=None,
+#     client=None,
+#     security_manager=None,
+#     log_params=None,
+# ):
+#     pass
 QUERY_LOGGER = None
 
 # Set this API key to enable Mapbox visualizations
@@ -1382,12 +733,12 @@ MAPBOX_API_KEY = os.environ.get("MAPBOX_API_KEY", "")
 SQL_MAX_ROW = 100000
 
 # Maximum number of rows displayed in SQL Lab UI
-          # Is set to avoid out of memory/localstorage issues in browsers. Does not affect
-          # exported CSVs
+# Is set to avoid out of memory/localstorage issues in browsers. Does not affect
+# exported CSVs
 DISPLAY_MAX_ROW = 10000
 
 # Default row limit for SQL Lab queries. Is overridden by setting a new limit in
-          # the SQL Lab UI
+# the SQL Lab UI
 DEFAULT_SQLLAB_LIMIT = 1000
 
 # Maximum number of tables/views displayed in the dropdown window in SQL Lab.
@@ -1395,64 +746,64 @@ MAX_TABLE_NAMES = 3000
 
 # Adds a warning message on sqllab save query and schedule query modals.
 SQLLAB_SAVE_WARNING_MESSAGE = None
-          SQLLAB_SCHEDULE_WARNING_MESSAGE = None
+SQLLAB_SCHEDULE_WARNING_MESSAGE = None
 
 # Force refresh while auto-refresh in dashboard
 DASHBOARD_AUTO_REFRESH_MODE: Literal["fetch", "force"] = "force"
 
 
 # Default celery config is to use SQLA as a broker, in a production setting
-          # you'll want to use a proper broker as specified here:
-          # http://docs.celeryproject.org/en/latest/getting-started/brokers/index.html
+# you'll want to use a proper broker as specified here:
+# http://docs.celeryproject.org/en/latest/getting-started/brokers/index.html
 
 
 class CeleryConfig:  # pylint: disable=too-few-public-methods
-          broker_url = "sqla+sqlite:///celerydb.sqlite"
-          imports = ("superset.sql_lab",)
-          result_backend = "db+sqlite:///celery_results.sqlite"
-          worker_log_level = "DEBUG"
-          worker_prefetch_multiplier = 1
-          task_acks_late = False
-          task_annotations = {
-              "sql_lab.get_sql_results": {"rate_limit": "100/s"},
-              "email_reports.send": {
-                  "rate_limit": "1/s",
-                  "time_limit": int(timedelta(seconds=120).total_seconds()),
-                  "soft_time_limit": int(timedelta(seconds=150).total_seconds()),
-                  "ignore_result": True,
-              },
-          }
-          beat_schedule = {
-              "email_reports.schedule_hourly": {
-                  "task": "email_reports.schedule_hourly",
-                  "schedule": crontab(minute=1, hour="*"),
-              },
-              "reports.scheduler": {
-                  "task": "reports.scheduler",
-                  "schedule": crontab(minute="*", hour="*"),
-              },
-              "reports.prune_log": {
-                  "task": "reports.prune_log",
-                  "schedule": crontab(minute=0, hour=0),
-              },
-          }
+    broker_url = "sqla+sqlite:///celerydb.sqlite"
+    imports = ("superset.sql_lab",)
+    result_backend = "db+sqlite:///celery_results.sqlite"
+    worker_log_level = "DEBUG"
+    worker_prefetch_multiplier = 1
+    task_acks_late = False
+    task_annotations = {
+        "sql_lab.get_sql_results": {"rate_limit": "100/s"},
+        "email_reports.send": {
+            "rate_limit": "1/s",
+            "time_limit": int(timedelta(seconds=120).total_seconds()),
+            "soft_time_limit": int(timedelta(seconds=150).total_seconds()),
+            "ignore_result": True,
+        },
+    }
+    beat_schedule = {
+        "email_reports.schedule_hourly": {
+            "task": "email_reports.schedule_hourly",
+            "schedule": crontab(minute=1, hour="*"),
+        },
+        "reports.scheduler": {
+            "task": "reports.scheduler",
+            "schedule": crontab(minute="*", hour="*"),
+        },
+        "reports.prune_log": {
+            "task": "reports.prune_log",
+            "schedule": crontab(minute=0, hour=0),
+        },
+    }
 
 
 CELERY_CONFIG = CeleryConfig  # pylint: disable=invalid-name
 
 # Set celery config to None to disable all the above configuration
-          # CELERY_CONFIG = None
+# CELERY_CONFIG = None
 
 # Additional static HTTP headers to be served by your Superset server. Note
-          # Flask-Talisman applies the relevant security HTTP headers.
-          #
-          # DEFAULT_HTTP_HEADERS: sets default values for HTTP headers. These may be overridden
-          # within the app
-          # OVERRIDE_HTTP_HEADERS: sets override values for HTTP headers. These values will
-          # override anything set within the app
+# Flask-Talisman applies the relevant security HTTP headers.
+#
+# DEFAULT_HTTP_HEADERS: sets default values for HTTP headers. These may be overridden
+# within the app
+# OVERRIDE_HTTP_HEADERS: sets override values for HTTP headers. These values will
+# override anything set within the app
 DEFAULT_HTTP_HEADERS: Dict[str, Any] = {}
-          OVERRIDE_HTTP_HEADERS: Dict[str, Any] = {}
-          HTTP_HEADERS: Dict[str, Any] = {}
+OVERRIDE_HTTP_HEADERS: Dict[str, Any] = {}
+HTTP_HEADERS: Dict[str, Any] = {}
 
 # The db id here results in selecting this one as a default in SQL Lab
 DEFAULT_DB_ID = None
@@ -1470,39 +821,39 @@ SQLLAB_DEFAULT_DBID = None
 SQLLAB_ASYNC_TIME_LIMIT_SEC = int(timedelta(hours=6).total_seconds())
 
 # Some databases support running EXPLAIN queries that allow users to estimate
-          # query costs before they run. These EXPLAIN queries should have a small
-          # timeout.
+# query costs before they run. These EXPLAIN queries should have a small
+# timeout.
 SQLLAB_QUERY_COST_ESTIMATE_TIMEOUT = int(timedelta(seconds=10).total_seconds())
-          # The feature is off by default, and currently only supported in Presto and Postgres.
-          # It also need to be enabled on a per-database basis, by adding the key/value pair
-          # `cost_estimate_enabled: true` to the database `extra` attribute.
+# The feature is off by default, and currently only supported in Presto and Postgres.
+# It also need to be enabled on a per-database basis, by adding the key/value pair
+# `cost_estimate_enabled: true` to the database `extra` attribute.
 ESTIMATE_QUERY_COST = False
-          # The cost returned by the databases is a relative value; in order to map the cost to
-          # a tangible value you need to define a custom formatter that takes into consideration
-          # your specific infrastructure. For example, you could analyze queries a posteriori by
-          # running EXPLAIN on them, and compute a histogram of relative costs to present the
-          # cost as a percentile:
-          #
-          # def postgres_query_cost_formatter(
-          #     result: List[Dict[str, Any]]
-          # ) -> List[Dict[str, str]]:
-          #     # 25, 50, 75% percentiles
-          #     percentile_costs = [100.0, 1000.0, 10000.0]
-          #
-          #     out = []
-          #     for row in result:
-          #         relative_cost = row["Total cost"]
-          #         percentile = bisect.bisect_left(percentile_costs, relative_cost) + 1
-          #         out.append({
-          #             "Relative cost": relative_cost,
-          #             "Percentile": str(percentile * 25) + "%",
-          #         })
-          #
-          #     return out
-          #
-          #  Then on define the formatter on the config:
-          #
-          # "QUERY_COST_FORMATTERS_BY_ENGINE": {"postgresql": postgres_query_cost_formatter},
+# The cost returned by the databases is a relative value; in order to map the cost to
+# a tangible value you need to define a custom formatter that takes into consideration
+# your specific infrastructure. For example, you could analyze queries a posteriori by
+# running EXPLAIN on them, and compute a histogram of relative costs to present the
+# cost as a percentile:
+#
+# def postgres_query_cost_formatter(
+#     result: List[Dict[str, Any]]
+# ) -> List[Dict[str, str]]:
+#     # 25, 50, 75% percentiles
+#     percentile_costs = [100.0, 1000.0, 10000.0]
+#
+#     out = []
+#     for row in result:
+#         relative_cost = row["Total cost"]
+#         percentile = bisect.bisect_left(percentile_costs, relative_cost) + 1
+#         out.append({
+#             "Relative cost": relative_cost,
+#             "Percentile": str(percentile * 25) + "%",
+#         })
+#
+#     return out
+#
+#  Then on define the formatter on the config:
+#
+# "QUERY_COST_FORMATTERS_BY_ENGINE": {"postgresql": postgres_query_cost_formatter},
 QUERY_COST_FORMATTERS_BY_ENGINE: Dict[
     str, Callable[[List[Dict[str, Any]]], List[Dict[str, Any]]]
 ] = {}
@@ -1511,67 +862,67 @@ QUERY_COST_FORMATTERS_BY_ENGINE: Dict[
 SQLLAB_CTAS_NO_LIMIT = False
 
 # This allows you to define custom logic around the "CREATE TABLE AS" or CTAS feature
-          # in SQL Lab that defines where the target schema should be for a given user.
-          # Database `CTAS Schema` has a precedence over this setting.
-          # Example below returns a username and CTA queries will write tables into the schema
-          # name `username`
-          # SQLLAB_CTAS_SCHEMA_NAME_FUNC = lambda database, user, schema, sql: user.username
-          # This is move involved example where depending on the database you can leverage data
-          # available to assign schema for the CTA query:
-          # def compute_schema_name(database: Database, user: User, schema: str, sql: str) -> str:
-          #     if database.name == 'mysql_payments_slave':
-          #         return 'tmp_superset_schema'
-          #     if database.name == 'presto_gold':
-          #         return user.username
-          #     if database.name == 'analytics':
-          #         if 'analytics' in [r.name for r in user.roles]:
-          #             return 'analytics_cta'
-          #         else:
-          #             return f'tmp_{schema}'
-          # Function accepts database object, user object, schema name and sql that will be run.
+# in SQL Lab that defines where the target schema should be for a given user.
+# Database `CTAS Schema` has a precedence over this setting.
+# Example below returns a username and CTA queries will write tables into the schema
+# name `username`
+# SQLLAB_CTAS_SCHEMA_NAME_FUNC = lambda database, user, schema, sql: user.username
+# This is move involved example where depending on the database you can leverage data
+# available to assign schema for the CTA query:
+# def compute_schema_name(database: Database, user: User, schema: str, sql: str) -> str:
+#     if database.name == 'mysql_payments_slave':
+#         return 'tmp_superset_schema'
+#     if database.name == 'presto_gold':
+#         return user.username
+#     if database.name == 'analytics':
+#         if 'analytics' in [r.name for r in user.roles]:
+#             return 'analytics_cta'
+#         else:
+#             return f'tmp_{schema}'
+# Function accepts database object, user object, schema name and sql that will be run.
 SQLLAB_CTAS_SCHEMA_NAME_FUNC: Optional[
     Callable[["Database", "models.User", str, str], str]
 ] = None
 
 # If enabled, it can be used to store the results of long-running queries
-          # in SQL Lab by using the "Run Async" button/feature
+# in SQL Lab by using the "Run Async" button/feature
 RESULTS_BACKEND: Optional[BaseCache] = None
 
 # Use PyArrow and MessagePack for async query results serialization,
-          # rather than JSON. This feature requires additional testing from the
-          # community before it is fully adopted, so this config option is provided
-          # in order to disable should breaking issues be discovered.
+# rather than JSON. This feature requires additional testing from the
+# community before it is fully adopted, so this config option is provided
+# in order to disable should breaking issues be discovered.
 RESULTS_BACKEND_USE_MSGPACK = True
 
 # The S3 bucket where you want to store your external hive tables created
-          # from CSV files. For example, 'companyname-superset'
+# from CSV files. For example, 'companyname-superset'
 CSV_TO_HIVE_UPLOAD_S3_BUCKET = None
 
 # The directory within the bucket specified above that will
-          # contain all the external tables
+# contain all the external tables
 CSV_TO_HIVE_UPLOAD_DIRECTORY = "EXTERNAL_HIVE_TABLES/"
 
 
 # Function that creates upload directory dynamically based on the
-          # database used, user and schema provided.
+# database used, user and schema provided.
 def CSV_TO_HIVE_UPLOAD_DIRECTORY_FUNC(  # pylint: disable=invalid-name
-        database: "Database",
-        user: "models.User",  # pylint: disable=unused-argument
-        schema: Optional[str],
+    database: "Database",
+    user: "models.User",  # pylint: disable=unused-argument
+    schema: Optional[str],
 ) -> str:
-          # Note the final empty path enforces a trailing slash.
+    # Note the final empty path enforces a trailing slash.
     return os.path.join(
         CSV_TO_HIVE_UPLOAD_DIRECTORY, str(database.id), schema or "", ""
     )
 
 
 # The namespace within hive where the tables created from
-          # uploading CSVs will be stored.
+# uploading CSVs will be stored.
 UPLOADED_CSV_HIVE_NAMESPACE: Optional[str] = None
 
 # Function that computes the allowed schemas for the CSV uploads.
-          # Allowed schemas will be a union of schemas_allowed_for_file_upload
-          # db configuration and a result of this function.
+# Allowed schemas will be a union of schemas_allowed_for_file_upload
+# db configuration and a result of this function.
 
 # mypy doesn't catch that if case ensures list content being always str
 ALLOWED_USER_CSV_SCHEMA_FUNC: Callable[["Database", "models.User"], List[str]] = (
@@ -1584,158 +935,158 @@ ALLOWED_USER_CSV_SCHEMA_FUNC: Callable[["Database", "models.User"], List[str]] =
 CSV_DEFAULT_NA_NAMES = list(STR_NA_VALUES)
 
 # A dictionary of items that gets merged into the Jinja context for
-          # SQL Lab. The existing context gets updated with this dictionary,
-          # meaning values for existing keys get overwritten by the content of this
-          # dictionary. Exposing functionality through JINJA_CONTEXT_ADDONS has security
-          # implications as it opens a window for a user to execute untrusted code.
-          # It's important to make sure that the objects exposed (as well as objects attached
-          # to those objets) are harmless. We recommend only exposing simple/pure functions that
-          # return native types.
+# SQL Lab. The existing context gets updated with this dictionary,
+# meaning values for existing keys get overwritten by the content of this
+# dictionary. Exposing functionality through JINJA_CONTEXT_ADDONS has security
+# implications as it opens a window for a user to execute untrusted code.
+# It's important to make sure that the objects exposed (as well as objects attached
+# to those objets) are harmless. We recommend only exposing simple/pure functions that
+# return native types.
 JINJA_CONTEXT_ADDONS: Dict[str, Callable[..., Any]] = {}
 
 # A dictionary of macro template processors (by engine) that gets merged into global
-          # template processors. The existing template processors get updated with this
-          # dictionary, which means the existing keys get overwritten by the content of this
-          # dictionary. The customized addons don't necessarily need to use Jinja templating
-          # language. This allows you to define custom logic to process templates on a per-engine
-          # basis. Example value = `{"presto": CustomPrestoTemplateProcessor}`
+# template processors. The existing template processors get updated with this
+# dictionary, which means the existing keys get overwritten by the content of this
+# dictionary. The customized addons don't necessarily need to use Jinja templating
+# language. This allows you to define custom logic to process templates on a per-engine
+# basis. Example value = `{"presto": CustomPrestoTemplateProcessor}`
 CUSTOM_TEMPLATE_PROCESSORS: Dict[str, Type[BaseTemplateProcessor]] = {}
 
 # Roles that are controlled by the API / Superset and should not be changes
-          # by humans.
+# by humans.
 ROBOT_PERMISSION_ROLES = ["Public", "Gamma", "Alpha", "Admin", "sql_lab"]
 
 CONFIG_PATH_ENV_VAR = "SUPERSET_CONFIG_PATH"
 
 # If a callable is specified, it will be called at app startup while passing
-          # a reference to the Flask app. This can be used to alter the Flask app
-          # in whatever way.
-          # example: FLASK_APP_MUTATOR = lambda x: x.before_request = f
+# a reference to the Flask app. This can be used to alter the Flask app
+# in whatever way.
+# example: FLASK_APP_MUTATOR = lambda x: x.before_request = f
 FLASK_APP_MUTATOR = None
 
 # Set this to false if you don't want users to be able to request/grant
-          # datasource access requests from/to other users.
+# datasource access requests from/to other users.
 ENABLE_ACCESS_REQUEST = False
 
 # smtp server configuration
 EMAIL_NOTIFICATIONS = False  # all the emails are sent using dryrun
-          SMTP_HOST = "localhost"
-          SMTP_STARTTLS = True
-          SMTP_SSL = False
-          SMTP_USER = "superset"
-          SMTP_PORT = 25
-          SMTP_PASSWORD = "superset"
-          SMTP_MAIL_FROM = "superset@superset.com"
+SMTP_HOST = "localhost"
+SMTP_STARTTLS = True
+SMTP_SSL = False
+SMTP_USER = "superset"
+SMTP_PORT = 25
+SMTP_PASSWORD = "superset"
+SMTP_MAIL_FROM = "superset@superset.com"
 
 ENABLE_CHUNK_ENCODING = False
 
 # Whether to bump the logging level to ERROR on the flask_appbuilder package
-          # Set to False if/when debugging FAB related issues like
-          # permission management
+# Set to False if/when debugging FAB related issues like
+# permission management
 SILENCE_FAB = True
 
 FAB_ADD_SECURITY_VIEWS = True
-          FAB_ADD_SECURITY_PERMISSION_VIEW = False
-          FAB_ADD_SECURITY_VIEW_MENU_VIEW = False
-          FAB_ADD_SECURITY_PERMISSION_VIEWS_VIEW = False
+FAB_ADD_SECURITY_PERMISSION_VIEW = False
+FAB_ADD_SECURITY_VIEW_MENU_VIEW = False
+FAB_ADD_SECURITY_PERMISSION_VIEWS_VIEW = False
 
 # The link to a page containing common errors and their resolutions
-          # It will be appended at the bottom of sql_lab errors.
+# It will be appended at the bottom of sql_lab errors.
 TROUBLESHOOTING_LINK = ""
 
 # CSRF token timeout, set to None for a token that never expires
 WTF_CSRF_TIME_LIMIT = int(timedelta(weeks=1).total_seconds())
 
 # This link should lead to a page with instructions on how to gain access to a
-          # Datasource. It will be placed at the bottom of permissions errors.
+# Datasource. It will be placed at the bottom of permissions errors.
 PERMISSION_INSTRUCTIONS_LINK = ""
 
 # Integrate external Blueprints to the app by passing them to your
-          # configuration. These blueprints will get integrated in the app
+# configuration. These blueprints will get integrated in the app
 BLUEPRINTS: List[Blueprint] = []
 
 # Provide a callable that receives a tracking_url and returns another
-          # URL. This is used to translate internal Hadoop job tracker URL
-          # into a proxied one
+# URL. This is used to translate internal Hadoop job tracker URL
+# into a proxied one
 TRACKING_URL_TRANSFORMER = lambda x: x
 
 # Interval between consecutive polls when using Hive Engine
 HIVE_POLL_INTERVAL = int(timedelta(seconds=5).total_seconds())
 
 # Interval between consecutive polls when using Presto Engine
-          # See here: https://github.com/dropbox/PyHive/blob/8eb0aeab8ca300f3024655419b93dad926c1a351/pyhive/presto.py#L93  # pylint: disable=line-too-long,useless-suppression
+# See here: https://github.com/dropbox/PyHive/blob/8eb0aeab8ca300f3024655419b93dad926c1a351/pyhive/presto.py#L93  # pylint: disable=line-too-long,useless-suppression
 PRESTO_POLL_INTERVAL = int(timedelta(seconds=1).total_seconds())
 
 # Allow list of custom authentications for each DB engine.
-          # Example:
-          # from your.module import AuthClass
-          # from another.extra import auth_method
-          #
-          # ALLOWED_EXTRA_AUTHENTICATIONS: Dict[str, Dict[str, Callable[..., Any]]] = {
-          #     "trino": {
-          #         "custom_auth": AuthClass,
-          #         "another_auth_method": auth_method,
-          #     },
-          # }
+# Example:
+# from your.module import AuthClass
+# from another.extra import auth_method
+#
+# ALLOWED_EXTRA_AUTHENTICATIONS: Dict[str, Dict[str, Callable[..., Any]]] = {
+#     "trino": {
+#         "custom_auth": AuthClass,
+#         "another_auth_method": auth_method,
+#     },
+# }
 ALLOWED_EXTRA_AUTHENTICATIONS: Dict[str, Dict[str, Callable[..., Any]]] = {}
 
 # The id of a template dashboard that should be copied to every new user
 DASHBOARD_TEMPLATE_ID = None
 
 # A callable that allows altering the database connection URL and params
-          # on the fly, at runtime. This allows for things like impersonation or
-          # arbitrary logic. For instance you can wire different users to
-          # use different connection parameters, or pass their email address as the
-          # username. The function receives the connection uri object, connection
-          # params, the username, and returns the mutated uri and params objects.
-          # Example:
-          #   def DB_CONNECTION_MUTATOR(uri, params, username, security_manager, source):
-          #       user = security_manager.find_user(username=username)
-          #       if user and user.email:
-          #           uri.username = user.email
-          #       return uri, params
-          #
-          # Note that the returned uri and params are passed directly to sqlalchemy's
-          # as such `create_engine(url, **params)`
+# on the fly, at runtime. This allows for things like impersonation or
+# arbitrary logic. For instance you can wire different users to
+# use different connection parameters, or pass their email address as the
+# username. The function receives the connection uri object, connection
+# params, the username, and returns the mutated uri and params objects.
+# Example:
+#   def DB_CONNECTION_MUTATOR(uri, params, username, security_manager, source):
+#       user = security_manager.find_user(username=username)
+#       if user and user.email:
+#           uri.username = user.email
+#       return uri, params
+#
+# Note that the returned uri and params are passed directly to sqlalchemy's
+# as such `create_engine(url, **params)`
 DB_CONNECTION_MUTATOR = None
 
 
 # A function that intercepts the SQL to be executed and can alter it.
-          # The use case is can be around adding some sort of comment header
-          # with information such as the username and worker node information
-          #
-          #    def SQL_QUERY_MUTATOR(sql, user_name=user_name, security_manager=security_manager, database=database):
-          #        dttm = datetime.now().isoformat()
-          #        return f"-- [SQL LAB] {username} {dttm}\n{sql}"
-          # For backward compatibility, you can unpack any of the above arguments in your
-          # function definition, but keep the **kwargs as the last argument to allow new args
-          # to be added later without any errors.
+# The use case is can be around adding some sort of comment header
+# with information such as the username and worker node information
+#
+#    def SQL_QUERY_MUTATOR(sql, user_name=user_name, security_manager=security_manager, database=database):
+#        dttm = datetime.now().isoformat()
+#        return f"-- [SQL LAB] {username} {dttm}\n{sql}"
+# For backward compatibility, you can unpack any of the above arguments in your
+# function definition, but keep the **kwargs as the last argument to allow new args
+# to be added later without any errors.
 def SQL_QUERY_MUTATOR(  # pylint: disable=invalid-name,unused-argument
-        sql: str, **kwargs: Any
+    sql: str, **kwargs: Any
 ) -> str:
     return sql
 
 
 # This auth provider is used by background (offline) tasks that need to access
-          # protected resources. Can be overridden by end users in order to support
-          # custom auth mechanisms
+# protected resources. Can be overridden by end users in order to support
+# custom auth mechanisms
 MACHINE_AUTH_PROVIDER_CLASS = "superset.utils.machine_auth.MachineAuthProvider"
 
 # ---------------------------------------------------
-          # Alerts & Reports
-          # ---------------------------------------------------
-          # Used for Alerts/Reports (Feature flask ALERT_REPORTS) to set the size for the
-          # sliding cron window size, should be synced with the celery beat config minus 1 second
+# Alerts & Reports
+# ---------------------------------------------------
+# Used for Alerts/Reports (Feature flask ALERT_REPORTS) to set the size for the
+# sliding cron window size, should be synced with the celery beat config minus 1 second
 ALERT_REPORTS_CRON_WINDOW_SIZE = 59
-          ALERT_REPORTS_WORKING_TIME_OUT_KILL = True
-          # if ALERT_REPORTS_WORKING_TIME_OUT_KILL is True, set a celery hard timeout
-          # Equal to working timeout + ALERT_REPORTS_WORKING_TIME_OUT_LAG
+ALERT_REPORTS_WORKING_TIME_OUT_KILL = True
+# if ALERT_REPORTS_WORKING_TIME_OUT_KILL is True, set a celery hard timeout
+# Equal to working timeout + ALERT_REPORTS_WORKING_TIME_OUT_LAG
 ALERT_REPORTS_WORKING_TIME_OUT_LAG = int(timedelta(seconds=10).total_seconds())
-          # if ALERT_REPORTS_WORKING_TIME_OUT_KILL is True, set a celery hard timeout
-          # Equal to working timeout + ALERT_REPORTS_WORKING_SOFT_TIME_OUT_LAG
+# if ALERT_REPORTS_WORKING_TIME_OUT_KILL is True, set a celery hard timeout
+# Equal to working timeout + ALERT_REPORTS_WORKING_SOFT_TIME_OUT_LAG
 ALERT_REPORTS_WORKING_SOFT_TIME_OUT_LAG = int(timedelta(seconds=1).total_seconds())
-          # If set to true no notification is sent, the worker will just log a message.
-          # Useful for debugging
+# If set to true no notification is sent, the worker will just log a message.
+# Useful for debugging
 ALERT_REPORTS_NOTIFICATION_DRY_RUN = False
 
 # A custom prefix to use on all Alerts & Reports emails
@@ -1743,15 +1094,15 @@ EMAIL_REPORTS_SUBJECT_PREFIX = "[Report] "
 
 # Slack API token for the superset reports, either string or callable
 SLACK_API_TOKEN: Optional[Union[Callable[[], str], str]] = None
-          SLACK_PROXY = None
+SLACK_PROXY = None
 
 # The webdriver to use for generating reports. Use one of the following
-          # firefox
-          #   Requires: geckodriver and firefox installations
-          #   Limitations: can be buggy at times
-          # chrome:
-          #   Requires: headless chrome
-          #   Limitations: unable to generate screenshots of elements
+# firefox
+#   Requires: geckodriver and firefox installations
+#   Limitations: can be buggy at times
+# chrome:
+#   Requires: headless chrome
+#   Limitations: unable to generate screenshots of elements
 WEBDRIVER_TYPE = "firefox"
 
 # Window size - this will impact the rendering of the data
@@ -1762,22 +1113,22 @@ WEBDRIVER_WINDOW = {
 }
 
 # An optional override to the default auth hook used to provide auth to the
-          # offline webdriver
+# offline webdriver
 WEBDRIVER_AUTH_FUNC = None
 
 # Any config options to be passed as-is to the webdriver
 WEBDRIVER_CONFIGURATION: Dict[Any, Any] = {"service_log_path": "/dev/null"}
 
 # Additional args to be passed as arguments to the config object
-          # Note: these options are Chrome-specific. For FF, these should
-          # only include the "--headless" arg
+# Note: these options are Chrome-specific. For FF, these should
+# only include the "--headless" arg
 WEBDRIVER_OPTION_ARGS = ["--headless", "--marionette"]
 
 # The base URL to query for accessing the user interface
 WEBDRIVER_BASEURL = "http://0.0.0.0:8080/"
-          # The base URL for the email report hyperlinks.
+# The base URL for the email report hyperlinks.
 WEBDRIVER_BASEURL_USER_FRIENDLY = WEBDRIVER_BASEURL
-          # Time selenium will wait for the page to load and render for the email report.
+# Time selenium will wait for the page to load and render for the email report.
 EMAIL_PAGE_RENDER_WAIT = int(timedelta(seconds=30).total_seconds())
 
 # Send user to a link where they can report bugs
@@ -1785,18 +1136,18 @@ BUG_REPORT_URL = None
 
 # Send user to a link where they can read more about Superset
 DOCUMENTATION_URL = None
-          DOCUMENTATION_TEXT = "Documentation"
-          DOCUMENTATION_ICON = None  # Recommended size: 16x16
+DOCUMENTATION_TEXT = "Documentation"
+DOCUMENTATION_ICON = None  # Recommended size: 16x16
 
 # What is the Last N days relative in the time selector to:
-          # 'today' means it is midnight (00:00:00) in the local timezone
-          # 'now' means it is relative to the query issue time
-          # If both start and end time is set to now, this will make the time
-          # filter a moving window. By only setting the end time to now,
-          # start time will be set to midnight, while end will be relative to
-          # the query issue time.
+# 'today' means it is midnight (00:00:00) in the local timezone
+# 'now' means it is relative to the query issue time
+# If both start and end time is set to now, this will make the time
+# filter a moving window. By only setting the end time to now,
+# start time will be set to midnight, while end will be relative to
+# the query issue time.
 DEFAULT_RELATIVE_START_TIME = "today"
-          DEFAULT_RELATIVE_END_TIME = "today"
+DEFAULT_RELATIVE_END_TIME = "today"
 
 # Configure which SQL validator to use for each engine
 SQL_VALIDATORS_BY_ENGINE = {
@@ -1805,9 +1156,9 @@ SQL_VALIDATORS_BY_ENGINE = {
 }
 
 # A list of preferred databases, in order. These databases will be
-          # displayed prominently in the "Add Database" dialog. You should
-          # use the "engine_name" attribute of the corresponding DB engine spec
-          # in `superset/db_engine_specs/`.
+# displayed prominently in the "Add Database" dialog. You should
+# use the "engine_name" attribute of the corresponding DB engine spec
+# in `superset/db_engine_specs/`.
 PREFERRED_DATABASES: List[str] = [
     "PostgreSQL",
     "Presto",
@@ -1815,15 +1166,15 @@ PREFERRED_DATABASES: List[str] = [
     "SQLite",
     # etc.
 ]
-          # When adding a new database we try to connect to it. Depending on which parameters are
-          # incorrect this could take a couple minutes, until the SQLAlchemy driver pinging the
-          # database times out. Instead of relying on the driver timeout we can specify a shorter
-          # one here.
+# When adding a new database we try to connect to it. Depending on which parameters are
+# incorrect this could take a couple minutes, until the SQLAlchemy driver pinging the
+# database times out. Instead of relying on the driver timeout we can specify a shorter
+# one here.
 TEST_DATABASE_CONNECTION_TIMEOUT = timedelta(seconds=30)
 
 # Do you want Talisman enabled?
 TALISMAN_ENABLED = False
-          # If you want Talisman, how do you want it configured??
+# If you want Talisman, how do you want it configured??
 TALISMAN_CONFIG = {
     "content_security_policy": None,
     "force_https": True,
@@ -1831,55 +1182,55 @@ TALISMAN_CONFIG = {
 }
 
 # It is possible to customize which tables and roles are featured in the RLS
-          # dropdown. When set, this dict is assigned to `add_form_query_rel_fields` and
-          # `edit_form_query_rel_fields` on `RowLevelSecurityFiltersModelView`. Example:
-          #
-          # from flask_appbuilder.models.sqla import filters
-          # RLS_FORM_QUERY_REL_FIELDS = {
-          #     "roles": [["name", filters.FilterStartsWith, "RlsRole"]]
-          #     "tables": [["table_name", filters.FilterContains, "rls"]]
-          # }
+# dropdown. When set, this dict is assigned to `add_form_query_rel_fields` and
+# `edit_form_query_rel_fields` on `RowLevelSecurityFiltersModelView`. Example:
+#
+# from flask_appbuilder.models.sqla import filters
+# RLS_FORM_QUERY_REL_FIELDS = {
+#     "roles": [["name", filters.FilterStartsWith, "RlsRole"]]
+#     "tables": [["table_name", filters.FilterContains, "rls"]]
+# }
 RLS_FORM_QUERY_REL_FIELDS: Optional[Dict[str, List[List[Any]]]] = None
 
 #
-          # Flask session cookie options
-          #
-          # See https://flask.palletsprojects.com/en/1.1.x/security/#set-cookie-options
-          # for details
-          #
+# Flask session cookie options
+#
+# See https://flask.palletsprojects.com/en/1.1.x/security/#set-cookie-options
+# for details
+#
 SESSION_COOKIE_HTTPONLY = True  # Prevent cookie from being read by frontend JS?
-          SESSION_COOKIE_SECURE = False  # Prevent cookie from being transmitted over non-tls?
-          SESSION_COOKIE_SAMESITE = "Lax"  # One of [None, 'None', 'Lax', 'Strict']
+SESSION_COOKIE_SECURE = False  # Prevent cookie from being transmitted over non-tls?
+SESSION_COOKIE_SAMESITE = "Lax"  # One of [None, 'None', 'Lax', 'Strict']
 
 # Cache static resources.
 SEND_FILE_MAX_AGE_DEFAULT = int(timedelta(days=365).total_seconds())
 
 # URI to database storing the example data, points to
-          # SQLALCHEMY_DATABASE_URI by default if set to `None`
+# SQLALCHEMY_DATABASE_URI by default if set to `None`
 SQLALCHEMY_EXAMPLES_URI = None
 
 # Optional prefix to be added to all static asset paths when rendering the UI.
-          # This is useful for hosting assets in an external CDN, for example
+# This is useful for hosting assets in an external CDN, for example
 STATIC_ASSETS_PREFIX = ""
 
 # Some sqlalchemy connection strings can open Superset to security risks.
-          # Typically these should not be allowed.
+# Typically these should not be allowed.
 PREVENT_UNSAFE_DB_CONNECTIONS = True
 
 # Path used to store SSL certificates that are generated when using custom certs.
-          # Defaults to temporary directory.
-          # Example: SSL_CERT_PATH = "/certs"
+# Defaults to temporary directory.
+# Example: SSL_CERT_PATH = "/certs"
 SSL_CERT_PATH: Optional[str] = None
 
 # SQLA table mutator, every time we fetch the metadata for a certain table
-          # (superset.connectors.sqla.models.SqlaTable), we call this hook
-          # to allow mutating the object with this callback.
-          # This can be used to set any properties of the object based on naming
-          # conventions and such. You can find examples in the tests.
+# (superset.connectors.sqla.models.SqlaTable), we call this hook
+# to allow mutating the object with this callback.
+# This can be used to set any properties of the object based on naming
+# conventions and such. You can find examples in the tests.
 SQLA_TABLE_MUTATOR = lambda table: table
 
 # Global async query config options.
-          # Requires GLOBAL_ASYNC_QUERIES feature flag to be enabled.
+# Requires GLOBAL_ASYNC_QUERIES feature flag to be enabled.
 GLOBAL_ASYNC_QUERIES_REDIS_CONFIG = {
     "port": 6379,
     "host": "127.0.0.1",
@@ -1887,57 +1238,57 @@ GLOBAL_ASYNC_QUERIES_REDIS_CONFIG = {
     "db": 0,
     "ssl": False,
 }
-          GLOBAL_ASYNC_QUERIES_REDIS_STREAM_PREFIX = "async-events-"
-          GLOBAL_ASYNC_QUERIES_REDIS_STREAM_LIMIT = 1000
-          GLOBAL_ASYNC_QUERIES_REDIS_STREAM_LIMIT_FIREHOSE = 1000000
-          GLOBAL_ASYNC_QUERIES_JWT_COOKIE_NAME = "async-token"
-          GLOBAL_ASYNC_QUERIES_JWT_COOKIE_SECURE = False
-          GLOBAL_ASYNC_QUERIES_JWT_COOKIE_DOMAIN = None
-          GLOBAL_ASYNC_QUERIES_JWT_SECRET = "test-secret-change-me"
-          GLOBAL_ASYNC_QUERIES_TRANSPORT = "polling"
-          GLOBAL_ASYNC_QUERIES_POLLING_DELAY = int(
-              timedelta(milliseconds=500).total_seconds() * 1000
-          )
-          GLOBAL_ASYNC_QUERIES_WEBSOCKET_URL = "ws://127.0.0.1:8080/"
+GLOBAL_ASYNC_QUERIES_REDIS_STREAM_PREFIX = "async-events-"
+GLOBAL_ASYNC_QUERIES_REDIS_STREAM_LIMIT = 1000
+GLOBAL_ASYNC_QUERIES_REDIS_STREAM_LIMIT_FIREHOSE = 1000000
+GLOBAL_ASYNC_QUERIES_JWT_COOKIE_NAME = "async-token"
+GLOBAL_ASYNC_QUERIES_JWT_COOKIE_SECURE = False
+GLOBAL_ASYNC_QUERIES_JWT_COOKIE_DOMAIN = None
+GLOBAL_ASYNC_QUERIES_JWT_SECRET = "test-secret-change-me"
+GLOBAL_ASYNC_QUERIES_TRANSPORT = "polling"
+GLOBAL_ASYNC_QUERIES_POLLING_DELAY = int(
+    timedelta(milliseconds=500).total_seconds() * 1000
+)
+GLOBAL_ASYNC_QUERIES_WEBSOCKET_URL = "ws://127.0.0.1:8080/"
 
 # Embedded config options
 GUEST_ROLE_NAME = "Public"
-          GUEST_TOKEN_JWT_SECRET = "test-guest-secret-change-me"
-          GUEST_TOKEN_JWT_ALGO = "HS256"
-          GUEST_TOKEN_HEADER_NAME = "X-GuestToken"
-          GUEST_TOKEN_JWT_EXP_SECONDS = 300  # 5 minutes
-          # Guest token audience for the embedded superset, either string or callable
+GUEST_TOKEN_JWT_SECRET = "test-guest-secret-change-me"
+GUEST_TOKEN_JWT_ALGO = "HS256"
+GUEST_TOKEN_HEADER_NAME = "X-GuestToken"
+GUEST_TOKEN_JWT_EXP_SECONDS = 300  # 5 minutes
+# Guest token audience for the embedded superset, either string or callable
 GUEST_TOKEN_JWT_AUDIENCE: Optional[Union[Callable[[], str], str]] = None
 
 # A SQL dataset health check. Note if enabled it is strongly advised that the callable
-          # be memoized to aid with performance, i.e.,
-          #
-          #    @cache_manager.cache.memoize(timeout=0)
-          #    def DATASET_HEALTH_CHECK(datasource: SqlaTable) -> Optional[str]:
-          #        if (
-          #            datasource.sql and
-          #            len(sql_parse.ParsedQuery(datasource.sql, strip_comments=True).tables) == 1
-          #        ):
-          #            return (
-          #                "This virtual dataset queries only one table and therefore could be "
-          #                "replaced by querying the table directly."
-          #            )
-          #
-          #        return None
-          #
-          # Within the FLASK_APP_MUTATOR callable, i.e., once the application and thus cache have
-          # been initialized it is also necessary to add the following logic to blow the cache for
-          # all datasources if the callback function changed.
-          #
-          #    def FLASK_APP_MUTATOR(app: Flask) -> None:
-          #        name = "DATASET_HEALTH_CHECK"
-          #        func = app.config[name]
-          #        code = func.uncached.__code__.co_code
-          #
-          #        if cache_manager.cache.get(name) != code:
-          #            cache_manager.cache.delete_memoized(func)
-          #            cache_manager.cache.set(name, code, timeout=0)
-          #
+# be memoized to aid with performance, i.e.,
+#
+#    @cache_manager.cache.memoize(timeout=0)
+#    def DATASET_HEALTH_CHECK(datasource: SqlaTable) -> Optional[str]:
+#        if (
+#            datasource.sql and
+#            len(sql_parse.ParsedQuery(datasource.sql, strip_comments=True).tables) == 1
+#        ):
+#            return (
+#                "This virtual dataset queries only one table and therefore could be "
+#                "replaced by querying the table directly."
+#            )
+#
+#        return None
+#
+# Within the FLASK_APP_MUTATOR callable, i.e., once the application and thus cache have
+# been initialized it is also necessary to add the following logic to blow the cache for
+# all datasources if the callback function changed.
+#
+#    def FLASK_APP_MUTATOR(app: Flask) -> None:
+#        name = "DATASET_HEALTH_CHECK"
+#        func = app.config[name]
+#        code = func.uncached.__code__.co_code
+#
+#        if cache_manager.cache.get(name) != code:
+#            cache_manager.cache.delete_memoized(func)
+#            cache_manager.cache.set(name, code, timeout=0)
+#
 DATASET_HEALTH_CHECK: Optional[Callable[["SqlaTable"], str]] = None
 
 # Do not show user info or profile in the menu
@@ -1947,34 +1298,34 @@ MENU_HIDE_USER_INFO = False
 ENABLE_BROAD_ACTIVITY_ACCESS = True
 
 # -------------------------------------------------------------------
-          # *                WARNING:  STOP EDITING  HERE                    *
-          # -------------------------------------------------------------------
-          # Don't add config values below this line since local configs won't be
-          # able to override them.
+# *                WARNING:  STOP EDITING  HERE                    *
+# -------------------------------------------------------------------
+# Don't add config values below this line since local configs won't be
+# able to override them.
 if CONFIG_PATH_ENV_VAR in os.environ:
-          # Explicitly import config module that is not necessarily in pythonpath; useful
-          # for case where app is being executed via pex.
+    # Explicitly import config module that is not necessarily in pythonpath; useful
+    # for case where app is being executed via pex.
     cfg_path = os.environ[CONFIG_PATH_ENV_VAR]
     try:
-          module = sys.modules[__name__]
-          override_conf = imp.load_source("superset_config", cfg_path)
+        module = sys.modules[__name__]
+        override_conf = imp.load_source("superset_config", cfg_path)
         for key in dir(override_conf):
             if key.isupper():
-          setattr(module, key, getattr(override_conf, key))
+                setattr(module, key, getattr(override_conf, key))
 
         print(f"Loaded your LOCAL configuration at [{cfg_path}]")
     except Exception:
-          logger.exception(
-              "Failed to import config for %s=%s", CONFIG_PATH_ENV_VAR, cfg_path
-          )
+        logger.exception(
+            "Failed to import config for %s=%s", CONFIG_PATH_ENV_VAR, cfg_path
+        )
         raise
 elif importlib.util.find_spec("superset_config") and not is_test():
     try:
-          # pylint: disable=import-error,wildcard-import,unused-wildcard-import
+        # pylint: disable=import-error,wildcard-import,unused-wildcard-import
         import superset_config
-          from superset_config import *  # type:ignore
+        from superset_config import *  # type:ignore
 
         print(f"Loaded your LOCAL configuration at [{superset_config.__file__}]")
     except Exception:
-          logger.exception("Found but failed to import local superset_config")
+        logger.exception("Found but failed to import local superset_config")
         raise
