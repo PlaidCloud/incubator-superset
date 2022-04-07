@@ -34,8 +34,6 @@ from superset.views.base import BaseFilter, is_user_admin
 from superset.views.base_api import BaseFavoriteFilter
 
 
-logger = logging.getLogger(__name__)
-
 class DashboardTitleOrSlugFilter(BaseFilter):
     name = _("Title or Slug")
     arg_name = "title_or_slug"
@@ -114,8 +112,6 @@ class DashboardAccessFilter(BaseFilter):  # pylint: disable=too-few-public-metho
                 )
             )
         )
-
-        logger.info(str(datasource_perm_query))
 
         users_favorite_dash_query = db.session.query(FavStar.obj_id).filter(
             and_(
