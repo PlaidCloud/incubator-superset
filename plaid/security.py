@@ -106,9 +106,11 @@ class PlaidSecurityManager(SupersetSecurityManager):
         base_url = f"http://{self.appbuilder.app.config.get('PLAID_RPC')}"
         rpc_url = urljoin(base_url, "json-rpc/")
         temp_rpc = SimpleRPC(session["token"]["access_token"], uri=rpc_url, verify_ssl=False)
-        current_user = temp_rpc.identity.me.info()
-        session["workspace"] = current_user["default_workspace"]
-        log.debug(f"{current_user['username']}'s default plaid group ID is {session['workspace']}({current_user['default_workspace']})")
+        session["workspace"] = next(
+            ws['id']
+            for ws in temp_rpc.identity.me.authorized_workspaces()
+            if ws['default']
+        )
         token = f"{session['token']['access_token']}_ws{session['workspace']}"
         return SimpleRPC(token, uri=rpc_url, verify_ssl=False)
 
