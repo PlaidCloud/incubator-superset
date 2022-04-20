@@ -123,6 +123,9 @@ class ExploreFormDataRestApi(BaseApi, ABC):
             DatasetAccessDeniedError,
             TemporaryCacheAccessDeniedError,
         ) as ex:
+            logger.error(
+                "403 error in form_data/api.py - %s", str(ex), exc_info=True
+            )
             return self.response(403, message=str(ex))
         except (ChartNotFoundError, DatasetNotFoundError) as ex:
             return self.response(404, message=str(ex))
