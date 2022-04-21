@@ -5,6 +5,7 @@ Plaid Security Class for Superset
 import logging
 import uuid
 import time
+import jwt
 from typing import Union, List
 from sqlalchemy import func, Table, MetaData
 from urllib.parse import urljoin
@@ -102,18 +103,23 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
 
     def get_rpc(self) -> SimpleRPC:
-        log.info(f"Current user's token is {session['token']['access_token']}")
-        log.info(f"Session dict is {session}")
+        log.debug(f"Current user's token is {session['token']['access_token']}")
         base_url = f"http://{self.appbuilder.app.config.get('PLAID_RPC')}"
         rpc_url = urljoin(base_url, "json-rpc/")
-        temp_rpc = SimpleRPC(session["token"]["access_token"], uri=rpc_url, verify_ssl=False)
-        authorized_workspaces = temp_rpc.identity.me.authorized_workspaces()
-        log.info(f"authorized_workspaces list is {authorized_workspaces}")
-        session["workspace"] = next(
-            ws['id']
-            for ws in authorized_workspaces
-            if ws['default']
-        )
+        if not session.get('workspace'):
+            detoken = jwt.decode(session['token']['access_token'])
+            session['workspace'] = detoken.get('default_plaid_group', detoken.get('plaid_groups'))
+        if not session.get('workspace'):
+            temp_rpc = SimpleRPC(session['token']['access_token'], uri=rpc_url, verify_ssl=False)
+            authorized_workspaces = temp_rpc.identity.me.authorized_workspaces()
+            try:
+                session['workspace'] = next(
+                    ws['id']
+                    for ws in authorized_workspaces
+                    if ws['default']
+                )
+            except StopIteration:
+                session['workspace'] = authorized_workspaces[0]['id']
         token = f"{session['token']['access_token']}_ws{session['workspace']}"
         return SimpleRPC(token, uri=rpc_url, verify_ssl=False)
 
