@@ -102,14 +102,16 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
 
     def get_rpc(self) -> SimpleRPC:
-        log.debug(f"Current user's token is {session['token']['access_token']}")
+        log.info(f"Current user's token is {session['token']['access_token']}")
+        log.info(f"Session dict is {session}")
         base_url = f"http://{self.appbuilder.app.config.get('PLAID_RPC')}"
         rpc_url = urljoin(base_url, "json-rpc/")
         temp_rpc = SimpleRPC(session["token"]["access_token"], uri=rpc_url, verify_ssl=False)
-        log.info("In get_rpc - temp_rpc.authorized_workspaces: %s", temp_rpc.identity.me.authorized_workspaces())
+        authorized_workspaces = temp_rpc.identity.me.authorized_workspaces()
+        log.info(f"authorized_workspaces list is {authorized_workspaces}")
         session["workspace"] = next(
             ws['id']
-            for ws in temp_rpc.identity.me.authorized_workspaces()
+            for ws in authorized_workspaces
             if ws['default']
         )
         token = f"{session['token']['access_token']}_ws{session['workspace']}"
