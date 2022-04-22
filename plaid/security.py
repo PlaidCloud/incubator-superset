@@ -73,14 +73,10 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
         self.set_role('Plaid', self.is_plaid_user_pvm)
         plaid_role = self.find_role('Plaid')
-        for perm in self.find_role('Gamma').permissions:
-            self.add_permission_role(plaid_role, perm)
 
         if self.appbuilder.app.config.get('PUBLIC_ROLE_LIKE_PLAID', False):
             self.set_role('Public', self.is_plaid_user_pvm)
             public_role = self.find_role('Public')
-            for perm in self.find_role('Gamma').permissions:
-                self.add_permission_role(public_role, perm)
         else:
             # Clear out public role.
             self.set_role('Public', lambda pvm: False)
