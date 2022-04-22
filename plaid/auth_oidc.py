@@ -37,7 +37,7 @@ class AuthOIDCView(AuthOIDView):
             )
         login_user(user)
         session['token'] = token
-        session['workspace'] = userinfo.get['default_plaid_group']
+        session['workspace'] = userinfo['default_plaid_group']
         return redirect('/')
 
     @expose("/logout/")
