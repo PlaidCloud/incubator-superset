@@ -23,7 +23,7 @@ class AuthOIDCView(AuthOIDView):
         oauth = self.appbuilder.sm.oauth
         token = oauth.plaid.authorize_access_token()
         userinfo = oauth.plaid.parse_id_token(token)
-        log.debug(f"Fetched user info from token: {userinfo}")
+        log.info(f"Fetched user info from token: {userinfo}")
         user = self.appbuilder.sm.find_user(email=userinfo['email'].lower())
         if not user:
             roles = [self.appbuilder.sm.find_role(role_name) for role_name in ("Plaid", "Gamma")]
@@ -36,7 +36,8 @@ class AuthOIDCView(AuthOIDView):
                 password=throwaway_password(),
             )
         login_user(user)
-        session["token"] = token
+        session['token'] = token
+        session['workspace'] = userinfo.get['default_plaid_group']
         return redirect('/')
 
     @expose("/logout/")
