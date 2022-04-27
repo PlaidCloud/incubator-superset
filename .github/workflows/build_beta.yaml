@@ -70,4 +70,4 @@ jobs:
           ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
         with:
           command: app
-          options: set beta-superset -p apps.rpc.image=gcr.io/plaidcloud-build/superset:${{ steps.extract_branch.outputs.branch }}-${{ github.run_number }}
+          options: set beta-superset -p image.tag=${{ steps.extract_branch.outputs.branch }}-${{ github.run_number }}
