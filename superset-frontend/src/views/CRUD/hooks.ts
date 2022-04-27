@@ -147,7 +147,7 @@ export function useListViewResource<D extends object = any>(
               : value,
         }));
 
-      const queryParams = rison.encode({
+      const queryParams = rison.encode_uri({
         order_column: sortBy[0].id,
         order_direction: sortBy[0].desc ? 'desc' : 'asc',
         page: pageIndex,
@@ -448,7 +448,10 @@ export function useImportResource(
                 t(
                   'An error occurred while importing %s: %s',
                   resourceLabel,
-                  error.errors.map(payload => payload.message).join('\n'),
+                  [
+                    ...error.errors.map(payload => payload.message),
+                    t('Please re-export your file and try importing again'),
+                  ].join('\n'),
                 ),
               );
             } else {
@@ -566,6 +569,7 @@ export const useChartEditModal = (
       cache_timeout: chart.cache_timeout,
       certified_by: chart.certified_by,
       certification_details: chart.certification_details,
+      is_managed_externally: chart.is_managed_externally,
     });
   }
 
@@ -649,7 +653,7 @@ export function useDatabaseValidation() {
     null,
   );
   const getValidation = useCallback(
-    (database: Partial<DatabaseObject> | null, onCreate = false) => {
+    (database: Partial<DatabaseObject> | null, onCreate = false) =>
       SupersetClient.post({
         endpoint: '/api/v1/database/validate_parameters',
         body: JSON.stringify(database),
@@ -658,9 +662,10 @@ export function useDatabaseValidation() {
         .then(() => {
           setValidationErrors(null);
         })
+        // eslint-disable-next-line consistent-return
         .catch(e => {
           if (typeof e.json === 'function') {
-            e.json().then(({ errors = [] }: JsonObject) => {
+            return e.json().then(({ errors = [] }: JsonObject) => {
               const parsedErrors = errors
                 .filter((error: { error_type: string }) => {
                   const skipValidationError = ![
@@ -687,6 +692,10 @@ export function useDatabaseValidation() {
                           url: string;
                           idx: number;
                         };
+                        issue_codes?: {
+                          code?: number;
+                          message?: string;
+                        }[];
                       };
                       message: string;
                     },
@@ -742,18 +751,24 @@ export function useDatabaseValidation() {
                         ),
                       };
                     }
+                    if (extra.issue_codes?.length) {
+                      return {
+                        ...obj,
+                        error_type,
+                        description: message || extra.issue_codes[0]?.message,
+                      };
+                    }
+
                     return obj;
                   },
                   {},
                 );
               setValidationErrors(parsedErrors);
             });
-          } else {
-            // eslint-disable-next-line no-console
-            console.error(e);
           }
-        });
-    },
+          // eslint-disable-next-line no-console
+          console.error(e);
+        }),
     [setValidationErrors],
   );
 

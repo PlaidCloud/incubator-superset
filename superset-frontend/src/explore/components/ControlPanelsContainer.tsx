@@ -187,6 +187,7 @@ function getState(
 export const ControlPanelsContainer = (props: ControlPanelsContainerProps) => {
   const pluginContext = useContext(PluginContext);
 
+  const prevState = usePrevious(props.exploreState);
   const prevDatasource = usePrevious(props.exploreState.datasource);
 
   const [showDatasourceAlert, setShowDatasourceAlert] = useState(false);
@@ -221,7 +222,7 @@ export const ControlPanelsContainer = (props: ControlPanelsContainerProps) => {
         props.datasource_type,
       ),
     [
-      props.form_data.datasource,
+      props.exploreState.datasource,
       props.form_data.viz_type,
       props.datasource_type,
     ],
@@ -245,6 +246,22 @@ export const ControlPanelsContainer = (props: ControlPanelsContainerProps) => {
     setShowDatasourceAlert(false);
   }, []);
 
+  const shouldRecalculateControlState = ({
+    name,
+    config,
+  }: CustomControlItem): boolean => {
+    const { controls, chart, exploreState } = props;
+
+    return Boolean(
+      config.shouldMapStateToProps?.(
+        prevState || exploreState,
+        exploreState,
+        controls[name],
+        chart,
+      ),
+    );
+  };
+
   const renderControl = ({ name, config }: CustomControlItem) => {
     const { controls, chart, exploreState } = props;
     const { visibility } = config;
@@ -255,11 +272,8 @@ export const ControlPanelsContainer = (props: ControlPanelsContainerProps) => {
     const controlData = {
       ...config,
       ...controls[name],
-      // if `mapStateToProps` accept three arguments, it means it needs chart
-      // state, too. Since it's may be expensive to run mapStateToProps for every
-      // re-render, we only run this when the chart plugin explicitly ask for this.
-      ...(config.mapStateToProps?.length === 3
-        ? config.mapStateToProps(exploreState, controls[name], chart)
+      ...(shouldRecalculateControlState({ name, config })
+        ? config?.mapStateToProps?.(exploreState, controls[name], chart)
         : // for other controls, `mapStateToProps` is already run in
           // controlUtils/getControlState.ts
           undefined),
@@ -269,16 +283,17 @@ export const ControlPanelsContainer = (props: ControlPanelsContainerProps) => {
       validationErrors?: any[];
     };
 
-    // if visibility check says the config is not visible, don't render it
-    if (visibility && !visibility.call(config, props, controlData)) {
-      return null;
-    }
+    const isVisible = visibility
+      ? visibility.call(config, props, controlData)
+      : undefined;
+
     return (
       <Control
         key={`control-${name}`}
         name={name}
         validationErrors={validationErrors}
         actions={props.actions}
+        isVisible={isVisible}
         {...restProps}
       />
     );

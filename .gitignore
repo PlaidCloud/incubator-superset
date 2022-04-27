@@ -114,3 +114,4 @@ messages.mo
 *.tmp
 docker/requirements-local.txt
 .env
+cache/

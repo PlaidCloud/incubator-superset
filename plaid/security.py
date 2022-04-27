@@ -5,6 +5,7 @@ Plaid Security Class for Superset
 import logging
 import uuid
 import time
+import jwt
 from typing import Union, List
 from sqlalchemy import func, Table, MetaData
 from urllib.parse import urljoin
@@ -26,7 +27,7 @@ __email__ = "garrett.bates@tartansolutions.com"
 log = logging.getLogger(__name__)
 
 
-def get_project_role_name(project_id):
+def get_project_role_name(project_id: str) -> str:
     """Fetch the datasource role name by project ID.
     """
     return 'project_' + project_id
@@ -63,19 +64,25 @@ class PlaidSecurityManager(SupersetSecurityManager):
         Establishes a Plaid role (and Public, if configured to do so) after
         invoking the super constructor.
 
+        Adds all permissions from Gamma to Plaid (and Public, if configured)
+
         Args:
             appbuilder (:obj:`AppBuilder`): F.A.B AppBuilder main object.
         """
         super().sync_role_definitions()
+
         self.set_role('Plaid', self.is_plaid_user_pvm)
+        plaid_role = self.find_role('Plaid')
+
         if self.appbuilder.app.config.get('PUBLIC_ROLE_LIKE_PLAID', False):
             self.set_role('Public', self.is_plaid_user_pvm)
+            public_role = self.find_role('Public')
         else:
             # Clear out public role.
             self.set_role('Public', lambda pvm: False)
 
 
-    def is_plaid_user_pvm(self, pvm):
+    def is_plaid_user_pvm(self, pvm) -> bool:
         """Determines which permission/view menu relations are in Plaid role.
 
         This is written to be used by self.set_role() when creating the Plaid
@@ -88,17 +95,27 @@ class PlaidSecurityManager(SupersetSecurityManager):
             bool: True if a proper Plaid PVM. False otherwise.
         """
         perm = self.get_perms().get(pvm.permission.name)
-        return perm and pvm.view_menu.name in perm
+        return bool(perm) and pvm.view_menu.name in perm
 
 
-    def get_rpc(self):
+    def get_rpc(self) -> SimpleRPC:
         log.debug(f"Current user's token is {session['token']['access_token']}")
         base_url = f"http://{self.appbuilder.app.config.get('PLAID_RPC')}"
         rpc_url = urljoin(base_url, "json-rpc/")
-        temp_rpc = SimpleRPC(session["token"]["access_token"], uri=rpc_url, verify_ssl=False)
-        current_user = temp_rpc.identity.me.info()
-        session["workspace"] = current_user["default_workspace"]
-        log.debug(f"{current_user['username']}'s default plaid group ID is {session['workspace']}({current_user['default_workspace']})")
+        # ADT2022 - the commented code is an attempt to do things the way we used to. It shouldn't be necessary.
+        # if not session.get('workspace'):
+        #     # NOTE: session['workspace'] should be set in auth_oidc.AuthOIDCView.authorize(), but if it's not
+        #     # we may be able to get it with a temporary rpc object
+        #     temp_rpc = SimpleRPC(session['token']['access_token'], uri=rpc_url, verify_ssl=False)
+        #     authorized_workspaces = temp_rpc.identity.me.authorized_workspaces()
+        #     try:
+        #         session['workspace'] = next(
+        #             ws['id']
+        #             for ws in authorized_workspaces
+        #             if ws['default']
+        #         )
+        #     except StopIteration:
+        #         session['workspace'] = authorized_workspaces[0]['id']
         token = f"{session['token']['access_token']}_ws{session['workspace']}"
         return SimpleRPC(token, uri=rpc_url, verify_ssl=False)
 
@@ -128,7 +145,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         log.debug(f"Fetching table with name: {table_id}")
         table = rpc.analyze.table.table(project_id=datasource.schema.replace("report", ""), table_id=table_id)
         if table["id"] is None: # This may be legacy - some projects were missing dashes in the UUID.
-            table = rpc.analyze.table.table(project_id=datasource.schema.replace("report", ""), table_id=table_id_without_dashes)            
+            table = rpc.analyze.table.table(project_id=datasource.schema.replace("report", ""), table_id=table_id_without_dashes)
         log.debug(f"Underlying table for datasource {datasource.uuid}: {table}")
         return table.get('id', None) is not None
 
