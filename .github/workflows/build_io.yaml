@@ -1,0 +1,52 @@
+name: Deploy Superset to IO
+on:
+  push:
+    branches:
+      - develop
+jobs:
+  Deploy-IO-Superset:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure python 3.9
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Install dependencies
+        run: pip install -r requirements_frozen.txt; pip install pylint==2.13.5
+      - name: Run lint
+        run: pylint workflow_runner -E
+      - name: Create tag
+        id: docker_tag
+        run: |
+          commit_tag=${GITHUB_SHA:0:7}
+          echo "::set-output name=tag::${commit_tag}-${{ github.run_number }}"
+      - name: Verify tag
+        run: echo ${{ steps.docker_tag.outputs.tag }}
+      - name: Login to GCR
+        uses: docker/login-action@v1
+        with:
+          registry: gcr.io
+          username: _json_key
+          password: ${{ secrets.GCR_JSON_KEY }}
+      - name: Build and push
+        id: docker_build
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          pull: true
+          no-cache: true
+          build-args: |
+            PLAID_BUILD_TAG:${{ steps.docker_tag.outputs.tag }}
+          tags: gcr.io/plaidcloud-build/superset:latest,gcr.io/plaidcloud-build/superset:${{ steps.docker_tag.outputs.tag }}
+      # - name: Deploy to Argo
+      #   uses: clowdhaus/argo-cd-action/@main
+      #   env:
+      #     ARGOCD_SERVER: deploy.plaidcloud.io
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # This might not be needed - Mostly used to avoid rate limiting
+      #     ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
+      #   with:
+      #     command: app
+      #     options: set io-superset -p image.tag=${{ steps.docker_tag.outputs.tag }}
+      #     options: set io-superset-events -p image.tag=${{ steps.docker_tag.outputs.tag }}
