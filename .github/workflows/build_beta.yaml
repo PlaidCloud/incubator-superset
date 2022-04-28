@@ -84,11 +84,19 @@ jobs:
           options: set beta-superset -p image.tag=${{ steps.extract_branch.outputs.branch }}-${{ github.run_number }}
       - name: Deploy Events to Argo
         uses: clowdhaus/argo-cd-action/@main
+        env:
+          ARGOCD_SERVER: deploy.plaidcloud.io
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # This might not be needed - Mostly used to avoid rate limiting
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
         with:
           command: app
           options: set beta-superset-events -p image.tag=${{ steps.extract_branch.outputs.branch }}-${{ github.run_number }}
       - name: Set Events Repo for Superset
         uses: clowdhaus/argo-cd-action/@main
+        env:
+          ARGOCD_SERVER: deploy.plaidcloud.io
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # This might not be needed - Mostly used to avoid rate limiting
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
         with:
           command: app
           options: set beta-superset -p events.repository=$gcr.io/plaidcloud-build/superset-events:${{ steps.extract_branch.outputs.branch }}-${{ github.run_number }}
