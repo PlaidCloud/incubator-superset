@@ -88,7 +88,7 @@ jobs:
           command: app
           options: set beta-superset-events -p image.tag=${{ steps.extract_branch.outputs.branch }}-${{ github.run_number }}
       - name: Set Events Repo for Superset
-        uses: clowdhaus/arg-cd-action/@main
+        uses: clowdhaus/argo-cd-action/@main
         with:
           command: app
           options: set beta-superset -p events.repository=$gcr.io/plaidcloud-build/superset-events:${{ steps.extract_branch.outputs.branch }}-${{ github.run_number }}
