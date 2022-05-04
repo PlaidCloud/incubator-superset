@@ -104,6 +104,7 @@ class ExploreFormDataRestApi(BaseApi, ABC):
             500:
               $ref: '#/components/responses/500'
         """
+        logger.info('GETTING HERE!!!!!!!!')
         try:
             item = self.add_model_schema.load(request.json)
             tab_id = request.args.get("tab_id")
