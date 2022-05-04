@@ -13,27 +13,27 @@ jobs:
           python-version: '3.9'
       - name: Checkout code
         uses: actions/checkout@v2
-      - name: Acquire list of changed python files
-        id: all-files
-        uses: jitterbit/get-changed-files@v1
-        continue-on-error: true
-      - name: Ignore non-python files
-        id: files
-        run: |
-          declare -a python_files
-          for changed_file in ${{ steps.all-files.outputs.all }}; do
-            if [[ $changed_file == *.py ]]
-            then
-              python_files+="${changed_file} "
-            fi
-          done
-          echo "::set-output name=python::${python_files[@]}"
-      - name: Install dependencies
-        if: ${{ steps.files.outputs.python != '' }}
-        run: pip install -r requirements_frozen.txt; pip install pylint
-      - name: Run lint
-        if: ${{ steps.files.outputs.python != '' }}
-        run: pylint --errors-only ${{ steps.files.outputs.python }}
+      # - name: Acquire list of changed python files
+      #   id: all-files
+      #   uses: jitterbit/get-changed-files@v1
+      #   continue-on-error: true
+      # - name: Ignore non-python files
+      #   id: files
+      #   run: |
+      #     declare -a python_files
+      #     for changed_file in ${{ steps.all-files.outputs.all }}; do
+      #       if [[ $changed_file == *.py ]]
+      #       then
+      #         python_files+="${changed_file} "
+      #       fi
+      #     done
+      #     echo "::set-output name=python::${python_files[@]}"
+      # - name: Install dependencies
+      #   if: ${{ steps.files.outputs.python != '' }}
+      #   run: pip install -r requirements_frozen.txt; pip install pylint
+      # - name: Run lint
+      #   if: ${{ steps.files.outputs.python != '' }}
+      #   run: pylint --errors-only ${{ steps.files.outputs.python }}
       - name: Extract branch name
         shell: bash
         run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"

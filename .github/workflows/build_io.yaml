@@ -14,10 +14,10 @@ jobs:
           python-version: '3.9'
       - name: Checkout code
         uses: actions/checkout@v2
-      - name: Install dependencies
-        run: pip install -r requirements_frozen.txt; pip install pylint==2.13.5
-      - name: Run lint
-        run: pylint workflow_runner -E
+      # - name: Install dependencies
+      #   run: pip install -r requirements_frozen.txt; pip install pylint==2.13.5
+      # - name: Run lint
+      #   run: pylint workflow_runner -E
       - name: Create tag
         id: docker_tag
         run: |
