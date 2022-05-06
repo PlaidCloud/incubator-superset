@@ -49,7 +49,7 @@ class AuthOIDCView(AuthOIDView):
         response = make_response(redirect('/'))
         # TODO: probably parameterize cookie name, though I suspect it won't change.
         response.delete_cookie('_session_id', path='/', domain=domain)
-        response.delete_cookie('session', path='/')
+        response.delete_cookie('session', path='/', domain='visualize.plaidcloud.net')
         return response
 
 def throwaway_password() -> str:
