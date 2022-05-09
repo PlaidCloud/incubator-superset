@@ -103,13 +103,6 @@ class PlaidSecurityManager(SupersetSecurityManager):
         base_url = f"http://{self.appbuilder.app.config.get('PLAID_RPC')}"
         rpc_url = urljoin(base_url, "json-rpc/")
 
-        #TODO: hopefully I can just use workspace = oauth.plaid.parse_id_token(session['token']['access_token'])
-        #      But that might not work because it might be pulled in only on authorize
-        #      So I might have to try to make the code work where we make an authorized_workspaces() call and look for one with default: True
-        #      That is, the code below ↓
-
-        # ADT2022 - the commented code is an attempt to do things the way we used to. It shouldn't be necessary.
-
         if 'workspace' in session:
             temp_token =  f"{session['token']['access_token']}_ws{session['workspace']}"
         else:
@@ -118,7 +111,6 @@ class PlaidSecurityManager(SupersetSecurityManager):
         temp_rpc = SimpleRPC(session['token']['access_token'], uri=rpc_url, verify_ssl=False)
 
         authorized_workspaces = temp_rpc.identity.me.authorized_workspaces()
-        log.info(f'authorized_workspaces: {authorized_workspaces}')
         try:
             session['workspace'] = next(
                 ws['id']
