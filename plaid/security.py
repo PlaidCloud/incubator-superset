@@ -126,10 +126,10 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
 
     def can_access_database(self, database: Union["Database", "DruidCluster"]) -> bool:
-        log.info(f"Can access database: {database}")
+        log.debug(f"Can access database: {database}")
         rpc = self.get_rpc()
         proj = rpc.analyze.project.project(project_id=str(database.uuid))
-        log.info(proj)
+        log.debug(proj)
         if proj["id"] is None:
             proj = rpc.analyze.project.project(project_id=str(database.uuid).replace('-', ''))
         return proj.get("id", None) is not None or super().can_access_database(database)
@@ -140,18 +140,18 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
 
     def can_access_datasource(self, datasource: "BaseDatasource") -> bool:
-        log.info(f"Can access datasource: {datasource}")
+        log.debug(f"Can access datasource: {datasource}")
         if datasource.schema is None:
             # Call the base method if there is no schema since it isn't a plaid table.
             return super().can_access_datasource(datasource)
         rpc = self.get_rpc()
         table_id = "{}{}".format("analyzetable_", str(datasource.uuid))
         table_id_without_dashes = table_id.replace("-", "")
-        log.info(f"Fetching table with name: {table_id}")
+        log.debug(f"Fetching table with name: {table_id}")
         table = rpc.analyze.table.table(project_id=datasource.schema.replace("report", ""), table_id=table_id)
         if table["id"] is None: # This may be legacy - some projects were missing dashes in the UUID.
             table = rpc.analyze.table.table(project_id=datasource.schema.replace("report", ""), table_id=table_id_without_dashes)
-        log.info(f"Underlying table for datasource {datasource.uuid}: {table}")
+        log.debug(f"Underlying table for datasource {datasource.uuid}: {table}")
         return table.get('id', None) is not None
 
 
@@ -161,9 +161,9 @@ class PlaidSecurityManager(SupersetSecurityManager):
         start = time.time()
         projects = rpc.analyze.project.projects()
         end = time.time()
-        log.info(f"Fetched user's projects in {end - start} seconds.")
+        log.debug(f"Fetched user's projects in {end - start} seconds.")
         project_uuids = {str(uuid.UUID(project['id'])) for project in projects}
-        log.info(f"Project IDs: {project_uuids}")
+        log.debug(f"Project IDs: {project_uuids}")
         return self.get_session.query(Database.id).filter(Database.uuid.in_(project_uuids))
 
 
