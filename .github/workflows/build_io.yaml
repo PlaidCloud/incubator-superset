@@ -1,4 +1,4 @@
-name: Deploy Superset to IO
+name: Build Superset for IO
 on:
   push:
     branches:
