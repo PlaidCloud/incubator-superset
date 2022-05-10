@@ -42,13 +42,10 @@ class AuthOIDCView(AuthOIDView):
 
     @expose("/logout/")
     def logout(self) -> Response:
-        base_url = self.appbuilder.app.config["OIDC_PARAMS"]["base_url"]
-        domain = "{}{}".format(".", urlparse(base_url).netloc)
         logout_user()
-        response = make_response(redirect('/'))
-        # TODO: probably parameterize cookie name, though I suspect it won't change.
-        response.delete_cookie('_session_id', path='/', domain=domain)
-        return response
+        session.clear()
+        return redirect('/')
+
 
 def throwaway_password() -> str:
     random_bytes = os.urandom(64)

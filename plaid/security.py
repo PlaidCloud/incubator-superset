@@ -102,20 +102,25 @@ class PlaidSecurityManager(SupersetSecurityManager):
         log.debug(f"Current user's token is {session['token']['access_token']}")
         base_url = f"http://{self.appbuilder.app.config.get('PLAID_RPC')}"
         rpc_url = urljoin(base_url, "json-rpc/")
-        # ADT2022 - the commented code is an attempt to do things the way we used to. It shouldn't be necessary.
-        # if not session.get('workspace'):
-        #     # NOTE: session['workspace'] should be set in auth_oidc.AuthOIDCView.authorize(), but if it's not
-        #     # we may be able to get it with a temporary rpc object
-        #     temp_rpc = SimpleRPC(session['token']['access_token'], uri=rpc_url, verify_ssl=False)
-        #     authorized_workspaces = temp_rpc.identity.me.authorized_workspaces()
-        #     try:
-        #         session['workspace'] = next(
-        #             ws['id']
-        #             for ws in authorized_workspaces
-        #             if ws['default']
-        #         )
-        #     except StopIteration:
-        #         session['workspace'] = authorized_workspaces[0]['id']
+
+        if 'workspace' in session:
+            temp_token =  f"{session['token']['access_token']}_ws{session['workspace']}"
+        else:
+            temp_token = session['token']['access_token']
+
+        temp_rpc = SimpleRPC(session['token']['access_token'], uri=rpc_url, verify_ssl=False)
+
+        authorized_workspaces = temp_rpc.identity.me.authorized_workspaces()
+        try:
+            session['workspace'] = next(
+                ws['id']
+                for ws in authorized_workspaces
+                if ws['default']
+            )
+        except StopIteration:
+            if 'workspace' not in session:
+                session['workspace'] = authorized_workspaces[0]['id']
+
         token = f"{session['token']['access_token']}_ws{session['workspace']}"
         return SimpleRPC(token, uri=rpc_url, verify_ssl=False)
 
