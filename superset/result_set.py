@@ -146,6 +146,9 @@ class SupersetResultSet:
                         except Exception as ex:  # pylint: disable=broad-except
                             logger.exception(ex)
 
+        if not pa_data:
+            pa_data = [pa.array([]) for _ in column_names]
+
         self.table = pa.Table.from_arrays(pa_data, names=column_names)
         self._type_dict: Dict[str, Any] = {}
         try:
