@@ -17,12 +17,18 @@
  * under the License.
  */
 /* eslint camelcase: 0 */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import PropTypes from 'prop-types';
 import { bindActionCreators } from 'redux';
 import { connect } from 'react-redux';
 import { styled, t, css, useTheme, logging } from '@superset-ui/core';
-import { debounce } from 'lodash';
+import { debounce, pick, isEmpty } from 'lodash';
 import { Resizable } from 're-resizable';
 import { useChangeEffect } from 'src/hooks/useChangeEffect';
 import { usePluginContext } from 'src/components/DynamicPlugins';
@@ -43,12 +49,15 @@ import * as chartActions from 'src/components/Chart/chartAction';
 import { fetchDatasourceMetadata } from 'src/dashboard/actions/datasources';
 import { chartPropShape } from 'src/dashboard/util/propShapes';
 import { mergeExtraFormData } from 'src/dashboard/components/nativeFilters/utils';
-import { postFormData, putFormData } from 'src/explore/exploreUtils/formData';
+import {
+  getFormDataDiffs,
+  postFormData,
+  putFormData,
+} from 'src/explore/exploreUtils/formData';
 import { useTabId } from 'src/hooks/useTabId';
 import ExploreChartPanel from '../ExploreChartPanel';
 import ConnectedControlPanelsContainer from '../ControlPanelsContainer';
 import SaveModal from '../SaveModal';
-import QueryAndSaveBtns from '../QueryAndSaveBtns';
 import DataSourcePanel from '../DatasourcePanel';
 import { mountExploreUrl } from '../../exploreUtils';
 import { areObjectsEqual } from '../../../reduxUtils';
@@ -64,8 +73,6 @@ import ConnectedExploreChartHeader from '../ExploreChartHeader';
 
 const propTypes = {
   ...ExploreChartPanel.propTypes,
-  height: PropTypes.string,
-  width: PropTypes.string,
   actions: PropTypes.object.isRequired,
   datasource_type: PropTypes.string.isRequired,
   dashboardId: PropTypes.number,
@@ -136,6 +143,7 @@ const ExplorePanelContainer = styled.div`
       flex: 1;
       min-width: ${theme.gridUnit * 128}px;
       border-left: 1px solid ${theme.colors.grayscale.light2};
+      padding: 0 ${theme.gridUnit * 4}px;
       .panel {
         margin-bottom: 0;
       }
@@ -151,9 +159,7 @@ const ExplorePanelContainer = styled.div`
       padding: 0 ${theme.gridUnit * 4}px;
       justify-content: space-between;
       .horizontal-text {
-        text-transform: uppercase;
-        color: ${theme.colors.grayscale.light1};
-        font-size: ${theme.typography.sizes.s * 4};
+        font-size: ${theme.typography.sizes.s}px;
       }
     }
     .no-show {
@@ -174,23 +180,6 @@ const ExplorePanelContainer = styled.div`
     }
   `};
 `;
-
-const getWindowSize = () => ({
-  height: window.innerHeight,
-  width: window.innerWidth,
-});
-
-function useWindowSize({ delayMs = 250 } = {}) {
-  const [size, setSize] = useState(getWindowSize());
-
-  useEffect(() => {
-    const onWindowResize = debounce(() => setSize(getWindowSize()), delayMs);
-    window.addEventListener('resize', onWindowResize);
-    return () => window.removeEventListener('resize', onWindowResize);
-  }, []);
-
-  return size;
-}
 
 const updateHistory = debounce(
   async (formData, datasetId, isReplace, standalone, force, title, tabId) => {
@@ -237,6 +226,11 @@ const updateHistory = debounce(
   1000,
 );
 
+const handleUnloadEvent = e => {
+  e.preventDefault();
+  e.returnValue = 'Controls changed';
+};
+
 function ExploreViewContainer(props) {
   const dynamicPluginContext = usePluginContext();
   const dynamicPlugin = dynamicPluginContext.dynamicPlugins[props.vizType];
@@ -249,7 +243,6 @@ function ExploreViewContainer(props) {
   const [lastQueriedControls, setLastQueriedControls] = useState(
     props.controls,
   );
-  const windowSize = useWindowSize();
 
   const [showingModal, setShowingModal] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -257,11 +250,9 @@ function ExploreViewContainer(props) {
   const tabId = useTabId();
 
   const theme = useTheme();
-  const width = `${windowSize.width}px`;
-  const navHeight = props.standalone ? 0 : 120;
-  const height = props.forcedHeight
-    ? `${props.forcedHeight}px`
-    : `${windowSize.height - navHeight}px`;
+
+  const isBeforeUnloadActive = useRef(false);
+  const initialFormData = useRef(props.form_data);
 
   const defaultSidebarsWidth = {
     controls_width: 320,
@@ -312,6 +303,7 @@ function ExploreViewContainer(props) {
   }, [props.actions, props.chart.id, props.timeout]);
 
   const onQuery = useCallback(() => {
+    props.actions.setForceQuery(false);
     props.actions.triggerQuery(true, props.chart.id);
     addHistory();
     setLastQueriedControls(props.controls);
@@ -392,6 +384,27 @@ function ExploreViewContainer(props) {
   }, [handleKeydown, previousHandleKeyDown]);
 
   useEffect(() => {
+    const formDataChanged = !isEmpty(
+      getFormDataDiffs(initialFormData.current, props.form_data),
+    );
+    if (formDataChanged && !isBeforeUnloadActive.current) {
+      window.addEventListener('beforeunload', handleUnloadEvent);
+      isBeforeUnloadActive.current = true;
+    }
+    if (!formDataChanged && isBeforeUnloadActive.current) {
+      window.removeEventListener('beforeunload', handleUnloadEvent);
+      isBeforeUnloadActive.current = false;
+    }
+  }, [props.form_data]);
+
+  // cleanup beforeunload event listener
+  // we use separate useEffect to call it only on component unmount instead of on every form data change
+  useEffect(
+    () => () => window.removeEventListener('beforeunload', handleUnloadEvent),
+    [],
+  );
+
+  useEffect(() => {
     if (wasDynamicPluginLoading && !isDynamicPluginLoading) {
       // reload the controls now that we actually have the control config
       props.actions.dynamicPluginControlsReady();
@@ -408,18 +421,33 @@ function ExploreViewContainer(props) {
     }
   }, []);
 
-  const reRenderChart = () => {
-    props.actions.updateQueryFormData(
-      getFormDataFromControls(props.controls),
+  const reRenderChart = useCallback(
+    controlsChanged => {
+      const newQueryFormData = controlsChanged
+        ? {
+            ...props.chart.latestQueryFormData,
+            ...getFormDataFromControls(pick(props.controls, controlsChanged)),
+          }
+        : getFormDataFromControls(props.controls);
+      props.actions.updateQueryFormData(newQueryFormData, props.chart.id);
+      props.actions.renderTriggered(new Date().getTime(), props.chart.id);
+      addHistory();
+    },
+    [
+      addHistory,
+      props.actions,
       props.chart.id,
-    );
-    props.actions.renderTriggered(new Date().getTime(), props.chart.id);
-    addHistory();
-  };
+      props.chart.latestQueryFormData,
+      props.controls,
+    ],
+  );
 
   // effect to run when controls change
   useEffect(() => {
-    if (previousControls) {
+    if (
+      previousControls &&
+      props.chart.latestQueryFormData.viz_type === props.controls.viz_type.value
+    ) {
       if (
         props.controls.datasource &&
         (previousControls.datasource == null ||
@@ -439,11 +467,11 @@ function ExploreViewContainer(props) {
       );
 
       // this should also be handled by the actions that are actually changing the controls
-      const hasDisplayControlChanged = changedControlKeys.some(
+      const displayControlsChanged = changedControlKeys.filter(
         key => props.controls[key].renderTrigger,
       );
-      if (hasDisplayControlChanged) {
-        reRenderChart();
+      if (displayControlsChanged.length > 0) {
+        reRenderChart(displayControlsChanged);
       }
     }
   }, [props.controls, props.ownState]);
@@ -479,8 +507,7 @@ function ExploreViewContainer(props) {
     props.actions.logEvent(LOG_ACTIONS_CHANGE_EXPLORE_CONTROLS);
   }
 
-  function renderErrorMessage() {
-    // Returns an error message as a node if any errors are in the store
+  const errorMessage = useMemo(() => {
     const controlsWithErrors = Object.values(props.controls).filter(
       control =>
         control.validationErrors && control.validationErrors.length > 0,
@@ -514,16 +541,14 @@ function ExploreViewContainer(props) {
       errorMessage = <div style={{ textAlign: 'left' }}>{errors}</div>;
     }
     return errorMessage;
-  }
+  }, [props.controls]);
 
   function renderChartContainer() {
     return (
       <ExploreChartPanel
-        width={width}
-        height={height}
         {...props}
-        errorMessage={renderErrorMessage()}
-        refreshOverlayVisible={chartIsStale}
+        errorMessage={errorMessage}
+        chartIsStale={chartIsStale}
         onQuery={onQuery}
       />
     );
@@ -560,6 +585,8 @@ function ExploreViewContainer(props) {
           chart={props.chart}
           user={props.user}
           reports={props.reports}
+          onSaveChart={toggleModal}
+          saveDisabled={errorMessage || props.chart.chartStatus === 'loading'}
         />
       </ExploreHeaderContainer>
       <ExplorePanelContainer id="explore-container">
@@ -613,7 +640,7 @@ function ExploreViewContainer(props) {
           }
         >
           <div className="title-container">
-            <span className="horizont al-text">{t('Dataset')}</span>
+            <span className="horizontal-text">{t('Dataset')}</span>
             <span
               role="button"
               tabIndex={0}
@@ -671,16 +698,6 @@ function ExploreViewContainer(props) {
           enable={{ right: true }}
           className="col-sm-3 explore-column controls-column"
         >
-          <QueryAndSaveBtns
-            canAdd={!!(props.can_add || props.can_overwrite)}
-            onQuery={onQuery}
-            onSave={toggleModal}
-            onStop={onStop}
-            loading={props.chart.chartStatus === 'loading'}
-            chartIsStale={chartIsStale}
-            errorMessage={renderErrorMessage()}
-            datasourceType={props.datasource_type}
-          />
           <ConnectedControlPanelsContainer
             exploreState={props.exploreState}
             actions={props.actions}
@@ -689,6 +706,11 @@ function ExploreViewContainer(props) {
             chart={props.chart}
             datasource_type={props.datasource_type}
             isDatasourceMetaLoading={props.isDatasourceMetaLoading}
+            onQuery={onQuery}
+            onStop={onStop}
+            canStopQuery={props.can_add || props.can_overwrite}
+            errorMessage={errorMessage}
+            chartIsStale={chartIsStale}
           />
         </Resizable>
         <div
