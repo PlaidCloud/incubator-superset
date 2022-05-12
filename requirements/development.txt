@@ -18,7 +18,7 @@ cached-property==1.5.2
     # via tableschema
 certifi==2021.10.8
     # via requests
-charset-normalizer==2.0.4
+charset-normalizer==2.0.12
     # via requests
 et-xmlfile==1.1.0
     # via openpyxl
