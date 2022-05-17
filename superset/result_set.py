@@ -146,6 +146,9 @@ class SupersetResultSet:
                         except Exception as ex:  # pylint: disable=broad-except
                             logger.exception(ex)
 
+        if not pa_data:
+            pa_data = [pa.array([]) for _ in column_names]
+
         self.table = pa.Table.from_arrays(pa_data, names=column_names)
         self._type_dict: Dict[str, Any] = {}
         try:
@@ -174,7 +177,10 @@ class SupersetResultSet:
 
     @staticmethod
     def convert_table_to_df(table: pa.Table) -> pd.DataFrame:
-        return table.to_pandas(integer_object_nulls=True)
+        try:
+            return table.to_pandas(integer_object_nulls=True)
+        except pa.lib.ArrowInvalid:
+            return table.to_pandas(integer_object_nulls=True, timestamp_as_object=True)
 
     @staticmethod
     def first_nonempty(items: List[Any]) -> Any:

@@ -28,6 +28,7 @@ import {
   isFormulaAnnotationLayer,
   isIntervalAnnotationLayer,
   isTimeseriesAnnotationLayer,
+  TimeGranularity,
   TimeseriesChartDataResponseResult,
 } from '@superset-ui/core';
 import { EChartsCoreOption, SeriesOption } from 'echarts';
@@ -69,6 +70,14 @@ import {
 } from './transformers';
 import { TIMESERIES_CONSTANTS } from '../constants';
 
+const TimeGrainToTimestamp = {
+  [TimeGranularity.HOUR]: 3600 * 1000,
+  [TimeGranularity.DAY]: 3600 * 1000 * 24,
+  [TimeGranularity.MONTH]: 3600 * 1000 * 24 * 31,
+  [TimeGranularity.QUARTER]: 3600 * 1000 * 24 * 31 * 3,
+  [TimeGranularity.YEAR]: 3600 * 1000 * 24 * 31 * 12,
+};
+
 export default function transformProps(
   chartProps: EchartsTimeseriesChartProps,
 ): TimeseriesChartTransformedProps {
@@ -80,6 +89,7 @@ export default function transformProps(
     hooks,
     queriesData,
     datasource,
+    theme,
   } = chartProps;
   const { verboseMap = {} } = datasource;
   const [queryData] = queriesData;
@@ -126,6 +136,7 @@ export default function transformProps(
     yAxisTitleMargin,
     yAxisTitlePosition,
     sliceId,
+    timeGrainSqla,
   }: EchartsTimeseriesFormData = { ...DEFAULT_FORM_DATA, ...formData };
 
   const colorScale = CategoricalColorNamespace.getScale(colorScheme as string);
@@ -229,6 +240,7 @@ export default function transformProps(
             data,
             annotationData,
             colorScale,
+            theme,
             sliceId,
           ),
         );
@@ -239,6 +251,7 @@ export default function transformProps(
             data,
             annotationData,
             colorScale,
+            theme,
             sliceId,
           ),
         );
@@ -249,6 +262,8 @@ export default function transformProps(
             markerSize,
             data,
             annotationData,
+            colorScale,
+            sliceId,
           ),
         );
       }
@@ -324,6 +339,10 @@ export default function transformProps(
         formatter: xAxisFormatter,
         rotate: xAxisLabelRotation,
       },
+      minInterval:
+        xAxisType === 'time' && timeGrainSqla
+          ? TimeGrainToTimestamp[timeGrainSqla]
+          : 0,
     },
     yAxis: {
       ...defaultYAxis,

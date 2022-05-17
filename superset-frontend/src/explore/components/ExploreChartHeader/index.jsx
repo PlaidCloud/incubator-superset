@@ -20,22 +20,19 @@ import React from 'react';
 import { connect } from 'react-redux';
 import { bindActionCreators } from 'redux';
 import PropTypes from 'prop-types';
+import { Tooltip } from 'src/components/Tooltip';
 import {
   CategoricalColorNamespace,
   css,
   SupersetClient,
-  styled,
   t,
 } from '@superset-ui/core';
-import {
-  fetchUISpecificReport,
-  toggleActive,
-  deleteActiveReport,
-} from 'src/reports/actions/reports';
-import { isFeatureEnabled, FeatureFlag } from 'src/featureFlags';
+import { toggleActive, deleteActiveReport } from 'src/reports/actions/reports';
 import { chartPropShape } from 'src/dashboard/util/propShapes';
 import AlteredSliceTag from 'src/components/AlteredSliceTag';
 import FaveStar from 'src/components/FaveStar';
+import Button from 'src/components/Button';
+import Icons from 'src/components/Icons';
 import PropertiesModal from 'src/explore/components/PropertiesModal';
 import { sliceUpdated } from 'src/explore/actions/exploreActions';
 import CertifiedBadge from 'src/components/CertifiedBadge';
@@ -55,60 +52,58 @@ const propTypes = {
   ownState: PropTypes.object,
   timeout: PropTypes.number,
   chart: chartPropShape,
+  saveDisabled: PropTypes.bool,
 };
 
-const StyledHeader = styled.div`
-  ${({ theme }) => css`
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    flex-wrap: nowrap;
-    justify-content: space-between;
-    height: 100%;
-
-    span[role='button'] {
-      display: flex;
-      height: 100%;
-    }
-
-    .title-panel {
-      display: flex;
-      align-items: center;
-      min-width: 0;
-      margin-right: ${theme.gridUnit * 12}px;
-    }
-
-    .right-button-panel {
-      display: flex;
-      align-items: center;
-
-      > .btn-group {
-        flex: 0 0 auto;
-        margin-left: ${theme.gridUnit}px;
-      }
-    }
-
-    .action-button {
-      color: ${theme.colors.grayscale.base};
-      margin: 0 ${theme.gridUnit * 1.5}px 0 ${theme.gridUnit}px;
-    }
-  `}
+const saveButtonStyles = theme => css`
+  color: ${theme.colors.primary.dark2};
+  & > span[role='img'] {
+    margin-right: 0;
+  }
 `;
 
-const StyledButtons = styled.span`
-  ${({ theme }) => css`
+const headerStyles = theme => css`
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  height: 100%;
+
+  span[role='button'] {
+    display: flex;
+    height: 100%;
+  }
+
+  .title-panel {
     display: flex;
     align-items: center;
-    padding-left: ${theme.gridUnit * 2}px;
+    min-width: 0;
+    margin-right: ${theme.gridUnit * 12}px;
+  }
 
-    & .fave-unfave-icon {
-      padding: 0 ${theme.gridUnit}px;
+  .right-button-panel {
+    display: flex;
+    align-items: center;
+  }
+`;
 
-      &:first-child {
-        padding-left: 0;
-      }
+const buttonsStyles = theme => css`
+  display: flex;
+  align-items: center;
+  padding-left: ${theme.gridUnit * 2}px;
+
+  & .fave-unfave-icon {
+    padding: 0 ${theme.gridUnit}px;
+
+    &:first-child {
+      padding-left: 0;
     }
-  `}
+  }
+`;
+
+const saveButtonContainerStyles = theme => css`
+  margin-right: ${theme.gridUnit * 2}px;
 `;
 
 export class ExploreChartHeader extends React.PureComponent {
@@ -124,16 +119,6 @@ export class ExploreChartHeader extends React.PureComponent {
 
   componentDidMount() {
     const { dashboardId } = this.props;
-    if (this.canAddReports()) {
-      const { user, chart } = this.props;
-      // this is in the case that there is an anonymous user.
-      this.props.fetchUISpecificReport(
-        user.userId,
-        'chart_id',
-        'charts',
-        chart.id,
-      );
-    }
     if (dashboardId) {
       this.fetchChartDashboardData();
     }
@@ -201,24 +186,6 @@ export class ExploreChartHeader extends React.PureComponent {
     });
   }
 
-  canAddReports() {
-    if (!isFeatureEnabled(FeatureFlag.ALERT_REPORTS)) {
-      return false;
-    }
-    const { user } = this.props;
-    if (!user?.userId) {
-      // this is in the case that there is an anonymous user.
-      return false;
-    }
-    const roles = Object.keys(user.roles || []);
-    const permissions = roles.map(key =>
-      user.roles[key].filter(
-        perms => perms[0] === 'menu_access' && perms[1] === 'Manage',
-      ),
-    );
-    return permissions[0].length > 0;
-  }
-
   render() {
     const {
       actions,
@@ -231,11 +198,13 @@ export class ExploreChartHeader extends React.PureComponent {
       isStarred,
       sliceUpdated,
       sliceName,
+      onSaveChart,
+      saveDisabled,
     } = this.props;
     const { latestQueryFormData, sliceFormData } = chart;
     const oldSliceName = slice?.slice_name;
     return (
-      <StyledHeader id="slice-header">
+      <div id="slice-header" css={headerStyles}>
         <div className="title-panel">
           <ChartEditableTitle
             title={sliceName}
@@ -248,7 +217,7 @@ export class ExploreChartHeader extends React.PureComponent {
             placeholder={t('Add the name of the chart')}
           />
           {slice && (
-            <StyledButtons>
+            <span css={buttonsStyles}>
               {slice.certified_by && (
                 <CertifiedBadge
                   certifiedBy={slice.certified_by}
@@ -279,20 +248,40 @@ export class ExploreChartHeader extends React.PureComponent {
                   currentFormData={{ ...formData, chartTitle: sliceName }}
                 />
               )}
-            </StyledButtons>
+            </span>
           )}
         </div>
         <div className="right-button-panel">
+          <Tooltip
+            title={
+              saveDisabled
+                ? t('Add required control values to save chart')
+                : null
+            }
+          >
+            {/* needed to wrap button in a div - antd tooltip doesn't work with disabled button */}
+            <div css={saveButtonContainerStyles}>
+              <Button
+                buttonStyle="secondary"
+                onClick={onSaveChart}
+                disabled={saveDisabled}
+                data-test="query-save-button"
+                css={saveButtonStyles}
+              >
+                <Icons.SaveOutlined iconSize="l" />
+                {t('Save')}
+              </Button>
+            </div>
+          </Tooltip>
           <ExploreAdditionalActionsMenu
             onOpenInEditor={actions.redirectSQLLab}
             onOpenPropertiesModal={this.openPropertiesModal}
             slice={slice}
             canDownloadCSV={canDownload}
             latestQueryFormData={latestQueryFormData}
-            canAddReports={this.canAddReports()}
           />
         </div>
-      </StyledHeader>
+      </div>
     );
   }
 }
@@ -301,7 +290,7 @@ ExploreChartHeader.propTypes = propTypes;
 
 function mapDispatchToProps(dispatch) {
   return bindActionCreators(
-    { sliceUpdated, fetchUISpecificReport, toggleActive, deleteActiveReport },
+    { sliceUpdated, toggleActive, deleteActiveReport },
     dispatch,
   );
 }
