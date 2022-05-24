@@ -115,7 +115,7 @@ class EventHandler:
         try:
             event_type = EventType(info['event'])
             object_type = PlaidObjectType(info['type'])
-            
+
             data = info['data']
 
             kwargs = {k: v for k, v in info.items() if k not in REQUIRED_FIELDS}
@@ -148,7 +148,7 @@ class EventHandler:
             )
         elif event_type is EventType.Delete:
             db.session.query(Database).filter_by(workspace_id=data['id']).delete()
-        
+
         db.session.commit()
 
     def _handle_project_event(self, event_type, data, **kwargs):
@@ -256,7 +256,7 @@ class EventHandler:
                     try:
                         project = db.session.query(Database).filter_by(uuid=kwargs['project_id']).one()
                         log.info(project.get_all_view_names_in_schema(schema=new_table.schema))
-                        # TODO: This is pretty dumb. Event is being processed before the DB can create the view. 
+                        # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
                         time.sleep(2)
                         project.get_table(table_name=new_table.table_name, schema=new_table.schema)
                         new_table.database = project
@@ -267,10 +267,10 @@ class EventHandler:
                     # If we've made it this far, the source table/view exists.
                     db.session.add(new_table)
                     db.session.commit()
-                    
+
                     # Populate columns and metrics for table.
                     new_table.fetch_metadata()
-                    
+
                     db.session.commit()
                 except Exception:
                     log.exception("Error occurred while inserting a new table.")
@@ -287,9 +287,12 @@ class EventHandler:
                     uuid=event_data['id'].replace('analyzetable_', ''),
                 ).one()
                 if not event_data.get("published_name"):
-                    # Table still exists, but the user unpublished it. So we want to delete.
-                    log.info(f"Table {event_data['published_name']} ({event_data['id']}) has no published name, and will be deleted.")
-                    delete_table(event_data)
+                    # !! We don't do this any more because sometimes there are multiple tables with the same published name !!
+                    # !! Things may seriously break if this code is uncommented. !!
+
+                    # # Table still exists, but the user unpublished it. So we want to delete.
+                    # log.info(f"Table {event_data['published_name']} ({event_data['id']}) has no published name, and will be deleted.")
+                    # delete_table(event_data)
                     return
                 map_data_to_row(event_data, existing_table)
                 # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
@@ -312,15 +315,15 @@ class EventHandler:
                 ).one()
 
                 has_charts = db.session.query(
-                        db.session.query(Slice).filter_by(datasource_id=table.id, datasource_type='plaid').exists()
-                    ).scalar()
+                    db.session.query(Slice).filter_by(datasource_id=table.id, datasource_type='plaid').exists()
+                ).scalar()
 
                 has_metrics = db.session.query(
-                        db.session.query(SqlMetric).filter(
-                            SqlMetric.table_id == table.id,
-                            SqlMetric.metric_name != 'count'
-                        ).exists()
-                    ).scalar()
+                    db.session.query(SqlMetric).filter(
+                        SqlMetric.table_id == table.id,
+                        SqlMetric.metric_name != 'count'
+                    ).exists()
+                ).scalar()
 
                 if not has_charts and not has_metrics:
                     security_manager.del_permission_view_menu('datasource_access', table.get_perm())
@@ -337,7 +340,8 @@ class EventHandler:
         elif event_type is EventType.Update:
             update_table(data)
         elif event_type is EventType.Delete:
-            delete_table(data)
+            # delete_table(data)
+            log.warning(f"Received a delete event for table {data['published_name']}, but deleting tables through events is no longer permitted.")
 
     # TODO: Do we even care about views here? Are views what I think they are?
     def _handle_view_event(self, event_type, data, **kwargs):
