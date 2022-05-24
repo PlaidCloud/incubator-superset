@@ -4,7 +4,7 @@ import logging
 from base64 import b64encode
 # from uuid import uuid4
 from urllib.parse import urljoin, urlparse
-from flask import redirect, url_for, session, make_response, Response
+from flask import request, redirect, url_for, session, make_response, Response
 from flask_appbuilder.security.views import AuthOIDView
 from flask_appbuilder import expose
 from flask_login import login_user, logout_user
@@ -15,6 +15,9 @@ class AuthOIDCView(AuthOIDView):
     @expose('/login/', methods=['GET', 'POST'])
     def login(self, flag=True) -> Response:
         oauth = self.appbuilder.sm.oauth
+        next_intent = request.args.get("next")
+        if next_intent:
+            session["next_redirect"] = next_intent
         redirect_uri = url_for('.authorize', _external=True, _scheme='https')
         return oauth.plaid.authorize_redirect(redirect_uri)
 
@@ -38,7 +41,8 @@ class AuthOIDCView(AuthOIDView):
         login_user(user)
         session['token'] = token
         session['workspace'] = userinfo['default_plaid_group']
-        return redirect('/')
+        next_url = session.pop("next_redirect", "/")
+        return redirect(next_url)
 
     @expose("/logout/")
     def logout(self) -> Response:
