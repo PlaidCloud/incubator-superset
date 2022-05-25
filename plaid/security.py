@@ -11,9 +11,11 @@ from typing import Union, List
 from sqlalchemy import func, Table, MetaData
 from urllib.parse import urljoin
 from flask import session
+import flask_login
 from flask_login import logout_user
 from flask_appbuilder.security.manager import AUTH_OID
 from authlib.integrations.flask_client import OAuth
+import requests
 from requests.exceptions import HTTPError
 
 from plaidcloud.rpc.connection.jsonrpc import SimpleRPC
@@ -117,6 +119,14 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
         try:
             authorized_workspaces = temp_rpc.identity.me.authorized_workspaces()
+            # Alright, I guess I need to figure out if a user is me, and if they are, raise an HTTPError. Hmm.
+            if flask_login.current_user.id == 47:
+                # Me, Adams
+                # TODO: if this just keeps looping, maybe do it at random, or after a 100 count or something
+                fake_response = requests.Response():
+                fake_response.status_code = 401
+                fake_response.reason = 'Fake 401 error for user 47'
+                fake_response.raise_for_status()
         except HTTPError as e:
             if e.response.status_code == 401:
                 #TODO: trigger a logout somehow
