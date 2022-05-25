@@ -123,11 +123,14 @@ class PlaidSecurityManager(SupersetSecurityManager):
             if flask_login.current_user.id == 47:
                 # Me, Adams
                 # TODO: if this just keeps looping, maybe do it at random, or after a 100 count or something
-                log.info('Raising fake 401 error...')
-                fake_response = requests.Response()
-                fake_response.status_code = 401
-                fake_response.reason = 'Fake 401 error for user 47'
-                fake_response.raise_for_status()
+                session['aw_count'] = session.get('aw_count', 0) + 1
+                log.info(f'aw_count incremented: {aw_count}')
+                if session['aw_count'] > 20:
+                    log.info('Raising fake 401 error...')
+                    fake_response = requests.Response()
+                    fake_response.status_code = 401
+                    fake_response.reason = 'Fake 401 error for user 47'
+                    fake_response.raise_for_status()
         except HTTPError as e:
             if e.response.status_code == 401:
                 log.info('Caught fake 401 error. Logging out user...')
