@@ -134,11 +134,10 @@ class PlaidSecurityManager(SupersetSecurityManager):
                     fake_response.raise_for_status()
         except HTTPError as e:
             if e.response.status_code == 401:
-                log.info('Caught fake 401 error. Logging out user...')
-                #TODO: trigger a logout somehow
-                #      Not sure this will work without a redirect
                 logout_user()
                 session.clear()
+                e.response.reason = '401 Unauthorized while running get_rpc(). Logging user out.'
+                return None
             raise
 
         try:
@@ -158,6 +157,8 @@ class PlaidSecurityManager(SupersetSecurityManager):
     def can_access_database(self, database: Union["Database", "DruidCluster"]) -> bool:
         log.debug(f"Can access database: {database}")
         rpc = self.get_rpc()
+        if not rpc:
+            return False
         proj = rpc.analyze.project.project(project_id=str(database.uuid))
         log.debug(proj)
         if proj["id"] is None:
@@ -175,6 +176,8 @@ class PlaidSecurityManager(SupersetSecurityManager):
             # Call the base method if there is no schema since it isn't a plaid table.
             return super().can_access_datasource(datasource)
         rpc = self.get_rpc()
+        if not rpc:
+            return False
         table_id = "{}{}".format("analyzetable_", str(datasource.uuid))
         table_id_without_dashes = table_id.replace("-", "")
         log.debug(f"Fetching table with name: {table_id}")
@@ -188,6 +191,8 @@ class PlaidSecurityManager(SupersetSecurityManager):
     def get_project_ids(self):
         from superset.models.core import Database
         rpc = self.get_rpc()
+        if not rpc:
+            return []
         start = time.time()
         projects = rpc.analyze.project.projects()
         end = time.time()
@@ -214,6 +219,8 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
     def get_table_ids(self):
         rpc = self.get_rpc()
+        if not rpc:
+            return set()
         start = time.time()
         tables = rpc.analyze.table.published_tables_by_project()
         end = time.time()
