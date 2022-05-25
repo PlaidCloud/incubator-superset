@@ -124,7 +124,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
                 # Me, Adams
                 # TODO: if this just keeps looping, maybe do it at random, or after a 100 count or something
                 session['aw_count'] = session.get('aw_count', 0) + 1
-                log.info(f'aw_count incremented: {aw_count}')
+                log.info(f'aw_count incremented: {session["aw_count"]}')
                 if session['aw_count'] > 20:
                     session['aw_count'] = 0  # This should be irrelevant, because session should be cleared
                     log.info('Raising fake 401 error...')
