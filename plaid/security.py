@@ -7,14 +7,19 @@ import uuid
 import time
 import jwt
 from typing import Union, List
+
 from sqlalchemy import func, Table, MetaData
 from urllib.parse import urljoin
-from superset.security import SupersetSecurityManager
 from flask import session
+from flask_login import logout_user
 from flask_appbuilder.security.manager import AUTH_OID
 from authlib.integrations.flask_client import OAuth
-from plaid.auth_oidc import AuthOIDCView
+from requests.exceptions import HTTPError
+
 from plaidcloud.rpc.connection.jsonrpc import SimpleRPC
+from plaid.auth_oidc import AuthOIDCView
+
+from superset.security import SupersetSecurityManager
 
 __author__ = "Garrett Bates"
 __copyright__ = "© Copyright 2018, Tartan Solutions, Inc"
@@ -110,7 +115,16 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
         temp_rpc = SimpleRPC(session['token']['access_token'], uri=rpc_url, verify_ssl=False)
 
-        authorized_workspaces = temp_rpc.identity.me.authorized_workspaces()
+        try:
+            authorized_workspaces = temp_rpc.identity.me.authorized_workspaces()
+        except HTTPError as e:
+            if e.response.status_code == 401:
+                #TODO: trigger a logout somehow
+                #      Not sure this will work without a redirect
+                logout_user()
+                session.clear()
+            raise
+
         try:
             session['workspace'] = next(
                 ws['id']
