@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 class AuthOIDCView(AuthOIDView):
 
     @expose('/login/', methods=['GET', 'POST'])
-    def login(self, flag=True) -> Response:
+    def login(self, flag:bool=True) -> Response:
         oauth = self.appbuilder.sm.oauth
         next_intent = request.args.get("next")
         if next_intent:
