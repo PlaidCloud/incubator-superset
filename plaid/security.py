@@ -121,7 +121,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
             if e.response.status_code == 401:
                 logout_user()
                 session.clear()
-                raise Exception('Unable to query plaid. Clearing user session. If you see this, please refresh.') from e
+                raise Exception('There were problems authenticating your access with PlaidCloud. If you see this message, please refresh your browser') from e
             raise
 
         try:
