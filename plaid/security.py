@@ -136,7 +136,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
             if e.response.status_code == 401:
                 logout_user()
                 session.clear()
-                e.response.reason = '401 Unauthorized while running get_rpc(). Logging user out.'
+                raise Exception('Unable to query plaid. Clearing user session. If you see this, please refresh.') from e
             raise
 
         try:
