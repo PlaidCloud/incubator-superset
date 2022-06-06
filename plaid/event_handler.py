@@ -5,7 +5,7 @@ import logging
 import time
 from enum import Enum
 import json
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 
 import pika
 from sqlalchemy import (
@@ -116,7 +116,7 @@ class EventHandler:
             channel.basic_ack(method.delivery_tag)
             self.process_event(data)
 
-    def process_event(self, info: dict[str, Any]) -> None:
+    def process_event(self, info: Dict[str, Any]) -> None:
         try:
             event_type = EventType(info['event'])
             object_type = PlaidObjectType(info['type'])
@@ -148,7 +148,7 @@ class EventHandler:
             # Skip this event as it is not recognized.
             self._handle_passthrough(event_type, {})
 
-    def _handle_workspace_event(self, event_type: EventType, data: dict[str, Any], **kwargs: Any) -> None:
+    def _handle_workspace_event(self, event_type: EventType, data: Dict[str, Any], **kwargs: Any) -> None:
         if event_type is EventType.Create:
             # Create events would be a no-op here, so ignore them.
             pass
@@ -164,8 +164,8 @@ class EventHandler:
 
         db.session.commit()
 
-    def _handle_project_event(self, event_type: EventType, data: dict[str, Any], **kwargs: Any) -> None:
-        def map_data_to_row(event_data: dict[str, Any], existing_project: Optional[Database] = None) -> Database:
+    def _handle_project_event(self, event_type: EventType, data: Dict[str, Any], **kwargs: Any) -> None:
+        def map_data_to_row(event_data: Dict[str, Any], existing_project: Optional[Database] = None) -> Database:
             if isinstance(existing_project, Database):
                 proj = existing_project
             else:
@@ -189,7 +189,7 @@ class EventHandler:
 
             return proj
 
-        def insert_project(event_data: dict[str, Any]) -> None:
+        def insert_project(event_data: Dict[str, Any]) -> None:
             if not db.session.query(db.session.query(Database).filter_by(uuid=event_data['id']).exists()).scalar():
                 # Project doesn't exist, so make a new one.
                 log.info(f"Inserting project {event_data['name']} ({event_data['id']}).")
@@ -200,7 +200,7 @@ class EventHandler:
                 # TODO: Log a warning here. No project should exist.
                 update_project(event_data)
 
-        def update_project(event_data: dict[str, Any]) -> None:
+        def update_project(event_data: Dict[str, Any]) -> None:
             try:
                 log.info(f"Updating project {event_data['name']} ({event_data['id']}).")
                 existing_project = db.session.query(Database).filter_by(uuid=event_data['id']).one()
@@ -211,7 +211,7 @@ class EventHandler:
                 map_data_to_row(event_data, existing_project)
                 db.session.commit()
 
-        def delete_project(event_data: dict[str, Any]) -> None:
+        def delete_project(event_data: Dict[str, Any]) -> None:
             # TODO: Deleting a table associated with a chart breaks UI (can't set new datasource, can only delete chart)
             # Need to figure out how to handle this circumstance (delete charts too? update dataousrce to placeholder?)
             # If update to placeholder, how to regulate perms?
@@ -230,9 +230,9 @@ class EventHandler:
         elif event_type is EventType.Delete:
             delete_project(data)
 
-    def _handle_table_event(self, event_type: EventType, data: dict[str, Any], **kwargs: Any) -> None:
+    def _handle_table_event(self, event_type: EventType, data: Dict[str, Any], **kwargs: Any) -> None:
 
-        def map_data_to_row(event_data: dict[str, Any], existing_table: Optional[SqlaTable] = None) -> SqlaTable:
+        def map_data_to_row(event_data: Dict[str, Any], existing_table: Optional[SqlaTable] = None) -> SqlaTable:
             if isinstance(existing_table, SqlaTable):
                 table = existing_table
             else:
@@ -281,7 +281,7 @@ class EventHandler:
                     log.error(ex, exc_info=True)
                     db.session.rollback()
 
-        def insert_table(event_data: dict[str, Any]) -> None:
+        def insert_table(event_data: Dict[str, Any]) -> None:
             if not event_data.get("published_name"):
                 log.info(
                     f"Received table insert event for {event_data['id']} "
@@ -335,7 +335,7 @@ class EventHandler:
                 return
 
 
-        def update_table(event_data: dict[str, Any]) -> None:
+        def update_table(event_data: Dict[str, Any]) -> None:
             try:
                 log.info(f"Updating table {event_data['published_name']} ({event_data['id']}) for project {kwargs['project_id']}.")
                 existing_table = db.session.query(SqlaTable).filter_by(
@@ -366,7 +366,7 @@ class EventHandler:
                 log.exception("Error occurred while updating a table.")
                 db.session.rollback()
 
-        def delete_table(event_data: dict[str, Any]) -> None:
+        def delete_table(event_data: Dict[str, Any]) -> None:
             try:
                 log.info(f"Deleting table {event_data['published_name']} ({event_data['id']}) for project {kwargs['project_id']}.")
                 table = db.session.query(SqlaTable).filter(
@@ -407,10 +407,10 @@ class EventHandler:
     # TODO: Do we even care about views here? Are views what I think they are?
     #       ADT2022 - I don't think we do. I think that when the things we care about happen to views, a table
     #       event is published.
-    def _handle_view_event(self, event_type: EventType, data: dict[str, Any], **kwargs: Any) -> None:
+    def _handle_view_event(self, event_type: EventType, data: Dict[str, Any], **kwargs: Any) -> None:
         raise NotImplementedError()
 
-    def _handle_passthrough(self, event_type: Optional[EventType], data: Optional[dict[str, Any]], **kwargs: Any) -> None:
+    def _handle_passthrough(self, event_type: Optional[EventType], data: Optional[Dict[str, Any]], **kwargs: Any) -> None:
         # TODO: Should we debug log unhandled events?
         pass
 
