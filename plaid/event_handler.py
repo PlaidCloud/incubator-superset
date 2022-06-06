@@ -280,6 +280,8 @@ class EventHandler:
                 except SQLAlchemyError as ex:  # pragma: no cover
                     log.error(ex, exc_info=True)
                     db.session.rollback()
+            else:
+                log.info("No cache records found for datasource %s", datasource_uid)
 
         def insert_table(event_data: Dict[str, Any]) -> None:
             if not event_data.get("published_name"):
