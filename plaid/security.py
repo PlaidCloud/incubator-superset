@@ -104,7 +104,6 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
 
     def get_rpc(self) -> SimpleRPC:
-        log.debug(f"Current user's token is {session['token']['access_token']}")
         base_url = f"http://{self.appbuilder.app.config.get('PLAID_RPC')}"
         rpc_url = urljoin(base_url, "json-rpc/")
 
@@ -153,31 +152,14 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
 
     def can_access_datasource(self, datasource: "BaseDatasource") -> bool:
-        log.debug(f"Checking access to datasource: {datasource}\n\tdatasource.schema: {datasource.schema}")
+        log.debug(f"Checking access to datasource: {datasource}")
         if datasource.schema is None:
             # Call the base method if there is no schema since there isn't a plaid schema.
             return super().can_access_datasource(datasource)
         project_id = datasource.schema.replace("report", "")
         rpc = self.get_rpc()
         project = rpc.analyze.project.project(project_id=project_id)
-        log.debug(f"result of project query: {project}")
         return bool(project.get('id'))
-
-        # log.debug(f"Can access datasource: {datasource}")
-        # if datasource.schema is None:
-        #     # Call the base method if there is no schema since it isn't a plaid table.
-        #     # This was maybe meant to catch the ch10215 issue, but in fact there _is_ a schema in this case
-        #     # Maybe we should be checking based _only_ on access to the project/schema?
-        #     return super().can_access_datasource(datasource)
-        # rpc = self.get_rpc()
-        # table_id = "{}{}".format("analyzetable_", str(datasource.uuid))
-        # table_id_without_dashes = table_id.replace("-", "")
-        # log.debug(f"Fetching table with name: {table_id}")
-        # table = rpc.analyze.table.table(project_id=datasource.schema.replace("report", ""), table_id=table_id)
-        # if table["id"] is None: # This may be legacy - some projects were missing dashes in the UUID.
-        #     table = rpc.analyze.table.table(project_id=datasource.schema.replace("report", ""), table_id=table_id_without_dashes)
-        # log.debug(f"Underlying table for datasource {datasource.uuid}: {table}")
-        # return table.get('id', None) is not None
 
 
     def get_project_ids(self):
