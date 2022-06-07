@@ -253,35 +253,35 @@ class EventHandler:
                 .all()
             )
             cache_keys = [c.cache_key for c in cache_key_objs]
-            if cache_keys:
-                all_keys_deleted = cache_manager.cache.delete_many(*cache_keys)
-
-                if not all_keys_deleted:
-                    # expected behavior as keys may expire and cache is not a
-                    # persistent storage
-                    log.info(
-                        "Some of the cache keys were not deleted in the list %s", cache_keys
-                    )
-
-                try:
-                    delete_stmt = (
-                        CacheKey.__table__.delete().where(  # pylint: disable=no-member
-                            CacheKey.cache_key.in_(cache_keys)
-                        )
-                    )
-                    db.session.execute(delete_stmt)
-                    db.session.commit()
-
-                    log.info(
-                        "Invalidated %s cache records for datasource %s",
-                        len(cache_keys),
-                        datasource_uid,
-                    )
-                except SQLAlchemyError as ex:  # pragma: no cover
-                    log.error(ex, exc_info=True)
-                    db.session.rollback()
-            else:
+            if not cache_keys:
                 log.info("No cache records found for datasource %s", datasource_uid)
+                return
+
+            all_keys_deleted = cache_manager.cache.delete_many(*cache_keys)
+            if not all_keys_deleted:
+                # expected behavior as keys may expire and cache is not a
+                # persistent storage
+                log.info(
+                    "Some of the cache keys were not deleted in the list %s", cache_keys
+                )
+
+            try:
+                delete_stmt = (
+                    CacheKey.__table__.delete().where(  # pylint: disable=no-member
+                        CacheKey.cache_key.in_(cache_keys)
+                    )
+                )
+                db.session.execute(delete_stmt)
+                db.session.commit()
+
+                log.info(
+                    "Invalidated %s cache records for datasource %s",
+                    len(cache_keys),
+                    datasource_uid,
+                )
+            except SQLAlchemyError as ex:  # pragma: no cover
+                log.error(ex, exc_info=True)
+                db.session.rollback()
 
         def insert_table(event_data: Dict[str, Any]) -> None:
             if not event_data.get("published_name"):
