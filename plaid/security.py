@@ -160,6 +160,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         project_id = datasource.schema.replace("report", "")
         rpc = self.get_rpc()
         project = rpc.analyze.project.project(project_id=project_id, keys='id')
+        log.debug(f"result of project query: {project}")
         return bool(project.get('id'))
 
         # log.debug(f"Can access datasource: {datasource}")
