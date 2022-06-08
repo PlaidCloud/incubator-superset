@@ -354,12 +354,12 @@ class EventHandler:
                     return
 
                 map_data_to_row(event_data, existing_table)
+                clear_table_cache(existing_table.uid)
+
                 # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
                 time.sleep(2)
                 existing_table.fetch_metadata()
                 db.session.commit()
-
-                clear_table_cache(existing_table.uid)
 
             except NoResultFound:
                 log.warning("Received an update event for a table that doesn't exist.")
