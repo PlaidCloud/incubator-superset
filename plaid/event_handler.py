@@ -294,7 +294,7 @@ class EventHandler:
             log.info(f"Inserting table {event_data['published_name']} ({event_data['id']}) for project {kwargs['project_id']}.")
             log.info(f"{event_data['id'].replace('analyzetable_', '')}")
 
-            if not db.session.query(
+            if db.session.query(
                 db.session.query(SqlaTable).filter_by(
                     uuid=event_data['id'].replace('analyzetable_', ''),
                 ).exists()
@@ -340,30 +340,32 @@ class EventHandler:
         def update_table(event_data: Dict[str, Any]) -> None:
             try:
                 log.info(f"Updating table {event_data['published_name']} ({event_data['id']}) for project {kwargs['project_id']}.")
-                existing_table = db.session.query(SqlaTable).filter_by(
-                    uuid=event_data['id'].replace('analyzetable_', ''),
-                ).one()
+                try:
+                    existing_table = db.session.query(SqlaTable).filter_by(
+                        uuid=event_data['id'].replace('analyzetable_', ''),
+                    ).one()
+                except NoResultFound:
+                    log.warning("Received an update event for a table that doesn't exist.")
+                    insert_table(event_data)
+                else:
 
-                if not event_data.get("published_name"):
-                    # !! We don't do this any more because sometimes there are multiple tables with the same published name !!
-                    # !! Things may seriously break if this code is uncommented. !!
+                    if not event_data.get("published_name"):
+                        # !! We don't do this any more because sometimes there are multiple tables with the same published name !!
+                        # !! Things may seriously break if this code is uncommented. !!
 
-                    # # Table still exists, but the user unpublished it. So we want to delete.
-                    # log.info(f"Table {event_data['published_name']} ({event_data['id']}) has no published name, and will be deleted.")
-                    # delete_table(event_data)
-                    return
+                        # # Table still exists, but the user unpublished it. So we want to delete.
+                        # log.info(f"Table {event_data['published_name']} ({event_data['id']}) has no published name, and will be deleted.")
+                        # delete_table(event_data)
+                        return
 
-                map_data_to_row(event_data, existing_table)
-                clear_table_cache(existing_table.uid)
+                    map_data_to_row(event_data, existing_table)
+                    clear_table_cache(existing_table.uid)
 
-                # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
-                time.sleep(2)
-                existing_table.fetch_metadata()
-                db.session.commit()
+                    # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
+                    time.sleep(2)
+                    existing_table.fetch_metadata()
+                    db.session.commit()
 
-            except NoResultFound:
-                log.warning("Received an update event for a table that doesn't exist.")
-                insert_table(event_data)
             except Exception:
                 log.exception("Error occurred while updating a table.")
                 db.session.rollback()
