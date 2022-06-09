@@ -1901,6 +1901,7 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
 
         # add back calculated (virtual) columns
         columns.extend([col for col in old_columns if col.expression])
+        logger.info(f"Setting columns to: {columns}\n\tuuids:{[col.uuid for col in columns]}")
         self.columns = columns
 
         metrics.append(
