@@ -1895,6 +1895,8 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
                 new_column.expression = ""
             new_column.groupby = True
             new_column.filterable = True
+            if not new_column.uuid:
+                new_column.uuid = uuid4()
             columns.append(new_column)
             if not any_date_col and new_column.is_temporal:
                 any_date_col = col["name"]
