@@ -1887,14 +1887,12 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
                 )
                 new_column.is_dttm = new_column.is_temporal
                 db_engine_spec.alter_new_orm_column(new_column)
-                logger.info(f"no old column for {new_column} - new_column.uuid: {new_column.uuid}")
             else:
                 new_column = old_column
                 if new_column.type != col["type"]:
                     results.modified.append(col["name"])
                 new_column.type = col["type"]
                 new_column.expression = ""
-                logger.info(f"old column exists for {new_column} - new_column.uuid: {new_column.uuid}")
             new_column.groupby = True
             new_column.filterable = True
             if not new_column.uuid:
@@ -1905,7 +1903,6 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
 
         # add back calculated (virtual) columns
         columns.extend([col for col in old_columns if col.expression])
-        logger.info(f"Setting columns to: {columns}\n\tuuids:{[col.uuid for col in columns]}")
         self.columns = columns
 
         metrics.append(
@@ -2104,7 +2101,6 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
             # update changed_on timestamp
             session.execute(update(NewDataset).where(NewDataset.id == dataset.id))
 
-            logger.info(f'target: {target}\n\ttarget.uuid: {target.uuid}')
             # update `Column` model as well
             session.add(
                 target.to_sl_column(
