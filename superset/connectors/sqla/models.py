@@ -1887,12 +1887,14 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
                 )
                 new_column.is_dttm = new_column.is_temporal
                 db_engine_spec.alter_new_orm_column(new_column)
+                logger.info(f"no old column for {new_column} - new_column.uuid: {new_column.uuid}")
             else:
                 new_column = old_column
                 if new_column.type != col["type"]:
                     results.modified.append(col["name"])
                 new_column.type = col["type"]
                 new_column.expression = ""
+                logger.info(f"old column exists for {new_column} - new_column.uuid: {new_column.uuid}")
             new_column.groupby = True
             new_column.filterable = True
             columns.append(new_column)
