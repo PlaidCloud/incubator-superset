@@ -2099,6 +2099,7 @@ class SqlaTable(Model, BaseDatasource):  # pylint: disable=too-many-public-metho
             # update changed_on timestamp
             session.execute(update(NewDataset).where(NewDataset.id == dataset.id))
 
+            logger.info(f'target: {target}\n\ttarget.uuid: {target.uuid}')
             # update `Column` model as well
             session.add(
                 target.to_sl_column(
