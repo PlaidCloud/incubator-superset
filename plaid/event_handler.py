@@ -79,7 +79,7 @@ class MissingDataException(Exception):
     def __init__(self, event_data: Dict[str, Any], required_keys: Collection[str]) -> None:
         self.event_data = event_data
         self.required_keys = required_keys
-        self.missing_keys = [key for key in self.required_keys if key not in self.event_data]
+        self.missing_keys = [key for key in self.required_keys if not self.event_data.get(key)]
         self.message = f"Event data is missing required fields {self.missing_keys}:\n\t {self.event_data}"
         super().__init__(self.message)
 
