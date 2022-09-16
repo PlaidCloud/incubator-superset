@@ -291,6 +291,8 @@ class EventHandler:
             try:
                 check_keys(event_data, ['id', 'published_name'])
             except MissingDataException:
+                if 'id' in event_data:
+                    log.exception(f"Insert Table called with incomplete event data (Project {kwargs['project_id']} Table {event_data['id']})")
                 log.exception(f"Insert Table called with incomplete event data (Project {kwargs['project_id']})")
                 return
 
@@ -351,6 +353,8 @@ class EventHandler:
             try:
                 check_keys(event_data, ['id', 'published_name'])
             except MissingDataException:
+                if 'id' in event_data:
+                    log.exception(f"Update Table called with incomplete event data(Project {kwargs['project_id']} Table {event_data['id']})")
                 log.exception(f"Update Table called with incomplete event data (Project {kwargs['project_id']})")
                 return
 
@@ -362,7 +366,7 @@ class EventHandler:
                     uuid=event_data['id'].replace('analyzetable_', ''),
                 ).one()
             except NoResultFound:
-                log.warning(f"Received an update event but table {display_name} already exists.")
+                log.warning(f"Received an update event but table {display_name} doesn't exist.")
                 insert_table(event_data)
                 return
 
