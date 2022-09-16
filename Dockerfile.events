@@ -1,4 +1,4 @@
-ARG PY_VER=3.8.12
+ARG PY_VER=3.10
 FROM python:${PY_VER} AS build-distribution
 
 ENV LANG=C.UTF-8 \
