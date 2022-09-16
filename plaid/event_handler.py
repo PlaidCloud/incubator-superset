@@ -291,16 +291,21 @@ class EventHandler:
             try:
                 check_keys(event_data, ['id', 'published_name'])
             except MissingDataException:
-                log.exception(f"Insert Table called with incomplete event data (Project {kwargs['project_id']})")
+                if 'id' in event_data:
+                    info = f"(Project {kwargs['project_id']} Table {event_data['id']})"
+                else:
+                    info = f"(Project {kwargs['project_id']})"
+                log.exception(f"Insert Table called with incomplete event data {info}")
                 return
 
-            log.info(f"Inserting table {event_data['published_name']} ({event_data['id']}) for project {kwargs['project_id']}.")
+            display_name = f"{event_data['published_name']} ({event_data['id']})"
+            log.info(f"Inserting table {display_name} for project {kwargs['project_id']}.")
             if db.session.query(
                 db.session.query(SqlaTable).filter_by(
                     uuid=event_data['id'].replace('analyzetable_', ''),
                 ).exists()
             ).scalar():
-                log.warning(f"Received a create event for table {event_data['id']}, but the table already exists.")
+                log.warning(f"Received a create event for table {display_name}, but the table already exists.")
                 update_table(event_data)
                 return
 
@@ -308,7 +313,7 @@ class EventHandler:
             try:
                 new_table = map_data_to_row(event_data)
             except MissingDataException:
-                log.exception(f"Insert Table called with incomplete event data (Project {kwargs['project_id']})")
+                log.exception(f"Insert Table called with incomplete event data (Project {kwargs['project_id']} Table {display_name})")
                 return
 
             # Test if source table/view actually exists before we add it.
@@ -338,7 +343,7 @@ class EventHandler:
                 clear_table_cache(new_table.uid)
 
             except Exception:
-                log.exception("Error occurred while inserting a new table.")
+                log.exception(f"Error occurred while inserting new table {display_name}.")
                 db.session.rollback()
                 return
 
@@ -351,7 +356,11 @@ class EventHandler:
             try:
                 check_keys(event_data, ['id', 'published_name'])
             except MissingDataException:
-                log.exception(f"Update Table called with incomplete event data (Project {kwargs['project_id']})")
+                if 'id' in event_data:
+                    info = f"(Project {kwargs['project_id']} Table {event_data['id']})"
+                else:
+                    info = f"(Project {kwargs['project_id']})"
+                log.exception(f"Update Table called with incomplete event data {info}")
                 return
 
             display_name = f"{event_data['published_name']} ({event_data['id']})"
@@ -362,7 +371,7 @@ class EventHandler:
                     uuid=event_data['id'].replace('analyzetable_', ''),
                 ).one()
             except NoResultFound:
-                log.warning(f"Received an update event but table {display_name} already exists.")
+                log.warning(f"Received an update event but table {display_name} doesn't exist.")
                 insert_table(event_data)
                 return
 
@@ -378,7 +387,7 @@ class EventHandler:
             try:
                 map_data_to_row(event_data, existing_table)
             except MissingDataException:
-                log.exception(f"Update Table called with incomplete event data (Project {kwargs['project_id']})")
+                log.exception(f"Update Table called with incomplete event data (Project {kwargs['project_id']} Table {display_name})")
                 return
 
             try:
@@ -391,7 +400,7 @@ class EventHandler:
                 db.session.commit()
 
             except Exception:
-                log.exception("Error occurred while updating a table.")
+                log.exception(f"Error occurred while updating table {display_name}.")
                 db.session.rollback()
 
         def delete_table(event_data: Dict[str, Any]) -> None:
