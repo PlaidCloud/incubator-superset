@@ -318,7 +318,10 @@ class EventHandler:
 
             # Test if source table/view actually exists before we add it.
             try:
-                project = db.session.query(Database).filter_by(uuid=kwargs['project_id']).one()
+                project = db.session.query(Database).filter_by(uuid=kwargs['project_id']).one_or_none()
+                if not project:
+                    log.error(f"The database for Project {kwargs['project_id']} does not exist. Create one by updating the Project record in PlaidCloud.")
+                    return
 
                 # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
                 time.sleep(2)
