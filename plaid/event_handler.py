@@ -181,9 +181,9 @@ class EventHandler:
             return proj
 
         def insert_project(event_data: Dict[str, Any]) -> None:
+            display_name = f"{event_data['name']} ({event_data['id']})"
             if not db.session.query(db.session.query(Database).filter_by(uuid=event_data['id']).exists()).scalar():
                 # Project doesn't exist, so make a new one.
-                display_name = f"{event_data['name']} ({event_data['id']})"
                 log.info(f"Inserting project {display_name}.")
 
                 try:
@@ -199,8 +199,8 @@ class EventHandler:
                 update_project(event_data)
 
         def update_project(event_data: Dict[str, Any]) -> None:
+            display_name = f"{event_data['name']} ({event_data['id']})"
             try:
-                display_name = f"{event_data['name']} ({event_data['id']})"
                 log.info(f"Updating project {display_name}.")
                 existing_project = db.session.query(Database).filter_by(uuid=event_data['id']).one()
             except NoResultFound:
