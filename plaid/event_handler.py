@@ -5,7 +5,7 @@ import logging
 import time
 from enum import Enum
 import json
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, Tuple, List
 from collections.abc import Collection
 
 import pika
@@ -154,7 +154,7 @@ class EventHandler:
             self._handle_passthrough(event_type, {})
 
     def _handle_project_event(self, event_type: EventType, data: Dict[str, Any], **kwargs: Any) -> None:
-        def map_data_to_row(event_data: Dict[str, Any], existing_project: Optional[Database] = None) -> Database:
+        def map_data_to_db_row(event_data: Dict[str, Any], existing_project: Optional[Database] = None) -> Database:
             if isinstance(existing_project, Database):
                 proj = existing_project
             else:
@@ -187,7 +187,7 @@ class EventHandler:
                 log.info(f"Inserting project {display_name}.")
 
                 try:
-                    new_project = map_data_to_row(event_data)
+                    new_project = map_data_to_db_row(event_data)
                 except MissingDataException:
                     log.exception("Insert Project called with incomplete event data")
                     return
@@ -207,7 +207,7 @@ class EventHandler:
                 log.warning(f"Update project called but project {display_name} doesn't exist! Inserting instead.")
                 insert_project(event_data)
             else:
-                map_data_to_row(event_data, existing_project)
+                map_data_to_db_row(event_data, existing_project)
                 db.session.commit()
 
         def delete_project(event_data: Dict[str, Any]) -> None:
@@ -231,17 +231,33 @@ class EventHandler:
 
     def _handle_table_event(self, event_type: EventType, data: Dict[str, Any], **kwargs: Any) -> None:
 
-        def map_data_to_row(event_data: Dict[str, Any], existing_table: Optional[SqlaTable] = None) -> SqlaTable:
+        def event_params(event_data: Dict[str, Any]) -> Tuple[int, str, str]:
+            check_keys(event_data, ['published_name', 'id'])
+
+            database_id = db.session.query(Database).filter_by(uuid=kwargs['project_id']).one().id
+            table_name = event_data['published_name']
+            schema = f"report{kwargs['project_id']}"
+
+            return database_id, table_name, schema
+
+        def existing_table_records(event_data: Dict[str, Any]) -> List[SqlaTable]:
+            database_id, table_name, schema = event_params(event_data)
+
+            return db.session.query(SqlaTable).filter(
+                SqlaTable.database_id==database_id,
+                SqlaTable.schema==schema,
+                SqlaTable.table_name==table_name,
+            ).all()
+
+        def map_data_to_table_row(event_data: Dict[str, Any], existing_table: Optional[SqlaTable] = None) -> SqlaTable:
             if isinstance(existing_table, SqlaTable):
                 table = existing_table
             else:
                 table = SqlaTable()
 
-            check_keys(event_data, ['published_name', 'id'])
-
-            table.table_name = event_data["published_name"]
-            table.uuid = event_data["id"].replace('analyzetable_', '')
-            table.schema = f"report{kwargs['project_id']}"
+            #TODO: should we just fill in database here too?
+            _, table.table_name, table.schema = event_params(event_data)
+            log.info('finishing map_data_to_table_row')
 
             return table
 
@@ -300,18 +316,14 @@ class EventHandler:
 
             display_name = f"{event_data['published_name']} ({event_data['id']})"
             log.info(f"Inserting table {display_name} for project {kwargs['project_id']}.")
-            if db.session.query(
-                db.session.query(SqlaTable).filter_by(
-                    uuid=event_data['id'].replace('analyzetable_', ''),
-                ).exists()
-            ).scalar():
-                log.warning(f"Received a create event for table {display_name}, but the table already exists.")
+            if existing_table_records(event_data):
+                log.warning(f"Received a create event for table {display_name}, but the table has already been published.")
                 update_table(event_data)
                 return
 
             # Table doesn't exist, so make a new one.
             try:
-                new_table = map_data_to_row(event_data)
+                new_table = map_data_to_table_row(event_data)
             except MissingDataException:
                 log.exception(f"Insert Table called with incomplete event data (Project {kwargs['project_id']} Table {display_name})")
                 return
@@ -369,15 +381,6 @@ class EventHandler:
             display_name = f"{event_data['published_name']} ({event_data['id']})"
             log.info(f"Updating table {display_name} for project {kwargs['project_id']}.")
 
-            try:
-                existing_table = db.session.query(SqlaTable).filter_by(
-                    uuid=event_data['id'].replace('analyzetable_', ''),
-                ).one()
-            except NoResultFound:
-                log.warning(f"Received an update event but table {display_name} doesn't exist.")
-                insert_table(event_data)
-                return
-
             if not event_data.get("published_name"):
                 # !! We don't do this any more because sometimes there are multiple tables with the same published name !!
                 # !! Things may seriously break if this code is uncommented. !!
@@ -387,19 +390,40 @@ class EventHandler:
                 # delete_table(event_data)
                 return
 
+            existing_tables = existing_table_records(event_data)
+            if not existing_tables:
+                log.warning(f"Received an update event but table {display_name} doesn't exist.")
+                insert_table(event_data)
+                return
+
+            table_to_update, *tables_to_delete = existing_tables
+
             try:
-                map_data_to_row(event_data, existing_table)
+                map_data_to_table_row(event_data, table_to_update)
             except MissingDataException:
                 log.exception(f"Update Table called with incomplete event data (Project {kwargs['project_id']} Table {display_name})")
                 return
 
+            for old_table in tables_to_delete:
+                log.warning(f"Deleting extra table record: {old_table.table_name}, UUID: {old_table.uuid}, Superset ID: {old_table.id}, Superset UID: {old_table.uid}")
+                #TODO: log warning that we're deleting records
+                #This shouldn't actually happen. There shouldn't be tables to delete, witht he current existing_table_records query.
+                try:
+                    db.session.delete(old_table)
+                    db.session.commit()
+                    clear_table_cache(old_table.uid)
+
+                except Exception:
+                    log.exception(f"Error occurred while deleting an extra table record: {old_table.table_name}, UUID: {old_table.uuid}, Superset ID: {old_table.id}, Superset UID: {old_table.uid}")
+                    db.session.rollback()
+
             try:
-                clear_table_cache(existing_table.uid)
+                clear_table_cache(table_to_update.uid)
 
                 # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
                 time.sleep(2)
 
-                existing_table.fetch_metadata()
+                table_to_update.fetch_metadata()
                 db.session.commit()
 
             except Exception:
