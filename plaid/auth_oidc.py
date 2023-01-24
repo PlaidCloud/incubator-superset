@@ -40,7 +40,7 @@ class AuthOIDCView(AuthOIDView):
             )
         login_user(user)
         session['token'] = token
-        session['workspace'] = userinfo['default_plaid_group']
+        session['workspace'] = userinfo.get('default_plaid_group')
         next_url = session.pop("next_redirect", "/")
         return redirect(next_url)
 

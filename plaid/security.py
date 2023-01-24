@@ -112,10 +112,10 @@ class PlaidSecurityManager(SupersetSecurityManager):
         else:
             temp_token = session['token']['access_token']
 
-        temp_rpc = SimpleRPC(session['token']['access_token'], uri=rpc_url, verify_ssl=False)
+        rpc = SimpleRPC(session['token']['access_token'], uri=rpc_url, verify_ssl=False)
 
         try:
-            authorized_workspaces = temp_rpc.identity.me.authorized_workspaces()
+            rpc.identity.me.scopes()  # Just checking authentication
         except HTTPError as e:
             if e.response.status_code == 401:
                 logout_user()
@@ -123,19 +123,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
                 raise Exception('There were problems authenticating your access with PlaidCloud. If you see this message, please refresh your browser') from e
             raise
 
-        try:
-            session['workspace'] = next(
-                ws['id']
-                for ws in authorized_workspaces
-                if ws['default']
-            )
-        except StopIteration:
-            if 'workspace' not in session:
-                session['workspace'] = authorized_workspaces[0]['id']
-
-        token = f"{session['token']['access_token']}_ws{session['workspace']}"
-        return SimpleRPC(token, uri=rpc_url, verify_ssl=False)
-
+        return rpc
 
     def can_access_database(self, database: Union["Database", "DruidCluster"]) -> bool:
         log.debug(f"Can access database: {database}")
