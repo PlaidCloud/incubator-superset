@@ -5,16 +5,22 @@
 #
 #    pip-compile-multi
 #
+cachetools==5.3.0
+    # via tox
 cfgv==3.3.1
     # via pre-commit
+chardet==5.1.0
+    # via tox
 click==8.1.2
     # via
-    #   -r requirements/integration.in
+    #   -r integration.in
     #   pip-compile-multi
     #   pip-tools
-distlib==0.3.4
+colorama==0.4.6
+    # via tox
+distlib==0.3.6
     # via virtualenv
-filelock==3.6.0
+filelock==3.9.0
     # via
     #   tox
     #   virtualenv
@@ -22,43 +28,39 @@ identify==2.4.12
     # via pre-commit
 nodeenv==1.6.0
     # via pre-commit
-packaging==21.3
-    # via tox
+packaging==23.0
+    # via
+    #   pyproject-api
+    #   tox
 pep517==0.12.0
     # via pip-tools
 pip-compile-multi==2.4.5
-    # via -r requirements/integration.in
+    # via -r integration.in
 pip-tools==6.6.0
     # via pip-compile-multi
-platformdirs==2.5.1
-    # via virtualenv
-pluggy==1.0.0
-    # via tox
-pre-commit==2.18.1
-    # via -r requirements/integration.in
-py==1.11.0
-    # via
-    #   -r requirements/integration.in
-    #   tox
-pyparsing==3.0.7
-    # via packaging
-pyyaml==6.0
-    # via pre-commit
-six==1.16.0
+platformdirs==2.6.2
     # via
     #   tox
     #   virtualenv
+pluggy==1.0.0
+    # via tox
+pre-commit==2.18.1
+    # via -r integration.in
+py==1.11.0
+    # via -r integration.in
+pyproject-api==1.5.0
+    # via tox
+pyyaml==6.0
+    # via pre-commit
 toml==0.10.2
-    # via
-    #   pre-commit
-    #   tox
+    # via pre-commit
 tomli==2.0.1
     # via pep517
 toposort==1.7
     # via pip-compile-multi
-tox==3.24.5
-    # via -r requirements/integration.in
-virtualenv==20.14.0
+tox==4.4.3
+    # via -r integration.in
+virtualenv==20.17.1
     # via
     #   pre-commit
     #   tox
