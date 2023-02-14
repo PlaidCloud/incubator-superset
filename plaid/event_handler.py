@@ -421,7 +421,7 @@ class EventHandler:
                 clear_table_cache(table_to_update.uid)
 
                 # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
-                time.sleep(2)
+                time.sleep(5)
 
                 table_to_update.fetch_metadata()
                 db.session.commit()
