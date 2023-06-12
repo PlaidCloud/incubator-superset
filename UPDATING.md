@@ -22,18 +22,64 @@ under the License.
 This file documents any backwards-incompatible changes in Superset and
 assists people when migrating to a new version.
 
-## Next
+## 2.1.0
+
+- [22809](https://github.com/apache/superset/pull/22809): Migrated endpoint `/superset/sql_json` and `/superset/results/` to `/api/v1/sqllab/execute/` and `/api/v1/sqllab/results/` respectively. Corresponding permissions are `can sql_json on Superset` to `can execute on SQLLab`, `can results on Superset` to `can results on SQLLab`. Make sure you add/replace the necessary permissions on any custom roles you may have.
+- [22931](https://github.com/apache/superset/pull/22931): Migrated endpoint `/superset/get_or_create_table/` to `/api/v1/dataset/get_or_create/`. Corresponding permissions are `can get or create table on Superset` to `can get or create dataset on Dataset`. Make sure you add/replace the necessary permissions on any custom roles you may have.
+- [22882](https://github.com/apache/superset/pull/22882): Migrated endpoint `/superset/filter/<datasource_type>/<int:datasource_id>/<column>/` to `/api/v1/datasource/<datasource_type>/<datasource_id>/column/<column_name>/values/`. Corresponding permissions are `can filter on Superset` to `can get column values on Datasource`. Make sure you add/replace the necessary permissions on any custom roles you may have.
+- [22789](https://github.com/apache/superset/pull/22789): Migrated endpoint `/superset/recent_activity/<user_id>/` to `/api/v1/log/recent_activity/<user_id>/`. Corresponding permissions are `can recent activity on Superset` to `can recent activity on Log`. Make sure you add/replace the necessary permissions on any custom roles you may have.
+- [22913](https://github.com/apache/superset/pull/22913): Migrated endpoint `/superset/csv` to `/api/v1/sqllab/export/`. Corresponding permissions are `can csv on Superset` to `can export csv on SQLLab`. Make sure you add/replace the necessary permissions on any custom roles you may have.
+- [22496](https://github.com/apache/superset/pull/22496): Migrated endpoint `/superset/slice_json/<int:layer_id>` to `/api/v1/chart/<int:id>/data/`. Corresponding permissions are `can slice json on Superset` to `can read on Chart`. Make sure you add/replace the necessary permissions on any custom roles you may have.
+- [22496](https://github.com/apache/superset/pull/22496): Migrated endpoint `/superset/annotation_json/<int:layer_id>` to `/api/v1/chart/<int:id>/data/`. Corresponding permissions are `can annotation json on Superset` to `can read on Chart`. Make sure you add/replace the necessary permissions on any custom roles you may have.
+- [22624](https://github.com/apache/superset/pull/22624): Migrated endpoint `/superset/stop_query/` to `/api/v1/query/stop`. Corresponding permissions are `can stop query on Superset` to `can read on Query`. Make sure you add/replace the necessary permissions on any custom roles you may have.
+- [22579](https://github.com/apache/superset/pull/22579): Migrated endpoint `/superset/search_queries/` to `/api/v1/query/`. Corresponding permissions are `can search queries on Superset` to `can read on Query`. Make sure you add/replace the necessary permissions on any custom roles you may have.
+- [22501](https://github.com/apache/superset/pull/22501): Migrated endpoint `/superset/tables/<int:db_id>/<schema>/` to `/api/v1/database/<int:id>/tables/`. Corresponding permissions are `can tables on Superset` to `can read on Database`. Make sure you add/replace the necessary permissions on any custom roles you may have.
+- [22611](https://github.com/apache/superset/pull/22611): Migrated endpoint `/superset/queries/` to `api/v1/query/updated_since`. Corresponding permissions are `can queries on Superset` to `can read on Query`. Make sure you add/replace the necessary permissions on any custom roles you may have.
+- [23186](https://github.com/apache/superset/pull/23186): Superset will refuse to start if a default `SECRET_KEY` is detected on a non Flask debug setting.
+- [22022](https://github.com/apache/superset/pull/22022): HTTP API endpoints `/superset/approve` and `/superset/request_access` have been deprecated and their HTTP methods were changed from GET to POST
+- [20606](https://github.com/apache/superset/pull/20606): When user clicks on chart title or "Edit chart" button in Dashboard page, Explore opens in the same tab. Clicking while holding cmd/ctrl opens Explore in a new tab. To bring back the old behaviour (always opening Explore in a new tab), flip feature flag `DASHBOARD_EDIT_CHART_IN_NEW_TAB` to `True`.
+- [20799](https://github.com/apache/superset/pull/20799): Presto and Trino engine will now display tracking URL for running queries in SQL Lab. If for some reason you don't want to show the tracking URL (for example, when your data warehouse hasn't enabled access for to Presto or Trino UI), update `TRACKING_URL_TRANSFORMER` in `config.py` to return `None`.
+- [21002](https://github.com/apache/superset/pull/21002): Support Python 3.10 and bump pandas 1.4 and pyarrow 6.
+- [21163](https://github.com/apache/superset/pull/21163): The time grain will be decoupled from the time filter column and the time grain control will move below the X-Axis control when `GENERIC_CHART_AXES` feature flags set to `True`. The time grain will be applied on the time column in the column-like controls(x axis, dimensions) instead of the time column in the time section.
+- [21284](https://github.com/apache/superset/pull/21284): The non-functional `MAX_TABLE_NAMES` config key has been removed.
+- [21794](https://github.com/apache/superset/pull/21794): Deprecates the undocumented `PRESTO_SPLIT_VIEWS_FROM_TABLES` feature flag. Now for Presto, like other engines, only physical tables are treated as tables.
+- [22798](https://github.com/apache/superset/pull/22798): To make the welcome page more relevant in production environments, the last tab on the welcome page has been changed from to feature all charts/dashboards the user has access to (previously only examples were shown). To keep current behavior unchanged, add the following to your `superset_config.py`: `WELCOME_PAGE_LAST_TAB = "examples"`
+- [22328](https://github.com/apache/superset/pull/22328): For deployments that have enabled the "THUMBNAILS" feature flag, the function that calculates dashboard digests has been updated to consider additional properties to more accurately identify changes in the dashboard metadata. This change will invalidate all currently cached dashboard thumbnails.
+- [21765](https://github.com/apache/superset/pull/21765): For deployments that have enabled the "ALERT_REPORTS" feature flag, Gamma users will no longer have read and write access to Alerts & Reports by default. To give Gamma users the ability to schedule reports from the Dashboard and Explore view like before, create an additional role with "can read on ReportSchedule" and "can write on ReportSchedule" permissions. To further give Gamma users access to the "Alerts & Reports" menu and CRUD view, add "menu access on Manage" and "menu access on Alerts & Report" permissions to the role.
+
+### Breaking Changes
+
+### Potential Downtime
+
+- [21284](https://github.com/apache/superset/pull/21284): A change which drops the unused `dbs.allow_multi_schema_metadata_fetch` column via a (potentially locking) DDL operation.
+
+### Other
+
+- [23118](https://github.com/apache/superset/pull/23118): Previously the "database access on <database>" permission granted access to all datasets on the underlying database, but they didn't show up on the list views. Now all dashboards, charts and datasets that are accessible via this permission will also show up on their respective list views.
+
+## 2.0.1
+
+- [21895](https://github.com/apache/superset/pull/21895): Markdown components had their security increased by adhering to the same sanitization process enforced by Github. This means that some HTML elements found in markdowns are not allowed anymore due to the security risks they impose. If you're deploying Superset in a trusted environment and wish to use some of the blocked elements, then you can use the HTML_SANITIZATION_SCHEMA_EXTENSIONS configuration to extend the default sanitization schema. There's also the option to disable HTML sanitization using the HTML_SANITIZATION configuration but we do not recommend this approach because of the security risks. Given the provided configurations, we don't view the improved sanitization as a breaking change but as a security patch.
+
+## Breaking Changes
+
+## Potential Downtime
+
+## Other
+
+## 2.0.0
 
 - [19046](https://github.com/apache/superset/pull/19046): Enables the drag and drop interface in Explore control panel by default. Flips `ENABLE_EXPLORE_DRAG_AND_DROP` and `ENABLE_DND_WITH_CLICK_UX` feature flags to `True`.
 - [18936](https://github.com/apache/superset/pull/18936): Removes legacy SIP-15 interim logic/flags—specifically the `SIP_15_ENABLED`, `SIP_15_GRACE_PERIOD_END`, `SIP_15_DEFAULT_TIME_RANGE_ENDPOINTS`, and `SIP_15_TOAST_MESSAGE` flags. Time range endpoints are no longer configurable and strictly adhere to the `[start, end)` paradigm, i.e., inclusive of the start and exclusive of the end. Additionally this change removes the now obsolete `time_range_endpoints` from the form-data and resulting in the cache being busted.
 - [19570](https://github.com/apache/superset/pull/19570): makes [sqloxide](https://pypi.org/project/sqloxide/) optional so the SIP-68 migration can be run on aarch64. If the migration is taking too long installing sqloxide manually should improve the performance.
+- [20170](https://github.com/apache/superset/pull/20170): Introduced a new endpoint for getting datasets samples.
 
 ### Breaking Changes
 
-- [19770](https://github.com/apache/superset/pull/19770): As per SIPs 11 and 68, the native NoSQL Druid connector is deprecated and has been removed. Druid is still supported through SQLAlchemy via pydruid. The config keys `DRUID_IS_ACTIVE` and `DRUID_METADATA_LINKS_ENABLED` have also been removed.
+- [19981](https://github.com/apache/superset/pull/19981): Per [SIP-81](https://github.com/apache/superset/issues/19953) the /explore/form_data api now requires a `datasource_type` in addition to a `datasource_id` for POST and PUT requests
+- [19770](https://github.com/apache/superset/pull/19770): Per [SIP-11](https://github.com/apache/superset/issues/6032) and [SIP-68](https://github.com/apache/superset/issues/14909), the native NoSQL Druid connector is deprecated and has been removed. Druid is still supported through SQLAlchemy via pydruid. The config keys `DRUID_IS_ACTIVE` and `DRUID_METADATA_LINKS_ENABLED` have also been removed.
 - [19274](https://github.com/apache/superset/pull/19274): The `PUBLIC_ROLE_LIKE_GAMMA` config key has been removed, set `PUBLIC_ROLE_LIKE = "Gamma"` to have the same functionality.
 - [19273](https://github.com/apache/superset/pull/19273): The `SUPERSET_CELERY_WORKERS` and `SUPERSET_WORKERS` config keys has been removed. Configure Celery directly using `CELERY_CONFIG` on Superset.
-- [19262](https://github.com/apache/superset/pull/19262): Per [SIP-11](https://github.com/apache/superset/issues/6032) and [SIP-68](https://github.com/apache/superset/issues/14909) the native NoSQL Druid connector is deprecated and will no longer be supported. Druid SQL is still [supported](https://superset.apache.org/docs/databases/druid).
 - [19231](https://github.com/apache/superset/pull/19231): The `ENABLE_REACT_CRUD_VIEWS` feature flag has been removed (premantly enabled). Any deployments which had set this flag to false will need to verify that the React views support their use case.
 - [19230](https://github.com/apache/superset/pull/19230): The `ROW_LEVEL_SECURITY` feature flag has been removed (permantly enabled). Any deployments which had set this flag to false will need to verify that the presence of the Row Level Security feature does not interfere with their use case.
 - [19168](https://github.com/apache/superset/pull/19168): Celery upgrade to 5.X resulted in breaking changes to its command line invocation. Please follow [these](https://docs.celeryq.dev/en/stable/whatsnew-5.2.html#step-1-adjust-your-command-line-invocation) instructions for adjustments. Also consider migrating you Celery config per [here](https://docs.celeryq.dev/en/stable/userguide/configuration.html#conf-old-settings-map).
@@ -43,9 +89,26 @@ assists people when migrating to a new version.
 - [19083](https://github.com/apache/superset/pull/19083): Updates the mutator function in the config file to take a SQL argument and a list of kwargs. Any `SQL_QUERY_MUTATOR` config function overrides will need to be updated to match the new set of params. It is advised regardless of the dictionary args that you list in your function arguments, to keep `**kwargs` as the last argument to allow for any new kwargs to be passed in.
 - [19049](https://github.com/apache/superset/pull/19049): The `APP_ICON_WIDTH` config key has been removed. Superset should now be able to handle different logo sizes without having to explicitly set an `APP_ICON_WIDTH`. This might affect the size of existing custom logos as the UI will now resize them according to the specified space of maximum 148px and not according to the value of `APP_ICON_WIDTH`.
 - [19017](https://github.com/apache/superset/pull/19017): Removes Python 3.7 support.
-- [18976](https://github.com/apache/superset/pull/18976): When running the app in debug mode, the app will default to use `SimpleCache` for `FILTER_STATE_CACHE_CONFIG` and `EXPLORE_FORM_DATA_CACHE_CONFIG`. When running in non-debug mode, a cache backend will need to be defined, otherwise the application will fail to start. For installations using Redis or other caching backends, it is recommended to use the same backend for both cache configs.
 - [18970](https://github.com/apache/superset/pull/18970): The `DISABLE_LEGACY_DATASOURCE_EDITOR` feature flag is now `True` by default which disables the legacy datasource editor from being shown in the client.
-- [17984](https://github.com/apache/superset/pull/17984): The default Flask SECRET_KEY has changed for security reasons. You should always override with your own secret. Set `PREVIOUS_SECRET_KEY`, e.g. `PREVIOUS_SECRET_KEY = "\2\1thisismyscretkey\1\2\\e\\y\\y\\h"`, with your previous key and use `superset re-encrypt-secrets` to rotate you current secrets.
+
+## 1.5.3
+
+### Other
+
+- [22022](https://github.com/apache/superset/pull/22022): HTTP API endpoints `/superset/approve` and `/superset/request_access` have been deprecated and their HTTP methods were changed from GET to POST
+- [21895](https://github.com/apache/superset/pull/21895): Markdown components had their security increased by adhering to the same sanitization process enforced by Github. This means that some HTML elements found in markdowns are not allowed anymore due to the security risks they impose. If you're deploying Superset in a trusted environment and wish to use some of the blocked elements, then you can use the HTML_SANITIZATION_SCHEMA_EXTENSIONS configuration to extend the default sanitization schema. There's also the option to disable HTML sanitization using the HTML_SANITIZATION configuration but we do not recommend this approach because of the security risks. Given the provided configurations, we don't view the improved sanitization as a breaking change but as a security patch.
+
+## 1.5.2
+
+### Other
+
+- [19570](https://github.com/apache/superset/pull/19570): makes [sqloxide](https://pypi.org/project/sqloxide/) optional so the SIP-68 migration can be run on aarch64. If the migration is taking too long installing sqloxide manually should improve the performance.
+
+## 1.5.0
+
+### Breaking Changes
+
+- [18976](https://github.com/apache/superset/pull/18976): When running the app in debug mode, the app will default to use `SimpleCache` for `FILTER_STATE_CACHE_CONFIG` and `EXPLORE_FORM_DATA_CACHE_CONFIG`. When running in non-debug mode, a cache backend will need to be defined, otherwise the application will fail to start. For installations using Redis or other caching backends, it is recommended to use the same backend for both cache configs.
 - [17881](https://github.com/apache/superset/pull/17881): Previously simple adhoc filter values on string columns were stripped of enclosing single and double quotes. To fully support literal quotes in filters, both single and double quotes will no longer be removed from filter values.
 - [17556](https://github.com/apache/superset/pull/17556): Bumps `mysqlclient` from v1 to v2.
 - [17539](https://github.com/apache/superset/pull/17539): All Superset CLI commands, e.g. `init`, `load_examples`, etc. require setting the `FLASK_APP` environment variable (which is set by default when `.flaskenv` is loaded).
@@ -73,6 +136,7 @@ assists people when migrating to a new version.
 ## 1.4.1
 
 ### Breaking Changes
+
 - [17984](https://github.com/apache/superset/pull/17984): Default Flask SECRET_KEY has changed for security reasons. You should always override with your own secret. Set `PREVIOUS_SECRET_KEY` (ex: PREVIOUS_SECRET_KEY = "\2\1thisismyscretkey\1\2\\e\\y\\y\\h") with your previous key and use `superset re-encrypt-secrets` to rotate you current secrets
 
 ### Potential Downtime

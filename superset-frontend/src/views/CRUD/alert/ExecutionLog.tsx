@@ -25,7 +25,7 @@ import ListView from 'src/components/ListView';
 import { Tooltip } from 'src/components/Tooltip';
 import SubMenu from 'src/views/components/SubMenu';
 import withToasts from 'src/components/MessageToasts/withToasts';
-import { fDuration } from 'src/modules/dates';
+import { fDuration } from 'src/utils/dates';
 import AlertStatusIcon from 'src/views/CRUD/alert/components/AlertStatusIcon';
 import {
   useListViewResource,
@@ -159,16 +159,26 @@ function ExecutionLog({ addDangerToast, isReportEnabled }: ExecutionLogProps) {
     [isReportEnabled],
   );
   const path = `/${isReportEnabled ? 'report' : 'alert'}/list/`;
+  const ALERT_TEXT = t('Alert');
+  const REPORT_TEXT = t('Report');
+
   return (
     <>
       <SubMenu
         name={
           <StyledHeader>
             <span>
-              {alertResource?.type} {alertResource?.name}
+              {alertResource
+                ? alertResource.type === 'Alert'
+                  ? `${ALERT_TEXT}:`
+                  : alertResource.type === 'Report'
+                  ? `${REPORT_TEXT}:`
+                  : null
+                : null}{' '}
+              {alertResource?.name}
             </span>
             <span>
-              <Link to={path}>Back to all</Link>
+              <Link to={path}>{t('Back to all')}</Link>
             </span>
           </StyledHeader>
         }

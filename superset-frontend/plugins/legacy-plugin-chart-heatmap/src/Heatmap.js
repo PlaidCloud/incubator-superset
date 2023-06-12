@@ -111,7 +111,7 @@ function Heatmap(element, props) {
   let showY = true;
   let showX = true;
   const pixelsPerCharX = 4.5; // approx, depends on font size
-  const pixelsPerCharY = 6; // approx, depends on font size
+  let pixelsPerCharY = 6; // approx, depends on font size
 
   const valueFormatter = getNumberFormatter(numberFormat);
 
@@ -121,6 +121,7 @@ function Heatmap(element, props) {
     let longestY = 1;
 
     records.forEach(datum => {
+      if (typeof datum.y === 'number') pixelsPerCharY = 7;
       longestX = Math.max(
         longestX,
         (datum.x && datum.x.toString().length) || 1,
@@ -176,7 +177,7 @@ function Heatmap(element, props) {
       domain[d[k]] = (domain[d[k]] || 0) + d.v;
       actualKeys[d[k]] = d[k];
     });
-    // Not usgin object.keys() as it converts to strings
+    // Not using object.keys() as it converts to strings
     const keys = Object.keys(actualKeys).map(s => actualKeys[s]);
     if (sortMethod === 'alpha_asc') {
       domain = keys.sort(cmp);

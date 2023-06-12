@@ -19,8 +19,15 @@
 import cx from 'classnames';
 import React from 'react';
 import PropTypes from 'prop-types';
-import { styled, t, logging } from '@superset-ui/core';
+import {
+  styled,
+  t,
+  logging,
+  isFeatureEnabled,
+  FeatureFlag,
+} from '@superset-ui/core';
 import { isEqual } from 'lodash';
+import { withRouter } from 'react-router-dom';
 
 import { exportChart, mountExploreUrl } from 'src/explore/exploreUtils';
 import ChartContainer from 'src/components/Chart/ChartContainer';
@@ -51,6 +58,7 @@ const propTypes = {
   updateSliceName: PropTypes.func.isRequired,
   isComponentVisible: PropTypes.bool,
   handleToggleFullSize: PropTypes.func.isRequired,
+  setControlValue: PropTypes.func,
 
   // from redux
   chart: chartPropShape.isRequired,
@@ -62,7 +70,11 @@ const propTypes = {
   sliceName: PropTypes.string.isRequired,
   timeout: PropTypes.number.isRequired,
   maxRows: PropTypes.number.isRequired,
-  filterboxMigrationState: FILTER_BOX_MIGRATION_STATES,
+  filterboxMigrationState: PropTypes.oneOf(
+    Object.keys(FILTER_BOX_MIGRATION_STATES).map(
+      key => FILTER_BOX_MIGRATION_STATES[key],
+    ),
+  ),
   // all active filter fields in dashboard
   filters: PropTypes.object.isRequired,
   refreshChart: PropTypes.func.isRequired,
@@ -84,6 +96,8 @@ const propTypes = {
   filterState: PropTypes.object,
   postTransformProps: PropTypes.func,
   datasetsStatus: PropTypes.oneOf(['loading', 'error', 'complete']),
+  isInView: PropTypes.bool,
+  emitCrossFilters: PropTypes.bool,
 };
 
 const defaultProps = {
@@ -100,6 +114,15 @@ const SHOULD_UPDATE_ON_PROP_CHANGES = Object.keys(propTypes).filter(
 );
 const OVERFLOWABLE_VIZ_TYPES = new Set(['filter_box']);
 const DEFAULT_HEADER_HEIGHT = 22;
+
+const ChartWrapper = styled.div`
+  overflow: hidden;
+  position: relative;
+
+  &.dashboard-chart--overflowable {
+    overflow: visible;
+  }
+`;
 
 const ChartOverlay = styled.div`
   position: absolute;
@@ -119,7 +142,7 @@ const SliceContainer = styled.div`
   max-height: 100%;
 `;
 
-export default class Chart extends React.Component {
+class Chart extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
@@ -154,6 +177,14 @@ export default class Chart extends React.Component {
       return true;
     }
 
+    // allow chart to update if the status changed and the previous status was loading.
+    if (
+      this.props?.chart?.chartStatus !== nextProps?.chart?.chartStatus &&
+      this.props?.chart?.chartStatus === 'loading'
+    ) {
+      return true;
+    }
+
     // allow chart update/re-render only if visible:
     // under selected tab or no tab layout
     if (nextProps.isComponentVisible) {
@@ -169,7 +200,9 @@ export default class Chart extends React.Component {
 
       if (
         nextProps.width !== this.props.width ||
-        nextProps.height !== this.props.height
+        nextProps.height !== this.props.height ||
+        nextProps.width !== this.state.width ||
+        nextProps.height !== this.state.height
       ) {
         clearTimeout(this.resizeTimeout);
         this.resizeTimeout = setTimeout(this.resize, RESIZE_TIMEOUT);
@@ -178,11 +211,20 @@ export default class Chart extends React.Component {
       for (let i = 0; i < SHOULD_UPDATE_ON_PROP_CHANGES.length; i += 1) {
         const prop = SHOULD_UPDATE_ON_PROP_CHANGES[i];
         // use deep objects equality comparison to prevent
-        // unneccessary updates when objects references change
+        // unnecessary updates when objects references change
         if (!areObjectsEqual(nextProps[prop], this.props[prop])) {
           return true;
         }
       }
+    } else if (
+      // chart should re-render if color scheme or label color was changed
+      nextProps.formData?.color_scheme !== this.props.formData?.color_scheme ||
+      !areObjectsEqual(
+        nextProps.formData?.label_colors,
+        this.props.formData?.label_colors,
+      )
+    ) {
+      return true;
     }
 
     // `cacheBusterProp` is jected by react-hot-loader
@@ -223,9 +265,14 @@ export default class Chart extends React.Component {
   }
 
   getHeaderHeight() {
-    return (
-      (this.headerRef && this.headerRef.offsetHeight) || DEFAULT_HEADER_HEIGHT
-    );
+    if (this.headerRef) {
+      const computedStyle = getComputedStyle(this.headerRef).getPropertyValue(
+        'margin-bottom',
+      );
+      const marginBottom = parseInt(computedStyle, 10) || 0;
+      return this.headerRef.offsetHeight + marginBottom;
+    }
+    return DEFAULT_HEADER_HEIGHT;
   }
 
   setDescriptionRef(ref) {
@@ -264,7 +311,9 @@ export default class Chart extends React.Component {
     });
   };
 
-  onExploreChart = async () => {
+  onExploreChart = async clickEvent => {
+    const isOpenInNewTab =
+      clickEvent.shiftKey || clickEvent.ctrlKey || clickEvent.metaKey;
     try {
       const lastTabId = window.localStorage.getItem('last_tab_id');
       const nextTabId = lastTabId
@@ -272,6 +321,7 @@ export default class Chart extends React.Component {
         : undefined;
       const key = await postFormData(
         this.props.datasource.id,
+        this.props.datasource.type,
         this.props.formData,
         this.props.slice.slice_id,
         nextTabId,
@@ -280,7 +330,14 @@ export default class Chart extends React.Component {
         [URL_PARAMS.formDataKey.name]: key,
         [URL_PARAMS.sliceId.name]: this.props.slice.slice_id,
       });
-      window.open(url, '_blank', 'noreferrer');
+      if (
+        isFeatureEnabled(FeatureFlag.DASHBOARD_EDIT_CHART_IN_NEW_TAB) ||
+        isOpenInNewTab
+      ) {
+        window.open(url, '_blank', 'noreferrer');
+      } else {
+        this.props.history.push(url);
+      }
     } catch (error) {
       logging.error(error);
       this.props.addDangerToast(t('An error occurred while opening Explore'));
@@ -299,6 +356,7 @@ export default class Chart extends React.Component {
       resultType: 'full',
       resultFormat: 'csv',
       force: true,
+      ownState: this.props.ownState,
     });
   }
 
@@ -346,9 +404,13 @@ export default class Chart extends React.Component {
       filterState,
       handleToggleFullSize,
       isFullSize,
+      setControlValue,
       filterboxMigrationState,
       postTransformProps,
       datasetsStatus,
+      isInView,
+      emitCrossFilters,
+      logEvent,
     } = this.props;
 
     const { width } = this.state;
@@ -378,6 +440,7 @@ export default class Chart extends React.Component {
           filterId: id,
         })
       : {};
+
     return (
       <SliceContainer
         className="chart-slice"
@@ -389,7 +452,7 @@ export default class Chart extends React.Component {
         <SliceHeader
           innerRef={this.setHeaderRef}
           slice={slice}
-          isExpanded={!!isExpanded}
+          isExpanded={isExpanded}
           isCached={isCached}
           cachedDttm={cachedDttm}
           updatedDttm={chartUpdateEndTime}
@@ -398,6 +461,7 @@ export default class Chart extends React.Component {
           editMode={editMode}
           annotationQuery={chart.annotationQuery}
           logExploreChart={this.logExploreChart}
+          logEvent={logEvent}
           onExploreChart={this.onExploreChart}
           exportCSV={this.exportCSV}
           exportFullCSV={this.exportFullCSV}
@@ -436,7 +500,7 @@ export default class Chart extends React.Component {
           />
         )}
 
-        <div
+        <ChartWrapper
           className={cx(
             'dashboard-chart',
             isOverflowable && 'dashboard-chart--overflowable',
@@ -473,12 +537,15 @@ export default class Chart extends React.Component {
             timeout={timeout}
             triggerQuery={chart.triggerQuery}
             vizType={slice.viz_type}
+            setControlValue={setControlValue}
             isDeactivatedViz={isDeactivatedViz}
             filterboxMigrationState={filterboxMigrationState}
             postTransformProps={postTransformProps}
             datasetsStatus={datasetsStatus}
+            isInView={isInView}
+            emitCrossFilters={emitCrossFilters}
           />
-        </div>
+        </ChartWrapper>
       </SliceContainer>
     );
   }
@@ -486,3 +553,5 @@ export default class Chart extends React.Component {
 
 Chart.propTypes = propTypes;
 Chart.defaultProps = defaultProps;
+
+export default withRouter(Chart);

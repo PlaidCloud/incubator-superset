@@ -938,21 +938,21 @@ msgid "Alert query returned a non-number value."
 msgstr "アラートクエリが数値以外の値を返しました。"
 
 #: superset/reports/commands/exceptions.py:186
-msgid "Alert query returned more then one column."
+msgid "Alert query returned more than one column."
 msgstr "アラートクエリが複数の列を返しました。"
 
 #: superset/reports/commands/alert.py:105
 #, python-format
-msgid "Alert query returned more then one column. %s columns returned"
+msgid "Alert query returned more than one column. %s columns returned"
 msgstr "アラートクエリが複数の列を返しました。%s 列が返されました"
 
 #: superset/reports/commands/exceptions.py:177
-msgid "Alert query returned more then one row."
+msgid "Alert query returned more than one row."
 msgstr "アラートクエリが複数の行を返しました。"
 
 #: superset/reports/commands/alert.py:96
 #, python-format
-msgid "Alert query returned more then one row. %s rows returned"
+msgid "Alert query returned more than one row. %s rows returned"
 msgstr "アラートクエリが複数の行を返しました。 %s 行が返されました"
 
 #: superset-frontend/src/views/CRUD/alert/components/AlertStatusIcon.tsx:75
@@ -1160,10 +1160,6 @@ msgstr "エラーが発生しました"
 
 #: superset-frontend/src/SqlLab/components/ResultSet/index.tsx:347
 msgid "An error occurred saving dataset"
-msgstr ""
-
-#: superset-frontend/src/SqlLab/components/QuerySearch/index.tsx:132
-msgid "An error occurred when refreshing queries"
 msgstr ""
 
 #: superset/key_value/commands/exceptions.py:33
@@ -5658,18 +5654,6 @@ msgstr "フィルタタイプ"
 msgid "Filter box"
 msgstr "フィルタボックス"
 
-#: superset-frontend/src/SqlLab/components/QuerySearch/index.tsx:204
-msgid "Filter by database"
-msgstr ""
-
-#: superset-frontend/src/SqlLab/components/QuerySearch/index.tsx:240
-msgid "Filter by status"
-msgstr ""
-
-#: superset-frontend/src/SqlLab/components/QuerySearch/index.tsx:195
-msgid "Filter by user"
-msgstr ""
-
 #: superset-frontend/src/explore/components/controls/FilterBoxItemControl/index.jsx:282
 msgid "Filter configuration"
 msgstr "フィルタ構成"
@@ -5833,7 +5817,7 @@ msgstr ""
 
 #: superset-frontend/src/views/CRUD/data/database/DatabaseModal/ExtraOptions.tsx:179
 msgid ""
-"For Presto and Postgres, shows a button to compute cost before running a "
+"For Bigquery, Presto and Postgres, shows a button to compute cost before running a "
 "query."
 msgstr ""
 
@@ -6500,7 +6484,6 @@ msgstr "Issue 1000 - データ ソースが大きすぎてクエリを実行で�
 msgid "Issue 1001 - The database is under an unusual load."
 msgstr "Issue 1001 - データベースに異常な負荷がかかっています。"
 
-#: superset-frontend/src/SqlLab/components/QuerySearch/index.tsx:180
 #: superset-frontend/src/SqlLab/components/SqlEditorLeftBar/index.jsx:125
 #: superset-frontend/src/components/DatabaseSelector/index.tsx:183
 msgid "It seems you don't have access to any database"
@@ -9115,10 +9098,6 @@ msgstr "クエリ名"
 msgid "Query preview"
 msgstr "クエリプレビュー"
 
-#: superset-frontend/src/SqlLab/components/QuerySearch/index.tsx:213
-msgid "Query search string"
-msgstr ""
-
 #: superset-frontend/src/SqlLab/components/ResultSet/index.tsx:682
 msgid "Query was stopped"
 msgstr ""
@@ -10136,7 +10115,6 @@ msgid "Scoping"
 msgstr "スコープ"
 
 #: superset-frontend/plugins/plugin-chart-table/src/TableChart.tsx:121
-#: superset-frontend/src/SqlLab/components/QuerySearch/index.tsx:256
 #: superset-frontend/src/explore/components/DataTableControl/index.tsx:77
 #: superset-frontend/src/views/CRUD/alert/AlertList.tsx:419
 #: superset-frontend/src/views/CRUD/annotationlayers/AnnotationLayersList.tsx:305
@@ -12055,7 +12033,7 @@ msgstr ""
 
 #: superset/views/core.py:2280
 msgid ""
-"The query associated with these results could not be find. You need to "
+"The query associated with these results could not be found. You need to "
 "re-run the original query."
 msgstr ""
 
@@ -14672,10 +14650,6 @@ msgstr ""
 msgid "[Alert] %(label)s"
 msgstr ""
 
-#: superset-frontend/src/SqlLab/components/QuerySearch/index.tsx:219
-msgid "[From]-"
-msgstr ""
-
 #: superset/viz.py:2349
 msgid "[Longitude] and [Latitude] columns must be present in [Group By]"
 msgstr ""
@@ -14692,10 +14666,6 @@ msgstr "[データセットが見つかりません]"
 #, python-format
 msgid "[Superset] Access to the datasource %(name)s was granted"
 msgstr "[Superset]　データソース　%(name)s へのアクセスは許可されました"
-
-#: superset-frontend/src/SqlLab/components/QuerySearch/index.tsx:231
-msgid "[To]-"
-msgstr ""
 
 #: superset-frontend/src/views/CRUD/welcome/ActivityTable.tsx:94
 msgid "[Untitled]"

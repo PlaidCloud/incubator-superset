@@ -42,13 +42,16 @@ import Owner from 'src/types/Owner';
 import withToasts from 'src/components/MessageToasts/withToasts';
 import FacePile from 'src/components/FacePile';
 import Icons from 'src/components/Icons';
+import DeleteModal from 'src/components/DeleteModal';
 import FaveStar from 'src/components/FaveStar';
 import PropertiesModal from 'src/dashboard/components/PropertiesModal';
 import { Tooltip } from 'src/components/Tooltip';
 import ImportModelsModal from 'src/components/ImportModal/index';
 
 import Dashboard from 'src/dashboard/containers/Dashboard';
+import { Dashboard as CRUDDashboard } from 'src/views/CRUD/types';
 import CertifiedBadge from 'src/components/CertifiedBadge';
+import getBootstrapData from 'src/utils/getBootstrapData';
 import DashboardCard from './DashboardCard';
 import { DashboardStatus } from './types';
 
@@ -94,6 +97,8 @@ const Actions = styled.div`
   color: ${({ theme }) => theme.colors.grayscale.base};
 `;
 
+const bootstrapData = getBootstrapData();
+
 function DashboardList(props: DashboardListProps) {
   const {
     addDangerToast,
@@ -128,10 +133,14 @@ function DashboardList(props: DashboardListProps) {
   const [dashboardToEdit, setDashboardToEdit] = useState<Dashboard | null>(
     null,
   );
+  const [dashboardToDelete, setDashboardToDelete] =
+    useState<CRUDDashboard | null>(null);
 
   const [importingDashboard, showImportModal] = useState<boolean>(false);
   const [passwordFields, setPasswordFields] = useState<string[]>([]);
   const [preparingExport, setPreparingExport] = useState<boolean>(false);
+  const enableBroadUserAccess =
+    bootstrapData?.common?.conf?.ENABLE_BROAD_ACTIVITY_ACCESS;
 
   const openDashboardImportModal = () => {
     showImportModal(true);
@@ -153,7 +162,8 @@ function DashboardList(props: DashboardListProps) {
   const canCreate = hasPerm('can_write');
   const canEdit = hasPerm('can_write');
   const canDelete = hasPerm('can_write');
-  const canExport = hasPerm('can_export');
+  const canExport =
+    hasPerm('can_export') && isFeatureEnabled(FeatureFlag.VERSIONED_EXPORT);
 
   const initialSort = [{ id: 'changed_on_delta_humanized', desc: true }];
 
@@ -180,6 +190,7 @@ function DashboardList(props: DashboardListProps) {
                 url = '',
                 certified_by = '',
                 certification_details = '',
+                owners,
               } = json.result;
               return {
                 ...dashboard,
@@ -193,6 +204,7 @@ function DashboardList(props: DashboardListProps) {
                 url,
                 certified_by,
                 certification_details,
+                owners,
               };
             }
             return dashboard;
@@ -289,7 +301,12 @@ function DashboardList(props: DashboardListProps) {
               changed_by_url: changedByUrl,
             },
           },
-        }: any) => <a href={changedByUrl}>{changedByName}</a>,
+        }: any) =>
+          enableBroadUserAccess ? (
+            <a href={changedByUrl}>{changedByName}</a>
+          ) : (
+            <>{changedByName}</>
+          ),
         Header: t('Modified by'),
         accessor: 'changed_by.first_name',
         size: 'xl',
@@ -438,6 +455,7 @@ function DashboardList(props: DashboardListProps) {
   const favoritesFilter: Filter = useMemo(
     () => ({
       Header: t('Favorite'),
+      key: 'favorite',
       id: 'id',
       urlDisplay: 'favorite',
       input: 'select',
@@ -454,7 +472,15 @@ function DashboardList(props: DashboardListProps) {
   const filters: Filters = useMemo(
     () => [
       {
+        Header: t('Search'),
+        key: 'search',
+        id: 'dashboard_title',
+        input: 'search',
+        operator: FilterOperator.titleOrSlug,
+      },
+      {
         Header: t('Owner'),
+        key: 'owner',
         id: 'owners',
         input: 'select',
         operator: FilterOperator.relationManyMany,
@@ -476,6 +502,7 @@ function DashboardList(props: DashboardListProps) {
       },
       {
         Header: t('Created by'),
+        key: 'created_by',
         id: 'created_by',
         input: 'select',
         operator: FilterOperator.relationOneMany,
@@ -497,6 +524,7 @@ function DashboardList(props: DashboardListProps) {
       },
       {
         Header: t('Status'),
+        key: 'published',
         id: 'published',
         input: 'select',
         operator: FilterOperator.equals,
@@ -509,6 +537,7 @@ function DashboardList(props: DashboardListProps) {
       ...(userId ? [favoritesFilter] : []),
       {
         Header: t('Certified'),
+        key: 'certified',
         id: 'id',
         urlDisplay: 'certified',
         input: 'select',
@@ -518,12 +547,6 @@ function DashboardList(props: DashboardListProps) {
           { label: t('Yes'), value: true },
           { label: t('No'), value: false },
         ],
-      },
-      {
-        Header: t('Search'),
-        id: 'dashboard_title',
-        input: 'search',
-        operator: FilterOperator.titleOrSlug,
       },
     ],
     [addDangerToast, favoritesFilter, props.user],
@@ -556,7 +579,6 @@ function DashboardList(props: DashboardListProps) {
         dashboard={dashboard}
         hasPerm={hasPerm}
         bulkSelectEnabled={bulkSelectEnabled}
-        refreshData={refreshData}
         showThumbnails={
           userKey
             ? userKey.thumbnails
@@ -564,23 +586,19 @@ function DashboardList(props: DashboardListProps) {
         }
         userId={userId}
         loading={loading}
-        addDangerToast={addDangerToast}
-        addSuccessToast={addSuccessToast}
         openDashboardEditModal={openDashboardEditModal}
         saveFavoriteStatus={saveFavoriteStatus}
         favoriteStatus={favoriteStatus[dashboard.id]}
         handleBulkDashboardExport={handleBulkDashboardExport}
+        onDelete={dashboard => setDashboardToDelete(dashboard)}
       />
     ),
     [
-      addDangerToast,
-      addSuccessToast,
       bulkSelectEnabled,
       favoriteStatus,
       hasPerm,
       loading,
       userId,
-      refreshData,
       saveFavoriteStatus,
       userKey,
     ],
@@ -660,6 +678,30 @@ function DashboardList(props: DashboardListProps) {
                   show
                   onHide={() => setDashboardToEdit(null)}
                   onSubmit={handleDashboardEdit}
+                />
+              )}
+              {dashboardToDelete && (
+                <DeleteModal
+                  description={
+                    <>
+                      {t('Are you sure you want to delete')}{' '}
+                      <b>{dashboardToDelete.dashboard_title}</b>?
+                    </>
+                  }
+                  onConfirm={() => {
+                    handleDashboardDelete(
+                      dashboardToDelete,
+                      refreshData,
+                      addSuccessToast,
+                      addDangerToast,
+                      undefined,
+                      userId,
+                    );
+                    setDashboardToDelete(null);
+                  }}
+                  onHide={() => setDashboardToDelete(null)}
+                  open={!!dashboardToDelete}
+                  title={t('Please confirm')}
                 />
               )}
               <ListView<Dashboard>

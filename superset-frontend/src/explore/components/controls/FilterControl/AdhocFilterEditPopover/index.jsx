@@ -19,7 +19,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import Button from 'src/components/Button';
-import { Tooltip } from 'src/components/Tooltip';
 import { styled, t } from '@superset-ui/core';
 
 import ErrorBoundary from 'src/components/ErrorBoundary';
@@ -53,6 +52,7 @@ const propTypes = {
   theme: PropTypes.object,
   sections: PropTypes.arrayOf(PropTypes.string),
   operators: PropTypes.arrayOf(PropTypes.string),
+  requireSave: PropTypes.bool,
 };
 
 const ResizeIcon = styled.i`
@@ -98,6 +98,7 @@ export default class AdhocFilterEditPopover extends React.Component {
     this.onMouseMove = this.onMouseMove.bind(this);
     this.onMouseUp = this.onMouseUp.bind(this);
     this.onAdhocFilterChange = this.onAdhocFilterChange.bind(this);
+    this.setSimpleTabIsValid = this.setSimpleTabIsValid.bind(this);
     this.adjustHeight = this.adjustHeight.bind(this);
     this.onTabChange = this.onTabChange.bind(this);
 
@@ -106,6 +107,7 @@ export default class AdhocFilterEditPopover extends React.Component {
       width: POPOVER_INITIAL_WIDTH,
       height: POPOVER_INITIAL_HEIGHT,
       activeKey: this.props?.adhocFilter?.expressionType || 'SIMPLE',
+      isSimpleTabValid: true,
     };
 
     this.popoverContentRef = React.createRef();
@@ -122,6 +124,10 @@ export default class AdhocFilterEditPopover extends React.Component {
 
   onAdhocFilterChange(adhocFilter) {
     this.setState({ adhocFilter });
+  }
+
+  setSimpleTabIsValid(isValid) {
+    this.setState({ isSimpleTabValid: isValid });
   }
 
   onSave() {
@@ -176,12 +182,14 @@ export default class AdhocFilterEditPopover extends React.Component {
       partitionColumn,
       theme,
       operators,
+      requireSave,
       ...popoverProps
     } = this.props;
 
     const { adhocFilter } = this.state;
     const stateIsValid = adhocFilter.isValid();
-    const hasUnsavedChanges = !adhocFilter.equals(propsAdhocFilter);
+    const hasUnsavedChanges =
+      requireSave || !adhocFilter.equals(propsAdhocFilter);
 
     return (
       <FilterPopoverContentContainer
@@ -214,26 +222,14 @@ export default class AdhocFilterEditPopover extends React.Component {
                 onHeightChange={this.adjustHeight}
                 partitionColumn={partitionColumn}
                 popoverRef={this.popoverContentRef.current}
+                validHandler={this.setSimpleTabIsValid}
               />
             </ErrorBoundary>
           </Tabs.TabPane>
           <Tabs.TabPane
             className="adhoc-filter-edit-tab"
             key={EXPRESSION_TYPES.SQL}
-            tab={
-              datasource?.type === 'druid' ? (
-                <Tooltip
-                  title={t(
-                    'Custom SQL ad-hoc filters are not available for the native Druid connector',
-                  )}
-                >
-                  {t('Custom SQL')}
-                </Tooltip>
-              ) : (
-                t('Custom SQL')
-              )
-            }
-            disabled={datasource?.type === 'druid'}
+            tab={t('Custom SQL')}
           >
             <ErrorBoundary>
               <AdhocFilterEditPopoverSqlTabContent
@@ -252,10 +248,12 @@ export default class AdhocFilterEditPopover extends React.Component {
           </Button>
           <Button
             data-test="adhoc-filter-edit-popover-save-button"
-            disabled={!stateIsValid}
-            buttonStyle={
-              hasUnsavedChanges && stateIsValid ? 'primary' : 'default'
+            disabled={
+              !stateIsValid ||
+              !this.state.isSimpleTabValid ||
+              !hasUnsavedChanges
             }
+            buttonStyle="primary"
             buttonSize="small"
             className="m-r-5"
             onClick={this.onSave}

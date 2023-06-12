@@ -20,35 +20,25 @@ from typing import Any
 
 from apispec import APISpec
 from apispec.exceptions import DuplicateComponentNameError
-from flask import g, request, Response
-from flask_appbuilder.api import BaseApi
+from flask import request, Response
 from marshmallow import ValidationError
 
-from superset.charts.commands.exceptions import (
-    ChartAccessDeniedError,
-    ChartNotFoundError,
-)
 from superset.constants import MODEL_API_RW_METHOD_PERMISSION_MAP, RouteMethod
-from superset.dashboards.commands.exceptions import (
-    DashboardAccessDeniedError,
-    DashboardNotFoundError,
+from superset.temporary_cache.commands.exceptions import (
+    TemporaryCacheAccessDeniedError,
+    TemporaryCacheResourceNotFoundError,
 )
-from superset.datasets.commands.exceptions import (
-    DatasetAccessDeniedError,
-    DatasetNotFoundError,
-)
-from superset.temporary_cache.commands.exceptions import TemporaryCacheAccessDeniedError
 from superset.temporary_cache.commands.parameters import CommandParameters
 from superset.temporary_cache.schemas import (
     TemporaryCachePostSchema,
     TemporaryCachePutSchema,
 )
-from superset.views.base_api import requires_json
+from superset.views.base_api import BaseSupersetApi, requires_json
 
 logger = logging.getLogger(__name__)
 
 
-class TemporaryCacheRestApi(BaseApi, ABC):
+class TemporaryCacheRestApi(BaseSupersetApi, ABC):
     add_model_schema = TemporaryCachePostSchema()
     edit_model_schema = TemporaryCachePutSchema()
     method_permission_name = MODEL_API_RW_METHOD_PERMISSION_MAP
@@ -79,21 +69,14 @@ class TemporaryCacheRestApi(BaseApi, ABC):
         try:
             item = self.add_model_schema.load(request.json)
             tab_id = request.args.get("tab_id")
-            args = CommandParameters(
-                actor=g.user, resource_id=pk, value=item["value"], tab_id=tab_id
-            )
+            args = CommandParameters(resource_id=pk, value=item["value"], tab_id=tab_id)
             key = self.get_create_command()(args).run()
             return self.response(201, key=key)
         except ValidationError as ex:
             return self.response(400, message=ex.messages)
-        except (
-            ChartAccessDeniedError,
-            DashboardAccessDeniedError,
-            DatasetAccessDeniedError,
-            TemporaryCacheAccessDeniedError,
-        ) as ex:
+        except TemporaryCacheAccessDeniedError as ex:
             return self.response(403, message=str(ex))
-        except (ChartNotFoundError, DashboardNotFoundError, DatasetNotFoundError) as ex:
+        except TemporaryCacheResourceNotFoundError as ex:
             return self.response(404, message=str(ex))
 
     @requires_json
@@ -102,7 +85,6 @@ class TemporaryCacheRestApi(BaseApi, ABC):
             item = self.edit_model_schema.load(request.json)
             tab_id = request.args.get("tab_id")
             args = CommandParameters(
-                actor=g.user,
                 resource_id=pk,
                 key=key,
                 value=item["value"],
@@ -112,48 +94,33 @@ class TemporaryCacheRestApi(BaseApi, ABC):
             return self.response(200, key=key)
         except ValidationError as ex:
             return self.response(400, message=ex.messages)
-        except (
-            ChartAccessDeniedError,
-            DashboardAccessDeniedError,
-            DatasetAccessDeniedError,
-            TemporaryCacheAccessDeniedError,
-        ) as ex:
+        except TemporaryCacheAccessDeniedError as ex:
             return self.response(403, message=str(ex))
-        except (ChartNotFoundError, DashboardNotFoundError, DatasetNotFoundError) as ex:
+        except TemporaryCacheResourceNotFoundError as ex:
             return self.response(404, message=str(ex))
 
     def get(self, pk: int, key: str) -> Response:
         try:
-            args = CommandParameters(actor=g.user, resource_id=pk, key=key)
+            args = CommandParameters(resource_id=pk, key=key)
             value = self.get_get_command()(args).run()
             if not value:
                 return self.response_404()
             return self.response(200, value=value)
-        except (
-            ChartAccessDeniedError,
-            DashboardAccessDeniedError,
-            DatasetAccessDeniedError,
-            TemporaryCacheAccessDeniedError,
-        ) as ex:
+        except TemporaryCacheAccessDeniedError as ex:
             return self.response(403, message=str(ex))
-        except (ChartNotFoundError, DashboardNotFoundError, DatasetNotFoundError) as ex:
+        except TemporaryCacheResourceNotFoundError as ex:
             return self.response(404, message=str(ex))
 
     def delete(self, pk: int, key: str) -> Response:
         try:
-            args = CommandParameters(actor=g.user, resource_id=pk, key=key)
+            args = CommandParameters(resource_id=pk, key=key)
             result = self.get_delete_command()(args).run()
             if not result:
                 return self.response_404()
             return self.response(200, message="Deleted successfully")
-        except (
-            ChartAccessDeniedError,
-            DashboardAccessDeniedError,
-            DatasetAccessDeniedError,
-            TemporaryCacheAccessDeniedError,
-        ) as ex:
+        except TemporaryCacheAccessDeniedError as ex:
             return self.response(403, message=str(ex))
-        except (ChartNotFoundError, DashboardNotFoundError, DatasetNotFoundError) as ex:
+        except TemporaryCacheResourceNotFoundError as ex:
             return self.response(404, message=str(ex))
 
     @abstractmethod

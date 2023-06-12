@@ -31,7 +31,10 @@ import {
   TimeFormats,
   TimeFormatter,
 } from '@superset-ui/core';
-import { getColorFormatters } from '@superset-ui/chart-controls';
+import {
+  ColorFormatters,
+  getColorFormatters,
+} from '@superset-ui/chart-controls';
 
 import isEqualColumns from './utils/isEqualColumns';
 import DateWithFormatter from './utils/DateWithFormatter';
@@ -189,6 +192,8 @@ const getPageSize = (
   return numRecords * numColumns > 5000 ? 200 : 0;
 };
 
+const defaultServerPaginationData = {};
+const defaultColorFormatters = [] as ColorFormatters;
 const transformProps = (
   chartProps: TableChartProps,
 ): TableChartTransformedProps => {
@@ -198,8 +203,13 @@ const transformProps = (
     rawFormData: formData,
     queriesData = [],
     filterState,
-    ownState: serverPaginationData = {},
-    hooks: { onAddFilter: onChangeFilter, setDataMask = () => {} },
+    ownState: serverPaginationData,
+    hooks: {
+      onAddFilter: onChangeFilter,
+      setDataMask = () => {},
+      onContextMenu,
+    },
+    emitCrossFilters,
   } = chartProps;
 
   const {
@@ -208,13 +218,13 @@ const transformProps = (
     show_cell_bars: showCellBars = true,
     include_search: includeSearch = false,
     page_length: pageLength,
-    emit_filter: emitFilter,
     server_pagination: serverPagination = false,
     server_page_length: serverPageLength = 10,
     order_desc: sortDesc = false,
     query_mode: queryMode,
     show_totals: showTotals,
     conditional_formatting: conditionalFormatting,
+    allow_rearrange_columns: allowRearrangeColumns,
   } = formData;
   const timeGrain = extractTimegrain(formData);
 
@@ -237,7 +247,7 @@ const transformProps = (
       ? totalQuery?.data[0]
       : undefined;
   const columnColorFormatters =
-    getColorFormatters(conditionalFormatting, data) ?? [];
+    getColorFormatters(conditionalFormatting, data) ?? defaultColorFormatters;
 
   return {
     height,
@@ -249,7 +259,9 @@ const transformProps = (
     serverPagination,
     metrics,
     percentMetrics,
-    serverPaginationData,
+    serverPaginationData: serverPagination
+      ? serverPaginationData
+      : defaultServerPaginationData,
     setDataMask,
     alignPositiveNegative,
     colorPositiveNegative,
@@ -261,10 +273,12 @@ const transformProps = (
       ? serverPageLength
       : getPageSize(pageLength, data.length, columns.length),
     filters: filterState.filters,
-    emitFilter,
+    emitCrossFilters,
     onChangeFilter,
     columnColorFormatters,
     timeGrain,
+    allowRearrangeColumns,
+    onContextMenu,
   };
 };
 

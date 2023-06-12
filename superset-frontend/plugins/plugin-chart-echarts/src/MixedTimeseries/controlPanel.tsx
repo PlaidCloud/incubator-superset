@@ -17,14 +17,14 @@
  * under the License.
  */
 import React from 'react';
-import { t } from '@superset-ui/core';
+import { ensureIsArray, hasGenericChartAxes, t } from '@superset-ui/core';
 import { cloneDeep } from 'lodash';
 import {
   ControlPanelConfig,
   ControlPanelSectionConfig,
   ControlSetRow,
   CustomControlItem,
-  emitFilterControl,
+  getStandardizedControls,
   sections,
   sharedControls,
 } from '@superset-ui/chart-controls';
@@ -35,7 +35,6 @@ import { legendSection, richTooltipSection } from '../controls';
 
 const {
   area,
-  annotationLayers,
   logAxis,
   markerEnabled,
   markerSize,
@@ -79,14 +78,6 @@ function createQuerySection(
           config: sharedControls.adhoc_filters,
         },
       ],
-      emitFilterControl.length > 0
-        ? [
-            {
-              ...emitFilterControl[0],
-              name: `emit_filter${controlSuffix}`,
-            },
-          ]
-        : [],
       [
         {
           name: `limit${controlSuffix}`,
@@ -119,6 +110,15 @@ function createQuerySection(
           },
         },
       ],
+      [
+        {
+          name: `truncate_metric${controlSuffix}`,
+          config: {
+            ...sharedControls.truncate_metric,
+            default: sharedControls.truncate_metric.default,
+          },
+        },
+      ],
     ],
   };
 }
@@ -138,13 +138,13 @@ function createCustomizeSection(
           renderTrigger: true,
           default: seriesType,
           choices: [
-            [EchartsTimeseriesSeriesType.Line, 'Line'],
-            [EchartsTimeseriesSeriesType.Scatter, 'Scatter'],
-            [EchartsTimeseriesSeriesType.Smooth, 'Smooth Line'],
-            [EchartsTimeseriesSeriesType.Bar, 'Bar'],
-            [EchartsTimeseriesSeriesType.Start, 'Step - start'],
-            [EchartsTimeseriesSeriesType.Middle, 'Step - middle'],
-            [EchartsTimeseriesSeriesType.End, 'Step - end'],
+            [EchartsTimeseriesSeriesType.Line, t('Line')],
+            [EchartsTimeseriesSeriesType.Scatter, t('Scatter')],
+            [EchartsTimeseriesSeriesType.Smooth, t('Smooth Line')],
+            [EchartsTimeseriesSeriesType.Bar, t('Bar')],
+            [EchartsTimeseriesSeriesType.Start, t('Step - start')],
+            [EchartsTimeseriesSeriesType.Middle, t('Step - middle')],
+            [EchartsTimeseriesSeriesType.End, t('Step - end')],
           ],
           description: t('Series chart type (line, bar etc)'),
         },
@@ -277,28 +277,19 @@ function createAdvancedAnalyticsSection(
 
 const config: ControlPanelConfig = {
   controlPanelSections: [
-    sections.legacyTimeseriesTime,
+    sections.genericTime,
+    hasGenericChartAxes
+      ? {
+          label: t('Shared query fields'),
+          expanded: true,
+          controlSetRows: [['x_axis'], ['time_grain_sqla']],
+        }
+      : null,
     createQuerySection(t('Query A'), ''),
     createAdvancedAnalyticsSection(t('Advanced analytics Query A'), ''),
     createQuerySection(t('Query B'), '_b'),
     createAdvancedAnalyticsSection(t('Advanced analytics Query B'), '_b'),
-    {
-      label: t('Annotations and Layers'),
-      expanded: false,
-      controlSetRows: [
-        [
-          {
-            name: 'annotation_layers',
-            config: {
-              type: 'AnnotationLayerControl',
-              label: '',
-              default: annotationLayers,
-              description: t('Annotation Layers'),
-            },
-          },
-        ],
-      ],
-    },
+    sections.annotationsAndLayersControls,
     sections.titleControls,
     {
       label: t('Chart Options'),
@@ -445,6 +436,29 @@ const config: ControlPanelConfig = {
       ],
     },
   ],
+  formDataOverrides: formData => {
+    const groupby = getStandardizedControls().controls.columns.filter(
+      col => !ensureIsArray(formData.groupby_b).includes(col),
+    );
+    getStandardizedControls().controls.columns =
+      getStandardizedControls().controls.columns.filter(
+        col => !groupby.includes(col),
+      );
+
+    const metrics = getStandardizedControls().controls.metrics.filter(
+      metric => !ensureIsArray(formData.metrics_b).includes(metric),
+    );
+    getStandardizedControls().controls.metrics =
+      getStandardizedControls().controls.metrics.filter(
+        col => !metrics.includes(col),
+      );
+
+    return {
+      ...formData,
+      metrics,
+      groupby,
+    };
+  },
 };
 
 export default config;

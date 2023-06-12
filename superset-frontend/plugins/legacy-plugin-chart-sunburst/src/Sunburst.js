@@ -24,6 +24,7 @@ import {
   NumberFormats,
   CategoricalColorNamespace,
   getSequentialSchemeRegistry,
+  t,
 } from '@superset-ui/core';
 import wrapSvgText from './utils/wrapSvgText';
 
@@ -381,7 +382,10 @@ function Sunburst(element, props) {
       .append('text')
       .attr('class', 'path-abs-percent')
       .attr('y', yOffsets[offsetIndex])
-      .text(`${absolutePercString} of total`);
+      // eslint-disable-next-line prefer-template
+      .text(absolutePercString + ' ' + t('of total'));
+
+    const OF_PARENT_TEXT = t('of parent');
 
     if (conditionalPercString) {
       offsetIndex += 1;
@@ -389,7 +393,7 @@ function Sunburst(element, props) {
         .append('text')
         .attr('class', 'path-cond-percent')
         .attr('y', yOffsets[offsetIndex])
-        .text(`${conditionalPercString} of parent`);
+        .text(`${conditionalPercString} ${OF_PARENT_TEXT}`);
     }
 
     offsetIndex += 1;
@@ -489,7 +493,7 @@ function Sunburst(element, props) {
     // For efficiency, filter nodes to keep only those large enough to see.
     const nodes = partition.nodes(root).filter(d => d.dx > 0.005); // 0.005 radians = 0.29 degrees
 
-    if (metrics[0] !== metrics[1] && metrics[1] && !colorScheme) {
+    if (metrics[0] !== metrics[1] && metrics[1]) {
       colorByCategory = false;
       const ext = d3.extent(nodes, d => d.m2 / d.m1);
       linearColorScale = getSequentialSchemeRegistry()

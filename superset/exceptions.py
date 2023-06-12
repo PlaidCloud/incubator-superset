@@ -115,6 +115,14 @@ class SupersetErrorsException(SupersetException):
             self.status = status
 
 
+class SupersetSyntaxErrorException(SupersetErrorsException):
+    status = 422
+    error_type = SupersetErrorType.SYNTAX_ERROR
+
+    def __init__(self, errors: List[SupersetError]) -> None:
+        super().__init__(errors)
+
+
 class SupersetTimeoutException(SupersetErrorFromParamsException):
     status = 408
 
@@ -196,6 +204,10 @@ class QueryObjectValidationError(SupersetException):
     status = 400
 
 
+class AdvancedDataTypeResponseError(SupersetException):
+    status = 400
+
+
 class InvalidPostProcessingError(SupersetException):
     status = 400
 
@@ -210,6 +222,12 @@ class QueryClauseValidationException(SupersetException):
 
 class DashboardImportException(SupersetException):
     pass
+
+
+class DatasetInvalidPermissionEvaluationException(SupersetException):
+    """
+    When a dataset can't compute its permission name
+    """
 
 
 class SerializationError(SupersetException):
@@ -248,3 +266,11 @@ class InvalidPayloadSchemaError(SupersetErrorException):
 
 class SupersetCancelQueryException(SupersetException):
     status = 422
+
+
+class QueryNotFoundException(SupersetException):
+    status = 404
+
+
+class ColumnNotFoundException(SupersetException):
+    status = 404

@@ -19,7 +19,7 @@ from __future__ import annotations
 import time
 from contextlib import contextmanager
 from functools import wraps
-from typing import Any, Callable, Dict, Iterator, TYPE_CHECKING, Union
+from typing import Any, Callable, Dict, Iterator, Optional, TYPE_CHECKING, Union
 
 from flask import current_app, Response
 
@@ -30,6 +30,37 @@ from superset.utils.dates import now_as_float
 
 if TYPE_CHECKING:
     from superset.stats_logger import BaseStatsLogger
+
+
+def statsd_gauge(metric_prefix: Optional[str] = None) -> Callable[..., Any]:
+    def decorate(f: Callable[..., Any]) -> Callable[..., Any]:
+        """
+        Handle sending statsd gauge metric from any method or function
+        """
+
+        def wrapped(*args: Any, **kwargs: Any) -> Any:
+            metric_prefix_ = metric_prefix or f.__name__
+            try:
+                result = f(*args, **kwargs)
+                current_app.config["STATS_LOGGER"].gauge(f"{metric_prefix_}.ok", 1)
+                return result
+            except Exception as ex:
+                if (
+                    hasattr(ex, "status")
+                    and ex.status < 500  # type: ignore # pylint: disable=no-member
+                ):
+                    current_app.config["STATS_LOGGER"].gauge(
+                        f"{metric_prefix_}.warning", 1
+                    )
+                else:
+                    current_app.config["STATS_LOGGER"].gauge(
+                        f"{metric_prefix_}.error", 1
+                    )
+                raise ex
+
+        return wrapped
+
+    return decorate
 
 
 @contextmanager

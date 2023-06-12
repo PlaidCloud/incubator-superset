@@ -22,6 +22,7 @@ from enum import Enum
 from typing import Any, Dict, Hashable, List, Optional, Set, Type, TYPE_CHECKING, Union
 
 from flask_appbuilder.security.sqla.models import User
+from flask_babel import gettext as __
 from sqlalchemy import and_, Boolean, Column, Integer, String, Text
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import foreign, Query, relationship, RelationshipProperty, Session
@@ -209,7 +210,7 @@ class BaseDatasource(
     def explore_url(self) -> str:
         if self.default_endpoint:
             return self.default_endpoint
-        return f"/superset/explore/{self.type}/{self.id}/"
+        return f"/explore/?datasource_type={self.type}&datasource_id={self.id}"
 
     @property
     def column_formats(self) -> Dict[str, Optional[str]]:
@@ -248,10 +249,10 @@ class BaseDatasource(
         for column_name in self.column_names:
             column_name = str(column_name or "")
             order_by_choices.append(
-                (json.dumps([column_name, True]), column_name + " [asc]")
+                (json.dumps([column_name, True]), f"{column_name} " + __("[asc]"))
             )
             order_by_choices.append(
-                (json.dumps([column_name, False]), column_name + " [desc]")
+                (json.dumps([column_name, False]), f"{column_name} " + __("[desc]"))
             )
 
         verbose_map = {"__timestamp": "Time"}
@@ -312,9 +313,9 @@ class BaseDatasource(
                 for metric in utils.get_iterable(form_data.get(metric_param) or []):
                     metric_names.add(utils.get_metric_name(metric))
                     if utils.is_adhoc_metric(metric):
-                        column_names.add(
-                            (metric.get("column") or {}).get("column_name")
-                        )
+                        column = metric.get("column") or {}
+                        if column_name := column.get("column_name"):
+                            column_names.add(column_name)
 
             # Columns used in query filters
             column_names.update(
@@ -395,6 +396,7 @@ class BaseDatasource(
     @staticmethod
     def filter_values_handler(  # pylint: disable=too-many-arguments
         values: Optional[FilterValues],
+        operator: str,
         target_generic_type: GenericDataType,
         target_native_type: Optional[str] = None,
         is_list_target: bool = False,
@@ -405,6 +407,8 @@ class BaseDatasource(
             return None
 
         def handle_single_value(value: Optional[FilterValue]) -> Optional[FilterValue]:
+            if operator == utils.FilterOperator.TEMPORAL_RANGE:
+                return value
             if (
                 isinstance(value, (float, int))
                 and target_generic_type == utils.GenericDataType.TEMPORAL
@@ -449,7 +453,7 @@ class BaseDatasource(
     def get_query_str(self, query_obj: QueryObjectDict) -> str:
         """Returns a query as a string
 
-        This is used to be displayed to the user so that she/he can
+        This is used to be displayed to the user so that they can
         understand what is taking place behind the scene"""
         raise NotImplementedError()
 
@@ -599,6 +603,7 @@ class BaseColumn(AuditMixinNullable, ImportExportMixin):
     verbose_name = Column(String(1024))
     is_active = Column(Boolean, default=True)
     type = Column(Text)
+    advanced_data_type = Column(String(255))
     groupby = Column(Boolean, default=True)
     filterable = Column(Boolean, default=True)
     description = Column(MediumText())
@@ -674,6 +679,7 @@ class BaseColumn(AuditMixinNullable, ImportExportMixin):
             "groupby",
             "is_dttm",
             "type",
+            "advanced_data_type",
         )
         return {s: getattr(self, s) for s in attrs if hasattr(self, s)}
 

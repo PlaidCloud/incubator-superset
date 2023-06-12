@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from numpy.typing import NDArray
 
 from superset.db_engine_specs import BaseEngineSpec
 from superset.superset_typing import DbapiDescription, DbapiResult, ResultSetColumnType
@@ -62,13 +63,40 @@ def stringify(obj: Any) -> str:
     return json.dumps(obj, default=utils.json_iso_dttm_ser)
 
 
-def stringify_values(array: np.ndarray) -> np.ndarray:
-    vstringify = np.vectorize(stringify)
-    return vstringify(array)
+def stringify_values(array: NDArray[Any]) -> NDArray[Any]:
+    result = np.copy(array)
+
+    with np.nditer(result, flags=["refs_ok"], op_flags=[["readwrite"]]) as it:
+        for obj in it:
+            if na_obj := pd.isna(obj):
+                # pandas <NA> type cannot be converted to string
+                obj[na_obj] = None  # type: ignore
+            else:
+                try:
+                    # for simple string conversions
+                    # this handles odd character types better
+                    obj[...] = obj.astype(str)  # type: ignore
+                except ValueError:
+                    obj[...] = stringify(obj)  # type: ignore
+
+    return result
 
 
 def destringify(obj: str) -> Any:
     return json.loads(obj)
+
+
+def convert_to_string(value: Any) -> str:
+    """
+    Used to ensure column names from the cursor description are strings.
+    """
+    if isinstance(value, str):
+        return value
+
+    if isinstance(value, bytes):
+        return value.decode("utf-8")
+
+    return str(value)
 
 
 class SupersetResultSet:
@@ -84,11 +112,13 @@ class SupersetResultSet:
         pa_data: List[pa.Array] = []
         deduped_cursor_desc: List[Tuple[Any, ...]] = []
         numpy_dtype: List[Tuple[str, ...]] = []
-        stringified_arr: np.ndarray
+        stringified_arr: NDArray[Any]
 
         if cursor_description:
             # get deduped list of column names
-            column_names = dedup([col[0] for col in cursor_description])
+            column_names = dedup(
+                [convert_to_string(col[0]) for col in cursor_description]
+            )
 
             # fix cursor descriptor with the deduped names
             deduped_cursor_desc = [
@@ -111,6 +141,7 @@ class SupersetResultSet:
                     pa.lib.ArrowInvalid,
                     pa.lib.ArrowTypeError,
                     pa.lib.ArrowNotImplementedError,
+                    ValueError,
                     TypeError,  # this is super hackey,
                     # https://issues.apache.org/jira/browse/ARROW-7855
                 ):
@@ -148,6 +179,7 @@ class SupersetResultSet:
 
         if not pa_data:
             pa_data = [pa.array([]) for _ in column_names]
+            # column_names = []
 
         self.table = pa.Table.from_arrays(pa_data, names=column_names)
         self._type_dict: Dict[str, Any] = {}
@@ -183,7 +215,7 @@ class SupersetResultSet:
             return table.to_pandas(integer_object_nulls=True, timestamp_as_object=True)
 
     @staticmethod
-    def first_nonempty(items: List[Any]) -> Any:
+    def first_nonempty(items: NDArray[Any]) -> Any:
         return next((i for i in items if i), None)
 
     def is_temporal(self, db_type_str: Optional[str]) -> bool:
