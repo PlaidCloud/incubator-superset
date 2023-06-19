@@ -3,8 +3,8 @@
 # Build using that tag name, plus an additional build arg.
 gcloud builds submit --project plaidcloud-build \
   --config=cloud-build/$1.yaml \
-  --machine-type=n1-highcpu-8 \
-  --timeout=6000s \
+  --machine-type=n1-highcpu-32 \
+  --timeout=10000s \
   --substitutions=TAG_NAME="$2",_LAST_TAG="$(cat cloud-build/.$1.tmp)"
 
 echo "$2" > cloud-build/.$1.tmp

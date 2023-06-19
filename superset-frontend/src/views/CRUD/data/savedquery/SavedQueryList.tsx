@@ -423,7 +423,7 @@ function SavedQueryList({
     () => [
       {
         Header: t('Project'),
-        key: 'database'
+        key: 'database',
         id: 'database',
         input: 'select',
         operator: FilterOperator.relationOneMany,
