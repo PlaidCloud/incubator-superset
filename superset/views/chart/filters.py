@@ -16,7 +16,7 @@
 # under the License.
 from typing import Any
 
-from sqlalchemy.orm.query import Query
+from sqlalchemy.orm.query import Query, or_
 
 from superset import security_manager
 from superset.utils.filters import get_dataset_access_filters
