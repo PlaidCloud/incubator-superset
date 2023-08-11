@@ -2,7 +2,7 @@ name: Build Superset for IO
 on:
   push:
     branches:
-      - develop
+      - develop-*
       - build-*
 jobs:
   Deploy-IO-Superset:
