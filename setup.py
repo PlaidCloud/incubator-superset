@@ -107,6 +107,7 @@ setup(
         "pandas>=1.5.3, <1.6",
         "parsedatetime",
         "pathlib2",
+        "plaidcloud-config@git+https://github.com/PlaidCloud/plaidcloud-config.git@master#egg=plaidcloud-config&subdirectory=python",
         "plaidcloud-rpc @ git+https://github.com/PlaidCloud/plaid-rpc.git@master#egg=plaidcloud-rpc",
         "pgsanity",
         "polyline",
