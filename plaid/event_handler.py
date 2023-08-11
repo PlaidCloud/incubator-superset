@@ -12,9 +12,7 @@ import asyncio
 
 from plaidcloud.config import config as cfg
 
-# from redis import asyncio as aioredis
 import redis
-# from redis.asyncio.sentinel import Sentinel as aioSentinel
 from redis.sentinel import Sentinel
 import pika
 from sqlalchemy import (
