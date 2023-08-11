@@ -54,9 +54,6 @@ REDIS_CONNECTION_RETRY_WAIT_SECS = 0.2
 User = security_manager.user_model
 Role = security_manager.role_model
 
-
-#TODO would it be better to just use synchronous redis for simplicity?
-
 class RedisWithRetry(redis.Redis):
     def execute_command(self, *args, **options):
         """Override for execute_command to wait and try one extra time if there was a Connection Error"""
