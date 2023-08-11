@@ -62,6 +62,7 @@ RUN mkdir -p ${PYTHONPATH} \
             build-essential \
             curl \
             default-libmysqlclient-dev \
+            git \
             libsasl2-dev \
             libsasl2-modules-gssapi-mit \
             libpq-dev \
@@ -130,6 +131,7 @@ USER root
 
 RUN apt-get update -y \
     && apt-get install -y --no-install-recommends \
+          git \
           libnss3 \
           libdbus-glib-1-2 \
           libgtk-3-0 \
