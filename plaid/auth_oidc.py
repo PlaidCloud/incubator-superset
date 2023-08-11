@@ -28,10 +28,11 @@ class AuthOIDCView(AuthOIDView):
         userinfo = oauth.plaid.parse_id_token(token)
         log.info(f"Fetched user info from token: {userinfo}")
         user = self.appbuilder.sm.find_user(email=userinfo['email'].lower())
+        name = userinfo.get('name', userinfo['preferred_username'])
         if not user:
             roles = [self.appbuilder.sm.find_role(role_name) for role_name in ("Plaid", "Gamma")]
             user = self.appbuilder.sm.add_user(
-                userinfo['name'],
+                name,
                 first_name=userinfo['given_name'],
                 last_name=userinfo['family_name'],
                 email=userinfo["email"].lower(),
