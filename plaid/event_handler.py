@@ -341,11 +341,16 @@ class EventHandler:
 
             try:
                 check_keys(event_data, ['id', 'published_name'])
-            except MissingDataException:
+            except MissingDataException as e:
                 if 'id' in event_data:
                     info = f"(Project {kwargs['project_id']} Table {event_data['id']})"
                 else:
                     info = f"(Project {kwargs['project_id']})"
+
+                if e.missing_keys == ['published_name']:
+                    log.info(f"Insert Table called on unpublished table - {info}")
+                    return
+
                 log.exception(f"Insert Table called with incomplete event data {info}")
                 return
 
@@ -405,11 +410,16 @@ class EventHandler:
 
             try:
                 check_keys(event_data, ['id', 'published_name'])
-            except MissingDataException:
+            except MissingDataException as e:
                 if 'id' in event_data:
                     info = f"(Project {kwargs['project_id']} Table {event_data['id']})"
                 else:
                     info = f"(Project {kwargs['project_id']})"
+
+                if e.missing_keys == ['published_name']:
+                    log.info(f"Update Table called on unpublished table - {info}")
+                    return
+
                 log.exception(f"Update Table called with incomplete event data {info}")
                 return
 
