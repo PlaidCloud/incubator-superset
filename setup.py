@@ -101,7 +101,7 @@ setup(
         "parsedatetime",
         "pathlib2",
         "plaidcloud-config @ git+https://github.com/PlaidCloud/plaidcloud-config.git@master#egg=plaidcloud-config&subdirectory=python",
-        "plaidcloud-rpc @ git+https://github.com/PlaidCloud/plaid-rpc.git@master#egg=plaidcloud-rpc",
+        "plaidcloud-rpc @ git+https://github.com/PlaidCloud/plaid-rpc.git@beta-202209-3#egg=plaidcloud-rpc",
         "pgsanity",
         "polyline",
         "pyparsing>=3.0.6, <4",
@@ -115,7 +115,7 @@ setup(
         "selenium>=3.141.0",
         "simplejson>=3.15.0",
         "slackclient==2.5.0",  # PINNED! slack changes file upload api in the future versions
-        "sqlalchemy==1.4",
+        "sqlalchemy>=1.3.16, <1.4, !=1.3.21",
         "sqlalchemy-utils>=0.37.8, <0.38",
         "sqlparse==0.3.0",  # PINNED! see https://github.com/andialbrecht/sqlparse/issues/562
         "tabulate==0.8.9",
