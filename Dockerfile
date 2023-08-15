@@ -26,6 +26,7 @@ RUN mkdir /app \
         && apt-get install -y --no-install-recommends \
             build-essential \
             default-libmysqlclient-dev \
+            git \
             libpq-dev \
             libsasl2-dev \
             libecpg-dev \
@@ -89,6 +90,7 @@ RUN mkdir -p ${PYTHONPATH} \
         && apt-get install -y --no-install-recommends \
             build-essential \
             default-libmysqlclient-dev \
+            git \
             libsasl2-modules-gssapi-mit \
             libpq-dev \
             libecpg-dev \
@@ -148,7 +150,7 @@ COPY ./requirements/*.txt ./docker/requirements-*.txt/ /app/requirements/
 USER root
 
 RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends libnss3 libdbus-glib-1-2 libgtk-3-0 libx11-xcb1
+    && apt-get install -y --no-install-recommends git libnss3 libdbus-glib-1-2 libgtk-3-0 libx11-xcb1
 
 # Install GeckoDriver WebDriver
 RUN wget https://github.com/mozilla/geckodriver/releases/download/${GECKODRIVER_VERSION}/geckodriver-${GECKODRIVER_VERSION}-linux64.tar.gz -O /tmp/geckodriver.tar.gz && \

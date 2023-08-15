@@ -252,6 +252,7 @@ pathlib2==2.3.7.post1
     # via apache-superset
 pgsanity==0.2.9
     # via apache-superset
+plaidcloud-config @ git+https://github.com/PlaidCloud/plaidcloud-config.git@master#subdirectory=python
 plaidcloud-rpc @ git+https://github.com/PlaidCloud/plaid-rpc.git@master
     # via apache-superset
 pluggy==1.0.0
