@@ -152,7 +152,7 @@ class EventHandler:
             try:
                 connection = self._connect()
                 with connection:
-                    key, message = connection.blpop(SUPERSET_QUEUE_KEY)
+                    key, message = connection.blpop(f'{SUPERSET_QUEUE_KEY}:{cfg.environment.designation}')
                     data = json.loads(message)
             except redis.TimeoutError:
                 continue
