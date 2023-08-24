@@ -125,8 +125,8 @@ class EventHandler:
                 health_check_interval=30, retry_on_timeout=True,
                 client_name=CLIENT_NAME,
             )
-            # read-only should be fine, from within superset. If not, switch to sentinel_connection.master_for
-            return sentinel_connection.slave_for(
+            # needs to be writeable because it is popping from a list
+            return sentinel_connection.master_for(
                 self.rinfo.service_name, socket_timeout=self.rinfo.socket_timeout,
                 redis_class=RedisWithRetry, decode_responses=True,
                 client_name=CLIENT_NAME,
