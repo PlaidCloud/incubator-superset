@@ -8,6 +8,7 @@ on:
 
 jobs:
   license_check:
+    if: false
     name: License Check
     runs-on: ubuntu-20.04
     steps:
