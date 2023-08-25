@@ -8,13 +8,11 @@ import json
 from typing import Optional, Any, Dict, Tuple, List
 from collections.abc import Collection
 import socket
-import asyncio
 
 from plaidcloud.config import config as cfg
 
 import redis
 from redis.sentinel import Sentinel
-import pika
 from sqlalchemy import (
     Column,
     ForeignKey,
@@ -235,8 +233,8 @@ class EventHandler:
 
         def update_project(event_data: Dict[str, Any]) -> None:
             display_name = f"{event_data['name']} ({event_data['id']})"
+            log.info(f"Updating project {display_name}.")
             try:
-                log.info(f"Updating project {display_name}.")
                 existing_project = db.session.query(Database).filter_by(uuid=event_data['id']).one()
             except NoResultFound:
                 log.warning(f"Update project called but project {display_name} doesn't exist! Inserting instead.")
