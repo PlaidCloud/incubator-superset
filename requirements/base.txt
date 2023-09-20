@@ -418,8 +418,6 @@ xlrd==2.0.1
     # via messytables
 yarl==1.7.2
     # via aiohttp
-zipp==3.4.1
-    # via -r requirements/base.in
 xlsxwriter==3.0.7
     # via apache-superset
 zipp==3.15.0
