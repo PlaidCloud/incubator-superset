@@ -21,3 +21,4 @@ pika
 psycopg2-binary
 redis==4.5.5
 requests==2.27.1
+greenlet>=2.0.2
