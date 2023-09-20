@@ -17,6 +17,8 @@
 # pylint: disable=too-many-lines
 from __future__ import annotations
 
+from uuid import uuid4
+
 import dataclasses
 import json
 import logging
