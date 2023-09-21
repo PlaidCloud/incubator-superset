@@ -132,7 +132,6 @@ setup(
         "werkzeug>=2.3.3, <3",
         "wtforms>=2.3.3, <4",
         "wtforms-json",
-        "werkzeug<2.1",
         "xlsxwriter>=3.0.7, <3.1",
     ],
     extras_require={
