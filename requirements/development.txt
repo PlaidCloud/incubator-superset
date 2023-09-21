@@ -30,7 +30,7 @@ certifi==2023.5.7
     # via requests
 chardet==5.1.0
     # via tabulator
-charset-normalizer==2.1.1
+charset-normalizer==2.0.0
     # via requests
 decorator==5.1.1
     # via ipython
