@@ -69,7 +69,8 @@ jobs:
           path: infrastructure
           token: ${{ secrets.GITOPS_REPO_ACCESS }}
 
-      - name: Update Control Plane & Tenant Image
+      - name: Update Tenant Image
+        # Used to also update control plane
         uses: fjogeleit/yaml-update-action@main
         with:
           # valueFile: 'controlplane/environment-values/ci-cluster.yaml'
@@ -80,23 +81,23 @@ jobs:
           workDir: infrastructure
           changes: |
             {
-              "controlplane/environment-values/ci-cluster.yaml": {
-                "superset.image.tag": "${{ steps.docker_tag.outputs.tag }}",
-                "events.image.tag": "${{ steps.docker_tag.outputs.tag }}"
-              },
+              # "controlplane/environment-values/ci-cluster.yaml": {
+              #   "superset.image.tag": "${{ steps.docker_tag.outputs.tag }}",
+              #   "events.image.tag": "${{ steps.docker_tag.outputs.tag }}"
+              # },
               "tenants/values.yaml": {
                 "superset.image.tag": "${{ steps.docker_tag.outputs.tag }}",
                 "events.image.tag": "${{ steps.docker_tag.outputs.tag }}"
               }
             }
 
-      - name: Trigger ArgoCD Sync for CI Control Plane App
-        uses: clowdhaus/argo-cd-action/@main
-        timeout-minutes: 1
-        env:
-          ARGOCD_SERVER: deploy.plaidcloud.io
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # This might not be needed - Mostly used to avoid rate limiting
-          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
-        with:
-          command: app sync ci-cluster-controlplane
-          options: --grpc-web --prune --async
+      # - name: Trigger ArgoCD Sync for CI Control Plane App
+      #   uses: clowdhaus/argo-cd-action/@main
+      #   timeout-minutes: 1
+      #   env:
+      #     ARGOCD_SERVER: deploy.plaidcloud.io
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # This might not be needed - Mostly used to avoid rate limiting
+      #     ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
+      #   with:
+      #     command: app sync ci-cluster-controlplane
+      #     options: --grpc-web --prune --async
