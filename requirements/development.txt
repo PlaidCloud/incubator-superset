@@ -28,7 +28,7 @@ cached-property==1.5.2
     # via tableschema
 certifi==2023.5.7
     # via requests
-chardet==5.1.0
+chardet==4.0.0
     # via tabulator
 charset-normalizer==2.0.0
     # via requests
