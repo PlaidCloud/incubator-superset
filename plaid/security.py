@@ -209,10 +209,10 @@ class PlaidSecurityManager(SupersetSecurityManager):
                 "Appended %s to %s roles list.", role.name, user.username
             )
 
-    def can_access_all_datasources():
-        log.info("can_access_all_datasources called")
+    def can_access_all_datasources(*args, **kwargs):
+        log.info(f"can_access_all_datasources called args: {args} kwargs: {kwargs}")
         return True
 
-    def can_access_all_databases():
-        log.info("can_access_all_databases called")
+    def can_access_all_databases(*args, **kwargs):
+        log.info(f"can_access_all_databases called args: {args} kwargs: {kwargs}")
         return True
