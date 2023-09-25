@@ -79,10 +79,6 @@ jobs:
           workDir: infrastructure
           changes: |
             {
-              # "controlplane/environment-values/ci-cluster.yaml": {
-              #   "superset.image.tag": "${{ steps.docker_tag.outputs.tag }}",
-              #   "events.image.tag": "${{ steps.docker_tag.outputs.tag }}"
-              # },
               "tenants/values.yaml": {
                 "superset.image.tag": "${{ steps.docker_tag.outputs.tag }}",
                 "events.image.tag": "${{ steps.docker_tag.outputs.tag }}"
