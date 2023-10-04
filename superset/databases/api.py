@@ -317,7 +317,6 @@ class DatabaseRestApi(BaseSupersetModelRestApi):
                 return payload
             return data
         except SupersetException as ex:
-            logger.exception(ex.message)
             return self.response(ex.status, message=ex.message)
 
     @expose("/", methods=("POST",))
@@ -392,7 +391,6 @@ class DatabaseRestApi(BaseSupersetModelRestApi):
         except DatabaseConnectionFailedError as ex:
             return self.response_422(message=str(ex))
         except SupersetErrorsException as ex:
-            logger.exception(ex.message)
             return json_errors_response(errors=ex.errors, status=ex.status)
         except DatabaseCreateFailedError as ex:
             logger.error(
@@ -405,7 +403,6 @@ class DatabaseRestApi(BaseSupersetModelRestApi):
         except SSHTunnelingNotEnabledError as ex:
             return self.response_400(message=str(ex))
         except SupersetException as ex:
-            logger.exception(ex.message)
             return self.response(ex.status, message=ex.message)
 
     @expose("/<int:pk>", methods=("PUT",))
