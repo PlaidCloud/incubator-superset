@@ -151,15 +151,14 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
 
     def get_project_ids(self):
-        log.info(f"About to fetch user project ids")
         from superset.models.core import Database
         rpc = self.get_rpc()
         start = time.time()
         projects = rpc.analyze.project.projects()
         end = time.time()
-        log.info(f"Fetched user's projects in {end - start} seconds.")
+        log.debug(f"Fetched user's projects in {end - start} seconds.")
         project_uuids = {str(uuid.UUID(project['id'])) for project in projects}
-        log.info(f"Project IDs: {project_uuids}")
+        log.debug(f"Project IDs: {project_uuids}")
         return self.get_session.query(Database.id).filter(Database.uuid.in_(project_uuids))
 
 
