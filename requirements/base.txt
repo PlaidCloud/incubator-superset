@@ -317,7 +317,7 @@ pyyaml==6.0.1
     # via
     #   apache-superset
     #   apispec
-redis==4.5.4
+redis==4.5.5
     # via apache-superset
 rich==13.3.4
     # via flask-limiter
