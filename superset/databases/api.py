@@ -148,6 +148,7 @@ class DatabaseRestApi(BaseSupersetModelRestApi):
         "impersonate_user",
         "is_managed_externally",
         "engine_information",
+        "sqlalchemy_uri"
     ]
     list_columns = [
         "allow_file_upload",
