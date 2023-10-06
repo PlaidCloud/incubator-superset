@@ -173,6 +173,7 @@ class DatabaseRestApi(BaseSupersetModelRestApi):
         "uuid",
         "disable_data_preview",
         "engine_information",
+        "sqlalchemy_uri"
     ]
     add_columns = [
         "database_name",
