@@ -391,7 +391,8 @@ class DatabaseRestApi(BaseSupersetModelRestApi):
 
             return self.response(201, id=new_model.id, result=item)
         except DatabaseInvalidError as ex:
-            logger.exception(ex.message)
+            # logger.exception(ex.message)
+            logger.exception(f"db_connection_failed.{ex.__class__.__name__}.{'.'.join(ex.get_list_classnames())}")
             return self.response_422(message=ex.normalized_messages())
         except DatabaseConnectionFailedError as ex:
             logger.exception(ex.message)
