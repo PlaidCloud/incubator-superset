@@ -369,6 +369,7 @@ class DatabaseRestApi(BaseSupersetModelRestApi):
             item = self.add_model_schema.load(request.json)
         # This validates custom Schema with custom validations
         except ValidationError as error:
+            logger.exception(error.message)
             return self.response_400(message=error.messages)
         try:
             new_model = CreateDatabaseCommand(item).run()
@@ -390,8 +391,10 @@ class DatabaseRestApi(BaseSupersetModelRestApi):
 
             return self.response(201, id=new_model.id, result=item)
         except DatabaseInvalidError as ex:
+            logger.exception(ex.message)
             return self.response_422(message=ex.normalized_messages())
         except DatabaseConnectionFailedError as ex:
+            logger.exception(ex.message)
             return self.response_422(message=str(ex))
         except SupersetErrorsException as ex:
             logger.exception(ex.message)
@@ -405,6 +408,7 @@ class DatabaseRestApi(BaseSupersetModelRestApi):
             )
             return self.response_422(message=str(ex))
         except SSHTunnelingNotEnabledError as ex:
+            logger.exception(ex.message)
             return self.response_400(message=str(ex))
         except SupersetException as ex:
             logger.exception(ex.message)
