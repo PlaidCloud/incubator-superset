@@ -76,8 +76,7 @@ class DatasetDAO(BaseDAO[SqlaTable]):  # pylint: disable=too-many-public-methods
             database.get_table(table_name, schema=schema)
             return True
         except SQLAlchemyError as ex:  # pragma: no cover
-            # logger.warning("Got an error %s validating table: %s", str(ex), table_name)
-            logger.exception("Got an error %s validating table: %s", str(ex), table_name)
+            logger.warning("Got an error %s validating table: %s", str(ex), table_name)
             return False
 
     @staticmethod
