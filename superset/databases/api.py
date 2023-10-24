@@ -148,6 +148,7 @@ class DatabaseRestApi(BaseSupersetModelRestApi):
         "impersonate_user",
         "is_managed_externally",
         "engine_information",
+        "sqlalchemy_uri"
     ]
     list_columns = [
         "allow_file_upload",
@@ -172,6 +173,7 @@ class DatabaseRestApi(BaseSupersetModelRestApi):
         "uuid",
         "disable_data_preview",
         "engine_information",
+        "sqlalchemy_uri"
     ]
     add_columns = [
         "database_name",
@@ -317,6 +319,7 @@ class DatabaseRestApi(BaseSupersetModelRestApi):
                 return payload
             return data
         except SupersetException as ex:
+            logger.exception(ex.message)
             return self.response(ex.status, message=ex.message)
 
     @expose("/", methods=("POST",))
@@ -366,6 +369,7 @@ class DatabaseRestApi(BaseSupersetModelRestApi):
             item = self.add_model_schema.load(request.json)
         # This validates custom Schema with custom validations
         except ValidationError as error:
+            logger.exception(error.message)
             return self.response_400(message=error.messages)
         try:
             new_model = CreateDatabaseCommand(item).run()
@@ -387,10 +391,14 @@ class DatabaseRestApi(BaseSupersetModelRestApi):
 
             return self.response(201, id=new_model.id, result=item)
         except DatabaseInvalidError as ex:
+            # logger.exception(ex.message)
+            logger.exception(f"db_connection_failed.{ex.__class__.__name__}.{'.'.join(ex.get_list_classnames())}")
             return self.response_422(message=ex.normalized_messages())
         except DatabaseConnectionFailedError as ex:
+            logger.exception(ex.message)
             return self.response_422(message=str(ex))
         except SupersetErrorsException as ex:
+            logger.exception(ex.message)
             return json_errors_response(errors=ex.errors, status=ex.status)
         except DatabaseCreateFailedError as ex:
             logger.error(
@@ -401,8 +409,10 @@ class DatabaseRestApi(BaseSupersetModelRestApi):
             )
             return self.response_422(message=str(ex))
         except SSHTunnelingNotEnabledError as ex:
+            logger.exception(ex.message)
             return self.response_400(message=str(ex))
         except SupersetException as ex:
+            logger.exception(ex.message)
             return self.response(ex.status, message=ex.message)
 
     @expose("/<int:pk>", methods=("PUT",))
