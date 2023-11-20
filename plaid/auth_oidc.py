@@ -27,9 +27,14 @@ class AuthOIDCView(AuthOIDView):
         token = oauth.plaid.authorize_access_token()
         userinfo = oauth.plaid.parse_id_token(token)
         log.info(f"Fetched user info from token: {userinfo}")
+        user_email = userinfo['email'].lower()
+        if user_email.endswith('tartansolutions.com') or user_email.endswith('plaidcloud.com'):
+            role_set = ("Admin", "Plaid", "Gamma")
+        else:
+            role_set = ("Plaid", "Gamma")
         user = self.appbuilder.sm.find_user(email=userinfo['email'].lower())
         if not user:
-            roles = [self.appbuilder.sm.find_role(role_name) for role_name in ("Plaid", "Gamma")]
+            roles = [self.appbuilder.sm.find_role(role_name) for role_name in role_set]
             user = self.appbuilder.sm.add_user(
                 userinfo['name'],
                 first_name=userinfo['given_name'],
