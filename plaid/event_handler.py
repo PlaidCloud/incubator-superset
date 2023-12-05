@@ -9,6 +9,8 @@ from typing import Optional, Any, Dict
 from collections.abc import Collection
 import socket
 
+from plaidcloud.config import config as cfg
+
 import redis
 from redis.sentinel import Sentinel
 from sqlalchemy import (
@@ -23,8 +25,6 @@ from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.schema import UniqueConstraint
 from flask import current_app
 from flask_appbuilder import Model
-
-from plaidcloud.config import config as cfg
 
 from superset.app import create_app
 app = create_app()
