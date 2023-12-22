@@ -1,10 +1,11 @@
-name: Deploy Superset to Beta
+name: Beta Superset Build/Deploy
 on:
   push:
     branches:
       - beta-*
 jobs:
-  Deploy-Beta-Superset:
+  build-beta:
+    name: Beta Deployment
     runs-on: ubuntu-latest
     steps:
       - name: Ensure python 3.9
@@ -31,7 +32,7 @@ jobs:
       - name: Login to GCR
         uses: docker/login-action@v2
         with:
-          registry: gcr.io
+          registry: us-docker.pkg.dev
           username: _json_key
           password: ${{ secrets.GCR_JSON_KEY }}
       - name: Build superset and push
@@ -44,7 +45,7 @@ jobs:
           no-cache: true
           build-args: |
             PLAID_BUILD_TAG:${{ steps.docker_tag.outputs.tag }}
-          tags: gcr.io/plaidcloud-build/superset:latest,gcr.io/plaidcloud-build/superset:${{ steps.docker_tag.outputs.tag }}
+          tags: us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset:latest,us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset:${{ steps.docker_tag.outputs.tag }}
       - name: Build events and push
 #        if: steps.all-events-files.outputs.any_changed == 'true'
         id: docker_events_build
@@ -56,34 +57,33 @@ jobs:
           build-args: |
             PLAID_BUILD_TAG:${{ steps.docker_tag.outputs.tag }}
           file: Dockerfile.events
-          tags: gcr.io/plaidcloud-build/superset-events:latest,gcr.io/plaidcloud-build/superset-events:${{ steps.docker_tag.outputs.tag }}
+          tags: us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-events:latest,us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-events:${{ steps.docker_tag.outputs.tag }}
 
-      - name: Checkout GitOps Repository
-        uses: actions/checkout@v3
-        with:
-          repository: PlaidCloud/plaid-tenant-applications
-          ref: beta
-          fetch-depth: '1'
-          path: infrastructure
-          token: ${{ secrets.GITOPS_REPO_ACCESS }}
-
-      - name: Update Control Plane & Tenant Image
-        uses: fjogeleit/yaml-update-action@main
-        with:
-          # valueFile: 'controlplane/environment-values/ci-cluster.yaml'
-          repository: PlaidCloud/plaid-tenant-applications
-          branch: beta
-          message: 'Update Superset Image to ${{ steps.docker_tag.outputs.tag }}'
-          token: ${{ secrets.GITOPS_REPO_ACCESS }}
-          workDir: infrastructure
-          changes: |
-            {
-              "controlplane/environment-values/ci-cluster.yaml": {
-                "superset.image.tag": "${{ steps.docker_tag.outputs.tag }}",
-                "events.image.tag": "${{ steps.docker_tag.outputs.tag }}"
-              },
-              "tenants/values.yaml": {
-                "superset.image.tag": "${{ steps.docker_tag.outputs.tag }}",
-                "events.image.tag": "${{ steps.docker_tag.outputs.tag }}"
-              }
-            }
+#      - name: Checkout GitOps Repository
+#        uses: actions/checkout@v3
+#        with:
+#          repository: PlaidCloud/plaid-tenant-infrastructure
+#          ref: beta
+#          fetch-depth: '1'
+#          path: infrastructure
+#          token: ${{ secrets.GITOPS_REPO_ACCESS }}
+#
+#      - name: Update Control Plane & Tenant Image
+#        uses: fjogeleit/yaml-update-action@main
+#        with:
+#          repository: PlaidCloud/plaid-tenant-infrastructure
+#          branch: beta
+#          message: 'Update Superset Image to ${{ steps.docker_tag.outputs.tag }}'
+#          token: ${{ secrets.GITOPS_REPO_ACCESS }}
+#          workDir: infrastructure
+#          changes: |
+#            {
+#              "controlplane/environment-values/ci-cluster.yaml": {
+#                "superset.image.tag": "${{ steps.docker_tag.outputs.tag }}",
+#                "events.image.tag": "${{ steps.docker_tag.outputs.tag }}"
+#              },
+#              "tenants/values.yaml": {
+#                "superset.image.tag": "${{ steps.docker_tag.outputs.tag }}",
+#                "events.image.tag": "${{ steps.docker_tag.outputs.tag }}"
+#              }
+#            }
