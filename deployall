@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# tvar="$(./randomchar)"
+tvar="rTUsCvq"
+
+./deploy dev "$tvar"
+# ./deploy events "$tvar"
+# ./deploy node "$tvar"
