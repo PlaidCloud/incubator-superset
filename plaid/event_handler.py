@@ -215,45 +215,54 @@ class EventHandler:
 
         def insert_project(event_data: Dict[str, Any]) -> None:
             display_name = f"{event_data['name']} ({event_data['id']})"
-            if not db.session.query(db.session.query(Database).filter_by(uuid=event_data['id']).exists()).scalar():
+            update = False
+            with db.session.begin():
+                log.info("session.begin beginning of insert project")
+                if not db.session.query(db.session.query(Database).filter_by(uuid=event_data['id']).exists()).scalar():
                 # Project doesn't exist, so make a new one.
-                log.info(f"Inserting project {display_name}.")
+                    log.info(f"Inserting project {display_name}.")
 
-                try:
-                    new_project = map_data_to_db_row(event_data)
-                except MissingDataException:
-                    log.exception("Insert Project called with incomplete event data")
-                    return
+                    try:
+                        new_project = map_data_to_db_row(event_data)
+                    except MissingDataException:
+                        log.exception("Insert Project called with incomplete event data")
+                        return
 
-                db.session.add(new_project)
-                db.session.commit()
-            else:
-                log.warning(f"Insert project called but project {display_name} already exists! Updating instead.")
+                    db.session.add(new_project)
+                else:
+                    log.warning(f"Insert project called but project {display_name} already exists! Updating instead.")
+                    update = True
+            if update:
                 update_project(event_data)
 
         def update_project(event_data: Dict[str, Any]) -> None:
             display_name = f"{event_data['name']} ({event_data['id']})"
             log.info(f"Updating project {display_name}.")
-            try:
-                existing_project = db.session.query(Database).filter_by(uuid=event_data['id']).one()
-            except NoResultFound:
-                log.warning(f"Update project called but project {display_name} doesn't exist! Inserting instead.")
+            insert = False
+            with db.session.begin():
+                log.info("session.begin beginning of update project")
+                try:
+                    existing_project = db.session.query(Database).filter_by(uuid=event_data['id']).one()
+                except NoResultFound:
+                    log.warning(f"Update project called but project {display_name} doesn't exist! Inserting instead.")
+                    insert = True
+                else:
+                    map_data_to_db_row(event_data, existing_project)
+            if insert:
                 insert_project(event_data)
-            else:
-                map_data_to_db_row(event_data, existing_project)
-                db.session.commit()
 
         def delete_project(event_data: Dict[str, Any]) -> None:
             # TODO: Deleting a table associated with a chart breaks UI (can't set new datasource, can only delete chart)
             # Need to figure out how to handle this circumstance (delete charts too? update dataousrce to placeholder?)
             # If update to placeholder, how to regulate perms?
-            project = db.session.query(Database).filter_by(uuid=event_data['id']).one()
-            for table in project.tables:
-                log.info(f"Deleting table {table.table_name} ({table.uuid}).")
-                db.session.delete(table)
-            log.info(f"Deleting project {event_data['name']} ({event_data['id']}).")
-            db.session.delete(project)
-            db.session.commit()
+            with db.session.begin():
+                log.info("Session.begin beginning of delete_project")
+                project = db.session.query(Database).filter_by(uuid=event_data['id']).one()
+                for table in project.tables:
+                    log.info(f"Deleting table {table.table_name} ({table.uuid}).")
+                    db.session.delete(table)
+                log.info(f"Deleting project {event_data['name']} ({event_data['id']}).")
+                db.session.delete(project)
 
         if event_type is EventType.Create:
             insert_project(data)
@@ -290,7 +299,6 @@ class EventHandler:
 
             #TODO: should we just fill in database here too?
             _, table.table_name, table.schema = event_params(event_data)
-            log.info('finishing map_data_to_table_row')
 
             return table
 
@@ -315,22 +323,22 @@ class EventHandler:
                 )
 
             try:
-                delete_stmt = (
-                    CacheKey.__table__.delete().where(  # pylint: disable=no-member
-                        CacheKey.cache_key.in_(cache_keys)
+                with db.session.begin():
+                    log.info("session.begin inside clear_table_cache")
+                    delete_stmt = (
+                        CacheKey.__table__.delete().where(  # pylint: disable=no-member
+                            CacheKey.cache_key.in_(cache_keys)
+                        )
                     )
-                )
-                db.session.execute(delete_stmt)
-                db.session.commit()
+                    db.session.execute(delete_stmt)
 
-                log.info(
-                    "Invalidated %s cache records for datasource %s",
-                    len(cache_keys),
-                    datasource_uid,
-                )
+                    log.info(
+                        "Invalidated %s cache records for datasource %s",
+                        len(cache_keys),
+                        datasource_uid,
+                    )
             except SQLAlchemyError as ex:  # pragma: no cover
                 log.error(ex, exc_info=True)
-                db.session.rollback()
 
         def insert_table(event_data: Dict[str, Any]) -> None:
             if not kwargs.get('project_id'):
@@ -354,52 +362,56 @@ class EventHandler:
 
             display_name = f"{event_data['published_name']} ({event_data['id']})"
             log.info(f"Inserting table {display_name} for project {kwargs['project_id']}.")
-            if existing_table_records(event_data):
-                log.warning(f"Received a create event for table {display_name}, but the table has already been published.")
-                update_table(event_data)
-                return
-
-            # Table doesn't exist, so make a new one.
-            try:
-                new_table = map_data_to_table_row(event_data)
-            except MissingDataException:
-                log.exception(f"Insert Table called with incomplete event data (Project {kwargs['project_id']} Table {display_name})")
-                return
 
             # Test if source table/view actually exists before we add it.
             try:
-                project = db.session.query(Database).filter_by(uuid=kwargs['project_id']).one_or_none()
-                if not project:
-                    log.error(f"The database for Project {kwargs['project_id']} does not exist. Create one by updating the Project record in PlaidCloud.")
-                    return
+                update = False
+                with db.session.begin():
+                    log.info("Session.begin inside insert_table")
+                    if existing_table_records(event_data):
+                        log.warning(f"Received a create event for table {display_name}, but the table has already been published.")
+                        update = True
+                    else:
+                        try:
+                            new_table = map_data_to_table_row(event_data)
+                        except MissingDataException:
+                            log.exception(f"Insert Table called with incomplete event data (Project {kwargs['project_id']} Table {display_name})")
+                            raise
 
-                # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
-                time.sleep(2)
+                        project = db.session.query(Database).filter_by(uuid=kwargs['project_id']).one_or_none()
+                        if not project:
+                            log.error(f"The database for Project {kwargs['project_id']} does not exist. Create one by updating the Project record in PlaidCloud.")
+                            return
 
-                project.get_table(table_name=new_table.table_name, schema=new_table.schema)
-                new_table.database = project
+                        # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
+                        time.sleep(2)
+
+                        project.get_table(table_name=new_table.table_name, schema=new_table.schema)
+                        new_table.database = project
+                        # If we've made it this far, the source table/view exists.
+                        db.session.add(new_table)
+
+                    if update:
+                        update_table(event_data)
+                        return
 
             except (NoResultFound, NoSuchTableError):
                 log.warning(f"Table {new_table.schema}.{new_table.table_name} doesn't exist. Skipping.")
                 return
-
-            try:
-                # If we've made it this far, the source table/view exists.
-                db.session.add(new_table)
-                db.session.commit()
-
-                # Populate columns and metrics for table.
-                new_table.fetch_metadata()
-
-                db.session.commit()
-
-                clear_table_cache(new_table.uid)
-
-            except Exception:
+            except:
                 log.exception(f"Error occurred while inserting new table {display_name}.")
-                db.session.rollback()
                 return
 
+            try:
+                with db.session.begin():
+                    log.info("session.begin fetch metadata in insert_table")
+                    # Populate columns and metrics for table.
+                    new_table.fetch_metadata()
+
+                clear_table_cache(new_table.uid)
+            except:
+                log.exception(f"Error occurred while populating columns and metrics after inserting new table {display_name}")
+                return
 
         def update_table(event_data: Dict[str, Any]) -> None:
             if not kwargs.get('project_id'):
@@ -433,32 +445,40 @@ class EventHandler:
                 # delete_table(event_data)
                 return
 
-            existing_tables = existing_table_records(event_data)
-            if not existing_tables:
-                log.warning(f"Received an update event but table {display_name} doesn't exist.")
+            insert = False
+            table_ids_to_clear_cache = []
+            with db.session.begin():
+                log.info("session.begin earlyish in update_table")
+                existing_tables = existing_table_records(event_data)
+                if not existing_tables:
+                    log.warning(f"Received an update event but table {display_name} doesn't exist.")
+                    insert = True
+
+                else:
+                    table_to_update, *tables_to_delete = existing_tables
+
+                    try:
+                        map_data_to_table_row(event_data, table_to_update)
+                    except MissingDataException:
+                        log.exception(f"Update Table called with incomplete event data (Project {kwargs['project_id']} Table {display_name})")
+                        return
+
+                    for old_table in tables_to_delete:
+                        log.warning(f"Deleting extra table record: {old_table.table_name}, UUID: {old_table.uuid}, Superset ID: {old_table.id}, Superset UID: {old_table.uid}")
+                        #TODO: log warning that we're deleting records
+                        #This shouldn't actually happen. There shouldn't be tables to delete, witht he current existing_table_records query.
+                        try:
+
+                            db.session.delete(old_table)
+
+                            table_ids_to_clear_cache.append(old_table.uid)
+
+                        except:
+                            log.exception(f"Error occurred while deleting an extra table record: {old_table.table_name}, UUID: {old_table.uuid}, Superset ID: {old_table.id}, Superset UID: {old_table.uid}")
+                            raise
+            if insert:
                 insert_table(event_data)
                 return
-
-            table_to_update, *tables_to_delete = existing_tables
-
-            try:
-                map_data_to_table_row(event_data, table_to_update)
-            except MissingDataException:
-                log.exception(f"Update Table called with incomplete event data (Project {kwargs['project_id']} Table {display_name})")
-                return
-
-            for old_table in tables_to_delete:
-                log.warning(f"Deleting extra table record: {old_table.table_name}, UUID: {old_table.uuid}, Superset ID: {old_table.id}, Superset UID: {old_table.uid}")
-                #TODO: log warning that we're deleting records
-                #This shouldn't actually happen. There shouldn't be tables to delete, witht he current existing_table_records query.
-                try:
-                    db.session.delete(old_table)
-                    db.session.commit()
-                    clear_table_cache(old_table.uid)
-
-                except Exception:
-                    log.exception(f"Error occurred while deleting an extra table record: {old_table.table_name}, UUID: {old_table.uuid}, Superset ID: {old_table.id}, Superset UID: {old_table.uid}")
-                    db.session.rollback()
 
             try:
                 clear_table_cache(table_to_update.uid)
@@ -466,42 +486,43 @@ class EventHandler:
                 # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
                 time.sleep(5)
 
-                table_to_update.fetch_metadata()
-                db.session.commit()
+                with db.session.begin():
+                    log.info("session.begin fetching metadata in update_table")
+                    table_to_update.fetch_metadata()
 
-            except Exception:
+            except:
                 log.exception(f"Error occurred while updating table {display_name}.")
-                db.session.rollback()
 
         def delete_table(event_data: Dict[str, Any]) -> None:
             try:
                 log.info(f"Deleting table {event_data['published_name']} ({event_data['id']}) for project {kwargs['project_id']}.")
-                table = db.session.query(SqlaTable).filter(
-                    SqlaTable.uuid == event_data['id'].replace('analyzetable_', ''),
-                    SqlaTable.schema == f"report{kwargs['project_id']}",
-                ).one()
+                with db.session.begin():
+                    log.info("session.begin start of delete_table")
+                    table = db.session.query(SqlaTable).filter(
+                        SqlaTable.uuid == event_data['id'].replace('analyzetable_', ''),
+                        SqlaTable.schema == f"report{kwargs['project_id']}",
+                    ).one()
 
-                has_charts = db.session.query(
-                    db.session.query(Slice).filter_by(datasource_id=table.id, datasource_type='plaid').exists()
-                ).scalar()
+                    has_charts = db.session.query(
+                        db.session.query(Slice).filter_by(datasource_id=table.id, datasource_type='plaid').exists()
+                    ).scalar()
 
-                has_metrics = db.session.query(
-                    db.session.query(SqlMetric).filter(
-                        SqlMetric.table_id == table.id,
-                        SqlMetric.metric_name != 'count'
-                    ).exists()
-                ).scalar()
+                    has_metrics = db.session.query(
+                        db.session.query(SqlMetric).filter(
+                            SqlMetric.table_id == table.id,
+                            SqlMetric.metric_name != 'count'
+                        ).exists()
+                    ).scalar()
 
-                if not has_charts and not has_metrics:
-                    security_manager.del_permission_view_menu('datasource_access', table.get_perm())
-                    db.session.delete(table)
-                    db.session.commit()
-                    clear_table_cache(table.uid)
+                    if not has_charts and not has_metrics:
+                        security_manager.del_permission_view_menu('datasource_access', table.get_perm())
+                        db.session.delete(table)
+
+                clear_table_cache(table.uid)
             except NoResultFound:
                 log.warning("Received a delete event for a table that doesn't exist.")
-            except Exception:
+            except:
                 log.exception("Error occurred while deleting a table.")
-                db.session.rollback()
 
         if event_type is EventType.Create:
             insert_table(data)
