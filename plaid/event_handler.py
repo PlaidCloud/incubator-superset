@@ -158,12 +158,17 @@ class EventHandler:
 
             try:
                 with db.session.begin():
-                    self.process_event(data)
+                    table_ids = self.process_event(data)
+
+                if table_ids:
+                    for table_id in table_ids:
+                        with db.session.begin():
+                            clear_table_cache(table_id)
             except:
                 log.exception(f'Error processing event with data: {data}')
                 continue
 
-    def process_event(self, info: Dict[str, Any]) -> None:
+    def process_event(self, info: Dict[str, Any]) -> Optional[List[str]]:
         try:
             event_type = EventType(info['event'])
             object_type = PlaidObjectType(info['type'])
