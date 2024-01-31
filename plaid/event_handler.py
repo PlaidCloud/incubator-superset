@@ -164,10 +164,10 @@ class EventHandler:
                     if table_id == 'from_event':
                         with db.session.begin():
                             for table in self.tables_from_event(data):
-                                clear_table_cache(table.uid)
+                                self.clear_table_cache(table.uid)
                     else:
                         with db.session.begin():
-                            clear_table_cache(table_id)
+                            self.clear_table_cache(table_id)
             except:
                 log.exception(f'Error processing event with data: {data}')
                 continue
@@ -292,6 +292,46 @@ class EventHandler:
         database_id, table_name, schema = self.table_event_params(published_name, project_id)
         return self.get_table_records(database_id, table_name, schema)
 
+    def clear_table_cache(self, datasource_uid: str) -> None:
+        log.info(f"Clearing cache for table {datasource_uid}")
+        # Copied from superset/cachekeys/api.py
+        cache_key_objs = (
+            db.session.query(CacheKey)
+            .filter(CacheKey.datasource_uid == datasource_uid)
+            .all()
+        )
+        cache_keys = [c.cache_key for c in cache_key_objs]
+        if not cache_keys:
+            log.info("No cache records found for datasource %s", datasource_uid)
+            return
+
+        all_keys_deleted = cache_manager.cache.delete_many(*cache_keys)
+        if not all_keys_deleted:
+            # expected behavior as keys may expire and cache is not a
+            # persistent storage
+            log.info(
+                "Some of the cache keys were not deleted in the list %s", cache_keys
+            )
+
+        try:
+            delete_stmt = (
+                CacheKey.__table__.delete().where(  # pylint: disable=no-member
+                    CacheKey.cache_key.in_(cache_keys)
+                )
+            )
+            db.session.execute(delete_stmt)
+
+            log.info(
+                "Invalidated %s cache records for datasource %s",
+                len(cache_keys),
+                datasource_uid,
+            )
+        except SQLAlchemyError as ex:  # pragma: no cover
+            log.error(ex, exc_info=True)
+            raise
+
+
+
     def _handle_table_event(self, event_type: EventType, data: Dict[str, Any], **kwargs: Any) -> Optional[List[str]]:
 
         def event_params(event_data: Dict[str, Any]) -> Tuple[int, str, str]:
@@ -312,44 +352,6 @@ class EventHandler:
             _, table.table_name, table.schema = event_params(event_data)
 
             return table
-
-        def clear_table_cache(datasource_uid: str) -> None:
-            log.info(f"Clearing cache for table {datasource_uid}")
-            # Copied from superset/cachekeys/api.py
-            cache_key_objs = (
-                db.session.query(CacheKey)
-                .filter(CacheKey.datasource_uid == datasource_uid)
-                .all()
-            )
-            cache_keys = [c.cache_key for c in cache_key_objs]
-            if not cache_keys:
-                log.info("No cache records found for datasource %s", datasource_uid)
-                return
-
-            all_keys_deleted = cache_manager.cache.delete_many(*cache_keys)
-            if not all_keys_deleted:
-                # expected behavior as keys may expire and cache is not a
-                # persistent storage
-                log.info(
-                    "Some of the cache keys were not deleted in the list %s", cache_keys
-                )
-
-            try:
-                delete_stmt = (
-                    CacheKey.__table__.delete().where(  # pylint: disable=no-member
-                        CacheKey.cache_key.in_(cache_keys)
-                    )
-                )
-                db.session.execute(delete_stmt)
-
-                log.info(
-                    "Invalidated %s cache records for datasource %s",
-                    len(cache_keys),
-                    datasource_uid,
-                )
-            except SQLAlchemyError as ex:  # pragma: no cover
-                log.error(ex, exc_info=True)
-                raise
 
         def insert_table(event_data: Dict[str, Any]) -> List[str]:
             if not kwargs.get('project_id'):
