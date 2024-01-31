@@ -160,8 +160,12 @@ class EventHandler:
                 with db.session.begin():
                     table_ids = self.process_event(data)
 
-                if table_ids:
-                    for table_id in table_ids:
+                for table_id in table_ids or []:
+                    if table_id == 'from_event':
+                        with db.session.begin():
+                            for table in self.tables_from_event(data):
+                                clear_table_cache(table.uid)
+                    else:
                         with db.session.begin():
                             clear_table_cache(table_id)
             except:
@@ -266,25 +270,37 @@ class EventHandler:
         elif event_type is EventType.Delete:
             delete_project(data)
 
+    def table_event_params(self, published_name: str, project_id: str) -> Tuple[int, str, str]:
+        database_id = db.session.query(Database).filter_by(uuid=project_id).one().id
+        table_name = published_name
+        schema = f"report{project_id}"
+        return database_id, table_name, schema
+
+    def get_table_records(self, database_id: int, table_name: str, schema: str) -> List[SqlaTable]:
+        return db.session.query(SqlaTable).filter(
+            SqlaTable.database_id==database_id,
+            SqlaTable.schema==schema,
+            SqlaTable.table_name==table_name,
+        ).all()
+
+    def tables_from_event(self, event: Dict[str, Any]) -> List[SqlaTable]:
+        published_name = event.get('data', {}).get('published_name')
+        project_id = event.get('project_id')
+        if not all([published_name, project_id]):
+            return []
+
+        database_id, table_name, schema = self.table_event_params(published_name, project_id)
+        return self.get_table_records(database_id, table_name, schema)
+
     def _handle_table_event(self, event_type: EventType, data: Dict[str, Any], **kwargs: Any) -> Optional[List[str]]:
 
         def event_params(event_data: Dict[str, Any]) -> Tuple[int, str, str]:
             check_keys(event_data, ['published_name', 'id'])
-
-            database_id = db.session.query(Database).filter_by(uuid=kwargs['project_id']).one().id
-            table_name = event_data['published_name']
-            schema = f"report{kwargs['project_id']}"
-
-            return database_id, table_name, schema
+            return self.table_event_params(event_data['published_name'], kwargs['project_id'])
 
         def existing_table_records(event_data: Dict[str, Any]) -> List[SqlaTable]:
             database_id, table_name, schema = event_params(event_data)
-
-            return db.session.query(SqlaTable).filter(
-                SqlaTable.database_id==database_id,
-                SqlaTable.schema==schema,
-                SqlaTable.table_name==table_name,
-            ).all()
+            return self.get_table_records(database_id, table_name, schema)
 
         def map_data_to_table_row(event_data: Dict[str, Any], existing_table: Optional[SqlaTable] = None) -> SqlaTable:
             if isinstance(existing_table, SqlaTable):
@@ -298,6 +314,7 @@ class EventHandler:
             return table
 
         def clear_table_cache(datasource_uid: str) -> None:
+            log.info(f"Clearing cache for table {datasource_uid}")
             # Copied from superset/cachekeys/api.py
             cache_key_objs = (
                 db.session.query(CacheKey)
@@ -391,10 +408,10 @@ class EventHandler:
 
             try:
                 # Populate columns and metrics for table.
-                new_table.fetch_metadata()
+                new_table.fetch_metadata(commit=False)
 
-                # clear_table_cache(new_table.uid)
-                return [new_table.uid]
+                return ['from_event']
+
             except:
                 log.exception(f"Error occurred while populating columns and metrics after inserting new table {display_name}")
                 raise
@@ -450,7 +467,6 @@ class EventHandler:
 
                         db.session.delete(old_table)
                         cache_tables.append(old_table.uid)
-                        # clear_table_cache(table_to_update.uid)
 
                     except:
                         log.exception(f"Error occurred while deleting an extra table record: {old_table.table_name}, UUID: {old_table.uuid}, Superset ID: {old_table.id}, Superset UID: {old_table.uid}")
@@ -460,13 +476,12 @@ class EventHandler:
                 return insert_table(event_data)
 
             try:
-                # clear_table_cache(table_to_update.uid)
                 cache_tables.append(table_to_update.uid)
 
                 # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
                 time.sleep(5)
 
-                table_to_update.fetch_metadata()
+                table_to_update.fetch_metadata(commit=False)
 
             except:
                 log.exception(f"Error occurred while updating table {display_name}.")
@@ -498,8 +513,8 @@ class EventHandler:
                     security_manager.del_permission_view_menu('datasource_access', table.get_perm())
                     db.session.delete(table)
 
-                # clear_table_cache(table.uid)
                 return [table.uid]
+
             except NoResultFound:
                 log.warning("Received a delete event for a table that doesn't exist.")
             except:
