@@ -158,12 +158,17 @@ class EventHandler:
 
             try:
                 with db.session.begin():
-                    self.process_event(data)
+                    table_ids = self.process_event(data)
+
+                if table_ids:
+                    for table_id in table_ids:
+                        with db.session.begin():
+                            clear_table_cache(table_id)
             except:
                 log.exception(f'Error processing event with data: {data}')
                 continue
 
-    def process_event(self, info: Dict[str, Any]) -> None:
+    def process_event(self, info: Dict[str, Any]) -> Optional[List[str]]:
         try:
             event_type = EventType(info['event'])
             object_type = PlaidObjectType(info['type'])
@@ -181,11 +186,11 @@ class EventHandler:
             }
 
             handle_event = event_handlers.get(object_type, self._handle_passthrough)
-            handle_event(event_type, data, **kwargs)
+            return handle_event(event_type, data, **kwargs)
 
         except ValueError:
             # Skip this event as it is not recognized.
-            self._handle_passthrough(event_type, {})
+            return self._handle_passthrough(event_type, {})
 
     def _handle_project_event(self, event_type: EventType, data: Dict[str, Any], **kwargs: Any) -> None:
         def map_data_to_db_row(event_data: Dict[str, Any], existing_project: Optional[Database] = None) -> Database:
@@ -261,7 +266,7 @@ class EventHandler:
         elif event_type is EventType.Delete:
             delete_project(data)
 
-    def _handle_table_event(self, event_type: EventType, data: Dict[str, Any], **kwargs: Any) -> None:
+    def _handle_table_event(self, event_type: EventType, data: Dict[str, Any], **kwargs: Any) -> Optional[List[str]]:
 
         def event_params(event_data: Dict[str, Any]) -> Tuple[int, str, str]:
             check_keys(event_data, ['published_name', 'id'])
@@ -329,10 +334,10 @@ class EventHandler:
                 log.error(ex, exc_info=True)
                 raise
 
-        def insert_table(event_data: Dict[str, Any]) -> None:
+        def insert_table(event_data: Dict[str, Any]) -> List[str]:
             if not kwargs.get('project_id'):
                 log.warning(f"Insert Table called without project_id")
-                return
+                return []
 
             try:
                 check_keys(event_data, ['id', 'published_name'])
@@ -344,10 +349,10 @@ class EventHandler:
 
                 if e.missing_keys == ['published_name']:
                     log.info(f"Insert Table called on unpublished table - {info}")
-                    return
+                    return []
 
                 log.exception(f"Insert Table called with incomplete event data {info}")
-                return
+                return []
 
             display_name = f"{event_data['published_name']} ({event_data['id']})"
             log.info(f"Inserting table {display_name} for project {kwargs['project_id']}.")
@@ -364,7 +369,7 @@ class EventHandler:
                     project = db.session.query(Database).filter_by(uuid=kwargs['project_id']).one_or_none()
                     if not project:
                         log.error(f"The database for Project {kwargs['project_id']} does not exist. Create one by updating the Project record in PlaidCloud.")
-                        return
+                        return []
 
                     # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
                     time.sleep(2)
@@ -375,12 +380,11 @@ class EventHandler:
                     db.session.add(new_table)
                 else:
                     log.warning(f"Received a create event for table {display_name}, but the table has already been published.")
-                    update_table(event_data)
-                    return
+                    return update_table(event_data)
 
             except (NoResultFound, NoSuchTableError):
                 log.exception(f"Table {new_table.schema}.{new_table.table_name} doesn't exist. Skipping.")
-                return
+                return []
             except:
                 log.exception(f"Error occurred while inserting new table {display_name}.")
                 raise
@@ -389,15 +393,17 @@ class EventHandler:
                 # Populate columns and metrics for table.
                 new_table.fetch_metadata()
 
-                clear_table_cache(new_table.uid)
+                # clear_table_cache(new_table.uid)
+                return [new_table.uid]
             except:
                 log.exception(f"Error occurred while populating columns and metrics after inserting new table {display_name}")
                 raise
 
-        def update_table(event_data: Dict[str, Any]) -> None:
+        def update_table(event_data: Dict[str, Any]) -> List[str]:
+            cache_tables = []
             if not kwargs.get('project_id'):
                 log.warning(f"Update Table called without project_id")
-                return
+                return cache_tables
 
             try:
                 check_keys(event_data, ['id', 'published_name'])
@@ -409,10 +415,10 @@ class EventHandler:
 
                 if e.missing_keys == ['published_name']:
                     log.info(f"Update Table called on unpublished table - {info}")
-                    return
+                    return cache_tables
 
                 log.exception(f"Update Table called with incomplete event data {info}")
-                return
+                return cache_tables
 
             display_name = f"{event_data['published_name']} ({event_data['id']})"
             log.info(f"Updating table {display_name} for project {kwargs['project_id']}.")
@@ -424,7 +430,7 @@ class EventHandler:
                 # # Table still exists, but the user unpublished it. So we want to delete.
                 # log.info(f"Table {event_data['published_name']} ({event_data['id']}) has no published name, and will be deleted.")
                 # delete_table(event_data)
-                return
+                return cache_tables
 
             existing_tables = existing_table_records(event_data)
             if existing_tables:
@@ -434,7 +440,7 @@ class EventHandler:
                     map_data_to_table_row(event_data, table_to_update)
                 except MissingDataException:
                     log.exception(f"Update Table called with incomplete event data (Project {kwargs['project_id']} Table {display_name})")
-                    return
+                    return cache_tables
 
                 for old_table in tables_to_delete:
                     log.warning(f"Deleting extra table record: {old_table.table_name}, UUID: {old_table.uuid}, Superset ID: {old_table.id}, Superset UID: {old_table.uid}")
@@ -443,18 +449,19 @@ class EventHandler:
                     try:
 
                         db.session.delete(old_table)
-                        clear_table_cache(table_to_update.uid)
+                        cache_tables.append(old_table.uid)
+                        # clear_table_cache(table_to_update.uid)
 
                     except:
                         log.exception(f"Error occurred while deleting an extra table record: {old_table.table_name}, UUID: {old_table.uuid}, Superset ID: {old_table.id}, Superset UID: {old_table.uid}")
                         raise
             else:
                 log.warning(f"Received an update event but table {display_name} doesn't exist.")
-                insert_table(event_data)
-                return
+                return insert_table(event_data)
 
             try:
-                clear_table_cache(table_to_update.uid)
+                # clear_table_cache(table_to_update.uid)
+                cache_tables.append(table_to_update.uid)
 
                 # TODO: This is pretty dumb. Event is being processed before the DB can create the view.
                 time.sleep(5)
@@ -465,7 +472,9 @@ class EventHandler:
                 log.exception(f"Error occurred while updating table {display_name}.")
                 raise
 
-        def delete_table(event_data: Dict[str, Any]) -> None:
+            return cache_tables
+
+        def delete_table(event_data: Dict[str, Any]) -> List[str]:
             try:
                 log.info(f"Deleting table {event_data['published_name']} ({event_data['id']}) for project {kwargs['project_id']}.")
 
@@ -489,7 +498,8 @@ class EventHandler:
                     security_manager.del_permission_view_menu('datasource_access', table.get_perm())
                     db.session.delete(table)
 
-                clear_table_cache(table.uid)
+                # clear_table_cache(table.uid)
+                return [table.uid]
             except NoResultFound:
                 log.warning("Received a delete event for a table that doesn't exist.")
             except:
@@ -497,11 +507,11 @@ class EventHandler:
                 raise
 
         if event_type is EventType.Create:
-            insert_table(data)
+            return insert_table(data)
         elif event_type is EventType.Update:
-            update_table(data)
+            return update_table(data)
         elif event_type is EventType.Delete:
-            # delete_table(data)
+            # return delete_table(data)
             log.warning(f"Received a delete event for table {data['published_name']}, but deleting tables through events is no longer permitted.")
 
     def _handle_passthrough(self, event_type: Optional[EventType], data: Optional[Dict[str, Any]], **kwargs: Any) -> None:
