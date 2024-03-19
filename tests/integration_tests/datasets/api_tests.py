@@ -25,17 +25,18 @@ from zipfile import is_zipfile, ZipFile
 import prison
 import pytest
 import yaml
+from sqlalchemy import inspect
 from sqlalchemy.orm import joinedload
 from sqlalchemy.sql import func
 
 from superset import app
+from superset.commands.dataset.exceptions import DatasetCreateFailedError
 from superset.connectors.sqla.models import SqlaTable, SqlMetric, TableColumn
 from superset.daos.exceptions import (
     DAOCreateFailedError,
     DAODeleteFailedError,
     DAOUpdateFailedError,
 )
-from superset.datasets.commands.exceptions import DatasetCreateFailedError
 from superset.datasets.models import Dataset
 from superset.extensions import db, security_manager
 from superset.models.core import Database
@@ -153,7 +154,9 @@ class TestDatasetApi(SupersetTestCase):
 
             # rollback changes
             for dataset in datasets:
-                db.session.delete(dataset)
+                state = inspect(dataset)
+                if not state.was_deleted:
+                    db.session.delete(dataset)
             db.session.commit()
 
     @staticmethod
@@ -579,6 +582,7 @@ class TestDatasetApi(SupersetTestCase):
             "schema": None,
             "table_name": "ab_permission",
             "normalize_columns": True,
+            "always_filter_main_dttm": False,
         }
         uri = "api/v1/dataset/"
         rv = self.post_assert_metric(uri, table_data, "post")
@@ -881,6 +885,65 @@ class TestDatasetApi(SupersetTestCase):
         assert rv.status_code == 422
         assert data == {"message": "Dataset could not be created."}
 
+    def test_update_dataset_preserve_ownership(self):
+        """
+        Dataset API: Test update dataset preserves owner list (if un-changed)
+        """
+        if backend() == "sqlite":
+            return
+
+        dataset = self.insert_default_dataset()
+        current_owners = dataset.owners
+        self.login(username="admin")
+        dataset_data = {"description": "new description"}
+        uri = f"api/v1/dataset/{dataset.id}"
+        rv = self.put_assert_metric(uri, dataset_data, "put")
+        assert rv.status_code == 200
+        model = db.session.query(SqlaTable).get(dataset.id)
+        assert model.owners == current_owners
+
+        db.session.delete(dataset)
+        db.session.commit()
+
+    def test_update_dataset_clear_owner_list(self):
+        """
+        Dataset API: Test update dataset admin can clear ownership config
+        """
+        if backend() == "sqlite":
+            return
+
+        dataset = self.insert_default_dataset()
+        self.login(username="admin")
+        dataset_data = {"owners": []}
+        uri = f"api/v1/dataset/{dataset.id}"
+        rv = self.put_assert_metric(uri, dataset_data, "put")
+        assert rv.status_code == 200
+        model = db.session.query(SqlaTable).get(dataset.id)
+        assert model.owners == []
+
+        db.session.delete(dataset)
+        db.session.commit()
+
+    def test_update_dataset_populate_owner(self):
+        """
+        Dataset API: Test update admin can update dataset with
+        no owners to a different owner
+        """
+        if backend() == "sqlite":
+            return
+        self.login(username="admin")
+        gamma = self.get_user("gamma")
+        dataset = self.insert_dataset("ab_permission", [], get_main_database())
+        dataset_data = {"owners": [gamma.id]}
+        uri = f"api/v1/dataset/{dataset.id}"
+        rv = self.put_assert_metric(uri, dataset_data, "put")
+        assert rv.status_code == 200
+        model = db.session.query(SqlaTable).get(dataset.id)
+        assert model.owners == [gamma]
+
+        db.session.delete(dataset)
+        db.session.commit()
+
     def test_update_dataset_item(self):
         """
         Dataset API: Test update dataset item
@@ -889,6 +952,7 @@ class TestDatasetApi(SupersetTestCase):
             return
 
         dataset = self.insert_default_dataset()
+        current_owners = dataset.owners
         self.login(username="admin")
         dataset_data = {"description": "changed_description"}
         uri = f"api/v1/dataset/{dataset.id}"
@@ -896,6 +960,7 @@ class TestDatasetApi(SupersetTestCase):
         assert rv.status_code == 200
         model = db.session.query(SqlaTable).get(dataset.id)
         assert model.description == dataset_data["description"]
+        assert model.owners == current_owners
 
         db.session.delete(dataset)
         db.session.commit()
@@ -2454,7 +2519,7 @@ class TestDatasetApi(SupersetTestCase):
         response = json.loads(rv.data.decode("utf-8"))
         self.assertEqual(response["message"], {"database": ["Database does not exist"]})
 
-    @patch("superset.datasets.commands.create.CreateDatasetCommand.run")
+    @patch("superset.commands.dataset.create.CreateDatasetCommand.run")
     def test_get_or_create_dataset_create_fails(self, command_run_mock):
         """
         Dataset API: Test get or create endpoint when create fails

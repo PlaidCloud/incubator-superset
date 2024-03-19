@@ -60,6 +60,7 @@ tmp
 rat-results.txt
 __pycache__
 superset/app/
+superset-websocket/config.json
 
 # Node.js, webpack artifacts, storybook
 *.entry.js

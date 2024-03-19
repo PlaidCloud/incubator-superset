@@ -18,6 +18,7 @@
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { useDispatch } from 'react-redux';
+import type { Table } from 'src/SqlLab/types';
 import Collapse from 'src/components/Collapse';
 import Card from 'src/components/Card';
 import ButtonGroup from 'src/components/ButtonGroup';
@@ -47,16 +48,6 @@ export interface Column {
   name: string;
   keys?: { type: ColumnKeyTypeType }[];
   type: string;
-}
-
-export interface Table {
-  id: string;
-  dbId: number;
-  schema: string;
-  name: string;
-  dataPreviewQueryId?: string | null;
-  expanded?: boolean;
-  initialized?: boolean;
 }
 
 export interface TableElementProps {
@@ -224,10 +215,14 @@ const TableElement = ({ table, ...props }: TableElementProps) => {
           </small>
         </div>
       ));
+      if (!metadata?.length) {
+        // hide metadata card view
+        return null;
+      }
     }
 
-    if (!partitions && (!metadata || !metadata.length)) {
-      // hide partition and metadata card view
+    if (!partitions) {
+      // hide partition card view
       return null;
     }
 
@@ -264,6 +259,11 @@ const TableElement = ({ table, ...props }: TableElementProps) => {
           display: flex;
           column-gap: ${theme.gridUnit * 1.5}px;
           margin-right: ${theme.gridUnit}px;
+          & span {
+            display: flex;
+            justify-content: center;
+            width: ${theme.gridUnit * 4}px;
+          }
         `}
       >
         {keyLink}

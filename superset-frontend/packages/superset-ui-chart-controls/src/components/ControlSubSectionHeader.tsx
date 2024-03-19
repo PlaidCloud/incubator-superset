@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -16,11 +16,21 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { styled } from '@superset-ui/core';
 
-export const ControlSubSectionHeader = styled.div`
-  font-weight: ${({ theme }) => theme.typography.weights.bold};
-  font-size: ${({ theme }) => theme.typography.sizes.s};
-  margin-bottom: ${({ theme }) => theme.gridUnit}px;
-`;
-export default ControlSubSectionHeader;
+import { t } from '../translation';
+
+/**
+ * Validate a [Mapbox styles URL](https://docs.mapbox.com/help/glossary/style-url/)
+ * @param v
+ */
+export default function validateMapboxStylesUrl(v: unknown) {
+  if (
+    typeof v === 'string' &&
+    v.trim().length > 0 &&
+    v.trim().startsWith('mapbox://styles/')
+  ) {
+    return false;
+  }
+
+  return t('is expected to be a Mapbox URL');
+}
