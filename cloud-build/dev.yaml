@@ -13,7 +13,7 @@ steps:
       #   -t us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-py:$TAG_NAME \
       #   --cache-from us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-py:$(cat tmp/py) \
       #   --target=superset-py \
-      #   --build-arg PY_VER=3.8.12 \
+      #   --build-arg PY_VER=3.9 \
       #   .
 
       (docker pull "us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-node:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/node) ||
@@ -23,7 +23,7 @@ steps:
         -t us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-node:$TAG_NAME \
         --cache-from us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-node:$(cat tmp/node) \
         --target=superset-node \
-        --build-arg PY_VER=3.8.12 \
+        --build-arg PY_VER=3.9 \
         .
 
       (docker pull "us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-production:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/production) ||
@@ -34,7 +34,7 @@ steps:
         --cache-from us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-node:$TAG_NAME \
         --cache-from us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-production:$(cat tmp/production) \
         --target lean \
-        --build-arg PY_VER=3.8.12 \
+        --build-arg PY_VER=3.9 \
         .
 
       (docker pull "us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-ci:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/ci) ||
@@ -46,7 +46,7 @@ steps:
         --cache-from us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-production:$TAG_NAME \
         --cache-from gus-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-ci:$(cat tmp/ci) \
         --target lean \
-        --build-arg PY_VER=3.8.12 \
+        --build-arg PY_VER=3.9 \
         .
 
       (docker pull "us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-dev:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/dev) ||
@@ -58,7 +58,7 @@ steps:
         --cache-from us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-production:$TAG_NAME \
         --cache-from us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-ci:$TAG_NAME \
         --cache-from us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-dev:$(cat tmp/dev) \
-        --build-arg PY_VER=3.8.12 \
+        --build-arg PY_VER=3.9 \
         .
 
 substitutions:
