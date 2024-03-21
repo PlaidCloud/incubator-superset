@@ -185,7 +185,7 @@ class PostgresBaseEngineSpec(BaseEngineSpec):
 
 class PostgresEngineSpec(PostgresBaseEngineSpec, BasicParametersMixin):
     engine = "postgresql"
-    engine_aliases = {"postgres"}
+    engine_aliases = {"postgres", "greenplum"}
     supports_dynamic_schema = True
 
     default_driver = "psycopg2"
