@@ -124,7 +124,7 @@ RUN chmod a+x /usr/bin/run-server.sh
 
 WORKDIR /app
 
-COPY --chmod=755 ./docker/run-server.sh /usr/bin/
+# COPY --chmod=755 ./docker/run-server.sh /usr/bin/
 USER superset
 
 HEALTHCHECK CMD curl -f "http://localhost:${SUPERSET_PORT}/health"
@@ -170,6 +170,8 @@ USER superset
 ######################################################################
 FROM lean AS ci
 
-COPY --chown=superset:superset --chmod=755 ./docker/*.sh /app/docker/
+# COPY --chown=superset --chmod=755 ./docker/*.sh /app/docker/
+COPY --chown=superset ./docker/*.sh /app/docker/
+RUN chmod a+x /app/docker/*.sh
 
 CMD ["/app/docker/docker-ci.sh"]
