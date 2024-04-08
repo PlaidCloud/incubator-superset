@@ -29,7 +29,7 @@ import { Link, useHistory } from 'react-router-dom';
 import rison from 'rison';
 import {
   createErrorHandler,
-  createFetchDistinct,
+  // createFetchDistinct,
   createFetchRelated,
 } from 'src/views/CRUD/utils';
 import { useSelector } from 'react-redux';

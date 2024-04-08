@@ -277,6 +277,10 @@ class DatasetRestApi(BaseSupersetModelRestApi):
     list_outer_default_load = True
     show_outer_default_load = True
 
+    def response_400(self, message=None):
+        logger.error(f"Error from datasets api: {message}")
+        return super().response_400(message=message)
+
     @expose("/", methods=("POST",))
     @protect()
     @safe

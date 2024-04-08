@@ -17,20 +17,11 @@
  * under the License.
  */
 
-import { t } from '../translation';
+import { styled } from '@superset-ui/core';
 
-/**
- * Validate a [Mapbox styles URL](https://docs.mapbox.com/help/glossary/style-url/)
- * @param v
- */
-export default function validateMapboxStylesUrl(v: unknown) {
-  if (
-    typeof v === 'string' &&
-    v.trim().length > 0 &&
-    v.trim().startsWith('mapbox://styles/')
-  ) {
-    return false;
-  }
-
-  return t('is expected to be a Mapbox URL');
-}
+export const ControlSubSectionHeader = styled.div`
+  font-weight: ${({ theme }) => theme.typography.weights.bold};
+  font-size: ${({ theme }) => theme.typography.sizes.s};
+  margin-bottom: ${({ theme }) => theme.gridUnit}px;
+`;
+export default ControlSubSectionHeader;

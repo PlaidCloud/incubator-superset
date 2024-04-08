@@ -122,10 +122,7 @@ FRONTEND_CONF_KEYS = (
     "ALERT_REPORTS_DEFAULT_WORKING_TIMEOUT",
     "NATIVE_FILTER_DEFAULT_ROW_LIMIT",
     "PREVENT_UNSAFE_DEFAULT_URLS_ON_DATASET",
-<<<<<<< HEAD
-=======
     "JWT_ACCESS_CSRF_COOKIE_NAME",
->>>>>>> 63a3feced4c57ef610e6664dba55b98c57cb1572
 )
 
 logger = logging.getLogger(__name__)
@@ -193,11 +190,7 @@ def generate_download_headers(
 
 def deprecated(
     eol_version: str = "4.0.0",
-<<<<<<< HEAD
-    new_target: Optional[str] = None,
-=======
     new_target: str | None = None,
->>>>>>> 63a3feced4c57ef610e6664dba55b98c57cb1572
 ) -> Callable[[Callable[..., FlaskResponse]], Callable[..., FlaskResponse]]:
     """
     A decorator to set an API endpoint from SupersetView has deprecated.
@@ -387,13 +380,9 @@ def menu_data(user: User) -> dict[str, Any]:
 
 
 @cache_manager.cache.memoize(timeout=60)
-<<<<<<< HEAD
-def cached_common_bootstrap_data(user: User, locale: str) -> dict[str, Any]:
-=======
 def cached_common_bootstrap_data(  # pylint: disable=unused-argument
     user_id: int | None, locale: str
 ) -> dict[str, Any]:
->>>>>>> 63a3feced4c57ef610e6664dba55b98c57cb1572
     """Common data always sent to the client
 
     The function is memoized as the return value only changes when user permissions
@@ -438,11 +427,7 @@ def cached_common_bootstrap_data(  # pylint: disable=unused-argument
 
 def common_bootstrap_payload() -> dict[str, Any]:
     return {
-<<<<<<< HEAD
-        **cached_common_bootstrap_data(user, get_locale()),
-=======
         **cached_common_bootstrap_data(utils.get_user_id(), get_locale()),
->>>>>>> 63a3feced4c57ef610e6664dba55b98c57cb1572
         "flash_messages": get_flashed_messages(with_categories=True),
     }
 

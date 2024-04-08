@@ -17,6 +17,8 @@
 import logging
 from typing import Optional
 
+from flask_appbuilder.models.sqla import Model
+
 from superset import security_manager
 from superset.commands.base import BaseCommand
 from superset.commands.dataset.exceptions import (
@@ -36,7 +38,7 @@ class RefreshDatasetCommand(BaseCommand):
         self._model_id = model_id
         self._model: Optional[SqlaTable] = None
 
-    def run(self) -> None:
+    def run(self) -> Model:
         self.validate()
         if self._model:
             try:
@@ -49,12 +51,11 @@ class RefreshDatasetCommand(BaseCommand):
 
     def validate(self) -> None:
         # Validate/populate model exists
-        self._models = DatasetDAO.find_by_ids(self._model_ids)
-        if not self._models or len(self._models) != len(self._model_ids):
+        self._model = DatasetDAO.find_by_id(self._model_id)
+        if not self._model:
             raise DatasetNotFoundError()
         # Check ownership
-        for model in self._models:
-            try:
-                security_manager.raise_for_ownership(model)
-            except SupersetSecurityException as ex:
-                raise DatasetForbiddenError() from ex
+        try:
+            security_manager.raise_for_ownership(self._model)
+        except SupersetSecurityException as ex:
+            raise DatasetForbiddenError() from ex

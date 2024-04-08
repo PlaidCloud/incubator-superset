@@ -418,14 +418,6 @@ export default function transformProps(
       !!contributionMode,
     );
 
-    const seriesFormatter = getFormatter(
-      customFormattersSecondary,
-      formatterSecondary,
-      metricsB,
-      labelMapB[seriesName]?.[0],
-      !!contributionMode,
-    );
-
     const transformedSeries = transformSeries(
       entry,
       colorScale,

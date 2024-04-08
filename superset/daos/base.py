@@ -30,7 +30,6 @@ from superset.daos.exceptions import (
     DAOUpdateFailedError,
 )
 from superset.extensions import db
-from superset.utils.core import get_iterable
 
 T = TypeVar("T", bound=Model)
 

@@ -76,15 +76,17 @@ class PlaidSecurityManager(SupersetSecurityManager):
         """
         super().sync_role_definitions()
 
-        self.set_role('Plaid', self.is_plaid_user_pvm)
+        pvms = self._get_all_pvms()
+
+        self.set_role('Plaid', self.is_plaid_user_pvm, pvms)
         plaid_role = self.find_role('Plaid')
 
         if self.appbuilder.app.config.get('PUBLIC_ROLE_LIKE_PLAID', False):
-            self.set_role('Public', self.is_plaid_user_pvm)
+            self.set_role('Public', self.is_plaid_user_pvm, pvms)
             public_role = self.find_role('Public')
         else:
             # Clear out public role.
-            self.set_role('Public', lambda pvm: False)
+            self.set_role('Public', lambda pvm: False, pvms)
 
 
     def is_plaid_user_pvm(self, pvm) -> bool:
