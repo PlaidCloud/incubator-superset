@@ -17,6 +17,7 @@
 # pylint: disable=invalid-name, redefined-outer-name, too-many-lines
 
 from typing import Optional
+from unittest.mock import Mock
 
 import pytest
 import sqlparse
@@ -25,10 +26,14 @@ from sqlalchemy import text
 from sqlparse.sql import Identifier, Token, TokenList
 from sqlparse.tokens import Name
 
-from superset.exceptions import QueryClauseValidationException
+from superset.exceptions import (
+    QueryClauseValidationException,
+    SupersetSecurityException,
+)
 from superset.sql_parse import (
     add_table_name,
     extract_table_references,
+    extract_tables_from_jinja_sql,
     get_rls_for_table,
     has_table_query,
     insert_rls_as_subquery,
@@ -260,10 +265,38 @@ def test_extract_tables_illdefined() -> None:
     """
     Test that ill-defined tables return an empty set.
     """
-    assert extract_tables("SELECT * FROM schemaname.") == set()
-    assert extract_tables("SELECT * FROM catalogname.schemaname.") == set()
-    assert extract_tables("SELECT * FROM catalogname..") == set()
-    assert extract_tables("SELECT * FROM catalogname..tbname") == set()
+    with pytest.raises(SupersetSecurityException) as excinfo:
+        extract_tables("SELECT * FROM schemaname.")
+    assert (
+        str(excinfo.value)
+        == "You may have an error in your SQL statement. Error parsing near '.' at line 1:25"
+    )
+
+    with pytest.raises(SupersetSecurityException) as excinfo:
+        extract_tables("SELECT * FROM catalogname.schemaname.")
+    assert (
+        str(excinfo.value)
+        == "You may have an error in your SQL statement. Error parsing near '.' at line 1:37"
+    )
+
+    with pytest.raises(SupersetSecurityException) as excinfo:
+        extract_tables("SELECT * FROM catalogname..")
+    assert (
+        str(excinfo.value)
+        == "You may have an error in your SQL statement. Error parsing near '.' at line 1:27"
+    )
+
+    with pytest.raises(SupersetSecurityException) as excinfo:
+        extract_tables('SELECT * FROM "tbname')
+    assert (
+        str(excinfo.value)
+        == "You may have an error in your SQL statement. Error tokenizing 'SELECT * FROM \"tbnam'"
+    )
+
+    # odd edge case that works
+    assert extract_tables("SELECT * FROM catalogname..tbname") == {
+        Table(table="tbname", schema=None, catalog="catalogname")
+    }
 
 
 def test_extract_tables_show_tables_from() -> None:
@@ -1816,3 +1849,47 @@ WITH t AS (
 )
 SELECT * FROM t"""
     ).is_select()
+
+
+@pytest.mark.parametrize(
+    "engine",
+    [
+        "hive",
+        "presto",
+        "trino",
+    ],
+)
+@pytest.mark.parametrize(
+    "macro",
+    [
+        "latest_partition('foo.bar')",
+        "latest_partition(' foo.bar ')",  # Non-atypical user error which works
+        "latest_sub_partition('foo.bar', baz='qux')",
+    ],
+)
+@pytest.mark.parametrize(
+    "sql,expected",
+    [
+        (
+            "SELECT '{{{{ {engine}.{macro} }}}}'",
+            {Table(table="bar", schema="foo")},
+        ),
+        (
+            "SELECT * FROM foo.baz WHERE quux = '{{{{ {engine}.{macro} }}}}'",
+            {Table(table="bar", schema="foo"), Table(table="baz", schema="foo")},
+        ),
+    ],
+)
+def test_extract_tables_from_jinja_sql(
+    engine: str,
+    macro: str,
+    sql: str,
+    expected: set[Table],
+) -> None:
+    assert (
+        extract_tables_from_jinja_sql(
+            sql=sql.format(engine=engine, macro=macro),
+            database=Mock(),
+        )
+        == expected
+    )

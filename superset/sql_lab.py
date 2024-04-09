@@ -419,7 +419,10 @@ def execute_sql_statements(
         )
 
     # Breaking down into multiple statements
-    parsed_query = ParsedQuery(rendered_query, strip_comments=True)
+    parsed_query = ParsedQuery(
+        rendered_query,
+        engine=db_engine_spec.engine,
+    )
     if not db_engine_spec.run_multiple_statements_as_one:
         statements = parsed_query.get_statements()
         logger.info(
