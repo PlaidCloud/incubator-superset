@@ -19,6 +19,7 @@
 *.pyc
 *.sqllite
 *.swp
+*.~undo-tree~
 __pycache__
 
 .local
