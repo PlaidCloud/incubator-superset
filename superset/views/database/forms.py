@@ -202,10 +202,6 @@ class CsvToDatabaseForm(UploadToDatabaseForm):
         _("Day First"),
         description=_("DD/MM format dates, international and European format"),
     )
-    day_first = BooleanField(
-        _("Day First"),
-        description=_("DD/MM format dates, international and European format"),
-    )
     decimal = StringField(
         _("Decimal Character"),
         default=".",

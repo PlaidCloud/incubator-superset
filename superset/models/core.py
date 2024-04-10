@@ -366,6 +366,7 @@ class Database(
             # do not over-write the password with the password mask
             self.password = conn.password
         conn = conn.set(password=PASSWORD_MASK if conn.password else None)
+        self.sqlalchemy_uri = str(conn)  # hides the password
 
     def get_effective_user(self, object_url: URL) -> str | None:
         """

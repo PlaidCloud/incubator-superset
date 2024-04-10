@@ -34,7 +34,7 @@ from sqlalchemy.dialects.mysql import (
     TINYINT,
     TINYTEXT,
 )
-from sqlalchemy.engine.url import make_url
+from sqlalchemy.engine.url import make_url, URL
 
 from superset.utils.core import GenericDataType
 from tests.unit_tests.db_engine_specs.utils import (
