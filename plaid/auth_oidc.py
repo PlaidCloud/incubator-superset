@@ -29,9 +29,9 @@ class AuthOIDCView(AuthOIDView):
         log.info(f"Fetched user info from token: {userinfo}")
         user_email = userinfo['email'].lower()
         if user_email.endswith('tartansolutions.com') or user_email.endswith('plaidcloud.com'):
-            role_set = ("Admin", "Plaid", "Gamma")
+            role_set = ["Admin", "Plaid", "Gamma"]
         else:
-            role_set = ("Plaid", "Gamma")
+            role_set = ["Plaid", "Gamma"]
         user = self.appbuilder.sm.find_user(email=userinfo['email'].lower())
         name = userinfo.get('name', userinfo['preferred_username'])
         if not user:
