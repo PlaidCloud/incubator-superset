@@ -351,9 +351,7 @@ class Database(
         cls, uri: str
     ) -> URL:
         sqlalchemy_url = make_url_safe(uri)
-        #TODO: turn this back on after I'm done debugging stuff!
-        # return cls.get_password_masked_url(sqlalchemy_url)
-        return sqlalchemy_url
+        return cls.get_password_masked_url(sqlalchemy_url)
 
     @classmethod
     def get_password_masked_url(cls, masked_url: URL) -> URL:
@@ -367,9 +365,7 @@ class Database(
         if conn.password != PASSWORD_MASK and not custom_password_store:
             # do not over-write the password with the password mask
             self.password = conn.password
-        #TODO: turn this back on after I'm done debugging stuff!
-        # conn = conn.set(password=PASSWORD_MASK if conn.password else None)
-        self.sqlalchemy_uri = str(conn)  # hides the password
+        conn = conn.set(password=PASSWORD_MASK if conn.password else None)
 
     def get_effective_user(self, object_url: URL) -> str | None:
         """
@@ -481,9 +477,7 @@ class Database(
             effective_username,
         )
 
-        #TODO: switch this back on once I'm done debugging stuff!
-        # masked_url = self.get_password_masked_url(sqlalchemy_url)
-        masked_url = sqlalchemy_url
+        masked_url = self.get_password_masked_url(sqlalchemy_url)
         logger.debug("Database._get_sqla_engine(). Masked URL: %s", str(masked_url))
 
         if self.impersonate_user:

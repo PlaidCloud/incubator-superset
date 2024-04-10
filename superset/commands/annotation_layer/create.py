@@ -36,7 +36,7 @@ class CreateAnnotationLayerCommand(BaseCommand):
     def __init__(self, data: dict[str, Any]):
         self._properties = data.copy()
 
-    def run(self) -> None:
+    def run(self) -> Model:
         self.validate()
         try:
             return AnnotationLayerDAO.create(attributes=self._properties)

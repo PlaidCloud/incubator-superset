@@ -40,9 +40,9 @@ class UpdateAnnotationLayerCommand(BaseCommand):
         self._properties = data.copy()
         self._model: Optional[AnnotationLayer] = None
 
-    def run(self) -> None:
+    def run(self) -> Model:
         self.validate()
-        assert self._models
+        assert self._model
 
         try:
             annotation_layer = AnnotationLayerDAO.update(self._model, self._properties)

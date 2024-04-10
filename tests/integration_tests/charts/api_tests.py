@@ -654,7 +654,7 @@ class TestChartApi(SupersetTestCase, ApiOwnersTestCaseMixin, InsertChartMixin):
         self.login(username="admin")
         uri = f"api/v1/chart/{chart_id}"
         rv = self.put_assert_metric(uri, chart_data, "put")
-        assert rv.status_code == 200
+        self.assertEqual(rv.status_code, 200)
         model = db.session.query(Slice).get(chart_id)
 
         response = self.get_assert_metric("api/v1/chart/", "get_list")

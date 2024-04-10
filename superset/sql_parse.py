@@ -20,7 +20,8 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Iterator
+import urllib.parse
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import Any, cast, TYPE_CHECKING
 
@@ -66,7 +67,7 @@ from superset.utils.backports import StrEnum
 
 try:
     from sqloxide import parse_sql as sqloxide_parse
-except:  # pylint: disable=bare-except
+except (ImportError, ModuleNotFoundError):
     sqloxide_parse = None
 
 if TYPE_CHECKING:
@@ -227,7 +228,11 @@ def strip_comments_from_sql(statement: str, engine: str | None = None) -> str:
     :param statement: A string with the SQL statement
     :return: SQL statement without comments
     """
-    return ParsedQuery(statement).strip_comments() if "--" in statement else statement
+    return (
+        ParsedQuery(statement, engine=engine).strip_comments()
+        if "--" in statement
+        else statement
+    )
 
 
 @dataclass(eq=True, frozen=True)
@@ -246,7 +251,7 @@ class Table:
         """
 
         return ".".join(
-            parse.quote(part, safe="").replace(".", "%2E")
+            urllib.parse.quote(part, safe="").replace(".", "%2E")
             for part in [self.catalog, self.schema, self.table]
             if part
         )
@@ -266,6 +271,7 @@ class ParsedQuery:
             sql_statement = sqlparse.format(sql_statement, strip_comments=True)
 
         self.sql: str = sql_statement
+        self._dialect = SQLGLOT_DIALECTS.get(engine) if engine else None
         self._tables: set[Table] = set()
         self._alias_names: set[str] = set()
         self._limit: int | None = None
@@ -278,12 +284,7 @@ class ParsedQuery:
     @property
     def tables(self) -> set[Table]:
         if not self._tables:
-            for statement in self._parsed:
-                self._extract_from_token(statement)
-
-            self._tables = {
-                table for table in self._tables if str(table) not in self._alias_names
-            }
+            self._tables = self._extract_tables_from_sql()
         return self._tables
 
     def _extract_tables_from_sql(self) -> set[Table]:
@@ -572,28 +573,6 @@ class ParsedQuery:
     def _is_identifier(token: Token) -> bool:
         return isinstance(token, (IdentifierList, Identifier))
 
-    def _process_tokenlist(self, token_list: TokenList) -> None:
-        """
-        Add table names to table set
-
-        :param token_list: TokenList to be processed
-        """
-        # exclude subselects
-        if "(" not in str(token_list):
-            table = self.get_table(token_list)
-            if table and not table.table.startswith(CTE_PREFIX):
-                self._tables.add(table)
-            return
-
-        # store aliases
-        if token_list.has_alias():
-            self._alias_names.add(token_list.get_alias())
-
-        # some aliases are not parsed properly
-        if token_list.tokens[0].ttype == Name:
-            self._alias_names.add(token_list.tokens[0].value)
-        self._extract_from_token(token_list)
-
     def as_create_table(
         self,
         table_name: str,
@@ -619,50 +598,6 @@ class ParsedQuery:
             exec_sql = f"DROP {method} IF EXISTS {full_table_name};\n"
         exec_sql += f"CREATE {method} {full_table_name} AS \n{sql}"
         return exec_sql
-
-    def _extract_from_token(self, token: Token) -> None:
-        """
-        <Identifier> store a list of subtokens and <IdentifierList> store lists of
-        subtoken list.
-
-        It extracts <IdentifierList> and <Identifier> from :param token: and loops
-        through all subtokens recursively. It finds table_name_preceding_token and
-        passes <IdentifierList> and <Identifier> to self._process_tokenlist to populate
-        self._tables.
-
-        :param token: instance of Token or child class, e.g. TokenList, to be processed
-        """
-        if not hasattr(token, "tokens"):
-            return
-
-        table_name_preceding_token = False
-
-        for item in token.tokens:
-            if item.is_group and (
-                not self._is_identifier(item) or isinstance(item.tokens[0], Parenthesis)
-            ):
-                self._extract_from_token(item)
-
-            if item.ttype in Keyword and (
-                item.normalized in PRECEDES_TABLE_NAME
-                or item.normalized.endswith(" JOIN")
-            ):
-                table_name_preceding_token = True
-                continue
-
-            if item.ttype in Keyword:
-                table_name_preceding_token = False
-                continue
-            if table_name_preceding_token:
-                if isinstance(item, Identifier):
-                    self._process_tokenlist(item)
-                elif isinstance(item, IdentifierList):
-                    for token2 in item.get_identifiers():
-                        if isinstance(token2, TokenList):
-                            self._process_tokenlist(token2)
-            elif isinstance(item, IdentifierList):
-                if any(not self._is_identifier(token2) for token2 in item.tokens):
-                    self._extract_from_token(item)
 
     def set_or_update_query_limit(self, new_limit: int, force: bool = False) -> str:
         """Returns the query with the specified limit.
@@ -1060,7 +995,7 @@ def insert_rls_in_predicate(
 
 
 # mapping between sqloxide and SQLAlchemy dialects
-SQLOXITE_DIALECTS = {
+SQLOXIDE_DIALECTS = {
     "ansi": {"trino", "trinonative", "presto"},
     "hive": {"hive", "databricks"},
     "ms": {"mssql"},
@@ -1093,7 +1028,7 @@ def extract_table_references(
     tree = None
 
     if sqloxide_parse:
-        for dialect, sqla_dialects in SQLOXITE_DIALECTS.items():
+        for dialect, sqla_dialects in SQLOXIDE_DIALECTS.items():
             if sqla_dialect in sqla_dialects:
                 break
         sql_text = RE_JINJA_BLOCK.sub(" ", sql_text)

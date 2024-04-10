@@ -106,11 +106,6 @@ class ExploreFormDataRestApi(BaseSupersetApi):
             return self.response(201, key=key)
         except ValidationError as ex:
             return self.response(400, message=ex.messages)
-        # except (
-        #     ChartAccessDeniedError,
-        #     DatasetAccessDeniedError,
-        #     TemporaryCacheAccessDeniedError,
-        # ) as ex:
         except TemporaryCacheAccessDeniedError as ex:
             return self.response(403, message=str(ex))
         except TemporaryCacheResourceNotFoundError as ex:
