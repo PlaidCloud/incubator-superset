@@ -484,66 +484,9 @@ class BaseSupersetModelRestApi(BaseSupersetApiMixin, ModelRestApi):
         """
         Add statsd metrics to builtin FAB GET list endpoint
         """
-        # duration, response = time_function(super().get_list_headless, **kwargs)
-        duration, response = time_function(self._my_get_list_headless, **kwargs)
+        duration, response = time_function(super().get_list_headless, **kwargs)
         self.send_stats_metrics(response, self.get_list.__name__, duration)
         return response
-
-    def _my_get_list_headless(self, **kwargs: Any) -> Response:
-        """
-        Get list of items from Model
-        """
-        from flask_appbuilder.const import API_SELECT_COLUMNS_RIS_KEY, API_RESULT_RES_KEY
-        from flask_appbuilder.exceptions import FABException, InvalidOrderByColumnFABException
-        
-        response = dict()
-        args = kwargs.get("rison", {})
-        # handle select columns
-        select_cols = args.get(API_SELECT_COLUMNS_RIS_KEY, [])
-        pruned_select_cols = [col for col in select_cols if col in self.list_columns]
-        # map decorated metadata
-        self.set_response_key_mappings(
-            response,
-            self.get_list,
-            args,
-            **{API_SELECT_COLUMNS_RIS_KEY: pruned_select_cols},
-        )
-        # Create a response schema with the computed response columns,
-        # defined or requested
-        if pruned_select_cols:
-            list_model_schema = self.model2schemaconverter.convert(pruned_select_cols)
-        else:
-            list_model_schema = self.list_model_schema
-        # handle filters
-        try:
-            joined_filters = self._handle_filters_args(args)
-        except FABException as e:
-            logger.exception(str(e))
-            return self.response_400(message=str(e))
-        # handle base order
-        try:
-            order_column, order_direction = self._handle_order_args(args)
-        except InvalidOrderByColumnFABException as e:
-            logger.exception(str(e))
-            return self.response_400(message=str(e))
-        # handle pagination
-        page_index, page_size = self._handle_page_args(args)
-        # Make the query
-        count, lst = self.datamodel.query(
-            joined_filters,
-            order_column,
-            order_direction,
-            page=page_index,
-            page_size=page_size,
-            select_columns=self.list_select_columns,
-            outer_default_load=self.list_outer_default_load,
-        )
-        pks = self.datamodel.get_keys(lst)
-        response[API_RESULT_RES_KEY] = list_model_schema.dump(lst, many=True)
-        response["ids"] = pks
-        response["count"] = count
-        self.pre_get_list(response)
-        return self.response(200, **response)
 
     @event_logger.log_this_with_context(
         action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.post",
