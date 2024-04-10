@@ -122,12 +122,12 @@ pyee==9.0.4
     # via playwright
 pyfakefs==5.2.2
     # via -r requirements/testing.in
-pytest==7.3.1
+pytest==7.1.1
     # via
     #   -r requirements/testing.in
     #   pytest-cov
     #   pytest-mock
-pytest-cov==4.0.0
+pytest-cov==3.0.0
     # via -r requirements/testing.in
 pytest-mock==3.10.0
     # via -r requirements/testing.in
