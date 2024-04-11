@@ -6,7 +6,7 @@
 #    pip-compile-multi
 #
 -r development.txt
--e file:.
+-e file:///home/amaranth/plaidsrc/incubator-superset
     # via
     #   -r requirements/base.in
     #   -r requirements/development.in

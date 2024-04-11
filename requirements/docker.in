@@ -19,5 +19,5 @@
 gevent
 pika
 psycopg2-binary
-redis==4.5.5
+redis==4.6.0
 greenlet>=2.0.2
