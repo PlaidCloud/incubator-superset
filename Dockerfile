@@ -83,6 +83,8 @@ RUN mkdir -p ${PYTHONPATH} superset/static superset-frontend apache_superset.egg
         libpq-dev \
         libecpg-dev \
         libldap2-dev \
+        pkg-config \
+        python3-dev \
     && touch superset/static/version_info.json \
     && chown -R superset:superset ./* \
     && rm -rf /var/lib/apt/lists/*
