@@ -149,7 +149,7 @@ docker buildx build --target lean \
   -t "${REPO_NAME}:${REFSPEC}-py39" \
   -t "${REPO_NAME}:${LATEST_TAG}-py39" \
   --platform linux/amd64 \
-  --build-arg PY_VER="3.9-slim-bullseye"\
+  --build-arg PY_VER="3.10-slim-bookworm"\
   --label "sha=${SHA}" \
   --label "built_at=$(date)" \
   --label "target=lean39" \

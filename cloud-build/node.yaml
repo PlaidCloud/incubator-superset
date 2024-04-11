@@ -14,7 +14,7 @@ steps:
       #   -t us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-py:$TAG_NAME \
       #   --cache-from us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-py:$(cat tmp/py) \
       #   --target=superset-py \
-      #   --build-arg PY_VER=3.8.12 \
+      #   --build-arg PY_VER=3.10 \
       #   .
 
       (docker pull "us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-node:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/node) ||
@@ -24,7 +24,7 @@ steps:
         -t us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-node:$TAG_NAME \
         --cache-from us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-node:$(cat tmp/node) \
         --target=superset-node \
-        --build-arg PY_VER=3.8.12 \
+        --build-arg PY_VER=3.10 \
         .
 substitutions:
   _LAST_TAG: "latest"
