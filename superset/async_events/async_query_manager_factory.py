@@ -32,4 +32,8 @@ class AsyncQueryManagerFactory:
         self._async_query_manager.init_app(app)
 
     def instance(self) -> AsyncQueryManager:
+        if not self._async_query_manager:
+            self._async_query_manager = load_class_from_name(
+                app.config["GLOBAL_ASYNC_QUERY_MANAGER_CLASS"]
+            )()
         return self._async_query_manager
