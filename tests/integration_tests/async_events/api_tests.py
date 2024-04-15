@@ -16,6 +16,7 @@
 # under the License.
 import json
 from typing import Optional
+import unittest
 from unittest import mock
 
 from superset.extensions import async_query_manager
