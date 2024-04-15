@@ -23,7 +23,7 @@ from superset.extensions import async_query_manager
 from tests.integration_tests.base_tests import SupersetTestCase
 from tests.integration_tests.test_app import app
 
-@unittest.skip()
+@unittest.skip('Fails')
 class TestAsyncEventApi(SupersetTestCase):
     UUID = "943c920-32a5-412a-977d-b8e47d36f5a4"
 
