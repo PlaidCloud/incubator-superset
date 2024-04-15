@@ -1,12 +1,13 @@
 name: Frontend
 
-on:
-  push:
-    branches-ignore:
-      - "dependabot/**/docs/**"
-      - "dependabot/**/cypress-base/**"
-  pull_request:
-    types: [synchronize, opened, reopened, ready_for_review]
+on: workflow_dispatch
+# on:
+#   push:
+#     branches-ignore:
+#       - "dependabot/**/docs/**"
+#       - "dependabot/**/cypress-base/**"
+#   pull_request:
+#     types: [synchronize, opened, reopened, ready_for_review]
 
 jobs:
   frontend-build:
