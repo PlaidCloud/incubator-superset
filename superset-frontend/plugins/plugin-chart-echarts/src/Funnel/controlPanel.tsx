@@ -20,16 +20,20 @@ import React from 'react';
 import { t } from '@superset-ui/core';
 import {
   ControlPanelConfig,
+  ControlSubSectionHeader,
   D3_FORMAT_OPTIONS,
+  D3_NUMBER_FORMAT_DESCRIPTION_VALUES_TEXT,
   sections,
   sharedControls,
   ControlStateMapping,
-  emitFilterControl,
+  getStandardizedControls,
+  D3_FORMAT_DOCS,
 } from '@superset-ui/chart-controls';
 import { DEFAULT_FORM_DATA, EchartsFunnelLabelTypeType } from './types';
 import { legendSection } from '../controls';
 
-const { labelType, numberFormat, showLabels } = DEFAULT_FORM_DATA;
+const { labelType, numberFormat, showLabels, defaultTooltipLabel } =
+  DEFAULT_FORM_DATA;
 
 const funnelLegendSection = [...legendSection];
 funnelLegendSection.splice(2, 1);
@@ -44,7 +48,6 @@ const config: ControlPanelConfig = {
         ['groupby'],
         ['metric'],
         ['adhoc_filters'],
-        emitFilterControl,
         [
           {
             name: 'row_limit',
@@ -76,30 +79,56 @@ const config: ControlPanelConfig = {
         ['color_scheme'],
         ...funnelLegendSection,
         // eslint-disable-next-line react/jsx-key
-        [<div className="section-header">{t('Labels')}</div>],
+        [<ControlSubSectionHeader>{t('Labels')}</ControlSubSectionHeader>],
         [
           {
             name: 'label_type',
             config: {
               type: 'SelectControl',
-              label: t('Label Type'),
+              label: t('Label Contents'),
               default: labelType,
               renderTrigger: true,
               choices: [
-                [EchartsFunnelLabelTypeType.Key, 'Category Name'],
-                [EchartsFunnelLabelTypeType.Value, 'Value'],
-                [EchartsFunnelLabelTypeType.Percent, 'Percentage'],
-                [EchartsFunnelLabelTypeType.KeyValue, 'Category and Value'],
+                [EchartsFunnelLabelTypeType.Key, t('Category Name')],
+                [EchartsFunnelLabelTypeType.Value, t('Value')],
+                [EchartsFunnelLabelTypeType.Percent, t('Percentage')],
+                [EchartsFunnelLabelTypeType.KeyValue, t('Category and Value')],
                 [
                   EchartsFunnelLabelTypeType.KeyPercent,
-                  'Category and Percentage',
+                  t('Category and Percentage'),
                 ],
                 [
                   EchartsFunnelLabelTypeType.KeyValuePercent,
-                  'Category, Value and Percentage',
+                  t('Category, Value and Percentage'),
                 ],
               ],
-              description: t('What should be shown on the label?'),
+              description: t('What should be shown as the label'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'tooltip_label_type',
+            config: {
+              type: 'SelectControl',
+              label: t('Tooltip Contents'),
+              default: defaultTooltipLabel,
+              renderTrigger: true,
+              choices: [
+                [EchartsFunnelLabelTypeType.Key, t('Category Name')],
+                [EchartsFunnelLabelTypeType.Value, t('Value')],
+                [EchartsFunnelLabelTypeType.Percent, t('Percentage')],
+                [EchartsFunnelLabelTypeType.KeyValue, t('Category and Value')],
+                [
+                  EchartsFunnelLabelTypeType.KeyPercent,
+                  t('Category and Percentage'),
+                ],
+                [
+                  EchartsFunnelLabelTypeType.KeyValuePercent,
+                  t('Category, Value and Percentage'),
+                ],
+              ],
+              description: t('What should be shown as the tooltip label'),
             },
           },
         ],
@@ -113,12 +142,11 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
               default: numberFormat,
               choices: D3_FORMAT_OPTIONS,
-              description: `${t(
-                'D3 format syntax: https://github.com/d3/d3-format',
-              )} ${t('Only applies when "Label Type" is set to show values.')}`,
+              description: `${D3_FORMAT_DOCS} ${D3_NUMBER_FORMAT_DESCRIPTION_VALUES_TEXT}`,
             },
           },
         ],
+        ['currency_format'],
         [
           {
             name: 'show_labels',
@@ -128,6 +156,18 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
               default: showLabels,
               description: t('Whether to display the labels.'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'show_tooltip_labels',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show Tooltip Labels'),
+              renderTrigger: true,
+              default: showLabels,
+              description: t('Whether to display the tooltip labels.'),
             },
           },
         ],
@@ -143,6 +183,11 @@ const config: ControlPanelConfig = {
       },
     };
   },
+  formDataOverrides: formData => ({
+    ...formData,
+    metric: getStandardizedControls().shiftMetric(),
+    groupby: getStandardizedControls().popAllColumns(),
+  }),
 };
 
 export default config;

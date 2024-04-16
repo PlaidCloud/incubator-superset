@@ -40,6 +40,8 @@ spec:
             - name: superset-config
               mountPath: {{ .Values.configMountPath | quote }}
               readOnly: true
+            - name: config
+              mountPath: /etc/plaidcloud
           resources:
 {{ toYaml .Values.resources | indent 12 }}
     {{- if .Values.image.pullSecret }}
@@ -62,3 +64,6 @@ spec:
         - name: superset-config
           secret:
             secretName: {{ .Values.configSecretName }}
+        - name: config
+          configMap:
+            name: plaid-config

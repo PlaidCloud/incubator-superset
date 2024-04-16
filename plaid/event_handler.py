@@ -7,8 +7,12 @@ from enum import Enum
 import json
 from typing import Optional, Any, Dict, Tuple, List
 from collections.abc import Collection
+import socket
 
-import pika
+from plaidcloud.config import config as cfg
+
+import redis
+from redis.sentinel import Sentinel
 from sqlalchemy import (
     Column,
     ForeignKey,
@@ -38,10 +42,23 @@ log.setLevel('INFO')
 logging.getLogger("pika").setLevel(logging.WARNING)
 config = app.config
 REQUIRED_FIELDS = {'event', 'type', 'data'}
+ANALYZE_CONNECTION_NAME = 'analyze_cache'
+SUPERSET_QUEUE_KEY = 'superset-queue'
+CLIENT_NAME = socket.gethostname().rsplit('-', 2)[0]
+REDIS_CONNECTION_RETRY_WAIT_SECS = 0.2
 
 User = security_manager.user_model
 Role = security_manager.role_model
 
+class RedisWithRetry(redis.Redis):
+    def execute_command(self, *args, **options):
+        """Override for execute_command to wait and try one extra time if there was a Connection Error"""
+        try:
+            return super().execute_command(*args, **options)
+        except redis.ConnectionError:
+            for i in range(int(REDIS_CONNECTION_RETRY_WAIT_SECS * 100)):
+                time.sleep(0.01)
+            return super().execute_command(*args, **options)
 
 class BaseEnum(Enum):
     # TODO: Figure out how to avoid copy/pasting this class (and subclasses) from plaid.
@@ -92,42 +109,58 @@ class EventHandler:
     """Handles plaid-sourced events from a message queue."""
 
     def __init__(self) -> None:
-        """Docstring"""
-        rmq_connection_info = config.get('RABBITMQ_CONNECTION_INFO', {})
+        """Loads redis connection info from plaidcloud.config"""
+        self.rinfo = cfg.redis.get_url(ANALYZE_CONNECTION_NAME)
 
-        self.host = rmq_connection_info.get('host', 'rabbitmq-rabbitmq-ha')
-        self.port = rmq_connection_info.get('port', 5672)
-        self.queue = rmq_connection_info.get('queue', 'events')
-        self.vhost = rmq_connection_info.get('vhost', 'events')
-
-        username = rmq_connection_info.get('username', 'event_user')
-        password = rmq_connection_info.get('password', 'cocoa puffs')
-        self.credentials = pika.PlainCredentials(username, password)
-
-    def _connect(self) -> pika.channel.Channel:
-        """Docstring"""
-        connection = pika.BlockingConnection(
-            pika.ConnectionParameters(
-                host=self.host,
-                port=self.port,
-                virtual_host=self.vhost,
-                credentials=self.credentials,
-                socket_timeout=15,
+    def _connect(self):
+        """Returns a redis connection"""
+        if self.rinfo.sentinel:  # We're connecting to a sentinel cluster.
+            sentinel_connection = Sentinel(
+                self.rinfo.hosts, socket_timeout=self.rinfo.socket_timeout,
+                db=self.rinfo.database, password=self.rinfo.password,
+                health_check_interval=30, retry_on_timeout=True,
+                client_name=CLIENT_NAME,
             )
-        )
-        return connection.channel()
+            # needs to be writeable because it is popping from a list
+            return sentinel_connection.master_for(
+                self.rinfo.service_name, socket_timeout=self.rinfo.socket_timeout,
+                redis_class=RedisWithRetry, decode_responses=True,
+                client_name=CLIENT_NAME,
+            )
+        else:  # Single redis instance
+            host, port = self.rinfo.hosts[0]
+            return RedisWithRetry(
+                host=host,
+                port=port,
+                db=self.rinfo.database,
+                password=self.rinfo.password,
+                decode_responses=True,
+                socket_timeout=self.rinfo.socket_timeout,
+                health_check_interval=30,
+                retry_on_timeout=True,
+                client_name=CLIENT_NAME,
+            )
 
     def consume(self) -> None:
-        """Docstring"""
-        channel = self._connect()
-        for method, _, body in channel.consume(self.queue, inactivity_timeout=1): # pylint: disable=unused-variable
+        """Loop, waiting for and processing events on the redis queue"""
+        self._connect()
+        while True:
             try:
-                data = json.loads(body)
-            except:
+                connection = self._connect()
+                with connection:
+                    key, message = connection.blpop(f'{SUPERSET_QUEUE_KEY}:{cfg.environment.designation}')
+                    data = json.loads(message)
+            except redis.TimeoutError:
                 continue
-            # Comment this out for debugging so messages aren't requeued.
-            channel.basic_ack(method.delivery_tag)
-            self.process_event(data)
+            except:
+                log.exception(f'Error popping event from queue')
+                continue
+
+            try:
+                self.process_event(data)
+            except:
+                log.exception(f'Error processing event with data: {data}')
+                continue
 
     def process_event(self, info: Dict[str, Any]) -> None:
         try:
@@ -200,8 +233,8 @@ class EventHandler:
 
         def update_project(event_data: Dict[str, Any]) -> None:
             display_name = f"{event_data['name']} ({event_data['id']})"
+            log.info(f"Updating project {display_name}.")
             try:
-                log.info(f"Updating project {display_name}.")
                 existing_project = db.session.query(Database).filter_by(uuid=event_data['id']).one()
             except NoResultFound:
                 log.warning(f"Update project called but project {display_name} doesn't exist! Inserting instead.")
@@ -306,11 +339,16 @@ class EventHandler:
 
             try:
                 check_keys(event_data, ['id', 'published_name'])
-            except MissingDataException:
+            except MissingDataException as e:
                 if 'id' in event_data:
                     info = f"(Project {kwargs['project_id']} Table {event_data['id']})"
                 else:
                     info = f"(Project {kwargs['project_id']})"
+
+                if e.missing_keys == ['published_name']:
+                    log.info(f"Insert Table called on unpublished table - {info}")
+                    return
+
                 log.exception(f"Insert Table called with incomplete event data {info}")
                 return
 
@@ -370,11 +408,16 @@ class EventHandler:
 
             try:
                 check_keys(event_data, ['id', 'published_name'])
-            except MissingDataException:
+            except MissingDataException as e:
                 if 'id' in event_data:
                     info = f"(Project {kwargs['project_id']} Table {event_data['id']})"
                 else:
                     info = f"(Project {kwargs['project_id']})"
+
+                if e.missing_keys == ['published_name']:
+                    log.info(f"Update Table called on unpublished table - {info}")
+                    return
+
                 log.exception(f"Update Table called with incomplete event data {info}")
                 return
 

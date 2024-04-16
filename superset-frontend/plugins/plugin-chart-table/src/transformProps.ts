@@ -18,6 +18,7 @@
  */
 import memoizeOne from 'memoize-one';
 import {
+  CurrencyFormatter,
   DataRecord,
   extractTimegrain,
   GenericDataType,
@@ -31,7 +32,10 @@ import {
   TimeFormats,
   TimeFormatter,
 } from '@superset-ui/core';
-import { getColorFormatters } from '@superset-ui/chart-controls';
+import {
+  ColorFormatters,
+  getColorFormatters,
+} from '@superset-ui/chart-controls';
 
 import isEqualColumns from './utils/isEqualColumns';
 import DateWithFormatter from './utils/DateWithFormatter';
@@ -54,7 +58,7 @@ const processDataRecords = memoizeOne(function processDataRecords(
   data: DataRecord[] | undefined,
   columns: DataColumnMeta[],
 ) {
-  if (!data || !data[0]) {
+  if (!data?.[0]) {
     return data || [];
   }
   const timeColumns = columns.filter(
@@ -81,7 +85,7 @@ const processColumns = memoizeOne(function processColumns(
   props: TableChartProps,
 ) {
   const {
-    datasource: { columnFormats, verboseMap },
+    datasource: { columnFormats, currencyFormats, verboseMap },
     rawFormData: {
       table_timestamp_format: tableTimestampFormat,
       metrics: metrics_,
@@ -108,16 +112,24 @@ const processColumns = memoizeOne(function processColumns(
         !(rawPercentMetricsSet.has(key) && !metricsSet.has(key)),
     )
     .map((key: string, i) => {
-      const label = verboseMap?.[key] || key;
       const dataType = coltypes[i];
       const config = columnConfig[key] || {};
       // for the purpose of presentation, only numeric values are treated as metrics
       // because users can also add things like `MAX(str_col)` as a metric.
       const isMetric = metricsSet.has(key) && isNumeric(key, records);
       const isPercentMetric = percentMetricsSet.has(key);
+      const label =
+        isPercentMetric && verboseMap?.hasOwnProperty(key.replace('%', ''))
+          ? `%${verboseMap[key.replace('%', '')]}`
+          : verboseMap?.[key] || key;
       const isTime = dataType === GenericDataType.TEMPORAL;
+      const isNumber = dataType === GenericDataType.NUMERIC;
       const savedFormat = columnFormats?.[key];
+      const savedCurrency = currencyFormats?.[key];
       const numberFormat = config.d3NumberFormat || savedFormat;
+      const currency = config.currencyFormat?.symbol
+        ? config.currencyFormat
+        : savedCurrency;
 
       let formatter;
 
@@ -148,8 +160,13 @@ const processColumns = memoizeOne(function processColumns(
       } else if (isPercentMetric) {
         // percent metrics have a default format
         formatter = getNumberFormatter(numberFormat || PERCENT_3_POINT);
-      } else if (isMetric || numberFormat) {
-        formatter = getNumberFormatter(numberFormat);
+      } else if (isMetric || (isNumber && (numberFormat || currency))) {
+        formatter = currency
+          ? new CurrencyFormatter({
+              d3Format: numberFormat,
+              currency,
+            })
+          : getNumberFormatter(numberFormat);
       }
       return {
         key,
@@ -189,6 +206,8 @@ const getPageSize = (
   return numRecords * numColumns > 5000 ? 200 : 0;
 };
 
+const defaultServerPaginationData = {};
+const defaultColorFormatters = [] as ColorFormatters;
 const transformProps = (
   chartProps: TableChartProps,
 ): TableChartTransformedProps => {
@@ -198,8 +217,13 @@ const transformProps = (
     rawFormData: formData,
     queriesData = [],
     filterState,
-    ownState: serverPaginationData = {},
-    hooks: { onAddFilter: onChangeFilter, setDataMask = () => {} },
+    ownState: serverPaginationData,
+    hooks: {
+      onAddFilter: onChangeFilter,
+      setDataMask = () => {},
+      onContextMenu,
+    },
+    emitCrossFilters,
   } = chartProps;
 
   const {
@@ -208,13 +232,13 @@ const transformProps = (
     show_cell_bars: showCellBars = true,
     include_search: includeSearch = false,
     page_length: pageLength,
-    emit_filter: emitFilter,
     server_pagination: serverPagination = false,
     server_page_length: serverPageLength = 10,
     order_desc: sortDesc = false,
     query_mode: queryMode,
     show_totals: showTotals,
     conditional_formatting: conditionalFormatting,
+    allow_rearrange_columns: allowRearrangeColumns,
   } = formData;
   const timeGrain = extractTimegrain(formData);
 
@@ -237,7 +261,7 @@ const transformProps = (
       ? totalQuery?.data[0]
       : undefined;
   const columnColorFormatters =
-    getColorFormatters(conditionalFormatting, data) ?? [];
+    getColorFormatters(conditionalFormatting, data) ?? defaultColorFormatters;
 
   return {
     height,
@@ -249,7 +273,9 @@ const transformProps = (
     serverPagination,
     metrics,
     percentMetrics,
-    serverPaginationData,
+    serverPaginationData: serverPagination
+      ? serverPaginationData
+      : defaultServerPaginationData,
     setDataMask,
     alignPositiveNegative,
     colorPositiveNegative,
@@ -261,10 +287,12 @@ const transformProps = (
       ? serverPageLength
       : getPageSize(pageLength, data.length, columns.length),
     filters: filterState.filters,
-    emitFilter,
+    emitCrossFilters,
     onChangeFilter,
     columnColorFormatters,
     timeGrain,
+    allowRearrangeColumns,
+    onContextMenu,
   };
 };
 

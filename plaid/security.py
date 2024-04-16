@@ -76,15 +76,17 @@ class PlaidSecurityManager(SupersetSecurityManager):
         """
         super().sync_role_definitions()
 
-        self.set_role('Plaid', self.is_plaid_user_pvm)
+        pvms = self._get_all_pvms()
+
+        self.set_role('Plaid', self.is_plaid_user_pvm, pvms)
         plaid_role = self.find_role('Plaid')
 
         if self.appbuilder.app.config.get('PUBLIC_ROLE_LIKE_PLAID', False):
-            self.set_role('Public', self.is_plaid_user_pvm)
+            self.set_role('Public', self.is_plaid_user_pvm, pvms)
             public_role = self.find_role('Public')
         else:
             # Clear out public role.
-            self.set_role('Public', lambda pvm: False)
+            self.set_role('Public', lambda pvm: False, pvms)
 
 
     def is_plaid_user_pvm(self, pvm) -> bool:
@@ -147,18 +149,21 @@ class PlaidSecurityManager(SupersetSecurityManager):
         project_id = datasource.schema.replace("report", "")
         rpc = self.get_rpc()
         project = rpc.analyze.project.project(project_id=project_id)
+        log.debug(f"project query result: {project}")
+        log.debug(f"returning: {bool(project.get('id'))}")
         return bool(project.get('id'))
 
 
     def get_project_ids(self):
+        log.info(f"About to fetch user project ids")
         from superset.models.core import Database
         rpc = self.get_rpc()
         start = time.time()
         projects = rpc.analyze.project.projects()
         end = time.time()
-        log.debug(f"Fetched user's projects in {end - start} seconds.")
+        log.info(f"Fetched user's projects in {end - start} seconds.")
         project_uuids = {str(uuid.UUID(project['id'])) for project in projects}
-        log.debug(f"Project IDs: {project_uuids}")
+        log.info(f"Project IDs: {project_uuids}")
         return self.get_session.query(Database.id).filter(Database.uuid.in_(project_uuids))
 
 

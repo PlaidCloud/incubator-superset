@@ -16,55 +16,48 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { createRef } from 'react';
+import React, { createRef, useMemo } from 'react';
+import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 import shortid from 'shortid';
 import Alert from 'src/components/Alert';
 import Tabs from 'src/components/Tabs';
 import { EmptyStateMedium } from 'src/components/EmptyState';
-import { t, styled } from '@superset-ui/core';
+import { FeatureFlag, styled, t, isFeatureEnabled } from '@superset-ui/core';
 
-import { isFeatureEnabled, FeatureFlag } from 'src/featureFlags';
+import { setActiveSouthPaneTab } from 'src/SqlLab/actions/sqlLab';
 
 import Label from 'src/components/Label';
-import { UserWithPermissionsAndRoles } from 'src/types/bootstrapTypes';
+import { SqlLabRootState } from 'src/SqlLab/types';
 import QueryHistory from '../QueryHistory';
 import ResultSet from '../ResultSet';
 import {
   STATUS_OPTIONS,
   STATE_TYPE_MAP,
   LOCALSTORAGE_MAX_QUERY_AGE_MS,
+  STATUS_OPTIONS_LOCALIZED,
 } from '../../constants';
 
 const TAB_HEIGHT = 140;
 
 /*
     editorQueries are queries executed by users passed from SqlEditor component
-    dataPrebiewQueries are all queries executed for preview of table data (from SqlEditorLeft)
+    dataPreviewQueries are all queries executed for preview of table data (from SqlEditorLeft)
 */
-interface SouthPanePropTypes {
-  editorQueries: any[];
+export interface SouthPaneProps {
+  queryEditorId: string;
   latestQueryId?: string;
-  dataPreviewQueries: any[];
-  actions: {
-    queryEditorSetSql: Function;
-    cloneQueryToNewTab: Function;
-    fetchQueryResults: Function;
-    clearQueryResults: Function;
-    removeQuery: Function;
-    setActiveSouthPaneTab: Function;
-  };
-  activeSouthPaneTab?: string;
   height: number;
-  databases: Record<string, any>;
-  offline?: boolean;
   displayLimit: number;
-  user: UserWithPermissionsAndRoles;
   defaultQueryLimit: number;
 }
 
-const StyledPane = styled.div`
-  width: 100%;
+type StyledPaneProps = {
+  height: number;
+};
 
+const StyledPane = styled.div<StyledPaneProps>`
+  width: 100%;
+  height: ${props => props.height}px;
   .ant-tabs .ant-tabs-content-holder {
     overflow: visible;
   }
@@ -77,8 +70,6 @@ const StyledPane = styled.div`
     }
   }
   .ant-tabs-tabpane {
-    display: flex;
-    flex-direction: column;
     .scrollable {
       overflow-y: auto;
     }
@@ -106,36 +97,67 @@ const StyledEmptyStateWrapper = styled.div`
   }
 `;
 
-export default function SouthPane({
-  editorQueries,
+const SouthPane = ({
+  queryEditorId,
   latestQueryId,
-  dataPreviewQueries,
-  actions,
-  activeSouthPaneTab = 'Results',
   height,
-  databases,
-  offline = false,
   displayLimit,
-  user,
   defaultQueryLimit,
-}: SouthPanePropTypes) {
+}: SouthPaneProps) => {
+  const dispatch = useDispatch();
+  const user = useSelector(({ user }: SqlLabRootState) => user, shallowEqual);
+  const { databases, offline, queries, tables } = useSelector(
+    ({ sqlLab: { databases, offline, queries, tables } }: SqlLabRootState) => ({
+      databases,
+      offline,
+      queries,
+      tables,
+    }),
+    shallowEqual,
+  );
+  const editorQueries = useMemo(
+    () =>
+      Object.values(queries).filter(
+        ({ sqlEditorId }) => sqlEditorId === queryEditorId,
+      ),
+    [queries, queryEditorId],
+  );
+  const dataPreviewQueries = useMemo(
+    () =>
+      tables
+        .filter(
+          ({ dataPreviewQueryId, queryEditorId: qeId }) =>
+            dataPreviewQueryId &&
+            queryEditorId === qeId &&
+            queries[dataPreviewQueryId],
+        )
+        .map(({ name, dataPreviewQueryId }) => ({
+          ...queries[dataPreviewQueryId || ''],
+          tableName: name,
+        })),
+    [queries, queryEditorId, tables],
+  );
+  const latestQuery = useMemo(
+    () => editorQueries.find(({ id }) => id === latestQueryId),
+    [editorQueries, latestQueryId],
+  );
+
+  const activeSouthPaneTab =
+    useSelector<SqlLabRootState, string>(
+      state => state.sqlLab.activeSouthPaneTab as string,
+    ) ?? 'Results';
   const innerTabContentHeight = height - TAB_HEIGHT;
   const southPaneRef = createRef<HTMLDivElement>();
   const switchTab = (id: string) => {
-    actions.setActiveSouthPaneTab(id);
+    dispatch(setActiveSouthPaneTab(id));
   };
   const renderOfflineStatus = () => (
     <Label className="m-r-3" type={STATE_TYPE_MAP[STATUS_OPTIONS.offline]}>
-      {STATUS_OPTIONS.offline}
+      {STATUS_OPTIONS_LOCALIZED.offline}
     </Label>
   );
 
   const renderResults = () => {
-    let latestQuery;
-    if (editorQueries.length > 0) {
-      // get the latest query
-      latestQuery = editorQueries.find(({ id }) => id === latestQueryId);
-    }
     let results;
     if (latestQuery) {
       if (latestQuery?.extra?.errors) {
@@ -160,15 +182,15 @@ export default function SouthPane({
       if (Date.now() - latestQuery.startDttm <= LOCALSTORAGE_MAX_QUERY_AGE_MS) {
         results = (
           <ResultSet
-            showControls
             search
             query={latestQuery}
-            actions={actions}
             user={user}
             height={innerTabContentHeight + EXTRA_HEIGHT_RESULTS}
             database={databases[latestQuery.dbId]}
             displayLimit={displayLimit}
             defaultQueryLimit={defaultQueryLimit}
+            showSql
+            showSqlInline
           />
         );
       }
@@ -195,7 +217,6 @@ export default function SouthPane({
           query={query}
           visualize={false}
           csv={false}
-          actions={actions}
           cache
           user={user}
           height={innerTabContentHeight}
@@ -207,7 +228,12 @@ export default function SouthPane({
   return offline ? (
     renderOfflineStatus()
   ) : (
-    <StyledPane className="SouthPane" ref={southPaneRef}>
+    <StyledPane
+      data-test="south-pane"
+      className="SouthPane"
+      height={height}
+      ref={southPaneRef}
+    >
       <Tabs
         activeKey={activeSouthPaneTab}
         className="SouthPaneTabs"
@@ -222,7 +248,6 @@ export default function SouthPane({
         <Tabs.TabPane tab={t('Query history')} key="History">
           <QueryHistory
             queries={editorQueries}
-            actions={actions}
             displayLimit={displayLimit}
             latestQueryId={latestQueryId}
           />
@@ -231,4 +256,6 @@ export default function SouthPane({
       </Tabs>
     </StyledPane>
   );
-}
+};
+
+export default SouthPane;

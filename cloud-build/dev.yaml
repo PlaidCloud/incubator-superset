@@ -1,74 +1,71 @@
 steps:
 - name: 'gcr.io/cloud-builders/docker'
   entrypoint: 'bash'
+  env: 'DOCKER_BUILDKIT=1'
   args:
     - '-c'
     - |
       mkdir tmp
 
-      (docker pull "gcr.io/plaidcloud-build/superset/py:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/py) ||
-        echo "latest" > tmp/py
+      # (docker pull "us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-py:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/py) ||
+      #   echo "latest" > tmp/py
 
-      docker build \
-        -t gcr.io/plaidcloud-build/superset/py:$TAG_NAME \
-        --cache-from gcr.io/plaidcloud-build/superset/py:$(cat tmp/py) \
-        --target=superset-py \
-        --build-arg PY_VER=3.8.12 \
-        .
+      # docker build \
+      #   -t us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-py:$TAG_NAME \
+      #   --cache-from us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-py:$(cat tmp/py) \
+      #   --target=superset-py \
+      #   --build-arg PY_VER=3.10 \
+      #   .
 
-      (docker pull "gcr.io/plaidcloud-build/superset/node:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/node) ||
+      (docker pull "us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-node:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/node) ||
         echo "latest" > tmp/node
 
       docker build \
-        -t gcr.io/plaidcloud-build/superset/node:$TAG_NAME \
-        --cache-from gcr.io/plaidcloud-build/superset/py:$TAG_NAME \
-        --cache-from gcr.io/plaidcloud-build/superset/node:$(cat tmp/node) \
+        -t us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-node:$TAG_NAME \
+        --cache-from us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-node:$(cat tmp/node) \
         --target=superset-node \
-        --build-arg PY_VER=3.8.12 \
+        --build-arg PY_VER=3.10 \
         .
 
-      (docker pull "gcr.io/plaidcloud-build/superset/production:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/production) ||
+      (docker pull "us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-production:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/production) ||
         echo "latest" > tmp/production
 
       docker build \
-        -t gcr.io/plaidcloud-build/superset/production:$TAG_NAME \
-        --cache-from gcr.io/plaidcloud-build/superset/py:$TAG_NAME \
-        --cache-from gcr.io/plaidcloud-build/superset/node:$TAG_NAME \
-        --cache-from gcr.io/plaidcloud-build/superset/production:$(cat tmp/production) \
+        -t us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-production:$TAG_NAME \
+        --cache-from us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-node:$TAG_NAME \
+        --cache-from us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-production:$(cat tmp/production) \
         --target lean \
-        --build-arg PY_VER=3.8.12 \
+        --build-arg PY_VER=3.10 \
         .
 
-      (docker pull "gcr.io/plaidcloud-build/superset/ci:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/ci) ||
+      (docker pull "us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-ci:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/ci) ||
         echo "latest" > tmp/ci
 
       docker build \
-        -t gcr.io/plaidcloud-build/superset/ci:$TAG_NAME \
-        --cache-from gcr.io/plaidcloud-build/superset/py:$TAG_NAME \
-        --cache-from gcr.io/plaidcloud-build/superset/node:$TAG_NAME \
-        --cache-from gcr.io/plaidcloud-build/superset/production:$TAG_NAME \
-        --cache-from gcr.io/plaidcloud-build/superset/ci:$(cat tmp/ci) \
+        -t us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-ci:$TAG_NAME \
+        --cache-from us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-node:$TAG_NAME \
+        --cache-from us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-production:$TAG_NAME \
+        --cache-from gus-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-ci:$(cat tmp/ci) \
         --target lean \
-        --build-arg PY_VER=3.8.12 \
+        --build-arg PY_VER=3.10 \
         .
 
-      (docker pull "gcr.io/plaidcloud-build/superset/dev:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/dev) ||
+      (docker pull "us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-dev:$_LAST_TAG" && echo "$_LAST_TAG" > tmp/dev) ||
         echo "latest" > tmp/dev
 
       docker build \
-        -t gcr.io/plaidcloud-build/superset/dev:$TAG_NAME \
-        --cache-from gcr.io/plaidcloud-build/superset/py:$TAG_NAME \
-        --cache-from gcr.io/plaidcloud-build/superset/node:$TAG_NAME \
-        --cache-from gcr.io/plaidcloud-build/superset/production:$TAG_NAME \
-        --cache-from gcr.io/plaidcloud-build/superset/ci:$TAG_NAME \
-        --cache-from gcr.io/plaidcloud-build/superset/dev:$(cat tmp/dev) \
-        --build-arg PY_VER=3.8.12 \
+        -t us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-dev:$TAG_NAME \
+        --cache-from us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-node:$TAG_NAME \
+        --cache-from us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-production:$TAG_NAME \
+        --cache-from us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-ci:$TAG_NAME \
+        --cache-from us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-dev:$(cat tmp/dev) \
+        --build-arg PY_VER=3.10 \
         .
 
 substitutions:
   _LAST_TAG: "latest"
 images:
-- "gcr.io/plaidcloud-build/superset/py:$TAG_NAME"
-- "gcr.io/plaidcloud-build/superset/node:$TAG_NAME"
-- "gcr.io/plaidcloud-build/superset/production:$TAG_NAME"
-- "gcr.io/plaidcloud-build/superset/dev:$TAG_NAME"
+# - "us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-py:$TAG_NAME"
+- "us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-node:$TAG_NAME"
+- "us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-production:$TAG_NAME"
+- "us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-dev:$TAG_NAME"

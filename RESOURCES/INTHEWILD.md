@@ -40,7 +40,10 @@ Join our growing community!
 - [Cape Crypto](https://capecrypto.com)
 - [Capital Service S.A.](http://capitalservice.pl) [@pkonarzewski]
 - [Clark.de](http://clark.de/)
+- [KarrotPay](https://www.daangnpay.com/)
+- [Wise](https://wise.com) [@koszti]
 - [Xendit](http://xendit.co/) [@LieAlbertTriAdrian]
+- [Taveo](https://www.taveo.com) [@codek]
 
 ### Gaming
 - [Digit Game Studios](https://www.digitgaming.com/)
@@ -48,6 +51,7 @@ Join our growing community!
 
 ### E-Commerce
 - [AiHello](https://www.aihello.com) [@ganeshkrishnan1]
+- [Bazaar Technologies](https://www.bazaartech.com) [@umair-abro]
 - [Dragonpass](https://www.dragonpass.com.cn/) [@zhxjdwh]
 - [Fanatics](https://www.fanatics.com) [@coderfender]
 - [Fordeal](http://www.fordeal.com) [@Renkai]
@@ -70,8 +74,11 @@ Join our growing community!
 - [Apollo GraphQL](https://www.apollographql.com/) [@evans]
 - [Astronomer](https://www.astronomer.io) [@ryw]
 - [Avesta Technologies](https://avestatechnologies.com/) [@TheRum]
+- [Caizin](https://caizin.com/) [@tejaskatariya]
+- [Careem](https://www.careem.com/) [@SamraHanifCareem]
 - [Cloudsmith](https://cloudsmith.io) [@alancarson]
 - [CnOvit](http://www.cnovit.com/) [@xieshaohu]
+- [Cyberhaven](https://www.cyberhaven.com/) [@toliver-ch]
 - [Deepomatic](https://deepomatic.com/) [@Zanoellia]
 - [Dial Once](https://www.dial-once.com/)
 - [Dremio](https://dremio.com) [@narendrans]
@@ -84,15 +91,19 @@ Join our growing community!
 - [Intercom](https://www.intercom.com/) [@kate-gallo]
 - [jampp](https://jampp.com/)
 - [Konfío](http://konfio.mx) [@uis-rodriguez]
+- [Mainstrat](https://mainstrat.com/)
 - [mishmash io](https://mishmash.io/)[@mishmash-io]
 - [Myra Labs](http://www.myralabs.com/) [@viksit]
 - [Nielsen](http://www.nielsen.com/) [@amitNielsen]
 - [Ona](https://ona.io) [@pld]
+- [Orange](https://www.orange.com) [@icsu]
+- [Oslandia](https://oslandia.com)
 - [Peak AI](https://www.peak.ai/) [@azhar22k]
 - [PeopleDoc](https://www.people-doc.com) [@rodo]
 - [Preset, Inc.](https://preset.io)
 - [Pronto Tools](http://www.prontotools.io) [@zkan]
 - [PubNub](https://pubnub.com) [@jzucker2]
+- [ReadyTech](https://www.readytech.io)
 - [Reward Gateway](https://www.rewardgateway.com)
 - [ScopeAI](https://www.getscopeai.com) [@iloveluce]
 - [Showmax](https://tech.showmax.com) [@bobek]
@@ -100,6 +111,7 @@ Join our growing community!
 - [Steamroot](https://streamroot.io/)
 - [TechAudit](https://www.techaudit.info) [@ETselikov]
 - [Tenable](https://www.tenable.com) [@dflionis]
+- [Tentacle](https://public.tentaclecmi.com) [@jdclarke5]
 - [timbr.ai](https://timbr.ai/) [@semantiDan]
 - [Tobii](http://www.tobii.com/) [@dwa]
 - [Tooploox](https://www.tooploox.com/) [@jakubczaplicki]
@@ -108,45 +120,64 @@ Join our growing community!
 - [Windsor.ai](https://www.windsor.ai/) [@octaviancorlade]
 - [Zeta](https://www.zeta.tech/) [@shaikidris]
 
-### Entertainment
+### Media & Entertainment
 - [6play](https://www.6play.fr) [@CoryChaplin]
 - [bilibili](https://www.bilibili.com) [@Moinheart]
+- [BurdaForward](https://www.burda-forward.de/en/)
 - [Douban](https://www.douban.com/) [@luchuan]
 - [Kuaishou](https://www.kuaishou.com/) [@zhaoyu89730105]
 - [Netflix](https://www.netflix.com/)
+- [Prensa Iberica](https://www.prensaiberica.es/) [@zamar-roura]
 - [TME QQMUSIC/WESING](https://www.tencentmusic.com/)[@shenyuanli,@marklaw]
 - [Xite](https://xite.com/) [@shashankkoppar]
 - [Zaihang](http://www.zaih.com/)
 
+
+
 ### Education
 - [Brilliant.org](https://brilliant.org/)
+- [Platzi.com](https://platzi.com/)
+- [Sunbird](https://www.sunbird.org/) [@eksteporg]
+- [The GRAPH Network](https://thegraphnetwork.org/)[@fccoelho]
 - [Udemy](https://www.udemy.com/) [@sungjuly]
 - [VIPKID](https://www.vipkid.com.cn/) [@illpanda]
-- [Sunbird](https://www.sunbird.org/) [@eksteporg]
+- [WikiMedia Foundation](https://wikimediafoundation.org) [@vg]
 
 ### Energy
 - [Airboxlab](https://foobot.io) [@antoine-galataud]
 - [DouroECI](https://www.douroeci.com/) [@nunohelibeires]
 - [Safaricom](https://www.safaricom.co.ke/) [@mmutiso]
 - [Scoot](https://scoot.co/) [@haaspt]
+- [Wattbewerb](https://wattbewerb.de/) [@wattbewerb]
 
 ### Healthcare
 - [Amino](https://amino.com) [@shkr]
+- [Beans](https://www.beans.fi) [@kakoni]
 - [Care](https://www.getcare.io/)[@alandao2021]
 - [Living Goods](https://www.livinggoods.org) [@chelule]
 - [Maieutical Labs](https://maieuticallabs.it) [@xrmx]
 - [QPID Health](http://www.qpidhealth.com/)
+- [REDCap Cloud](https://www.redcapcloud.com/)
 - [TrustMedis](https://trustmedis.com) [@famasya]
 - [WeSure](https://www.wesure.cn/)
 
 ### HR / Staffing
+- [Swile](https://www.swile.co/) [@PaoloTerzi]
 - [Symmetrics](https://www.symmetrics.fyi)
 
+### Government
+- [City of Ann Arbor, MI](https://www.a2gov.org/) [@sfirke]
+
+### Travel
+- [Skyscanner](https://www.skyscanner.net/) [@cleslie, @stanhoucke]
+
 ### Others
- - [Dropbox](https://www.dropbox.com/) [@bkyryliuk]
- - [Grassroot](https://www.grassrootinstitute.org/)
- - [komoot](https://www.komoot.com/) [@christophlingg]
- - [Let's Roam](https://www.letsroam.com/)
- - [Twitter](https://twitter.com/)
- - [VLMedia](https://www.vlmedia.com.tr/) [@ibotheperfect]
- - [Yahoo!](https://yahoo.com/)
+- [AI inside](https://inside.ai/en/)
+- [Automattic](https://automattic.com/) [@Khrol, @Usiel]
+- [Dropbox](https://www.dropbox.com/) [@bkyryliuk]
+- [Grassroot](https://www.grassrootinstitute.org/)
+- [komoot](https://www.komoot.com/) [@christophlingg]
+- [Let's Roam](https://www.letsroam.com/)
+- [Twitter](https://twitter.com/)
+- [VLMedia](https://www.vlmedia.com.tr/) [@ibotheperfect]
+- [Yahoo!](https://yahoo.com/)

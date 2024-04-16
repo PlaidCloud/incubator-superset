@@ -226,6 +226,7 @@ function StickyWrap({
           height: maxHeight,
           overflow: 'auto',
           visibility: 'hidden',
+          scrollbarGutter: 'stable',
         }}
       >
         {React.cloneElement(table, {}, theadWithRef, tbody, tfootWithRef)}
@@ -237,7 +238,7 @@ function StickyWrap({
   const colWidths = columnWidths?.slice(0, columnCount);
 
   if (colWidths && bodyHeight) {
-    const bodyColgroup = (
+    const colgroup = (
       <colgroup>
         {colWidths.map((w, i) => (
           // eslint-disable-next-line react/no-array-index-key
@@ -246,35 +247,19 @@ function StickyWrap({
       </colgroup>
     );
 
-    // header columns do not have vertical scroll bars,
-    // so we add scroll bar size to the last column
-    const headerColgroup =
-      sticky.hasVerticalScroll && scrollBarSize ? (
-        <colgroup>
-          {colWidths.map((x, i) => (
-            // eslint-disable-next-line react/no-array-index-key
-            <col
-              key={i}
-              width={x + (i === colWidths.length - 1 ? scrollBarSize : 0)}
-            />
-          ))}
-        </colgroup>
-      ) : (
-        bodyColgroup
-      );
-
     headerTable = (
       <div
         key="header"
         ref={scrollHeaderRef}
         style={{
           overflow: 'hidden',
+          scrollbarGutter: 'stable',
         }}
       >
         {React.cloneElement(
           table,
           mergeStyleProp(table, fixedTableLayout),
-          headerColgroup,
+          colgroup,
           thead,
         )}
         {headerTable}
@@ -287,12 +272,13 @@ function StickyWrap({
         ref={scrollFooterRef}
         style={{
           overflow: 'hidden',
+          scrollbarGutter: 'stable',
         }}
       >
         {React.cloneElement(
           table,
           mergeStyleProp(table, fixedTableLayout),
-          headerColgroup,
+          colgroup,
           tfoot,
         )}
         {footerTable}
@@ -314,13 +300,14 @@ function StickyWrap({
         style={{
           height: bodyHeight,
           overflow: 'auto',
+          scrollbarGutter: 'stable',
         }}
         onScroll={sticky.hasHorizontalScroll ? onScroll : undefined}
       >
         {React.cloneElement(
           table,
           mergeStyleProp(table, fixedTableLayout),
-          bodyColgroup,
+          colgroup,
           tbody,
         )}
       </div>
@@ -350,6 +337,7 @@ function useInstance<D extends object>(instance: TableInstance<D>) {
     data,
     page,
     rows,
+    allColumns,
     getTableSize = () => undefined,
   } = instance;
 
@@ -370,7 +358,7 @@ function useInstance<D extends object>(instance: TableInstance<D>) {
       useMountedMemo(getTableSize, [getTableSize]) || sticky;
     // only change of data should trigger re-render
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    const table = useMemo(renderer, [page, rows]);
+    const table = useMemo(renderer, [page, rows, allColumns]);
 
     useLayoutEffect(() => {
       if (!width || !height) {
