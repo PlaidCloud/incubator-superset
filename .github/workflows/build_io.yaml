@@ -15,15 +15,6 @@ jobs:
           python-version: '3.10'
       - name: Checkout code
         uses: actions/checkout@v3
-#      - name: Acquire list of changed events files
-#        id: all-events-files
-#        continue-on-error: true
-#        uses: tj-actions/changed-files@v38
-#        with:
-#          files: |
-#            plaid/event_handler.py
-#            plaid/requirements.txt
-#            Dockerfile.events
       - name: Create tag
         id: docker_tag
         run: |
@@ -38,7 +29,6 @@ jobs:
           username: _json_key
           password: ${{ secrets.GCR_JSON_KEY }}
       - name: Build superset and push
-        # if: steps.all-events-files.outputs.only_changed == 'false'
         id: docker_build
         uses: docker/build-push-action@v3
         with:
@@ -48,19 +38,6 @@ jobs:
           build-args: |
             PLAID_BUILD_TAG:${{ steps.docker_tag.outputs.tag }}
           tags: us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset:latest,us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset:${{ steps.docker_tag.outputs.tag }}
-#      - name: Build events and push
-#        # if: steps.all-events-files.outputs.any_changed == 'true'
-#        id: docker_events_build
-#        uses: docker/build-push-action@v3
-#        with:
-#          push: true
-#          pull: true
-#          no-cache: true
-#          build-args: |
-#            PLAID_BUILD_TAG:${{ steps.docker_tag.outputs.tag }}
-#          file: Dockerfile.events
-#          tags: us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-events:latest,us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-events:${{ steps.docker_tag.outputs.tag }}
-
       - name: Checkout GitOps Repository
         uses: actions/checkout@v3
         with:
@@ -71,7 +48,6 @@ jobs:
           token: ${{ secrets.GITOPS_REPO_ACCESS }}
 
       - name: Update Tenant Image
-        # Used to also update control plane
         uses: fjogeleit/yaml-update-action@main
         with:
           repository: PlaidCloud/plaid-tenant-infrastructure
@@ -82,18 +58,6 @@ jobs:
           changes: |
             {
               "tenants/values.yaml": {
-                "superset.image.tag": "${{ steps.docker_tag.outputs.tag }}",
-                "events.image.tag": "${{ steps.docker_tag.outputs.tag }}"
+                "superset.image.tag": "${{ steps.docker_tag.outputs.tag }}"
               }
             }
-
-      # - name: Trigger ArgoCD Sync for CI Control Plane App
-      #   uses: clowdhaus/argo-cd-action/@main
-      #   timeout-minutes: 1
-      #   env:
-      #     ARGOCD_SERVER: deploy.plaidcloud.io
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # This might not be needed - Mostly used to avoid rate limiting
-      #     ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
-      #   with:
-      #     command: app sync ci-cluster-controlplane
-      #     options: --grpc-web --prune --async
