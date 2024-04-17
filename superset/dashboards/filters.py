@@ -35,7 +35,7 @@ from superset.views.base import BaseFilter
 from superset.views.base_api import BaseFavoriteFilter, BaseTagFilter
 
 
-class DashboardTitleOrSlugFilter(BaseFilter):
+class DashboardTitleOrSlugFilter(BaseFilter):  # pylint: disable=too-few-public-methods
     name = _("Title or Slug")
     arg_name = "title_or_slug"
 

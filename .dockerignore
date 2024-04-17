@@ -37,7 +37,6 @@
 **/.storybook/
 **/node_modules/
 
-kubernetes/
 tests/
 docs/
 install/
