@@ -36,7 +36,6 @@ jobs:
           build-args: |
             PLAID_BUILD_TAG:${{ steps.docker_tag.outputs.tag }}
           tags: us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset:latest,us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset:${{ steps.docker_tag.outputs.tag }}
-
       - name: Checkout GitOps Repository
         uses: actions/checkout@v3
         with:
@@ -47,7 +46,6 @@ jobs:
           token: ${{ secrets.GITOPS_REPO_ACCESS }}
 
       - name: Update & Tenant Image
-        # Used to also update control plane
         uses: fjogeleit/yaml-update-action@main
         with:
           repository: PlaidCloud/plaid-tenant-infrastructure
