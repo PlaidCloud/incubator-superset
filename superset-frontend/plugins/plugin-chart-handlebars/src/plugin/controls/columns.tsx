@@ -21,6 +21,8 @@ import {
   ControlSetItem,
   ExtraControlProps,
   sharedControls,
+  Dataset,
+  ColumnMeta,
 } from '@superset-ui/chart-controls';
 import {
   ensureIsArray,
@@ -47,7 +49,7 @@ const allColumns: typeof sharedControls.groupby = {
     options: datasource?.columns || [],
     queryMode: getQueryMode(controls),
     externalValidationErrors:
-      isRawMode({ controls }) && ensureIsArray(controlState.value).length === 0
+      isRawMode({ controls }) && ensureIsArray(controlState?.value).length === 0
         ? [t('must have a value')]
         : [],
   }),
@@ -63,14 +65,15 @@ const dndAllColumns: typeof sharedControls.groupby = {
   mapStateToProps({ datasource, controls }, controlState) {
     const newState: ExtraControlProps = {};
     if (datasource) {
-      const options = datasource.columns;
-      newState.options = Object.fromEntries(
-        options.map(option => [option.column_name, option]),
-      );
+      if (datasource?.columns[0]?.hasOwnProperty('filterable')) {
+        newState.options = (datasource as Dataset)?.columns?.filter(
+          (c: ColumnMeta) => c.filterable,
+        );
+      } else newState.options = datasource.columns;
     }
     newState.queryMode = getQueryMode(controls);
     newState.externalValidationErrors =
-      isRawMode({ controls }) && ensureIsArray(controlState.value).length === 0
+      isRawMode({ controls }) && ensureIsArray(controlState?.value).length === 0
         ? [t('must have a value')]
         : [];
     return newState;

@@ -35,7 +35,7 @@ import {
 
 import rison from 'rison';
 import { isEqual } from 'lodash';
-import { PartialStylesConfig } from 'src/components/Select';
+import { PartialStylesConfig } from 'src/components/DeprecatedSelect';
 import {
   FetchDataConfig,
   Filter,
@@ -221,7 +221,7 @@ export function useListViewState({
       query.sortColumn && query.sortOrder
         ? [{ id: query.sortColumn, desc: query.sortOrder === 'desc' }]
         : initialSort,
-    [query.sortColumn, query.sortOrder],
+    [initialSort, query.sortColumn, query.sortOrder],
   );
 
   const initialState = {
@@ -257,6 +257,7 @@ export function useListViewState({
     pageCount,
     gotoPage,
     setAllFilters,
+    setSortBy,
     selectedFlatRows,
     toggleAllRowsSelected,
     state: { pageIndex, pageSize, sortBy, filters },
@@ -344,7 +345,7 @@ export function useListViewState({
 
   const applyFilterValue = (index: number, value: any) => {
     setInternalFilters(currentInternalFilters => {
-      // skip redunundant updates
+      // skip redundant updates
       if (currentInternalFilters[index].value === value) {
         return currentInternalFilters;
       }
@@ -374,6 +375,7 @@ export function useListViewState({
     rows,
     selectedFlatRows,
     setAllFilters,
+    setSortBy,
     state: { pageIndex, pageSize, sortBy, filters, internalFilters, viewMode },
     toggleAllRowsSelected,
     applyFilterValue,

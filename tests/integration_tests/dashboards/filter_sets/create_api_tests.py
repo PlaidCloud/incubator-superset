@@ -16,7 +16,9 @@
 # under the License.
 from __future__ import annotations
 
-from typing import Any, Dict, TYPE_CHECKING
+from typing import Any
+
+from flask.testing import FlaskClient
 
 from superset.dashboards.filter_sets.consts import (
     DASHBOARD_OWNER_TYPE,
@@ -27,7 +29,6 @@ from superset.dashboards.filter_sets.consts import (
     OWNER_TYPE_FIELD,
     USER_OWNER_TYPE,
 )
-from tests.integration_tests.base_tests import login
 from tests.integration_tests.dashboards.filter_sets.consts import (
     ADMIN_USERNAME_FOR_TEST,
     DASHBOARD_OWNER_USERNAME,
@@ -38,16 +39,14 @@ from tests.integration_tests.dashboards.filter_sets.utils import (
     get_filter_set_by_dashboard_id,
     get_filter_set_by_name,
 )
-
-if TYPE_CHECKING:
-    from flask.testing import FlaskClient
+from tests.integration_tests.test_app import login
 
 
-def assert_filterset_was_not_created(filter_set_data: Dict[str, Any]) -> None:
+def assert_filterset_was_not_created(filter_set_data: dict[str, Any]) -> None:
     assert get_filter_set_by_name(str(filter_set_data["name"])) is None
 
 
-def assert_filterset_was_created(filter_set_data: Dict[str, Any]) -> None:
+def assert_filterset_was_created(filter_set_data: dict[str, Any]) -> None:
     assert get_filter_set_by_name(filter_set_data["name"]) is not None
 
 
@@ -55,7 +54,7 @@ class TestCreateFilterSetsApi:
     def test_with_extra_field__400(
         self,
         dashboard_id: int,
-        valid_filter_set_data_for_create: Dict[str, Any],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -75,7 +74,7 @@ class TestCreateFilterSetsApi:
     def test_with_id_field__400(
         self,
         dashboard_id: int,
-        valid_filter_set_data_for_create: Dict[str, Any],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -95,7 +94,7 @@ class TestCreateFilterSetsApi:
     def test_with_dashboard_not_exists__404(
         self,
         not_exists_dashboard_id: int,
-        valid_filter_set_data_for_create: Dict[str, Any],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # act
@@ -111,7 +110,7 @@ class TestCreateFilterSetsApi:
     def test_without_name__400(
         self,
         dashboard_id: int,
-        valid_filter_set_data_for_create: Dict[str, Any],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -130,7 +129,7 @@ class TestCreateFilterSetsApi:
     def test_with_none_name__400(
         self,
         dashboard_id: int,
-        valid_filter_set_data_for_create: Dict[str, Any],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -149,7 +148,7 @@ class TestCreateFilterSetsApi:
     def test_with_int_as_name__400(
         self,
         dashboard_id: int,
-        valid_filter_set_data_for_create: Dict[str, Any],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -168,7 +167,7 @@ class TestCreateFilterSetsApi:
     def test_without_description__201(
         self,
         dashboard_id: int,
-        valid_filter_set_data_for_create: Dict[str, Any],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -187,7 +186,7 @@ class TestCreateFilterSetsApi:
     def test_with_none_description__201(
         self,
         dashboard_id: int,
-        valid_filter_set_data_for_create: Dict[str, Any],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -206,7 +205,7 @@ class TestCreateFilterSetsApi:
     def test_with_int_as_description__400(
         self,
         dashboard_id: int,
-        valid_filter_set_data_for_create: Dict[str, Any],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -225,7 +224,7 @@ class TestCreateFilterSetsApi:
     def test_without_json_metadata__400(
         self,
         dashboard_id: int,
-        valid_filter_set_data_for_create: Dict[str, Any],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -244,7 +243,7 @@ class TestCreateFilterSetsApi:
     def test_with_invalid_json_metadata__400(
         self,
         dashboard_id: int,
-        valid_filter_set_data_for_create: Dict[str, Any],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -263,7 +262,7 @@ class TestCreateFilterSetsApi:
     def test_without_owner_type__400(
         self,
         dashboard_id: int,
-        valid_filter_set_data_for_create: Dict[str, Any],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -282,7 +281,7 @@ class TestCreateFilterSetsApi:
     def test_with_invalid_owner_type__400(
         self,
         dashboard_id: int,
-        valid_filter_set_data_for_create: Dict[str, Any],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -301,7 +300,7 @@ class TestCreateFilterSetsApi:
     def test_without_owner_id_when_owner_type_is_user__400(
         self,
         dashboard_id: int,
-        valid_filter_set_data_for_create: Dict[str, Any],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -321,7 +320,7 @@ class TestCreateFilterSetsApi:
     def test_without_owner_id_when_owner_type_is_dashboard__201(
         self,
         dashboard_id: int,
-        valid_filter_set_data_for_create: Dict[str, Any],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -341,7 +340,7 @@ class TestCreateFilterSetsApi:
     def test_with_not_exists_owner__400(
         self,
         dashboard_id: int,
-        valid_filter_set_data_for_create: Dict[str, Any],
+        valid_filter_set_data_for_create: dict[str, Any],
         not_exists_user_id: int,
         client: FlaskClient[Any],
     ):
@@ -362,8 +361,8 @@ class TestCreateFilterSetsApi:
     def test_when_caller_is_admin_and_owner_is_admin__201(
         self,
         dashboard_id: int,
-        test_users: Dict[str, int],
-        valid_filter_set_data_for_create: Dict[str, Any],
+        test_users: dict[str, int],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -385,8 +384,8 @@ class TestCreateFilterSetsApi:
     def test_when_caller_is_admin_and_owner_is_dashboard_owner__201(
         self,
         dashboard_id: int,
-        test_users: Dict[str, int],
-        valid_filter_set_data_for_create: Dict[str, Any],
+        test_users: dict[str, int],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -408,8 +407,8 @@ class TestCreateFilterSetsApi:
     def test_when_caller_is_admin_and_owner_is_regular_user__201(
         self,
         dashboard_id: int,
-        test_users: Dict[str, int],
-        valid_filter_set_data_for_create: Dict[str, Any],
+        test_users: dict[str, int],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -431,8 +430,8 @@ class TestCreateFilterSetsApi:
     def test_when_caller_is_admin_and_owner_type_is_dashboard__201(
         self,
         dashboard_id: int,
-        test_users: Dict[str, int],
-        valid_filter_set_data_for_create: Dict[str, Any],
+        test_users: dict[str, int],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -452,8 +451,8 @@ class TestCreateFilterSetsApi:
     def test_when_caller_is_dashboard_owner_and_owner_is_admin__201(
         self,
         dashboard_id: int,
-        test_users: Dict[str, int],
-        valid_filter_set_data_for_create: Dict[str, Any],
+        test_users: dict[str, int],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -475,8 +474,8 @@ class TestCreateFilterSetsApi:
     def test_when_caller_is_dashboard_owner_and_owner_is_dashboard_owner__201(
         self,
         dashboard_id: int,
-        test_users: Dict[str, int],
-        valid_filter_set_data_for_create: Dict[str, Any],
+        test_users: dict[str, int],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -498,8 +497,8 @@ class TestCreateFilterSetsApi:
     def test_when_caller_is_dashboard_owner_and_owner_is_regular_user__201(
         self,
         dashboard_id: int,
-        test_users: Dict[str, int],
-        valid_filter_set_data_for_create: Dict[str, Any],
+        test_users: dict[str, int],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -521,8 +520,8 @@ class TestCreateFilterSetsApi:
     def test_when_caller_is_dashboard_owner_and_owner_type_is_dashboard__201(
         self,
         dashboard_id: int,
-        test_users: Dict[str, int],
-        valid_filter_set_data_for_create: Dict[str, Any],
+        test_users: dict[str, int],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -542,8 +541,8 @@ class TestCreateFilterSetsApi:
     def test_when_caller_is_regular_user_and_owner_is_admin__201(
         self,
         dashboard_id: int,
-        test_users: Dict[str, int],
-        valid_filter_set_data_for_create: Dict[str, Any],
+        test_users: dict[str, int],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -565,8 +564,8 @@ class TestCreateFilterSetsApi:
     def test_when_caller_is_regular_user_and_owner_is_dashboard_owner__201(
         self,
         dashboard_id: int,
-        test_users: Dict[str, int],
-        valid_filter_set_data_for_create: Dict[str, Any],
+        test_users: dict[str, int],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -588,8 +587,8 @@ class TestCreateFilterSetsApi:
     def test_when_caller_is_regular_user_and_owner_is_regular_user__201(
         self,
         dashboard_id: int,
-        test_users: Dict[str, int],
-        valid_filter_set_data_for_create: Dict[str, Any],
+        test_users: dict[str, int],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange
@@ -611,8 +610,8 @@ class TestCreateFilterSetsApi:
     def test_when_caller_is_regular_user_and_owner_type_is_dashboard__403(
         self,
         dashboard_id: int,
-        test_users: Dict[str, int],
-        valid_filter_set_data_for_create: Dict[str, Any],
+        test_users: dict[str, int],
+        valid_filter_set_data_for_create: dict[str, Any],
         client: FlaskClient[Any],
     ):
         # arrange

@@ -16,21 +16,16 @@
 # under the License.
 from typing import Any
 
-from sqlalchemy import or_
 from sqlalchemy.orm.query import Query
 
 from superset import security_manager
+from superset.utils.filters import get_dataset_access_filters
 from superset.views.base import BaseFilter
-from superset.connectors.sqla.models import SqlaTable
 
 
 class SliceFilter(BaseFilter):  # pylint: disable=too-few-public-methods
     def apply(self, query: Query, value: Any) -> Query:
         if security_manager.can_access_all_datasources():
             return query
-        perms = security_manager.user_view_menu_names("datasource_access")
-        schema_perms = security_manager.user_view_menu_names("schema_access")
-        project_ids = security_manager.get_project_ids()
-        return query.filter(
-            or_(self.model.perm.in_(perms), self.model.schema_perm.in_(schema_perms), SqlaTable.database_id.in_(project_ids)),
-        )
+
+        return query.filter(get_dataset_access_filters(self.model))

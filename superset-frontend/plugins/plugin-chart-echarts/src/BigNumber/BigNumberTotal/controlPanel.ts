@@ -16,18 +16,20 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { smartDateFormatter, t } from '@superset-ui/core';
+import { GenericDataType, smartDateFormatter, t } from '@superset-ui/core';
 import {
   ControlPanelConfig,
   D3_FORMAT_DOCS,
   D3_TIME_FORMAT_OPTIONS,
+  Dataset,
+  getStandardizedControls,
   sections,
 } from '@superset-ui/chart-controls';
 import { headerFontSize, subheaderFontSize } from '../sharedControls';
 
 export default {
   controlPanelSections: [
-    sections.legacyTimeseriesTime,
+    sections.legacyRegularTime,
     {
       label: t('Query'),
       expanded: true,
@@ -60,6 +62,7 @@ export default {
         [headerFontSize],
         [subheaderFontSize],
         ['y_axis_format'],
+        ['currency_format'],
         [
           {
             name: 'time_format',
@@ -88,6 +91,45 @@ export default {
             },
           },
         ],
+        [
+          {
+            name: 'conditional_formatting',
+            config: {
+              type: 'ConditionalFormattingControl',
+              renderTrigger: true,
+              label: t('Conditional Formatting'),
+              description: t('Apply conditional color formatting to metric'),
+              shouldMapStateToProps() {
+                return true;
+              },
+              mapStateToProps(explore, _, chart) {
+                const verboseMap = explore?.datasource?.hasOwnProperty(
+                  'verbose_map',
+                )
+                  ? (explore?.datasource as Dataset)?.verbose_map
+                  : explore?.datasource?.columns ?? {};
+                const { colnames, coltypes } =
+                  chart?.queriesResponse?.[0] ?? {};
+                const numericColumns =
+                  Array.isArray(colnames) && Array.isArray(coltypes)
+                    ? colnames
+                        .filter(
+                          (colname: string, index: number) =>
+                            coltypes[index] === GenericDataType.NUMERIC,
+                        )
+                        .map(colname => ({
+                          value: colname,
+                          label: verboseMap[colname] ?? colname,
+                        }))
+                    : [];
+                return {
+                  columnOptions: numericColumns,
+                  verboseMap,
+                };
+              },
+            },
+          },
+        ],
       ],
     },
   ],
@@ -96,4 +138,8 @@ export default {
       label: t('Number format'),
     },
   },
+  formDataOverrides: formData => ({
+    ...formData,
+    metric: getStandardizedControls().shiftMetric(),
+  }),
 } as ControlPanelConfig;

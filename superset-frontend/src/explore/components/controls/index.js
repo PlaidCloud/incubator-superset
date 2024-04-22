@@ -40,11 +40,15 @@ import MetricsControl from './MetricControl/MetricsControl';
 import AdhocFilterControl from './FilterControl/AdhocFilterControl';
 import FilterBoxItemControl from './FilterBoxItemControl';
 import ConditionalFormattingControl from './ConditionalFormattingControl';
+import ContourControl from './ContourControl';
 import DndColumnSelectControl, {
   DndColumnSelect,
   DndFilterSelect,
   DndMetricSelect,
 } from './DndColumnSelectControl';
+import XAxisSortControl from './XAxisSortControl';
+import CurrencyControl from './CurrencyControl';
+import ColumnConfigControl from './ColumnConfigControl';
 
 const controlMap = {
   AnnotationLayerControl,
@@ -53,6 +57,8 @@ const controlMap = {
   CollectionControl,
   ColorPickerControl,
   ColorSchemeControl,
+  ColumnConfigControl,
+  CurrencyControl,
   DatasourceControl,
   DateFilterControl,
   DndColumnSelectControl,
@@ -74,6 +80,8 @@ const controlMap = {
   AdhocFilterControl,
   FilterBoxItemControl,
   ConditionalFormattingControl,
+  XAxisSortControl,
+  ContourControl,
   ...sharedControlComponents,
 };
 export default controlMap;

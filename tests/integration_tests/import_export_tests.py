@@ -32,15 +32,15 @@ from tests.integration_tests.fixtures.energy_dashboard import (
     load_energy_table_data,
 )
 from tests.integration_tests.test_app import app
-from superset.dashboards.commands.importers.v0 import decode_dashboards
+from superset.commands.dashboard.importers.v0 import decode_dashboards
 from superset import db, security_manager
 
 from superset.connectors.sqla.models import SqlaTable, SqlMetric, TableColumn
-from superset.dashboards.commands.importers.v0 import import_chart, import_dashboard
-from superset.datasets.commands.importers.v0 import import_dataset
+from superset.commands.dashboard.importers.v0 import import_chart, import_dashboard
+from superset.commands.dataset.importers.v0 import import_dataset
 from superset.models.dashboard import Dashboard
 from superset.models.slice import Slice
-from superset.utils.core import get_example_default_schema
+from superset.utils.core import DatasourceType, get_example_default_schema
 from superset.utils.database import get_example_database
 
 from tests.integration_tests.fixtures.world_bank_dashboard import (
@@ -50,32 +50,30 @@ from tests.integration_tests.fixtures.world_bank_dashboard import (
 from .base_tests import SupersetTestCase
 
 
+def delete_imports():
+    with app.app_context():
+        # Imported data clean up
+        session = db.session
+        for slc in session.query(Slice):
+            if "remote_id" in slc.params_dict:
+                session.delete(slc)
+        for dash in session.query(Dashboard):
+            if "remote_id" in dash.params_dict:
+                session.delete(dash)
+        for table in session.query(SqlaTable):
+            if "remote_id" in table.params_dict:
+                session.delete(table)
+        session.commit()
+
+
+@pytest.fixture(autouse=True, scope="module")
+def clean_imports():
+    yield
+    delete_imports()
+
+
 class TestImportExport(SupersetTestCase):
     """Testing export import functionality for dashboards"""
-
-    @classmethod
-    def delete_imports(cls):
-        with app.app_context():
-            # Imported data clean up
-            session = db.session
-            for slc in session.query(Slice):
-                if "remote_id" in slc.params_dict:
-                    session.delete(slc)
-            for dash in session.query(Dashboard):
-                if "remote_id" in dash.params_dict:
-                    session.delete(dash)
-            for table in session.query(SqlaTable):
-                if "remote_id" in table.params_dict:
-                    session.delete(table)
-            session.commit()
-
-    @classmethod
-    def setUpClass(cls):
-        cls.delete_imports()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.delete_imports()
 
     def create_slice(
         self,
@@ -103,7 +101,7 @@ class TestImportExport(SupersetTestCase):
 
         return Slice(
             slice_name=name,
-            datasource_type="table",
+            datasource_type=DatasourceType.TABLE,
             viz_type="bubble",
             params=json.dumps(params),
             datasource_id=ds_id,
@@ -117,14 +115,18 @@ class TestImportExport(SupersetTestCase):
             dashboard_title=title,
             slices=slcs,
             position_json='{"size_y": 2, "size_x": 2}',
-            slug="{}_imported".format(title.lower()),
+            slug=f"{title.lower()}_imported",
             json_metadata=json.dumps(json_metadata),
+            published=False,
         )
 
     def create_table(self, name, schema=None, id=0, cols_names=[], metric_names=[]):
         params = {"remote_id": id, "database_name": "examples"}
         table = SqlaTable(
-            id=id, schema=schema, table_name=name, params=json.dumps(params)
+            id=id,
+            schema=schema,
+            table_name=name,
+            params=json.dumps(params),
         )
         for col_name in cols_names:
             table.columns.append(TableColumn(column_name=col_name))
@@ -162,12 +164,12 @@ class TestImportExport(SupersetTestCase):
         self.assertEqual(len(expected_ds.metrics), len(actual_ds.metrics))
         self.assertEqual(len(expected_ds.columns), len(actual_ds.columns))
         self.assertEqual(
-            set([c.column_name for c in expected_ds.columns]),
-            set([c.column_name for c in actual_ds.columns]),
+            {c.column_name for c in expected_ds.columns},
+            {c.column_name for c in actual_ds.columns},
         )
         self.assertEqual(
-            set([m.metric_name for m in expected_ds.metrics]),
-            set([m.metric_name for m in actual_ds.metrics]),
+            {m.metric_name for m in expected_ds.metrics},
+            {m.metric_name for m in actual_ds.metrics},
         )
 
     def assert_datasource_equals(self, expected_ds, actual_ds):
@@ -176,12 +178,12 @@ class TestImportExport(SupersetTestCase):
         self.assertEqual(len(expected_ds.metrics), len(actual_ds.metrics))
         self.assertEqual(len(expected_ds.columns), len(actual_ds.columns))
         self.assertEqual(
-            set([c.column_name for c in expected_ds.columns]),
-            set([c.column_name for c in actual_ds.columns]),
+            {c.column_name for c in expected_ds.columns},
+            {c.column_name for c in actual_ds.columns},
         )
         self.assertEqual(
-            set([m.metric_name for m in expected_ds.metrics]),
-            set([m.metric_name for m in actual_ds.metrics]),
+            {m.metric_name for m in expected_ds.metrics},
+            {m.metric_name for m in actual_ds.metrics},
         )
 
     def assert_slice_equals(self, expected_slc, actual_slc):
@@ -406,8 +408,8 @@ class TestImportExport(SupersetTestCase):
             {
                 "remote_id": 10003,
                 "expanded_slices": {
-                    "{}".format(e_slc.id): True,
-                    "{}".format(b_slc.id): False,
+                    f"{e_slc.id}": True,
+                    f"{b_slc.id}": False,
                 },
                 # mocked filter_scope metadata
                 "filter_scopes": {
@@ -439,8 +441,8 @@ class TestImportExport(SupersetTestCase):
                 }
             },
             "expanded_slices": {
-                "{}".format(i_e_slc.id): True,
-                "{}".format(i_b_slc.id): False,
+                f"{i_e_slc.id}": True,
+                f"{i_b_slc.id}": False,
             },
         }
         self.assertEqual(

@@ -17,6 +17,7 @@
  * under the License.
  */
 import React from 'react';
+import rison from 'rison';
 import PropTypes from 'prop-types';
 import { CompactPicker } from 'react-color';
 import Button from 'src/components/Button';
@@ -27,12 +28,17 @@ import {
   getChartMetadataRegistry,
   validateNonEmpty,
   isValidExpression,
+  styled,
+  getColumnLabel,
   withTheme,
 } from '@superset-ui/core';
-
 import SelectControl from 'src/explore/components/controls/SelectControl';
+import { AsyncSelect } from 'src/components';
 import TextControl from 'src/explore/components/controls/TextControl';
 import CheckboxControl from 'src/explore/components/controls/CheckboxControl';
+import PopoverSection from 'src/components/PopoverSection';
+import ControlHeader from 'src/explore/components/ControlHeader';
+import { EmptyStateSmall } from 'src/components/EmptyState';
 import {
   ANNOTATION_SOURCE_TYPES,
   ANNOTATION_TYPES,
@@ -40,9 +46,7 @@ import {
   DEFAULT_ANNOTATION_TYPE,
   requiresQuery,
   ANNOTATION_SOURCE_TYPES_METADATA,
-} from 'src/modules/AnnotationTypes';
-import PopoverSection from 'src/components/PopoverSection';
-import ControlHeader from 'src/explore/components/ControlHeader';
+} from './AnnotationTypes';
 
 const AUTOMATIC_COLOR = '';
 
@@ -97,6 +101,35 @@ const defaultProps = {
   removeAnnotationLayer: () => {},
   close: () => {},
 };
+
+const NotFoundContentWrapper = styled.div`
+  && > div:first-child {
+    padding-left: 0;
+    padding-right: 0;
+  }
+`;
+
+const NotFoundContent = () => (
+  <NotFoundContentWrapper>
+    <EmptyStateSmall
+      title={t('No annotation layers')}
+      description={
+        <span>
+          {t('Add an annotation layer')}{' '}
+          <a
+            href="/annotationlayer/list"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {t('here')}
+          </a>
+          .
+        </span>
+      }
+      image="empty.svg"
+    />
+  </NotFoundContentWrapper>
+);
 
 class AnnotationLayer extends React.PureComponent {
   constructor(props) {
@@ -161,28 +194,46 @@ class AnnotationLayer extends React.PureComponent {
       hideLine,
       // refData
       isNew: !name,
-      isLoadingOptions: true,
-      valueOptions: [],
+      slice: null,
     };
     this.submitAnnotation = this.submitAnnotation.bind(this);
     this.deleteAnnotation = this.deleteAnnotation.bind(this);
     this.applyAnnotation = this.applyAnnotation.bind(this);
-    this.fetchOptions = this.fetchOptions.bind(this);
+    this.isValidForm = this.isValidForm.bind(this);
+    // Handlers
     this.handleAnnotationType = this.handleAnnotationType.bind(this);
     this.handleAnnotationSourceType =
       this.handleAnnotationSourceType.bind(this);
-    this.handleValue = this.handleValue.bind(this);
-    this.isValidForm = this.isValidForm.bind(this);
+    this.handleSelectValue = this.handleSelectValue.bind(this);
+    this.handleTextValue = this.handleTextValue.bind(this);
+    // Fetch related functions
+    this.fetchOptions = this.fetchOptions.bind(this);
+    this.fetchCharts = this.fetchCharts.bind(this);
+    this.fetchNativeAnnotations = this.fetchNativeAnnotations.bind(this);
+    this.fetchAppliedAnnotation = this.fetchAppliedAnnotation.bind(this);
+    this.fetchSliceData = this.fetchSliceData.bind(this);
+    this.shouldFetchSliceData = this.shouldFetchSliceData.bind(this);
+    this.fetchAppliedChart = this.fetchAppliedChart.bind(this);
+    this.fetchAppliedNativeAnnotation =
+      this.fetchAppliedNativeAnnotation.bind(this);
+    this.shouldFetchAppliedAnnotation =
+      this.shouldFetchAppliedAnnotation.bind(this);
   }
 
   componentDidMount() {
-    const { annotationType, sourceType, isLoadingOptions } = this.state;
-    this.fetchOptions(annotationType, sourceType, isLoadingOptions);
+    if (this.shouldFetchAppliedAnnotation()) {
+      const { value } = this.state;
+      /* The value prop is the id of the chart/native. This function will set
+      value in state to an object with the id as value.value to be used by
+      AsyncSelect */
+      this.fetchAppliedAnnotation(value);
+    }
   }
 
   componentDidUpdate(prevProps, prevState) {
-    if (prevState.sourceType !== this.state.sourceType) {
-      this.fetchOptions(this.state.annotationType, this.state.sourceType, true);
+    if (this.shouldFetchSliceData(prevState)) {
+      const { value } = this.state;
+      this.fetchSliceData(value.value);
     }
   }
 
@@ -202,6 +253,20 @@ class AnnotationLayer extends React.PureComponent {
       sources.unshift(ANNOTATION_SOURCE_TYPES_METADATA.NATIVE);
     }
     return sources;
+  }
+
+  shouldFetchAppliedAnnotation() {
+    const { value, sourceType } = this.state;
+    return value && requiresQuery(sourceType);
+  }
+
+  shouldFetchSliceData(prevState) {
+    const { value, sourceType } = this.state;
+    const isChart =
+      sourceType !== ANNOTATION_SOURCE_TYPES.NATIVE &&
+      requiresQuery(sourceType);
+    const valueIsNew = value && prevState.value !== value;
+    return valueIsNew && isChart;
   }
 
   isValidFormulaAnnotation(expression, annotationType) {
@@ -243,6 +308,7 @@ class AnnotationLayer extends React.PureComponent {
       annotationType,
       sourceType: null,
       value: null,
+      slice: null,
     });
   }
 
@@ -250,13 +316,17 @@ class AnnotationLayer extends React.PureComponent {
     const { sourceType: prevSourceType } = this.state;
 
     if (prevSourceType !== sourceType) {
-      this.setState({ sourceType, value: null, isLoadingOptions: true });
+      this.setState({
+        sourceType,
+        value: null,
+        slice: null,
+      });
     }
   }
 
-  handleValue(value) {
+  handleSelectValue(selectedValueObject) {
     this.setState({
-      value,
+      value: selectedValueObject,
       descriptionColumns: [],
       intervalEndColumn: null,
       timeColumn: null,
@@ -265,47 +335,172 @@ class AnnotationLayer extends React.PureComponent {
     });
   }
 
-  fetchOptions(annotationType, sourceType, isLoadingOptions) {
-    if (isLoadingOptions) {
-      if (sourceType === ANNOTATION_SOURCE_TYPES.NATIVE) {
-        SupersetClient.get({
-          endpoint: '/annotationlayermodelview/api/read?',
-        }).then(({ json }) => {
-          const layers = json
-            ? json.result.map(layer => ({
-                value: layer.id,
-                label: layer.name,
-              }))
-            : [];
-          this.setState({
-            isLoadingOptions: false,
-            valueOptions: layers,
-          });
-        });
-      } else if (requiresQuery(sourceType)) {
-        SupersetClient.get({ endpoint: '/superset/user_slices' }).then(
-          ({ json }) => {
-            const registry = getChartMetadataRegistry();
-            this.setState({
-              isLoadingOptions: false,
-              valueOptions: json
-                .filter(x => {
-                  const metadata = registry.get(x.viz_type);
-                  return (
-                    metadata && metadata.canBeAnnotationType(annotationType)
-                  );
-                })
-                .map(x => ({ value: x.id, label: x.title, slice: x })),
-            });
-          },
-        );
-      } else {
+  handleTextValue(inputValue) {
+    this.setState({
+      value: inputValue,
+    });
+  }
+
+  fetchNativeAnnotations = async (search, page, pageSize) => {
+    const queryParams = rison.encode({
+      filters: [
+        {
+          col: 'name',
+          opr: 'ct',
+          value: search,
+        },
+      ],
+      columns: ['id', 'name'],
+      page,
+      page_size: pageSize,
+    });
+
+    const { json } = await SupersetClient.get({
+      endpoint: `/api/v1/annotation_layer/?q=${queryParams}`,
+    });
+
+    const { result, count } = json;
+
+    const layersArray = result.map(layer => ({
+      value: layer.id,
+      label: layer.name,
+    }));
+
+    return {
+      data: layersArray,
+      totalCount: count,
+    };
+  };
+
+  fetchCharts = async (search, page, pageSize) => {
+    const { annotationType } = this.state;
+
+    const queryParams = rison.encode({
+      filters: [
+        { col: 'slice_name', opr: 'chart_all_text', value: search },
+        {
+          col: 'id',
+          opr: 'chart_owned_created_favored_by_me',
+          value: true,
+        },
+      ],
+      columns: ['id', 'slice_name', 'viz_type'],
+      order_column: 'slice_name',
+      order_direction: 'asc',
+      page,
+      page_size: pageSize,
+    });
+    const { json } = await SupersetClient.get({
+      endpoint: `/api/v1/chart/?q=${queryParams}`,
+    });
+
+    const { result, count } = json;
+    const registry = getChartMetadataRegistry();
+
+    const chartsArray = result
+      .filter(chart => {
+        const metadata = registry.get(chart.viz_type);
+        return metadata && metadata.canBeAnnotationType(annotationType);
+      })
+      .map(chart => ({
+        value: chart.id,
+        label: chart.slice_name,
+        viz_type: chart.viz_type,
+      }));
+
+    return {
+      data: chartsArray,
+      totalCount: count,
+    };
+  };
+
+  fetchOptions = (search, page, pageSize) => {
+    const { sourceType } = this.state;
+
+    if (sourceType === ANNOTATION_SOURCE_TYPES.NATIVE) {
+      return this.fetchNativeAnnotations(search, page, pageSize);
+    }
+    return this.fetchCharts(search, page, pageSize);
+  };
+
+  fetchSliceData = id => {
+    const queryParams = rison.encode({
+      columns: ['query_context'],
+    });
+    SupersetClient.get({
+      endpoint: `/api/v1/chart/${id}?q=${queryParams}`,
+    }).then(({ json }) => {
+      const { result } = json;
+      const queryContext = result.query_context;
+      const formData = JSON.parse(queryContext).form_data;
+      const dataObject = {
+        data: {
+          ...formData,
+          groupby: formData.groupby?.map(column => getColumnLabel(column)),
+        },
+      };
+      this.setState({
+        slice: dataObject,
+      });
+    });
+  };
+
+  fetchAppliedChart(id) {
+    const { annotationType } = this.state;
+    const registry = getChartMetadataRegistry();
+    const queryParams = rison.encode({
+      columns: ['slice_name', 'query_context', 'viz_type'],
+    });
+    SupersetClient.get({
+      endpoint: `/api/v1/chart/${id}?q=${queryParams}`,
+    }).then(({ json }) => {
+      const { result } = json;
+      const sliceName = result.slice_name;
+      const queryContext = result.query_context;
+      const vizType = result.viz_type;
+      const formData = JSON.parse(queryContext).form_data;
+      const metadata = registry.get(vizType);
+      const canBeAnnotationType =
+        metadata && metadata.canBeAnnotationType(annotationType);
+      if (canBeAnnotationType) {
         this.setState({
-          isLoadingOptions: false,
-          valueOptions: [],
+          value: {
+            value: id,
+            label: sliceName,
+          },
+          slice: {
+            data: {
+              ...formData,
+              groupby: formData.groupby?.map(column => getColumnLabel(column)),
+            },
+          },
         });
       }
+    });
+  }
+
+  fetchAppliedNativeAnnotation(id) {
+    SupersetClient.get({
+      endpoint: `/api/v1/annotation_layer/${id}`,
+    }).then(({ json }) => {
+      const { result } = json;
+      const layer = result;
+      this.setState({
+        value: {
+          value: layer.id,
+          label: layer.name,
+        },
+      });
+    });
+  }
+
+  fetchAppliedAnnotation(id) {
+    const { sourceType } = this.state;
+
+    if (sourceType === ANNOTATION_SOURCE_TYPES.NATIVE) {
+      return this.fetchAppliedNativeAnnotation(id);
     }
+    return this.fetchAppliedChart(id);
   }
 
   deleteAnnotation() {
@@ -314,6 +509,7 @@ class AnnotationLayer extends React.PureComponent {
   }
 
   applyAnnotation() {
+    const { value, sourceType } = this.state;
     if (this.isValidForm()) {
       const annotationFields = [
         'name',
@@ -325,7 +521,6 @@ class AnnotationLayer extends React.PureComponent {
         'width',
         'showMarkers',
         'hideLine',
-        'value',
         'overrides',
         'show',
         'showLabel',
@@ -341,6 +536,10 @@ class AnnotationLayer extends React.PureComponent {
         }
       });
 
+      // Prepare newAnnotation.value for use in runAnnotationQuery()
+      const applicableValue = requiresQuery(sourceType) ? value.value : value;
+      newAnnotation.value = applicableValue;
+
       if (newAnnotation.color === AUTOMATIC_COLOR) {
         newAnnotation.color = null;
       }
@@ -355,35 +554,25 @@ class AnnotationLayer extends React.PureComponent {
     this.props.close();
   }
 
-  renderOption(option) {
+  renderChartHeader(label, description, value) {
     return (
-      <span
-        css={{
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-        title={option.label}
-      >
-        {option.label}
-      </span>
+      <ControlHeader
+        hovered
+        label={label}
+        description={description}
+        validationErrors={!value ? ['Mandatory'] : []}
+      />
     );
   }
 
   renderValueConfiguration() {
-    const {
-      annotationType,
-      sourceType,
-      value,
-      valueOptions,
-      isLoadingOptions,
-    } = this.state;
+    const { annotationType, sourceType, value } = this.state;
     let label = '';
     let description = '';
     if (requiresQuery(sourceType)) {
       if (sourceType === ANNOTATION_SOURCE_TYPES.NATIVE) {
-        label = 'Annotation layer';
-        description = 'Select the Annotation Layer you would like to use.';
+        label = t('Annotation layer');
+        description = t('Select the Annotation Layer you would like to use.');
       } else {
         label = t('Chart');
         description = t(
@@ -395,27 +584,23 @@ class AnnotationLayer extends React.PureComponent {
         );
       }
     } else if (annotationType === ANNOTATION_TYPES.FORMULA) {
-      label = 'Formula';
-      description = `Expects a formula with depending time parameter 'x'
+      label = t('Formula');
+      description = t(`Expects a formula with depending time parameter 'x'
         in milliseconds since epoch. mathjs is used to evaluate the formulas.
-        Example: '2x+5'`;
+        Example: '2x+5'`);
     }
     if (requiresQuery(sourceType)) {
       return (
-        <SelectControl
+        <AsyncSelect
+          /* key to force re-render on sourceType change */
+          key={sourceType}
           ariaLabel={t('Annotation layer value')}
           name="annotation-layer-value"
-          showHeader
-          hovered
-          description={description}
-          label={label}
-          placeholder=""
-          options={valueOptions}
-          isLoading={isLoadingOptions}
-          value={value}
-          onChange={this.handleValue}
-          validationErrors={!value ? ['Mandatory'] : []}
-          optionRenderer={this.renderOption}
+          header={this.renderChartHeader(label, description, value)}
+          options={this.fetchOptions}
+          value={value || null}
+          onChange={this.handleSelectValue}
+          notFoundContent={<NotFoundContent />}
         />
       );
     }
@@ -429,10 +614,10 @@ class AnnotationLayer extends React.PureComponent {
           label={label}
           placeholder=""
           value={value}
-          onChange={this.handleValue}
+          onChange={this.handleTextValue}
           validationErrors={
             !this.isValidFormulaAnnotation(value, annotationType)
-              ? ['Bad formula.']
+              ? [t('Bad formula.')]
               : []
           }
         />
@@ -446,14 +631,18 @@ class AnnotationLayer extends React.PureComponent {
       annotationType,
       sourceType,
       value,
-      valueOptions,
+      slice,
       overrides,
       titleColumn,
       timeColumn,
       intervalEndColumn,
       descriptionColumns,
     } = this.state;
-    const { slice } = valueOptions.find(x => x.value === value) || {};
+
+    if (!slice || !value) {
+      return '';
+    }
+
     if (sourceType !== ANNOTATION_SOURCE_TYPES.NATIVE && slice) {
       const columns = (slice.data.groupby || [])
         .concat(slice.data.all_columns || [])
@@ -467,7 +656,7 @@ class AnnotationLayer extends React.PureComponent {
             isSelected
             title={t('Annotation Slice Configuration')}
             info={t(`This section allows you to configure how to use the slice
-               to generate annotations.`)}
+              to generate annotations.`)}
           >
             {(annotationType === ANNOTATION_TYPES.EVENT ||
               annotationType === ANNOTATION_TYPES.INTERVAL) && (
@@ -511,7 +700,7 @@ class AnnotationLayer extends React.PureComponent {
               name="annotation-layer-title"
               label={t('Title Column')}
               description={t('Pick a title for you annotation.')}
-              options={[{ value: '', label: 'None' }].concat(columns)}
+              options={[{ value: '', label: t('None') }].concat(columns)}
               value={titleColumn}
               onChange={value => this.setState({ titleColumn: value })}
             />
@@ -534,9 +723,9 @@ class AnnotationLayer extends React.PureComponent {
               <CheckboxControl
                 hovered
                 name="annotation-override-time_range"
-                label="Override time range"
-                description={`This controls whether the "time_range" field from the current
-                  view should be passed down to the chart containing the annotation data.`}
+                label={t('Override time range')}
+                description={t(`This controls whether the "time_range" field from the current
+                  view should be passed down to the chart containing the annotation data.`)}
                 value={'time_range' in overrides}
                 onChange={v => {
                   delete overrides.time_range;
@@ -552,9 +741,9 @@ class AnnotationLayer extends React.PureComponent {
               <CheckboxControl
                 hovered
                 name="annotation-override-timegrain"
-                label="Override time grain"
-                description={`This controls whether the time grain field from the current
-                  view should be passed down to the chart containing the annotation data.`}
+                label={t('Override time grain')}
+                description={t(`This controls whether the time grain field from the current
+                  view should be passed down to the chart containing the annotation data.`)}
                 value={'time_grain_sqla' in overrides}
                 onChange={v => {
                   delete overrides.time_grain_sqla;
@@ -575,9 +764,9 @@ class AnnotationLayer extends React.PureComponent {
               <TextControl
                 hovered
                 name="annotation-layer-timeshift"
-                label="Time Shift"
-                description={`Time delta in natural language
-                  (example:  24 hours, 7 days, 56 weeks, 365 days)`}
+                label={t('Time Shift')}
+                description={t(`Time delta in natural language
+                  (example:  24 hours, 7 days, 56 weeks, 365 days)`)}
                 placeholder=""
                 value={overrides.time_shift}
                 onChange={v =>
@@ -624,10 +813,10 @@ class AnnotationLayer extends React.PureComponent {
           label={t('Style')}
           // see '../../../visualizations/nvd3_vis.css'
           options={[
-            { value: 'solid', label: 'Solid' },
-            { value: 'dashed', label: 'Dashed' },
-            { value: 'longDashed', label: 'Long dashed' },
-            { value: 'dotted', label: 'Dotted' },
+            { value: 'solid', label: t('Solid') },
+            { value: 'dashed', label: t('Dashed') },
+            { value: 'longDashed', label: t('Long dashed') },
+            { value: 'dotted', label: t('Dotted') },
           ]}
           value={style}
           clearable={false}
@@ -639,7 +828,7 @@ class AnnotationLayer extends React.PureComponent {
           label={t('Opacity')}
           // see '../../../visualizations/nvd3_vis.css'
           options={[
-            { value: '', label: 'Solid' },
+            { value: '', label: t('Solid') },
             { value: 'opacityLow', label: '0.2' },
             { value: 'opacityMedium', label: '0.5' },
             { value: 'opacityHigh', label: '0.8' },
@@ -661,7 +850,7 @@ class AnnotationLayer extends React.PureComponent {
               buttonSize="xsmall"
               onClick={() => this.setState({ color: AUTOMATIC_COLOR })}
             >
-              Automatic Color
+              {t('Automatic Color')}
             </Button>
           </div>
         </div>
@@ -676,8 +865,8 @@ class AnnotationLayer extends React.PureComponent {
           <CheckboxControl
             hovered
             name="annotation-layer-show-markers"
-            label="Show Markers"
-            description="Shows or hides markers for the time series"
+            label={t('Show Markers')}
+            description={t('Shows or hides markers for the time series')}
             value={showMarkers}
             onChange={v => this.setState({ showMarkers: v })}
           />
@@ -686,8 +875,8 @@ class AnnotationLayer extends React.PureComponent {
           <CheckboxControl
             hovered
             name="annotation-layer-hide-line"
-            label="Hide Line"
-            description="Hides the Line for the time series"
+            label={t('Hide Line')}
+            description={t('Hides the Line for the time series')}
             value={hideLine}
             onChange={v => this.setState({ hideLine: v })}
           />
@@ -760,9 +949,10 @@ class AnnotationLayer extends React.PureComponent {
                   ariaLabel={t('Annotation source type')}
                   hovered
                   description={t('Choose the source of your annotations')}
-                  label={t('Annotation Source')}
+                  label={t('Annotation source')}
                   name="annotation-source-type"
                   options={supportedSourceTypes}
+                  notFoundContent={<NotFoundContent />}
                   value={sourceType}
                   onChange={this.handleAnnotationSourceType}
                   validationErrors={!sourceType ? [t('Mandatory')] : []}

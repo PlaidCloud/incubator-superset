@@ -26,7 +26,7 @@ group = AppGroup('plaid')
               help='Provide a SQLAlchemy URI to the server where the database '
                    'will be provisioned. Default is database.postgres setting '
                    'found in plaid.conf.')
-def init_db(drop_existing, uri):
+def init_db(drop_existing: bool, uri: str | None):
     """Provisions an empty postgres database with a 'superset' role to manage it."""
     super_uri = ''
     
@@ -108,5 +108,5 @@ def init_db(drop_existing, uri):
         logging.info('Granted future table and sequence privileges.')
         con.close()
     except:
-        logging.error(traceback.print_exc())
+        logging.error(traceback.format_exc())
         con.close()

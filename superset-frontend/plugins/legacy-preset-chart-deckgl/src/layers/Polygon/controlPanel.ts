@@ -16,7 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { ControlPanelConfig, sections } from '@superset-ui/chart-controls';
+import {
+  ControlPanelConfig,
+  getStandardizedControls,
+  sections,
+} from '@superset-ui/chart-controls';
 import { FeatureFlag, isFeatureEnabled, t } from '@superset-ui/core';
 import timeGrainSqlaAnimationOverrides from '../../utilities/controls';
 import { formatSelectOptions } from '../../utilities/utils';
@@ -93,10 +97,7 @@ const config: ControlPanelConfig = {
     {
       label: t('Map'),
       expanded: true,
-      controlSetRows: [
-        [mapboxStyle, viewport],
-        [autozoom, null],
-      ],
+      controlSetRows: [[mapboxStyle], [viewport], [autozoom]],
     },
     {
       label: t('Polygon Settings'),
@@ -104,10 +105,26 @@ const config: ControlPanelConfig = {
       controlSetRows: [
         [fillColorPicker, strokeColorPicker],
         [filled, stroked],
-        [extruded, multiplier],
-        [lineWidth, null],
+        [extruded],
+        [multiplier],
+        [lineWidth],
         [
-          'linear_color_scheme',
+          {
+            name: 'line_width_unit',
+            config: {
+              type: 'SelectControl',
+              label: t('Line width unit'),
+              default: 'pixels',
+              choices: [
+                ['meters', t('meters')],
+                ['pixels', t('pixels')],
+              ],
+              renderTrigger: true,
+            },
+          },
+        ],
+        ['linear_color_scheme'],
+        [
           {
             name: 'opacity',
             config: {
@@ -136,6 +153,8 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
             },
           },
+        ],
+        [
           {
             name: 'break_points',
             config: {
@@ -162,6 +181,8 @@ const config: ControlPanelConfig = {
               description: t('Whether to apply filter when items are clicked'),
             },
           },
+        ],
+        [
           {
             name: 'toggle_polygons',
             config: {
@@ -175,7 +196,8 @@ const config: ControlPanelConfig = {
             },
           },
         ],
-        [legendPosition, legendFormat],
+        [legendPosition],
+        [legendFormat],
       ],
     },
     {
@@ -194,6 +216,10 @@ const config: ControlPanelConfig = {
     },
     time_grain_sqla: timeGrainSqlaAnimationOverrides,
   },
+  formDataOverrides: formData => ({
+    ...formData,
+    metric: getStandardizedControls().shiftMetric(),
+  }),
 };
 
 export default config;

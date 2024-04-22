@@ -15,8 +15,9 @@
 # limitations under the License.
 #
 -r base.in
+-e .[postgres,gevent]
 gevent
 pika
 psycopg2-binary
-redis==4.2.2
-requests==2.27.1
+redis==4.6.0
+greenlet>=2.0.2

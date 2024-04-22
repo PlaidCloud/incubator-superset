@@ -1,7 +1,7 @@
 version: v1beta9
 images:
   superset:
-    image: gcr.io/plaidcloud-build/superset/dev
+    image: us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-dev
     preferSyncOverRebuild: true
     build:
       custom:
@@ -11,19 +11,8 @@ images:
         - ${DEVSPACE_RANDOM}
     tags:
     - ${DEVSPACE_RANDOM}
-  events:
-    image: gcr.io/plaidcloud-build/superset/events
-    preferSyncOverRebuild: true
-    build:
-      custom:
-        command: ./deploy
-        args:
-        - events
-        - ${DEVSPACE_RANDOM}
-    tags:
-    - ${DEVSPACE_RANDOM}
   node:
-    image: gcr.io/plaidcloud-build/superset/node
+    image: us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-node
     preferSyncOverRebuild: true
     build:
       custom:
@@ -44,21 +33,12 @@ deployments:
       extraEnv:
         FLASK_ENV: "development"
       image:
-        repository: gcr.io/plaidcloud-build/superset/dev
+        repository: us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-dev
         tag: latest
         pullPolicy: IfNotPresent
         pullSecret: gcr-key
       node:
-        repository: gcr.io/plaidcloud-build/superset/node
-      events:
-        repository: gcr.io/plaidcloud-build/superset/events
-        tag: latest
-        pullPolicy: IfNotPresent
-        pullSecret: gcr-key
-        entrypoint:
-          - "entrypoint"
-          - "python"
-          - "/plaid/plaid/event_handler.py"
+        repository: us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-node
       init:
         enabled: false
         loadExamples: true
@@ -160,21 +140,6 @@ dev:
     localSubPath: ./superset-frontend/src
     containerPath: /app/superset-frontend/src
     disableDownload: true  
-  - imageName: events
-    labelSelector:
-      app: superset
-      component: superset-events
-    containerName: events
-    localSubPath: ./plaid
-    containerPath: /plaid/plaid
-    disableDownload: true
-    onUpload:
-      execRemote:
-        onBatch:
-          command: bash
-          args:
-          - -c
-          - "kill -HUP 1"
 ######################################################################################################
 # READ THIS:
 #   To set any variables with a source of `env`, copy the `.env-sample` file at the root of

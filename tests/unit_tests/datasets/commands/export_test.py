@@ -21,12 +21,12 @@ import json
 from sqlalchemy.orm.session import Session
 
 
-def test_export(app_context: None, session: Session) -> None:
+def test_export(session: Session) -> None:
     """
     Test exporting a dataset.
     """
+    from superset.commands.dataset.export import ExportDatasetsCommand
     from superset.connectors.sqla.models import SqlaTable, SqlMetric, TableColumn
-    from superset.datasets.commands.export import ExportDatasetsCommand
     from superset.models.core import Database
 
     engine = session.get_bind()
@@ -81,6 +81,8 @@ def test_export(app_context: None, session: Session) -> None:
         is_sqllab_view=0,  # no longer used?
         template_params=json.dumps({"answer": "42"}),
         schema_perm=None,
+        normalize_columns=False,
+        always_filter_main_dttm=False,
         extra=json.dumps({"warning_markdown": "*WARNING*"}),
     )
 
@@ -108,6 +110,8 @@ filter_select_enabled: 1
 fetch_values_predicate: foo IN (1, 2)
 extra:
   warning_markdown: '*WARNING*'
+normalize_columns: false
+always_filter_main_dttm: false
 uuid: null
 metrics:
 - metric_name: cnt
@@ -116,6 +120,7 @@ metrics:
   expression: COUNT(*)
   description: null
   d3format: null
+  currency: null
   extra:
     warning_markdown: null
   warning_text: null
@@ -125,6 +130,7 @@ columns:
   is_dttm: null
   is_active: null
   type: INTEGER
+  advanced_data_type: null
   groupby: null
   filterable: null
   expression: revenue-expenses
@@ -137,6 +143,7 @@ columns:
   is_dttm: 1
   is_active: null
   type: TIMESTAMP
+  advanced_data_type: null
   groupby: null
   filterable: null
   expression: null
@@ -148,6 +155,7 @@ columns:
   is_dttm: null
   is_active: null
   type: INTEGER
+  advanced_data_type: null
   groupby: null
   filterable: null
   expression: null
@@ -159,6 +167,7 @@ columns:
   is_dttm: null
   is_active: null
   type: INTEGER
+  advanced_data_type: null
   groupby: null
   filterable: null
   expression: null
@@ -170,6 +179,7 @@ columns:
   is_dttm: null
   is_active: null
   type: INTEGER
+  advanced_data_type: null
   groupby: null
   filterable: null
   expression: null
@@ -189,6 +199,7 @@ expose_in_sqllab: true
 allow_run_async: false
 allow_ctas: false
 allow_cvas: false
+allow_dml: false
 allow_file_upload: false
 extra:
   metadata_params: {{}}

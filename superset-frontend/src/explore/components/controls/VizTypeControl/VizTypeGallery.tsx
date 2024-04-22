@@ -47,8 +47,10 @@ import scrollIntoView from 'scroll-into-view-if-needed';
 
 interface VizTypeGalleryProps {
   onChange: (vizType: string | null) => void;
+  onDoubleClick: () => void;
   selectedViz: string | null;
   className?: string;
+  denyList: string[];
 }
 
 type VizEntry = {
@@ -88,10 +90,8 @@ const DEFAULT_ORDER = [
   'deck_arc',
   'heatmap',
   'deck_grid',
-  'dual_line',
   'deck_screengrid',
-  'line_multi',
-  'treemap',
+  'treemap_v2',
   'box_plot',
   'sunburst',
   'sankey',
@@ -101,6 +101,7 @@ const DEFAULT_ORDER = [
   'cal_heatmap',
   'rose',
   'bubble',
+  'bubble_v2',
   'deck_geojson',
   'horizon',
   'deck_multi',
@@ -224,7 +225,7 @@ const SelectorLabel = styled.button`
     }
 
     &.selected {
-      background-color: ${theme.colors.primary.dark1};
+      background-color: ${theme.colors.primary.base};
       color: ${theme.colors.primary.light5};
 
       svg {
@@ -380,12 +381,14 @@ interface ThumbnailProps {
   entry: VizEntry;
   selectedViz: string | null;
   setSelectedViz: (viz: string) => void;
+  onDoubleClick: () => void;
 }
 
 const Thumbnail: React.FC<ThumbnailProps> = ({
   entry,
   selectedViz,
   setSelectedViz,
+  onDoubleClick,
 }) => {
   const theme = useTheme();
   const { key, value: type } = entry;
@@ -400,6 +403,7 @@ const Thumbnail: React.FC<ThumbnailProps> = ({
       tabIndex={0}
       className={isSelected ? 'selected' : ''}
       onClick={() => setSelectedViz(key)}
+      onDoubleClick={onDoubleClick}
       data-test="viztype-selector-container"
     >
       <img
@@ -429,6 +433,7 @@ interface ThumbnailGalleryProps {
   vizEntries: VizEntry[];
   selectedViz: string | null;
   setSelectedViz: (viz: string) => void;
+  onDoubleClick: () => void;
 }
 
 /** A list of viz thumbnails, used within the viz picker modal */
@@ -487,7 +492,7 @@ const doesVizMatchSelector = (viz: ChartMetadata, selector: string) =>
   (viz.tags || []).indexOf(selector) > -1;
 
 export default function VizTypeGallery(props: VizTypeGalleryProps) {
-  const { selectedViz, onChange, className } = props;
+  const { selectedViz, onChange, onDoubleClick, className } = props;
   const { mountedPluginMetadata } = usePluginContext();
   const searchInputRef = useRef<HTMLInputElement>();
   const [searchInputValue, setSearchInputValue] = useState('');
@@ -501,6 +506,7 @@ export default function VizTypeGallery(props: VizTypeGalleryProps) {
   const chartMetadata: VizEntry[] = useMemo(() => {
     const result = Object.entries(mountedPluginMetadata)
       .map(([key, value]) => ({ key, value }))
+      .filter(({ key }) => !props.denyList.includes(key))
       .filter(
         ({ value }) =>
           nativeFilterGate(value.behaviors || []) && !value.deprecated,
@@ -579,7 +585,17 @@ export default function VizTypeGallery(props: VizTypeGalleryProps) {
       new Fuse(chartMetadata, {
         ignoreLocation: true,
         threshold: 0.3,
-        keys: ['value.name', 'value.tags', 'value.description'],
+        keys: [
+          {
+            name: 'value.name',
+            weight: 4,
+          },
+          {
+            name: 'value.tags',
+            weight: 2,
+          },
+          'value.description',
+        ],
       }),
     [chartMetadata],
   );
@@ -783,6 +799,7 @@ export default function VizTypeGallery(props: VizTypeGalleryProps) {
           vizEntries={getVizEntriesToDisplay()}
           selectedViz={selectedViz}
           setSelectedViz={onChange}
+          onDoubleClick={onDoubleClick}
         />
       </RightPane>
 
@@ -832,11 +849,20 @@ export default function VizTypeGallery(props: VizTypeGalleryProps) {
                 grid-area: examples-header;
               `}
             >
-              {!!selectedVizMetadata?.exampleGallery?.length && t('Examples')}
+              {t('Examples')}
             </SectionTitle>
             <Examples>
-              {(selectedVizMetadata?.exampleGallery || []).map(example => (
+              {(selectedVizMetadata?.exampleGallery?.length
+                ? selectedVizMetadata.exampleGallery
+                : [
+                    {
+                      url: selectedVizMetadata?.thumbnail,
+                      caption: selectedVizMetadata?.name,
+                    },
+                  ]
+              ).map(example => (
                 <img
+                  key={example.url}
                   src={example.url}
                   alt={example.caption}
                   title={example.caption}

@@ -40,7 +40,7 @@ describe('Chart', () => {
     // from redux
     maxRows: 666,
     chart: chartQueries[queryId],
-    formData: chartQueries[queryId].formData,
+    formData: chartQueries[queryId].form_data,
     datasource: mockDatasource[sliceEntities.slices[queryId].datasource],
     slice: {
       ...sliceEntities.slices[queryId],
@@ -62,17 +62,20 @@ describe('Chart', () => {
     addDangerToast() {},
     exportCSV() {},
     exportFullCSV() {},
+    exportXLSX() {},
+    exportFullXLSX() {},
     componentId: 'test',
     dashboardId: 111,
     editMode: false,
     isExpanded: false,
     supersetCanExplore: false,
     supersetCanCSV: false,
-    sliceCanEdit: false,
   };
 
   function setup(overrideProps) {
-    const wrapper = shallow(<Chart {...props} {...overrideProps} />);
+    const wrapper = shallow(
+      <Chart.WrappedComponent {...props} {...overrideProps} />,
+    );
     return wrapper;
   }
 
@@ -94,7 +97,10 @@ describe('Chart', () => {
   });
 
   it('should calculate the description height if it has one and isExpanded=true', () => {
-    const spy = jest.spyOn(Chart.prototype, 'getDescriptionHeight');
+    const spy = jest.spyOn(
+      Chart.WrappedComponent.prototype,
+      'getDescriptionHeight',
+    );
     const wrapper = setup({ isExpanded: true });
 
     expect(wrapper.find('.slice_description')).toExist();
@@ -138,6 +144,32 @@ describe('Chart', () => {
     wrapper.instance().exportFullCSV(props.slice.sliceId);
     expect(stubbedExportCSV.calledOnce).toBe(true);
     expect(stubbedExportCSV.lastCall.args[0].formData.row_limit).toEqual(666);
+    exploreUtils.exportChart.restore();
+  });
+  it('should call exportChart when exportXLSX is clicked', () => {
+    const stubbedExportXLSX = sinon
+      .stub(exploreUtils, 'exportChart')
+      .returns(() => {});
+    const wrapper = setup();
+    wrapper.instance().exportXLSX(props.slice.sliceId);
+    expect(stubbedExportXLSX.calledOnce).toBe(true);
+    expect(stubbedExportXLSX.lastCall.args[0]).toEqual(
+      expect.objectContaining({
+        formData: expect.anything(),
+        resultType: 'full',
+        resultFormat: 'xlsx',
+      }),
+    );
+    exploreUtils.exportChart.restore();
+  });
+  it('should call exportChart with row_limit props.maxRows when exportFullXLSX is clicked', () => {
+    const stubbedExportXLSX = sinon
+      .stub(exploreUtils, 'exportChart')
+      .returns(() => {});
+    const wrapper = setup();
+    wrapper.instance().exportFullXLSX(props.slice.sliceId);
+    expect(stubbedExportXLSX.calledOnce).toBe(true);
+    expect(stubbedExportXLSX.lastCall.args[0].formData.row_limit).toEqual(666);
     exploreUtils.exportChart.restore();
   });
 });

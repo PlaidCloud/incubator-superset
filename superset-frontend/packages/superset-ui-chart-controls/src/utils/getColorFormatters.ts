@@ -16,7 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { DataRecord } from '@superset-ui/core';
+import memoizeOne from 'memoize-one';
+import { addAlpha, DataRecord } from '@superset-ui/core';
 import {
   ColorFormatters,
   COMPARATOR,
@@ -27,9 +28,6 @@ import {
 export const round = (num: number, precision = 0) =>
   Number(`${Math.round(Number(`${num}e+${precision}`))}e-${precision}`);
 
-export const rgbToRgba = (rgb: string, alpha: number) =>
-  rgb.replace(/rgb/i, 'rgba').replace(/\)/i, `,${alpha})`);
-
 const MIN_OPACITY_BOUNDED = 0.05;
 const MIN_OPACITY_UNBOUNDED = 0;
 const MAX_OPACITY = 1;
@@ -39,16 +37,21 @@ export const getOpacity = (
   extremeValue: number,
   minOpacity = MIN_OPACITY_BOUNDED,
   maxOpacity = MAX_OPACITY,
-) =>
-  extremeValue === cutoffPoint
-    ? maxOpacity
-    : round(
-        Math.abs(
-          ((maxOpacity - minOpacity) / (extremeValue - cutoffPoint)) *
-            (value - cutoffPoint),
-        ) + minOpacity,
-        2,
-      );
+) => {
+  if (extremeValue === cutoffPoint) {
+    return maxOpacity;
+  }
+  return Math.min(
+    maxOpacity,
+    round(
+      Math.abs(
+        ((maxOpacity - minOpacity) / (extremeValue - cutoffPoint)) *
+          (value - cutoffPoint),
+      ) + minOpacity,
+      2,
+    ),
+  );
+};
 
 export const getColorFunction = (
   {
@@ -59,6 +62,7 @@ export const getColorFunction = (
     colorScheme,
   }: ConditionalFormattingConfig,
   columnValues: number[],
+  alpha?: boolean,
 ) => {
   let minOpacity = MIN_OPACITY_BOUNDED;
   const maxOpacity = MAX_OPACITY;
@@ -173,37 +177,44 @@ export const getColorFunction = (
     const compareResult = comparatorFunction(value, columnValues);
     if (compareResult === false) return undefined;
     const { cutoffValue, extremeValue } = compareResult;
-    return rgbToRgba(
-      colorScheme,
-      getOpacity(value, cutoffValue, extremeValue, minOpacity, maxOpacity),
-    );
+    if (alpha === undefined || alpha) {
+      return addAlpha(
+        colorScheme,
+        getOpacity(value, cutoffValue, extremeValue, minOpacity, maxOpacity),
+      );
+    }
+    return colorScheme;
   };
 };
 
-export const getColorFormatters = (
-  columnConfig: ConditionalFormattingConfig[] | undefined,
-  data: DataRecord[],
-) =>
-  columnConfig?.reduce(
-    (acc: ColorFormatters, config: ConditionalFormattingConfig) => {
-      if (
-        config?.column !== undefined &&
-        (config?.operator === COMPARATOR.NONE ||
-          (config?.operator !== undefined &&
-            (MULTIPLE_VALUE_COMPARATORS.includes(config?.operator)
-              ? config?.targetValueLeft !== undefined &&
-                config?.targetValueRight !== undefined
-              : config?.targetValue !== undefined)))
-      ) {
-        acc.push({
-          column: config?.column,
-          getColorFromValue: getColorFunction(
-            config,
-            data.map(row => row[config.column!] as number),
-          ),
-        });
-      }
-      return acc;
-    },
-    [],
-  ) ?? [];
+export const getColorFormatters = memoizeOne(
+  (
+    columnConfig: ConditionalFormattingConfig[] | undefined,
+    data: DataRecord[],
+    alpha?: boolean,
+  ) =>
+    columnConfig?.reduce(
+      (acc: ColorFormatters, config: ConditionalFormattingConfig) => {
+        if (
+          config?.column !== undefined &&
+          (config?.operator === COMPARATOR.NONE ||
+            (config?.operator !== undefined &&
+              (MULTIPLE_VALUE_COMPARATORS.includes(config?.operator)
+                ? config?.targetValueLeft !== undefined &&
+                  config?.targetValueRight !== undefined
+                : config?.targetValue !== undefined)))
+        ) {
+          acc.push({
+            column: config?.column,
+            getColorFromValue: getColorFunction(
+              config,
+              data.map(row => row[config.column!] as number),
+              alpha,
+            ),
+          });
+        }
+        return acc;
+      },
+      [],
+    ) ?? [],
+);

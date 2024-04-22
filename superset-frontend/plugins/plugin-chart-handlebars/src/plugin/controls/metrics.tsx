@@ -21,6 +21,9 @@ import {
   ControlSetItem,
   ControlState,
   sharedControls,
+  Dataset,
+  ColumnMeta,
+  defineSavedMetrics,
 } from '@superset-ui/chart-controls';
 import { FeatureFlag, isFeatureEnabled, t } from '@superset-ui/core';
 import { getQueryMode, isAggMode, validateAggControlValues } from './shared';
@@ -29,21 +32,23 @@ const percentMetrics: typeof sharedControls.metrics = {
   type: 'MetricsControl',
   label: t('Percentage metrics'),
   description: t(
-    'Metrics for which percentage of total are to be displayed. Calculated from only data within the row limit.',
+    'Select one or many metrics to display, that will be displayed in the percentages of total. ' +
+      'Percentage metrics will be calculated only from data within the row limit. ' +
+      'You can use an aggregation function on a column or write custom SQL to create a percentage metric.',
   ),
   multi: true,
   visibility: isAggMode,
   resetOnHide: false,
   mapStateToProps: ({ datasource, controls }, controlState) => ({
     columns: datasource?.columns || [],
-    savedMetrics: datasource?.metrics || [],
+    savedMetrics: defineSavedMetrics(datasource),
     datasource,
     datasourceType: datasource?.type,
     queryMode: getQueryMode(controls),
     externalValidationErrors: validateAggControlValues(controls, [
       controls.groupby?.value,
       controls.metrics?.value,
-      controlState.value,
+      controlState?.value,
     ]),
   }),
   rerender: ['groupby', 'metrics'],
@@ -74,8 +79,12 @@ export const metricsControlSetItem: ControlSetItem = {
       { controls, datasource, form_data }: ControlPanelState,
       controlState: ControlState,
     ) => ({
-      columns: datasource?.columns.filter(c => c.filterable) || [],
-      savedMetrics: datasource?.metrics || [],
+      columns: datasource?.columns[0]?.hasOwnProperty('filterable')
+        ? (datasource as Dataset)?.columns?.filter(
+            (c: ColumnMeta) => c.filterable,
+          )
+        : datasource?.columns,
+      savedMetrics: defineSavedMetrics(datasource),
       // current active adhoc metrics
       selectedMetrics:
         form_data.metrics || (form_data.metric ? [form_data.metric] : []),

@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from typing import Any, Dict, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 import pytest
 
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture
-def columns_default() -> Dict[str, Any]:
+def columns_default() -> dict[str, Any]:
     """Default props for new columns"""
     return {
         "changed_by": 1,
@@ -49,7 +49,7 @@ def columns_default() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def sample_columns() -> Dict["TableColumn", Dict[str, Any]]:
+def sample_columns() -> dict["TableColumn", dict[str, Any]]:
     from superset.connectors.sqla.models import TableColumn
 
     return {
@@ -57,6 +57,7 @@ def sample_columns() -> Dict["TableColumn", Dict[str, Any]]:
             "name": "ds",
             "expression": "ds",
             "type": "TIMESTAMP",
+            "advanced_data_type": None,
             "is_temporal": True,
             "is_physical": True,
         },
@@ -64,6 +65,7 @@ def sample_columns() -> Dict["TableColumn", Dict[str, Any]]:
             "name": "num_boys",
             "expression": "num_boys",
             "type": "INTEGER",
+            "advanced_data_type": None,
             "is_dimensional": True,
             "is_physical": True,
         },
@@ -71,6 +73,7 @@ def sample_columns() -> Dict["TableColumn", Dict[str, Any]]:
             "name": "region",
             "expression": "region",
             "type": "VARCHAR",
+            "advanced_data_type": None,
             "is_dimensional": True,
             "is_physical": True,
         },
@@ -83,13 +86,14 @@ def sample_columns() -> Dict["TableColumn", Dict[str, Any]]:
             "name": "profit",
             "expression": "revenue-expenses",
             "type": "INTEGER",
+            "advanced_data_type": None,
             "is_physical": False,
         },
     }
 
 
 @pytest.fixture
-def sample_metrics() -> Dict["SqlMetric", Dict[str, Any]]:
+def sample_metrics() -> dict["SqlMetric", dict[str, Any]]:
     from superset.connectors.sqla.models import SqlMetric
 
     return {
@@ -98,6 +102,7 @@ def sample_metrics() -> Dict["SqlMetric", Dict[str, Any]]:
             "expression": "COUNT(*)",
             "extra_json": '{"metric_type": "COUNT"}',
             "type": "UNKNOWN",
+            "advanced_data_type": None,
             "is_additive": True,
             "is_aggregation": True,
             "is_filterable": False,
@@ -110,6 +115,7 @@ def sample_metrics() -> Dict["SqlMetric", Dict[str, Any]]:
             "expression": "AVG(revenue)",
             "extra_json": '{"metric_type": "AVG"}',
             "type": "UNKNOWN",
+            "advanced_data_type": None,
             "is_additive": False,
             "is_aggregation": True,
             "is_filterable": False,
