@@ -157,6 +157,7 @@ Interested in contributing? Check out our
 to find resources around contributing along with a detailed guide on
 how to set up a development environment.
 
+
 ## Resources
 
 - [Superset "In the Wild"](RESOURCES/INTHEWILD.md) - open a PR to add your org to the list!
