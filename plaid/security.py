@@ -12,6 +12,7 @@ from sqlalchemy import func, Table, MetaData
 from urllib.parse import urljoin
 from flask import session
 from flask_login import logout_user
+from flask_appbuilder import Model
 from flask_appbuilder.security.manager import AUTH_OID
 from authlib.integrations.flask_client import OAuth
 from requests.exceptions import HTTPError
