@@ -17,7 +17,6 @@
 """Unit tests for Superset with caching"""
 import json
 
-import unittest
 import pytest
 
 from superset import app, db
@@ -31,7 +30,6 @@ from tests.integration_tests.fixtures.birth_names_dashboard import (
 from .base_tests import SupersetTestCase
 
 
-@unittest.skip('fails')
 class TestCache(SupersetTestCase):
     def setUp(self):
         self.login(username="admin")

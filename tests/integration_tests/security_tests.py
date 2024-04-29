@@ -1660,14 +1660,13 @@ class TestSecurityManager(SupersetTestCase):
     @patch("superset.security.SupersetSecurityManager.can_access")
     @patch("superset.security.SupersetSecurityManager.can_access_schema")
     def test_raise_for_access_query_context(
-        self, mock_can_access_schema, mock_can_access, mock_is_owner, mock_g
+        self, mock_can_access_schema, mock_can_access, mock_is_owner
     ):
         query_context = Mock(datasource=self.get_datasource_mock(), form_data={})
 
         mock_can_access_schema.return_value = True
         security_manager.raise_for_access(query_context=query_context)
 
-        mock_g.user = security_manager.find_user("gamma")
         mock_can_access.return_value = False
         mock_can_access_schema.return_value = False
         mock_is_owner.return_value = False
@@ -1688,19 +1687,17 @@ class TestSecurityManager(SupersetTestCase):
         with self.assertRaises(SupersetSecurityException):
             security_manager.raise_for_access(database=database, table=table)
 
-    @patch("superset.security.manager.g")
     @patch("superset.security.SupersetSecurityManager.is_owner")
     @patch("superset.security.SupersetSecurityManager.can_access")
     @patch("superset.security.SupersetSecurityManager.can_access_schema")
     def test_raise_for_access_viz(
-        self, mock_can_access_schema, mock_can_access, mock_is_owner, mock_g
+        self, mock_can_access_schema, mock_can_access, mock_is_owner
     ):
         test_viz = viz.TimeTableViz(self.get_datasource_mock(), form_data={})
 
         mock_can_access_schema.return_value = True
         security_manager.raise_for_access(viz=test_viz)
 
-        mock_g.user = security_manager.find_user("gamma")
         mock_can_access.return_value = False
         mock_can_access_schema.return_value = False
         mock_is_owner.return_value = False

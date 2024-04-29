@@ -56,11 +56,10 @@ class DatabaseFilter(BaseFilter):  # pylint: disable=too-few-public-methods
         # We can proceed with default filtering now
         if security_manager.can_access_all_databases():
             return query
-
         database_perms = security_manager.user_view_menu_names("database_access")
         schema_access_databases = can_access_databases("schema_access")
+
         datasource_access_databases = can_access_databases("datasource_access")
-        project_ids = security_manager.get_project_ids()
 
         return query.filter(
             or_(
@@ -68,7 +67,6 @@ class DatabaseFilter(BaseFilter):  # pylint: disable=too-few-public-methods
                 self.model.database_name.in_(
                     [*schema_access_databases, *datasource_access_databases]
                 ),
-                self.model.id.in_(project_ids),
             )
         )
 

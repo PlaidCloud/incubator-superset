@@ -73,7 +73,6 @@ CHART_DATA_URI = "api/v1/chart/data"
 CHARTS_FIXTURE_COUNT = 10
 
 
-@pytest.mark.skip(reason='fails due to plaid stuff')
 class TestChartApi(SupersetTestCase, ApiOwnersTestCaseMixin, InsertChartMixin):
     resource_name = "chart"
 
@@ -564,7 +563,6 @@ class TestChartApi(SupersetTestCase, ApiOwnersTestCaseMixin, InsertChartMixin):
             response, {"message": {"datasource_id": ["Datasource does not exist"]}}
         )
 
-    @pytest.mark.skip('fails due to plaid stuff')
     @pytest.mark.usefixtures("load_world_bank_dashboard_with_slices")
     def test_create_chart_validate_user_is_dashboard_owner(self):
         """
@@ -1553,7 +1551,6 @@ class TestChartApi(SupersetTestCase, ApiOwnersTestCaseMixin, InsertChartMixin):
 
         assert rv.status_code == 404
 
-    @pytest.mark.skip(reason='fails due to plaid stuff')
     def test_export_chart_gamma(self):
         """
         Chart API: Test export chart has gamma
