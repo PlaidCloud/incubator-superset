@@ -154,6 +154,14 @@ class PlaidSecurityManager(SupersetSecurityManager):
         return bool(project.get('id'))
 
 
+    def is_owner(self, resource: Model) -> bool:
+        from superset.models.slice import Slice  # a Slice is a chart
+        if isinstance(resource, Slice):
+            return super().is_owner(resource) or any([self.is_owner(dashboard) for dashboard in resource.dashboards])
+
+        return super().is_owner(resource)
+
+
     # def get_project_ids(self):
     #     log.info(f"About to fetch user project ids")
     #     from superset.models.core import Database
