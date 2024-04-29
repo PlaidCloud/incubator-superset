@@ -178,8 +178,7 @@ class SupersetResultSet:
                             logger.exception(ex)
 
         if not pa_data:
-            pa_data = [pa.array([]) for _ in column_names]
-            # column_names = []
+            column_names = []
 
         self.table = pa.Table.from_arrays(pa_data, names=column_names)
         self._type_dict: dict[str, Any] = {}

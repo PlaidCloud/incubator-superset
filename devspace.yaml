@@ -11,17 +11,6 @@ images:
         - ${DEVSPACE_RANDOM}
     tags:
     - ${DEVSPACE_RANDOM}
-  events:
-    image: us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-events
-    preferSyncOverRebuild: true
-    build:
-      custom:
-        command: ./deploy
-        args:
-        - events
-        - ${DEVSPACE_RANDOM}
-    tags:
-    - ${DEVSPACE_RANDOM}
   node:
     image: us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-node
     preferSyncOverRebuild: true
@@ -50,15 +39,6 @@ deployments:
         pullSecret: gcr-key
       node:
         repository: us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-node
-      events:
-        repository: us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/superset-events
-        tag: latest
-        pullPolicy: IfNotPresent
-        pullSecret: gcr-key
-        entrypoint:
-          - "entrypoint"
-          - "python"
-          - "/plaid/plaid/event_handler.py"
       init:
         enabled: false
         loadExamples: true
@@ -160,21 +140,6 @@ dev:
     localSubPath: ./superset-frontend/src
     containerPath: /app/superset-frontend/src
     disableDownload: true  
-  - imageName: events
-    labelSelector:
-      app: superset
-      component: superset-events
-    containerName: events
-    localSubPath: ./plaid
-    containerPath: /plaid/plaid
-    disableDownload: true
-    onUpload:
-      execRemote:
-        onBatch:
-          command: bash
-          args:
-          - -c
-          - "kill -HUP 1"
 ######################################################################################################
 # READ THIS:
 #   To set any variables with a source of `env`, copy the `.env-sample` file at the root of

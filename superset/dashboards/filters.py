@@ -35,7 +35,7 @@ from superset.views.base import BaseFilter
 from superset.views.base_api import BaseFavoriteFilter, BaseTagFilter
 
 
-class DashboardTitleOrSlugFilter(BaseFilter):
+class DashboardTitleOrSlugFilter(BaseFilter):  # pylint: disable=too-few-public-methods
     name = _("Title or Slug")
     arg_name = "title_or_slug"
 
@@ -104,10 +104,6 @@ class DashboardAccessFilter(BaseFilter):  # pylint: disable=too-few-public-metho
         if security_manager.is_admin():
             return query
 
-        datasource_perms = security_manager.user_view_menu_names("datasource_access")
-        schema_perms = security_manager.user_view_menu_names("schema_access")
-
-        project_ids = security_manager.get_project_ids()
         is_rbac_disabled_filter = []
         dashboard_has_roles = Dashboard.roles.any()
         if is_feature_enabled("DASHBOARD_RBAC"):
@@ -117,7 +113,7 @@ class DashboardAccessFilter(BaseFilter):  # pylint: disable=too-few-public-metho
             db.session.query(Dashboard.id)
             .join(Dashboard.slices, isouter=True)
             .join(SqlaTable, Slice.datasource_id == SqlaTable.id)
-            # .join(Database, SqlaTable.database_id == Database.id)
+            .join(Database, SqlaTable.database_id == Database.id)
             .filter(
                 and_(
                     Dashboard.published.is_(True),
@@ -125,7 +121,6 @@ class DashboardAccessFilter(BaseFilter):  # pylint: disable=too-few-public-metho
                     get_dataset_access_filters(
                         Slice,
                         security_manager.can_access_all_datasources(),
-                        SqlaTable.database_id.in_(project_ids),
                     ),
                 )
             )

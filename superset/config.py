@@ -850,22 +850,6 @@ DEFAULT_MODULE_DS_MAP = OrderedDict(
 ADDITIONAL_MODULE_DS_MAP: dict[str, list[str]] = {}
 ADDITIONAL_MIDDLEWARE: list[Callable[..., Any]] = []
 
-# ---------------------------------------------------
-# List of modules to add as subcommands to superset CLI.
-# Useful for extending the CLI without modifying source.
-# CLI module must assign an AppGroup instance to a 'group'
-# variable (http://flask.pocoo.org/docs/1.0/cli/#custom-commands):
-#  group = AppGroup('name_of_my_subcommand')
-#
-#  @group.command()
-#  def my_cli_magic():
-# ---------------------------------------------------
-CLI_MODULES = []
-
-"""
-1) https://docs.python-guide.org/writing/logging/
-2) https://docs.python.org/2/library/logging.config.html
-"""
 # 1) https://docs.python-guide.org/writing/logging/
 # 2) https://docs.python.org/2/library/logging.config.html
 

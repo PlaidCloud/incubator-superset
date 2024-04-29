@@ -21,7 +21,7 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import aliased
 from sqlalchemy.orm.query import Query
 
-from superset import security_manager
+from superset import db, security_manager
 from superset.connectors.sqla import models
 from superset.connectors.sqla.models import SqlaTable
 from superset.models.core import FavStar
@@ -96,8 +96,7 @@ class ChartFilter(BaseFilter):  # pylint: disable=too-few-public-methods
         query = query.join(
             models.Database, table_alias.database_id == models.Database.id
         )
-        project_ids = security_manager.get_project_ids()
-        return query.filter(or_(get_dataset_access_filters(self.model)), SqlaTable.database_id.in_(project_ids))
+        return query.filter(get_dataset_access_filters(self.model))
 
 
 class ChartHasCreatedByFilter(BaseFilter):  # pylint: disable=too-few-public-methods

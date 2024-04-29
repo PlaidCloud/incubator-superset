@@ -12,6 +12,7 @@ from sqlalchemy import func, Table, MetaData
 from urllib.parse import urljoin
 from flask import session
 from flask_login import logout_user
+from flask_appbuilder import Model
 from flask_appbuilder.security.manager import AUTH_OID
 from authlib.integrations.flask_client import OAuth
 from requests.exceptions import HTTPError
@@ -154,17 +155,73 @@ class PlaidSecurityManager(SupersetSecurityManager):
         return bool(project.get('id'))
 
 
-    def get_project_ids(self):
-        log.info(f"About to fetch user project ids")
+    def is_owner(self, resource: Model) -> bool:
+        from superset.models.slice import Slice  # a Slice is a chart
+        if isinstance(resource, Slice):
+            return super().is_owner(resource) or any([self.is_owner(dashboard) for dashboard in resource.dashboards])
+
+        return super().is_owner(resource)
+
+
+    # def get_project_ids(self):
+    #     log.info(f"About to fetch user project ids")
+    #     from superset.models.core import Database
+    #     rpc = self.get_rpc()
+    #     start = time.time()
+    #     projects = rpc.analyze.project.projects()
+    #     end = time.time()
+    #     log.info(f"Fetched user's projects in {end - start} seconds.")
+    #     project_uuids = {str(uuid.UUID(project['id'])) for project in projects}
+    #     log.info(f"Project IDs: {project_uuids}")
+    #     return self.get_session.query(Database.id).filter(Database.uuid.in_(project_uuids))
+
+    # Not actually called anywhere any more! Success!
+    # def get_project_ids(self):
+    #     return [db.id for db in self.get_project_dbs()]
+
+    def _get_project_dbs(self):
         from superset.models.core import Database
         rpc = self.get_rpc()
-        start = time.time()
         projects = rpc.analyze.project.projects()
-        end = time.time()
-        log.info(f"Fetched user's projects in {end - start} seconds.")
         project_uuids = {str(uuid.UUID(project['id'])) for project in projects}
-        log.info(f"Project IDs: {project_uuids}")
-        return self.get_session.query(Database.id).filter(Database.uuid.in_(project_uuids))
+        return self.get_session.query(Database).filter(Database.uuid.in_(project_uuids))
+
+    def user_view_menu_names(self, permission_name: str) -> set[str]:
+        if permission_name == 'database_access':
+            project_perms = {db.perm for db in self._get_project_dbs()}
+            return project_perms | super().user_view_menu_names(permission_name)
+
+        return super().user_view_menu_names(permission_name)
+
+
+    # - Database.perm!
+    # So I think maybe the other thing to do is to override user_view_menu_names, and add accessible projects in if it's queried on "database_access "?
+    # Superset's get_accessible_databases is based on self.user_view_menu_names("database_access"), and it uses DATABASE_PERM_REGEX to extract the id, I think?
+    # According to unpack_database_and_schema, it looks like a schema_permission looks like [database_name].[schema|table] , I think with the square brackets included.
+    # unpack_database_and_schema is run on the things erturned by user_view_menu_names
+    # so is the regex in get_accessible_databases()
+    #Looks like maybe it's [database_name].[schema|table].id:<id> (where the first id is literal, the second is an id)
+    # Actual examples:
+ # ('all_database_access',),
+ # ('all_query_access',),
+ # ('[International Motors (21dc)].(id:1)',),
+ # ('[International Motors (21dc)].[anlz21dccece-1043-4c10-9bb5-c512ca4d5393]',),
+ # ('[International Motors (21dc)].[anlze395fd34-fedc-4f04-b3fd-c50d8d77c531]',),
+ # ('[International Motors (21dc)].[gp_toolkit]',),
+ # ('[International Motors (21dc)].[information_schema]',),
+ # ('[International Motors (21dc)].[public]',),
+ # ('Profile',),
+ # ('[International Motors (21dc)].[ParentChildRecord](id:50)',),
+ # ('[International Motors (21dc)].[ActivityDriverValueRecord](id:51)',),
+ # ('[International Motors (21dc)].[ResourceDriverSplitRecord](id:52)',),
+ # ('[International Motors (21dc)].[ResourceDriverValueRecord](id:53)',)
+
+
+    # Not actually necessary to override this, since it depends on user_view_menu_names(), and we're overriding that.
+    # def get_accessible_databases():
+    #     # Return any databases that would be accessible under superset's security system, and also any
+    #     # projects accessible under plaid's security system.
+    #     return self.get_project_ids() + super().get_accessible_databases()
 
 
     def get_schemas_accessible_by_user(

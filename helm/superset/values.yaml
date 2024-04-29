@@ -43,15 +43,10 @@ serviceAccount:
 # @default -- see `values.yaml`
 bootstrapScript: |
   #!/bin/bash
-  # rm -rf /var/lib/apt/lists/* && \
-  # pip install \
-  #   psycopg2-binary==2.9.6 \
-  #   redis==3.5.3 && \
   if [ ! -f ~/bootstrap ]; then echo "Running Superset with uid {{ .Values.runAsUser }}" > ~/bootstrap; fi
 
-## The name of the secret which we will use to generate a superset_config.py file
-## Note: this secret must have the key superset_config.py in it and can include other files as well
-##
+# -- The name of the secret which we will use to generate a superset_config.py file
+# Note: this secret must have the key superset_config.py in it and can include other files as well
 configFromSecret: plaid-superset-config-override
 
 # -- The name of the secret which we will use to populate env vars in deployed pods

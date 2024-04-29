@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # coding=utf-8
 
+# This is no longer actually used, but I'm keeping it around because I find it useful as an example of how to
+# write a program that calls superset code for debugging purposes
+
 import logging
 import time
 from enum import Enum

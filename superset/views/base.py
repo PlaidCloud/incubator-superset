@@ -48,7 +48,7 @@ from flask_babel import get_locale, gettext as __, lazy_gettext as _
 from flask_jwt_extended.exceptions import NoAuthorizationError
 from flask_wtf.csrf import CSRFError
 from flask_wtf.form import FlaskForm
-from sqlalchemy import exc, or_
+from sqlalchemy import exc
 from sqlalchemy.orm import Query
 from werkzeug.exceptions import HTTPException
 from wtforms import Form
@@ -669,12 +669,11 @@ class DatasourceFilter(BaseFilter):  # pylint: disable=too-few-public-methods
     def apply(self, query: Query, value: Any) -> Query:
         if security_manager.can_access_all_datasources():
             return query
-        project_ids = security_manager.get_project_ids()
         query = query.join(
             models.Database,
             models.Database.id == self.model.database_id,
         )
-        return query.filter(or_(get_dataset_access_filters(self.model), self.model.database_id.in_(project_ids)))
+        return query.filter(get_dataset_access_filters(self.model))
 
 
 class CsvResponse(Response):
