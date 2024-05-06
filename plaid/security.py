@@ -128,14 +128,31 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
         return rpc
 
+
+    def _can_access_project(self, project_id):
+        rpc = self.get_rpc()
+        try:
+            proj = rpc.analyze.project.project(project_id=project_id)
+        except:
+            proj = None
+
+        if not (proj and proj.get('id')) and '-' in project_id:
+            # Try again without dashes
+            smooshed_project_id = project_id.replace('-', '')
+            try:
+                proj = rpc.analyze.project.project(project_id=smooshed_project_id)
+            except:
+                proj = None
+
+        return proj and proj.get('id')
+
+
     def can_access_database(self, database: Union["Database", "DruidCluster"]) -> bool:
         log.debug(f"Can access database: {database}")
-        rpc = self.get_rpc()
-        proj = rpc.analyze.project.project(project_id=str(database.uuid))
-        log.debug(proj)
-        if proj["id"] is None:
-            proj = rpc.analyze.project.project(project_id=str(database.uuid).replace('-', ''))
-        return proj.get("id", None) is not None or super().can_access_database(database)
+        return (
+            self._can_access_project(str(database.uuid))
+            or super().can_access_database(database)
+        )
 
 
     def can_access_schema(self, datasource: "BaseDatasource") -> bool:
@@ -147,12 +164,12 @@ class PlaidSecurityManager(SupersetSecurityManager):
         if datasource.schema is None:
             # Call the base method if there is no schema since there isn't a plaid schema.
             return super().can_access_datasource(datasource)
+
         project_id = datasource.schema.replace("report", "")
-        rpc = self.get_rpc()
-        project = rpc.analyze.project.project(project_id=project_id)
-        log.debug(f"project query result: {project}")
-        log.debug(f"returning: {bool(project.get('id'))}")
-        return bool(project.get('id'))
+        return (
+            self._can_access_project(project_id)
+            or super().can_access_datasource(datasource)
+        )
 
 
     def is_owner(self, resource: Model) -> bool:
