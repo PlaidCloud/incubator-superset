@@ -78,6 +78,7 @@ from superset.commands.importers.v1.utils import get_contents_from_bundle
 from superset.constants import MODEL_API_RW_METHOD_PERMISSION_MAP, RouteMethod
 from superset.daos.chart import ChartDAO
 from superset.extensions import event_logger
+from superset.models.dashboard import Dashboard
 from superset.models.slice import Slice
 from superset.tasks.thumbnails import cache_chart_thumbnail
 from superset.tasks.utils import get_current_user
@@ -275,6 +276,26 @@ class ChartRestApi(BaseSupersetModelRestApi):
     }
 
     allowed_rel_fields = {"owners", "created_by", "changed_by"}
+
+    def pre_get(self, response: Dict[str, Any]) -> None:
+        # Mutate response before it's sent
+        print(response)  # TODO: probably should be log
+        owners = response['result']['owners']
+        dashboard_ids = [dsb['id'] for dsb in response['result']['dashboards']]
+        full_dashboards = self.datamodel.session.query(Dashboard).filter(Dashboard.id.in_(dashboard_ids))
+        owner_ids = set(o['id'] for o in owners)
+        for dashboard in full_dashboards:
+            for dashboard_owner in dashboard.owners:
+                if dashboard_owner.id not in owner_ids:
+                    owner_ids.add(dashboard_owner.id)
+                    owners.append({
+                        'id': dashboard_owner.id,
+                        'first_name': dashboard_owner.first_name
+                        'last_name': dashboard_owner.last_name
+                    })
+        # TODO: get a list of users with Admin or Alpha powers and add those too?
+        # TODO: find the separate owners endpoint and override that too?
+            
 
     @expose("/", methods=("POST",))
     @protect()
