@@ -30,7 +30,6 @@ The general idea is to use static classes and an inheritance scheme.
 import inspect
 import logging
 import pkgutil
-import traceback
 from collections import defaultdict
 from importlib import import_module
 from pathlib import Path
@@ -63,7 +62,6 @@ def load_engine_specs() -> list[type[BaseEngineSpec]]:
     Load all engine specs, native and 3rd party.
     """
     engine_specs: list[type[BaseEngineSpec]] = []
-    logger.warning(traceback.format_stack())
 
     # load standard engines
     db_engine_spec_dir = str(Path(__file__).parent)
