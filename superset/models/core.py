@@ -785,6 +785,7 @@ class Database(
     def get_db_engine_spec(
         cls, url: URL
     ) -> builtins.type[db_engine_specs.BaseEngineSpec]:
+        logger.warning(f'getting engine spec for {url}')
         backend = url.get_backend_name()
         try:
             driver = url.get_driver_name()
