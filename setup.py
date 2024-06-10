@@ -73,7 +73,7 @@ setup(
         ],
     },
     install_requires=[
-        "Authlib==1.3.0",
+        "Authlib==1.3.1",
         "backoff>=1.8.0",
         "celery>=5.2.2, <6.0.0",
         "click>=8.0.3",
