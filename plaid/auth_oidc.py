@@ -69,5 +69,5 @@ class PlaidAuthOAuthView(AuthOAuthView):
     @expose("/login/<provider>")
     def login(self, provider=None):
         if provider is None:
-            return super().login(provider='plaid-keycloak')
+            return super().login(provider='plaidkeycloak')
         return super().login(provider=provider)
