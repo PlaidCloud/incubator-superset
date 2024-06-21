@@ -391,21 +391,25 @@ class PlaidSecurityManager(SupersetSecurityManager):
             )
 
     def has_access(self, permission_name: str, view_name: str) -> bool:
+        def logout_and_clear():
+            logout_user()
+            session.clear()
+            return False
         # check token expiry and logout, then continue previous auth check
         if self.auth_type == AUTH_OAUTH:
-            if 'oauth' in session:
-                token, secret = session['oauth']
-                # provider = session["oauth_provider"]
-                if not token_is_valid(token):
-                    logout_user()
-                    session.clear()
+            if 'oauth' not in session:
+                return logout_and_clear()
+            token, secret = session['oauth']
+            # provider = session["oauth_provider"]
+            if not token_is_valid(token):
+                return logout_and_clear()
 
         elif self.auth_type == AUTH_OID:
-            if 'token' in session:
-                token = session['token']
-                if not token_is_valid(token):
-                    logout_user()
-                    session.clear()
+            if 'token' not in session:
+                return logout_and_clear()
+            token = session['token']
+            if not token_is_valid(token):
+                return logout_and_clear()
 
         return super().has_access(permission_name, view_name)
 
