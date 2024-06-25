@@ -422,16 +422,24 @@ class PlaidSecurityManager(SupersetSecurityManager):
                         user_resp = self.appbuilder.sm.oauth_remotes[provider].get("userinfo")
                         user_resp.raise_for_status()
                         logging.info('Got user response')
-                        # new token now stored in session
-                        token_dict = session['oauth_token_dict']
-                        logging.info('Provider %s, Revised Token %s', provider, token_dict)
-                        token_endpoint = self.appbuilder.sm.oauth.plaidkeycloak.access_token_url
-                        intro_resp = self.appbuilder.sm.oauth_remotes[provider].introspect_token(token_endpoint, token=token_dict)
-                        intro_resp.raise_for_status()
-                        logging.info('Did introspection')
-                        token_info = intro_resp.json()
-                        if token_info['active']:
+
+                        token, secret = session['oauth']
+                        if token_is_valid(token):
                             return True
+
+                        #ToDo - I could not get introspection to work, I was calling from FlaskOAuth2App, but needs to be and OAuth2Session which is the _get_oauth_client() of the Flask thing
+                        # maybe we don't need to introspect anyway, can just check expiry.
+
+                        # # new token now stored in session
+                        # token_dict = session['oauth_token_dict']
+                        # logging.info('Provider %s, Revised Token %s', provider, token_dict)
+                        # token_endpoint = self.appbuilder.sm.oauth.plaidkeycloak.access_token_url
+                        # intro_resp = self.appbuilder.sm.oauth_remotes[provider].introspect_token(token_endpoint, token=token_dict)
+                        # intro_resp.raise_for_status()
+                        # logging.info('Did introspection')
+                        # token_info = intro_resp.json()
+                        # if token_info['active']:
+                        #     return True
 
                 elif self.auth_type == AUTH_OID:
                     if 'token' in session:
