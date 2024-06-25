@@ -390,28 +390,70 @@ class PlaidSecurityManager(SupersetSecurityManager):
                 "Appended %s to %s roles list.", role.name, user.username
             )
 
-    def has_access(self, permission_name: str, view_name: str) -> bool:
-        def logout_and_clear():
+    def validate_oauth_token(self):
+        def _internal_validate():
+            try:
+                if self.auth_type == AUTH_OAUTH:
+                    if 'oauth' not in session:
+                        return False
+                    # token, secret = session['oauth']
+                    provider = session["oauth_provider"]
+                    # self.oauth.providers[provider].introspect_token(token_endpoint)
+                    # client.introspect_token(token_endpoint, token=token)
+
+                    # this will refresh the token if it is expired (via `token_update` listener)
+                    user_resp = self.appbuilder.sm.oauth_remotes[provider].get("userinfo")
+                    user_resp.raise_for_status()
+                    # new token now stored in session
+                    token, secret = session['oauth']
+                    token_endpoint = self.appbuilder.sm.oauth.plaidkeycloak.access_token_url
+                    intro_resp = self.appbuilder.sm.oauth_remotes[provider].introspect_token(token_endpoint, token=token)
+                    intro_resp.raise_for_status()
+                    token_info = intro_resp.json()
+                    if not token_info['active']:
+                        return False
+                    return True
+
+                elif self.auth_type == AUTH_OID:
+                    if 'token' not in session:
+                        return False
+                    token = session['token']
+                    if not token_is_valid(token):
+                        return False
+
+            except Exception as e:
+                logging.info('Failed to validate oauth token: %s', e)
+                return False
+
+        result = _internal_validate()
+        if not result:
             logout_user()
             session.clear()
-            return False
-        # check token expiry and logout, then continue previous auth check
-        if self.auth_type == AUTH_OAUTH:
-            if 'oauth' not in session:
-                return logout_and_clear()
-            token, secret = session['oauth']
-            # provider = session["oauth_provider"]
-            if not token_is_valid(token):
-                return logout_and_clear()
+        return result
 
-        elif self.auth_type == AUTH_OID:
-            if 'token' not in session:
-                return logout_and_clear()
-            token = session['token']
-            if not token_is_valid(token):
-                return logout_and_clear()
-
-        return super().has_access(permission_name, view_name)
+    #
+    # def has_access(self, permission_name: str, view_name: str) -> bool:
+    #     def logout_and_clear():
+    #         logout_user()
+    #         session.clear()
+    #         return False
+    #     # check token expiry and logout, then continue previous auth check
+    #     if self.auth_type == AUTH_OAUTH:
+    #         if 'oauth' not in session:
+    #             return logout_and_clear()
+    #         token, secret = session['oauth']
+    #         # provider = session["oauth_provider"]
+    #         if not token_is_valid(token):
+    #             return logout_and_clear()
+    #
+    #     elif self.auth_type == AUTH_OID:
+    #         if 'token' not in session:
+    #             return logout_and_clear()
+    #         token = session['token']
+    #         if not token_is_valid(token):
+    #             return logout_and_clear()
+    #
+    #     return super().has_access(permission_name, view_name)
 
 
 def token_is_valid(access_token):
