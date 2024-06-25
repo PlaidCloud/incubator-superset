@@ -390,39 +390,47 @@ class PlaidSecurityManager(SupersetSecurityManager):
                 "Appended %s to %s roles list.", role.name, user.username
             )
 
+    def has_oauth_token(self):
+        if self.auth_type == AUTH_OAUTH:
+            return 'oauth' in session
+        if self.auth_type == AUTH_OID:
+            return 'token' in session
+        return False
+
     def validate_oauth_token(self):
         def _internal_validate():
             try:
                 if self.auth_type == AUTH_OAUTH:
-                    if 'oauth' not in session:
-                        return False
-                    token, secret = session['oauth']
-                    provider = session["oauth_provider"]
-                    # self.oauth.providers[provider].introspect_token(token_endpoint)
-                    # client.introspect_token(token_endpoint, token=token)
-                    logging.info('Provider %s, Token %s', provider, token)
-                    # this will refresh the token if it is expired (via `token_update` listener)
-                    user_resp = self.appbuilder.sm.oauth_remotes[provider].get("userinfo")
-                    user_resp.raise_for_status()
-                    logging.info('Got user response')
-                    # new token now stored in session
-                    token, secret = session['oauth']
-                    logging.info('Provider %s, Revised Token %s', provider, token)
-                    token_endpoint = self.appbuilder.sm.oauth.plaidkeycloak.access_token_url
-                    intro_resp = self.appbuilder.sm.oauth_remotes[provider].introspect_token(token_endpoint, token=token)
-                    intro_resp.raise_for_status()
-                    logging.info('Did introspection')
-                    token_info = intro_resp.json()
-                    if not token_info['active']:
-                        return False
-                    return True
+                    if 'oauth' in session:
+                        token, secret = session['oauth']
+                        # if token_is_valid(token):
+                        #     return True
+                        provider = session["oauth_provider"]
+                        # self.oauth.providers[provider].introspect_token(token_endpoint)
+                        # client.introspect_token(token_endpoint, token=token)
+                        logging.info('Provider %s, Token %s', provider, token)
+                        # this will refresh the token if it is expired (via `token_update` listener)
+                        user_resp = self.appbuilder.sm.oauth_remotes[provider].get("userinfo")
+                        user_resp.raise_for_status()
+                        logging.info('Got user response')
+                        # new token now stored in session
+                        token, secret = session['oauth']
+                        logging.info('Provider %s, Revised Token %s', provider, token)
+                        token_endpoint = self.appbuilder.sm.oauth.plaidkeycloak.access_token_url
+                        intro_resp = self.appbuilder.sm.oauth_remotes[provider].introspect_token(token_endpoint, token=token)
+                        intro_resp.raise_for_status()
+                        logging.info('Did introspection')
+                        token_info = intro_resp.json()
+                        if token_info['active']:
+                            return True
 
                 elif self.auth_type == AUTH_OID:
-                    if 'token' not in session:
-                        return False
-                    token = session['token']
-                    if not token_is_valid(token):
-                        return False
+                    if 'token' in session:
+                        token = session['token']
+                        if token_is_valid(token):
+                            return True
+
+                return False
 
             except Exception as e:
                 logging.exception('Failed to validate oauth token: %s', e)
