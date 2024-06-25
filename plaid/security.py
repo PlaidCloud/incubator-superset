@@ -396,19 +396,22 @@ class PlaidSecurityManager(SupersetSecurityManager):
                 if self.auth_type == AUTH_OAUTH:
                     if 'oauth' not in session:
                         return False
-                    # token, secret = session['oauth']
+                    token, secret = session['oauth']
                     provider = session["oauth_provider"]
                     # self.oauth.providers[provider].introspect_token(token_endpoint)
                     # client.introspect_token(token_endpoint, token=token)
-
+                    logging.info('Provider %s, Token %s', provider, token)
                     # this will refresh the token if it is expired (via `token_update` listener)
                     user_resp = self.appbuilder.sm.oauth_remotes[provider].get("userinfo")
                     user_resp.raise_for_status()
+                    logging.info('Got user response')
                     # new token now stored in session
                     token, secret = session['oauth']
+                    logging.info('Provider %s, Revised Token %s', provider, token)
                     token_endpoint = self.appbuilder.sm.oauth.plaidkeycloak.access_token_url
                     intro_resp = self.appbuilder.sm.oauth_remotes[provider].introspect_token(token_endpoint, token=token)
                     intro_resp.raise_for_status()
+                    logging.info('Did introspection')
                     token_info = intro_resp.json()
                     if not token_info['active']:
                         return False
@@ -422,7 +425,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
                         return False
 
             except Exception as e:
-                logging.info('Failed to validate oauth token: %s', e)
+                logging.exception('Failed to validate oauth token: %s', e)
                 return False
 
         result = _internal_validate()
