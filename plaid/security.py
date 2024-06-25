@@ -390,6 +390,14 @@ class PlaidSecurityManager(SupersetSecurityManager):
                 "Appended %s to %s roles list.", role.name, user.username
             )
 
+    def set_oauth_session(self, provider, oauth_response):
+        """
+        Set the current session with OAuth token dict
+        """
+        # Save users token_dict on encrypted session cookie
+        session["oauth_token_dict"] = oauth_response
+        super().set_oauth_session(provider, oauth_response)
+
     def has_oauth_token(self):
         if self.auth_type == AUTH_OAUTH:
             return 'oauth' in session
@@ -402,22 +410,23 @@ class PlaidSecurityManager(SupersetSecurityManager):
             try:
                 if self.auth_type == AUTH_OAUTH:
                     if 'oauth' in session:
-                        token, secret = session['oauth']
+                        # token, secret = session['oauth']
                         # if token_is_valid(token):
                         #     return True
+                        # to do the below, it needs custom `set_oauth_session` to save the `oauth_token_dict`
                         provider = session["oauth_provider"]
-                        # self.oauth.providers[provider].introspect_token(token_endpoint)
-                        # client.introspect_token(token_endpoint, token=token)
-                        logging.info('Provider %s, Token %s', provider, token)
+                        token_dict = session['oauth_token_dict']
+                        logging.info('Provider %s, Token %s', provider, token_dict)
                         # this will refresh the token if it is expired (via `token_update` listener)
+                        self.appbuilder.sm.oauth_remotes[provider].token = token_dict
                         user_resp = self.appbuilder.sm.oauth_remotes[provider].get("userinfo")
                         user_resp.raise_for_status()
                         logging.info('Got user response')
                         # new token now stored in session
-                        token, secret = session['oauth']
-                        logging.info('Provider %s, Revised Token %s', provider, token)
+                        token_dict = session['oauth_token_dict']
+                        logging.info('Provider %s, Revised Token %s', provider, token_dict)
                         token_endpoint = self.appbuilder.sm.oauth.plaidkeycloak.access_token_url
-                        intro_resp = self.appbuilder.sm.oauth_remotes[provider].introspect_token(token_endpoint, token=token)
+                        intro_resp = self.appbuilder.sm.oauth_remotes[provider].introspect_token(token_endpoint, token=token_dict)
                         intro_resp.raise_for_status()
                         logging.info('Did introspection')
                         token_info = intro_resp.json()
