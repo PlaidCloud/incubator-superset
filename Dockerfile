@@ -107,11 +107,11 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     && apt-get autoremove -yqq --purge build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-    apt-get update -qq && apt-get install -yqq --no-install-recommends \
-      build-essential \
-    && pip install -r requirements/development.txt \
-    && apt-get autoremove -yqq --purge build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    # apt-get update -qq && apt-get install -yqq --no-install-recommends \
+    #   build-essential \
+    # && pip install -r requirements/development.txt \
+    # && apt-get autoremove -yqq --purge build-essential \
+    # && rm -rf /var/lib/apt/lists/*
 
 USER superset
 ######################################################################
