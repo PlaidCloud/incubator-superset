@@ -99,6 +99,15 @@ COPY --chown=superset:superset pyproject.toml setup.py MANIFEST.in README.md ./
 # setup.py uses the version information in package.json
 COPY --chown=superset:superset superset-frontend/package.json superset-frontend/
 COPY --chown=superset:superset requirements/base.txt requirements/
+# RUN --mount=type=bind,target=./requirements/local.txt,src=./requirements/local.txt \
+#     --mount=type=bind,target=./requirements/development.txt,src=./requirements/development.txt \
+#     --mount=type=bind,target=./requirements/base.txt,src=./requirements/base.txt \
+#     --mount=type=cache,target=/root/.cache/pip \
+#     pip install -r requirements/local.txt
+
+COPY --chown=superset:superset --from=superset-node /app/superset/static/assets superset/static/assets
+
+COPY --chown=superset:superset superset superset
 RUN --mount=type=cache,target=/root/.cache/pip \
     apt-get update -qq && apt-get install -yqq --no-install-recommends \
       build-essential \
@@ -112,6 +121,54 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     # && pip install -r requirements/development.txt \
     # && apt-get autoremove -yqq --purge build-essential \
     # && rm -rf /var/lib/apt/lists/*
+
+COPY plaid /plaid/plaid/
+
+COPY ./docker/run-server.sh /usr/bin/
+
+RUN chmod a+x /usr/bin/run-server.sh
+
+WORKDIR /app
+
+# COPY --chmod=755 ./docker/run-server.sh /usr/bin/
+USER superset
+
+HEALTHCHECK CMD curl -f "http://localhost:${SUPERSET_PORT}/health"
+
+EXPOSE ${SUPERSET_PORT}
+
+CMD ["/usr/bin/run-server.sh"]
+
+######################################################################
+# Dev image...
+######################################################################
+FROM lean AS dev
+ARG GECKODRIVER_VERSION=v0.33.0 \
+    FIREFOX_VERSION=117.0.1
+
+USER root
+
+RUN apt-get update -qq \
+    && apt-get install -yqq --no-install-recommends \
+        git \
+        libnss3 \
+        libdbus-glib-1-2 \
+        libgtk-3-0 \
+        libx11-xcb1 \
+        libasound2 \
+        libxtst6 \
+        wget \
+    # Install GeckoDriver WebDriver
+    && wget -q https://github.com/mozilla/geckodriver/releases/download/${GECKODRIVER_VERSION}/geckodriver-${GECKODRIVER_VERSION}-linux64.tar.gz -O - | tar xfz - -C /usr/local/bin \
+    # Install Firefox
+    && wget -q https://download-installer.cdn.mozilla.net/pub/firefox/releases/${FIREFOX_VERSION}/linux-x86_64/en-US/firefox-${FIREFOX_VERSION}.tar.bz2 -O - | tar xfj - -C /opt \
+    && ln -s /opt/firefox/firefox /usr/local/bin/firefox \
+    && apt-get autoremove -yqq --purge wget && rm -rf /var/[log,tmp]/* /tmp/* /var/lib/apt/lists/*
+# Cache everything for dev purposes...
+RUN --mount=type=bind,target=./requirements/base.txt,src=./requirements/base.txt \
+    --mount=type=bind,target=./requirements/docker.txt,src=./requirements/docker.txt \
+    --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements/docker.txt
 
 USER superset
 ######################################################################

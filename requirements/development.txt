@@ -10,13 +10,13 @@
     # via
     #   -r requirements/base.in
     #   -r requirements/development.in
-astroid==3.2.3
+astroid==3.2.4
     # via pylint
-boto3==1.34.144
+boto3==1.34.146
     # via
     #   apache-superset
     #   dataflows-tabulator
-botocore==1.34.144
+botocore==1.34.146
     # via
     #   boto3
     #   s3transfer
@@ -87,12 +87,12 @@ googleapis-common-protos==1.63.2
     # via
     #   google-api-core
     #   grpcio-status
-grpcio==1.64.1
+grpcio==1.65.1
     # via
     #   apache-superset
     #   google-api-core
     #   grpcio-status
-grpcio-status==1.64.1
+grpcio-status==1.65.1
     # via google-api-core
 identify==2.6.0
     # via pre-commit
@@ -146,7 +146,7 @@ pip-compile-multi==2.6.4
     # via apache-superset
 pip-tools==7.4.1
     # via pip-compile-multi
-playwright==1.45.0
+playwright==1.45.1
     # via apache-superset
 pluggy==1.5.0
     # via
@@ -167,9 +167,7 @@ protobuf==5.27.2
     #   grpcio-status
     #   proto-plus
 pure-sasl==0.6.2
-    # via
-    #   pyhive
-    #   thrift-sasl
+    # via thrift-sasl
 pydata-google-auth==1.8.2
     # via pandas-gbq
 pydruid==0.6.9
@@ -178,11 +176,11 @@ pyee==11.1.0
     # via playwright
 pyfakefs==5.6.0
     # via apache-superset
-pyhive[hive_pure_sasl]==0.7.0
+pyhive[presto]==0.7.0
     # via apache-superset
 pyinstrument==4.6.2
     # via apache-superset
-pylint==3.2.5
+pylint==3.2.6
     # via apache-superset
 pyproject-api==1.7.1
     # via tox
@@ -207,7 +205,7 @@ rfc3339-validator==0.1.4
     # via openapi-schema-validator
 rfc3986==2.0.0
     # via tableschema
-ruff==0.5.2
+ruff==0.5.4
     # via apache-superset
 s3transfer==0.10.2
     # via boto3
@@ -224,12 +222,9 @@ tableschema==1.20.11
 thrift==0.20.0
     # via
     #   apache-superset
-    #   pyhive
     #   thrift-sasl
 thrift-sasl==0.4.3
-    # via
-    #   apache-superset
-    #   pyhive
+    # via apache-superset
 tomli==2.0.1
     # via
     #   build
