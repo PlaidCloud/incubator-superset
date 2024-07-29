@@ -6,7 +6,7 @@ import logging
 import uuid
 import time
 import jwt
-from typing import Union, List
+from typing import Union, List, Optional
 
 from sqlalchemy import func, Table, MetaData
 from urllib.parse import urljoin
@@ -346,7 +346,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
 
     def get_schemas_accessible_by_user(
-            self, database: "Database", schemas: List[str], hierarchical: bool = True
+            self, database: "Database", catalog: Optional[str], schemas: List[str], hierarchical: bool = True
     ) -> List[str]:
         REPORTING_SCHEMA_PREFIX = 'report'
 
