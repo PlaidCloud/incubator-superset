@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import sqlalchemy
 import logging
 from functools import partial
 from typing import Any
@@ -147,6 +148,11 @@ class UpdateDatabaseCommand(BaseCommand):
                 catalog=catalog,
                 ssh_tunnel=ssh_tunnel,
             )
+        except sqlalchemy.exc.OperationalError:
+            # Return an empty set. In our case, this is probably a failure to connect to a catalog this
+            # database connection shouldn't be able to connect to.
+            # logger.exception(f'Could not get schema names for database {database} catalog {catalog}')
+            return set()
         except Exception as ex:
             raise DatabaseConnectionFailedError() from ex
 
