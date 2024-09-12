@@ -260,6 +260,9 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
 
     def can_access_schema(self, datasource: "BaseDatasource") -> bool:
+        if datasource.schema is None:
+            # Call the base method if there is no schema since there isn't a plaid schema.
+            return super().can_access_schema(datasource)
         return self.can_access_datasource(datasource)
 
 
