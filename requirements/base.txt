@@ -97,9 +97,9 @@ cryptography==42.0.8
     #   authlib
     #   paramiko
     #   pyopenssl
-databend-driver==0.19.5
+databend-driver==0.22.2
     # via databend-sqlalchemy
-databend-sqlalchemy @ git+https://github.com/PlaidCloud/databend-sqlalchemy.git@implement-time#egg=databend-sqlalchemy
+databend-sqlalchemy @ git+https://github.com/PlaidCloud/databend-sqlalchemy.git@main#egg=databend-sqlalchemy
     # via plaidcloud-rpc
 defusedxml==0.7.1
     # via python3-openid
