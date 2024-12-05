@@ -18,7 +18,7 @@
 ######################################################################
 # Node stage to deal with static asset construction
 ######################################################################
-ARG PY_VER=3.10-slim-bookworm
+ARG PY_VER=3.11-slim-bookworm
 
 # if BUILDPLATFORM is null, set it to 'amd64' (or leave as is otherwise).
 ARG BUILDPLATFORM=${BUILDPLATFORM:-amd64}
@@ -89,12 +89,15 @@ COPY --chown=superset:superset pyproject.toml setup.py MANIFEST.in README.md ./
 # setup.py uses the version information in package.json
 COPY --chown=superset:superset superset-frontend/package.json superset-frontend/
 COPY --chown=superset:superset requirements/base.txt requirements/
+COPY --chown=superset:superset plaid/requirements.txt plaid/
 RUN --mount=type=cache,target=/root/.cache/pip \
     apt-get update -qq && apt-get install -yqq --no-install-recommends \
       build-essential \
+      git \
     && pip install --upgrade setuptools pip \
-    && pip install -r requirements/base.txt \
+    && pip install -r requirements/base.txt -r plaid/requirements.txt \
     && apt-get autoremove -yqq --purge build-essential \
+      git \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the compiled frontend assets
@@ -104,6 +107,8 @@ COPY --chown=superset:superset --from=superset-node /app/superset/static/assets 
 COPY --chown=superset:superset superset superset
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -e .
+
+COPY --chown=superset:superset plaid plaid
 
 # Copy the .json translations from the frontend layer
 COPY --chown=superset:superset --from=superset-node /app/superset/translations superset/translations
