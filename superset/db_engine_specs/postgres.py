@@ -195,7 +195,7 @@ class PostgresBaseEngineSpec(BaseEngineSpec):
 
 class PostgresEngineSpec(BasicParametersMixin, PostgresBaseEngineSpec):
     engine = "postgresql"
-    engine_aliases = {"postgres"}
+    engine_aliases = {"postgres", "greenplum"}
 
     supports_dynamic_schema = True
     supports_catalog = True

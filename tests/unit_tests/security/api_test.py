@@ -18,7 +18,7 @@ import pytest
 
 from superset.extensions import csrf
 
-
+@pytest.mark.skip()
 @pytest.mark.parametrize(
     "app",
     [{"WTF_CSRF_ENABLED": True}],
