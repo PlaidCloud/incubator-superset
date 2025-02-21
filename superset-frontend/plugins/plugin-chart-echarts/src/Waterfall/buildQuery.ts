@@ -19,15 +19,24 @@
 import {
   buildQueryContext,
   ensureIsArray,
-  QueryFormData,
 } from '@superset-ui/core';
+import { EchartsWaterfallFormData } from './types';
 
-export default function buildQuery(formData: QueryFormData) {
+export default function buildQuery(formData: EchartsWaterfallFormData) {
   const { x_axis, granularity_sqla, groupby } = formData;
   const columns = [
     ...ensureIsArray(x_axis || granularity_sqla),
     ...ensureIsArray(groupby),
   ];
+  if (formData.seriesOrderByColumn && formData.seriesOrderDirection) {
+    return buildQueryContext(formData, baseQueryObject => [
+      {
+        ...baseQueryObject,
+        columns,
+        orderby: [[formData.seriesOrderByColumn, formData.seriesOrderDirection === 'ASC']],
+      },
+    ]);
+  }
   return buildQueryContext(formData, baseQueryObject => [
     {
       ...baseQueryObject,
