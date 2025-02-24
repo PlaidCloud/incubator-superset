@@ -44,7 +44,10 @@ import {
   t,
 } from '@superset-ui/core';
 import { Radio } from '@superset-ui/core/components/Radio';
-import { canUserEditDashboard } from 'src/dashboard/util/permissionUtils';
+import {
+  isUserAdmin,
+  canUserEditDashboard,
+} from 'src/dashboard/util/permissionUtils';
 import { setSaveChartModalVisibility } from 'src/explore/actions/saveModalActions';
 import { SaveActionType } from 'src/explore/types';
 import { UserWithPermissionsAndRoles } from 'src/types/bootstrapTypes';
@@ -112,7 +115,9 @@ class SaveModal extends Component<SaveModalProps, SaveModalState> {
 
   canOverwriteSlice(): boolean {
     return (
-      this.props.slice?.owners?.includes(this.props.user.userId) &&
+      this.props.slice &&
+      (this.props.slice?.owners?.includes(this.props.user.userId) ||
+        isUserAdmin(this.props.user)) &&
       !this.props.slice?.is_managed_externally
     );
   }

@@ -203,6 +203,7 @@ class DatabaseRestApi(BaseSupersetModelRestApi):
         "impersonate_user",
         "is_managed_externally",
         "engine_information",
+        "sqlalchemy_uri",
     ]
     list_columns = [
         "allow_file_upload",
@@ -231,6 +232,7 @@ class DatabaseRestApi(BaseSupersetModelRestApi):
         "disable_drill_to_detail",
         "allow_multi_catalog",
         "engine_information",
+        "sqlalchemy_uri",
     ]
     add_columns = [
         "database_name",

@@ -29,7 +29,7 @@ import { Link, useHistory } from 'react-router-dom';
 import rison from 'rison';
 import {
   createErrorHandler,
-  createFetchDistinct,
+  // createFetchDistinct,
   createFetchRelated,
 } from 'src/views/CRUD/utils';
 import { useSelector } from 'react-redux';
@@ -346,7 +346,7 @@ function SavedQueryList({
       },
       {
         accessor: 'database.database_name',
-        Header: t('Database'),
+        Header: t('Project'),
         size: 'lg',
         id: 'database.database_name',
       },
@@ -356,12 +356,12 @@ function SavedQueryList({
         disableSortBy: true,
         id: 'database',
       },
-      {
-        accessor: 'schema',
-        Header: t('Schema'),
-        size: 'lg',
-        id: 'schema',
-      },
+      // {
+      //   accessor: 'schema',
+      //   Header: t('Schema'),
+      //   size: 'lg',
+      //   id: 'schema',
+      // },
       {
         Cell: ({
           row: {
@@ -509,7 +509,7 @@ function SavedQueryList({
         input: 'search',
         operator: FilterOperator.AllText,
         toolTipDescription:
-          'Searches all text fields: Name, Description, Database & Schema',
+          'Searches all text fields: Name, Description & Project',
       },
       {
         Header: t('Database'),
@@ -532,24 +532,24 @@ function SavedQueryList({
         ),
         paginate: true,
       },
-      {
-        Header: t('Schema'),
-        id: 'schema',
-        key: 'schema',
-        input: 'select',
-        operator: FilterOperator.Equals,
-        unfilteredLabel: 'All',
-        fetchSelects: createFetchDistinct(
-          'saved_query',
-          'schema',
-          createErrorHandler(errMsg =>
-            addDangerToast(
-              t('An error occurred while fetching schema values: %s', errMsg),
-            ),
-          ),
-        ),
-        paginate: true,
-      },
+      // {
+      //   Header: t('Schema'),
+      //   id: 'schema',
+      //   key: 'schema',
+      //   input: 'select',
+      //   operator: FilterOperator.Equals,
+      //   unfilteredLabel: 'All',
+      //   fetchSelects: createFetchDistinct(
+      //     'saved_query',
+      //     'schema',
+      //     createErrorHandler(errMsg =>
+      //       addDangerToast(
+      //         t('An error occurred while fetching schema values: %s', errMsg),
+      //       ),
+      //     ),
+      //   ),
+      //   paginate: true,
+      // },
       ...((isFeatureEnabled(FeatureFlag.TaggingSystem) && canReadTag
         ? [
             {

@@ -381,8 +381,6 @@ jsonschema==4.23.0
     #   flask-appbuilder
     #   openapi-schema-validator
     #   openapi-spec-validator
-jsonschema-path==0.3.4
-    # via openapi-spec-validator
 jsonschema-specifications==2025.4.1
     # via
     #   -c requirements/base.txt
@@ -394,8 +392,6 @@ kombu==5.5.3
     # via
     #   -c requirements/base.txt
     #   celery
-lazy-object-proxy==1.10.0
-    # via openapi-spec-validator
 limits==5.1.0
     # via
     #   -c requirements/base.txt
@@ -477,7 +473,7 @@ openapi-schema-validator==0.6.3
     # via
     #   -c requirements/base.txt
     #   openapi-spec-validator
-openapi-spec-validator==0.7.1
+openapi-spec-validator==0.3.1
     # via apache-superset
 openpyxl==3.1.5
     # via
@@ -529,8 +525,6 @@ parsedatetime==2.6
     # via
     #   -c requirements/base.txt
     #   apache-superset
-pathable==0.4.3
-    # via jsonschema-path
 pgsanity==0.2.9
     # via
     #   -c requirements/base.txt
@@ -585,8 +579,10 @@ protobuf==4.25.5
     #   proto-plus
 psutil==6.1.0
     # via apache-superset
-psycopg2-binary==2.9.6
-    # via apache-superset
+psycopg2-binary==2.9.9
+    # via
+    #   -c requirements/base.txt
+    #   apache-superset
 pyarrow==16.1.0
     # via
     #   -c requirements/base.txt
@@ -697,17 +693,16 @@ pyyaml==6.0.2
     #   -c requirements/base.txt
     #   apache-superset
     #   apispec
-    #   jsonschema-path
+    #   openapi-spec-validator
     #   pre-commit
 redis==4.6.0
     # via
     #   -c requirements/base.txt
     #   apache-superset
-referencing==0.36.2
+referencing==0.37.0
     # via
     #   -c requirements/base.txt
     #   jsonschema
-    #   jsonschema-path
     #   jsonschema-specifications
 requests==2.32.4
     # via
@@ -715,7 +710,6 @@ requests==2.32.4
     #   docker
     #   google-api-core
     #   google-cloud-bigquery
-    #   jsonschema-path
     #   pydruid
     #   pyhive
     #   requests-cache
@@ -751,8 +745,9 @@ selenium==4.32.0
     # via
     #   -c requirements/base.txt
     #   apache-superset
-setuptools==80.7.1
+setuptools==80.9.0
     # via
+    #   -c requirements/base.txt
     #   nodeenv
     #   pandas-gbq
     #   pydata-google-auth
@@ -769,6 +764,7 @@ simplejson==3.20.1
 six==1.17.0
     # via
     #   -c requirements/base.txt
+    #   openapi-spec-validator
     #   prison
     #   python-dateutil
     #   rfc3339-validator

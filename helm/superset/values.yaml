@@ -57,7 +57,7 @@ bootstrapScript: |
 
 # -- The name of the secret which we will use to generate a superset_config.py file
 # Note: this secret must have the key superset_config.py in it and can include other files as well
-configFromSecret: '{{ template "superset.fullname" . }}-config'
+configFromSecret: plaid-superset-config-override
 
 # -- The name of the secret which we will use to populate env vars in deployed pods
 # This can be useful for secret keys, etc.
