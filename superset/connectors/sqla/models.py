@@ -17,6 +17,8 @@
 # pylint: disable=too-many-lines
 from __future__ import annotations
 
+from uuid import uuid4
+
 import builtins
 import dataclasses
 import logging
@@ -1334,7 +1336,8 @@ class SqlaTable(
 
     @hybrid_property
     def name(self) -> str:  # pylint: disable=invalid-overridden-method
-        return self.schema + "." + self.table_name if self.schema else self.table_name
+        # return self.schema + "." + self.table_name if self.schema else self.table_name
+        return self.table_name
 
     @property
     def full_name(self) -> str:
@@ -1856,6 +1859,8 @@ class SqlaTable(
                 new_column.expression = ""
             new_column.groupby = True
             new_column.filterable = True
+            if not new_column.uuid:
+                new_column.uuid = uuid4()
             columns.append(new_column)
             if not any_date_col and new_column.is_temporal:
                 any_date_col = col["column_name"]

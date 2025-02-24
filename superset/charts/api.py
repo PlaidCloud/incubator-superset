@@ -80,6 +80,7 @@ from superset.commands.importers.v1.utils import get_contents_from_bundle
 from superset.constants import MODEL_API_RW_METHOD_PERMISSION_MAP, RouteMethod
 from superset.daos.chart import ChartDAO
 from superset.extensions import event_logger
+from superset.models.dashboard import Dashboard
 from superset.models.slice import Slice
 from superset.tasks.thumbnails import cache_chart_thumbnail
 from superset.tasks.utils import get_current_user
@@ -200,6 +201,7 @@ class ChartRestApi(BaseSupersetModelRestApi):
         "slice_url",
         "table.default_endpoint",
         "table.table_name",
+        "table.uuid",
         "thumbnail_url",
         "url",
         "viz_type",
@@ -285,6 +287,30 @@ class ChartRestApi(BaseSupersetModelRestApi):
     }
 
     allowed_rel_fields = {"owners", "created_by", "changed_by"}
+
+    def pre_get(self, data: dict[str, Any]) -> None:
+        # Mutate response before it's sent,
+        # to add dashboard owners as chart owners
+        response = data
+        if 'owners' in response['result']:
+            owners = response['result']['owners']
+            if 'dashboards' in response['result']:
+                dashboards = response['result']['dashboards']
+                dashboard_ids = [dsb['id'] for dsb in dashboards]
+                full_dashboards = self.appbuilder.session.query(Dashboard).filter(Dashboard.id.in_(dashboard_ids))
+            else:
+                chart = self.appbuilder.session.query(Slice).filter(Slice.id == response['id']).one()
+                full_dashboards = chart.dashboards
+            owner_ids = set(o['id'] for o in owners)
+            for dashboard in full_dashboards:
+                for dashboard_owner in dashboard.owners:
+                    if dashboard_owner.id not in owner_ids:
+                        owner_ids.add(dashboard_owner.id)
+                        owners.append({
+                            'id': dashboard_owner.id,
+                            'first_name': dashboard_owner.first_name,
+                            'last_name': dashboard_owner.last_name,
+                        })
 
     @expose("/", methods=("POST",))
     @protect()
