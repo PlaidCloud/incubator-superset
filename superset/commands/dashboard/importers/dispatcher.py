@@ -57,7 +57,7 @@ class ImportDashboardsCommand(BaseCommand):
                 command.run()
                 return
             except IncorrectVersionError:
-                logger.debug("File not handled by command, skipping")
+                logger.exception("File not handled by command, skipping") # give a full traceback for debugging
             except (CommandInvalidError, ValidationError):
                 # found right version, but file is invalid
                 logger.info("Command failed validation")
