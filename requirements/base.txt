@@ -15,8 +15,11 @@ attrs==24.2.0
     #   cattrs
     #   jsonschema
     #   outcome
+    #   referencing
     #   requests-cache
     #   trio
+authlib==1.3.0
+    # via -r requirements/base.in
 babel==2.16.0
     # via flask-babel
 backoff==2.2.1
@@ -25,6 +28,8 @@ bcrypt==4.2.1
     # via paramiko
 billiard==4.2.1
     # via celery
+bleach==6.2.0
+    # via plaidcloud-rpc
 blinker==1.9.0
     # via flask
 bottleneck==1.4.2
@@ -49,6 +54,8 @@ cffi==1.17.1
     # via
     #   cryptography
     #   pynacl
+chardet==5.2.0
+    # via messytables
 charset-normalizer==3.4.0
     # via requests
 click==8.1.7
@@ -80,10 +87,17 @@ croniter==5.0.1
 cryptography==43.0.3
     # via
     #   apache-superset (pyproject.toml)
+    #   authlib
     #   paramiko
     #   pyopenssl
+databend-driver==0.25.4
+    # via databend-sqlalchemy
+databend-sqlalchemy@git+https://github.com/PlaidCloud/databend-sqlalchemy.git@59e8dc8177e2400d0ace5b952d1f2d52e11c8205#egg=databend-sqlalchemy
+    # via plaidcloud-rpc
 defusedxml==0.7.1
-    # via odfpy
+    # via
+    #   odfpy
+    #   python3-openid
 deprecated==1.2.15
     # via limits
 deprecation==2.1.0
@@ -105,6 +119,7 @@ flask==2.3.3
     #   flask-limiter
     #   flask-login
     #   flask-migrate
+    #   flask-openid
     #   flask-session
     #   flask-sqlalchemy
     #   flask-wtf
@@ -126,6 +141,8 @@ flask-login==0.6.3
     #   flask-appbuilder
 flask-migrate==3.1.0
     # via apache-superset (pyproject.toml)
+flask-openid==1.3.1
+    # via -r requirements/base.in
 flask-session==0.8.0
     # via apache-superset (pyproject.toml)
 flask-sqlalchemy==2.5.1
@@ -148,6 +165,7 @@ greenlet==3.0.3
     # via
     #   apache-superset (pyproject.toml)
     #   shillelagh
+    #   sqlalchemy
 gunicorn==23.0.0
     # via apache-superset (pyproject.toml)
 h11==0.14.0
@@ -156,6 +174,8 @@ hashids==1.3.1
     # via apache-superset (pyproject.toml)
 holidays==0.25
     # via apache-superset (pyproject.toml)
+html5lib==1.1
+    # via messytables
 humanize==4.11.0
     # via apache-superset (pyproject.toml)
 idna==3.10
@@ -177,6 +197,8 @@ jinja2==3.1.4
     # via
     #   flask
     #   flask-babel
+json-table-schema==0.2.1
+    # via messytables
 jsonpath-ng==1.7.0
     # via apache-superset (pyproject.toml)
 jsonschema==4.17.3
@@ -187,6 +209,8 @@ korean-lunar-calendar==0.3.1
     # via holidays
 limits==3.13.0
     # via flask-limiter
+lxml==5.3.1
+    # via messytables
 mako==1.3.6
     # via
     #   apache-superset (pyproject.toml)
@@ -209,6 +233,8 @@ marshmallow-sqlalchemy==0.28.2
     # via flask-appbuilder
 mdurl==0.1.2
     # via markdown-it-py
+messytables @ git+https://github.com/PlaidCloud/messytables.git@4469aaf21ebc2fa6527386299573e64cbefa5844#egg=messytables
+    # via plaidcloud-rpc
 msgpack==1.0.8
     # via apache-superset (pyproject.toml)
 msgspec==0.18.6
@@ -230,6 +256,8 @@ openpyxl==3.1.5
     # via pandas
 ordered-set==4.1.0
     # via flask-limiter
+orjson==3.10.15
+    # via plaidcloud-rpc
 outcome==1.3.0.post0
     # via trio
 packaging==24.2
@@ -241,6 +269,7 @@ packaging==24.2
     #   limits
     #   marshmallow
     #   marshmallow-sqlalchemy
+    #   plaidcloud-rpc
     #   shillelagh
 pandas==2.0.3
     # via apache-superset (pyproject.toml)
@@ -252,6 +281,10 @@ parsedatetime==2.6
     # via apache-superset (pyproject.toml)
 pgsanity==0.2.9
     # via apache-superset (pyproject.toml)
+plaidcloud-config @ git+https://github.com/PlaidCloud/plaidcloud-config.git@306dd73d32d4de6692d2204806f3b0a835304592#subdirectory=python
+    # via -r requirements/base.in
+plaidcloud-rpc @ git+https://github.com/PlaidCloud/plaid-rpc.git@e95bed8dab09db58c74a047f735c39b1773791c1
+    # via -r requirements/base.in
 platformdirs==3.8.1
     # via requests-cache
 ply==3.11
@@ -262,6 +295,11 @@ prison==0.2.1
     # via flask-appbuilder
 prompt-toolkit==3.0.48
     # via click-repl
+psycopg2-binary==2.9.9
+    # via
+    #   -r requirements/base.in
+    #   plaidcloud-rpc
+    #   sqlalchemy-greenplum
 pyarrow==14.0.2
     # via apache-superset (pyproject.toml)
 pyasn1==0.6.1
@@ -279,6 +317,7 @@ pyjwt==2.10.1
     #   apache-superset (pyproject.toml)
     #   flask-appbuilder
     #   flask-jwt-extended
+    #   plaidcloud-rpc
 pynacl==1.5.0
     # via paramiko
 pyopenssl==24.2.1
@@ -296,12 +335,17 @@ python-dateutil==2.9.0.post0
     #   croniter
     #   flask-appbuilder
     #   holidays
+    #   messytables
     #   pandas
     #   shillelagh
 python-dotenv==1.0.1
     # via apache-superset (pyproject.toml)
 python-geohash==0.8.5
     # via apache-superset (pyproject.toml)
+python-magic==0.4.27
+    # via messytables
+python3-openid==3.2.0
+    # via flask-openid
 pytz==2024.2
     # via
     #   croniter
@@ -313,20 +357,33 @@ pyyaml==6.0.2
     # via
     #   apache-superset (pyproject.toml)
     #   apispec
+    #   plaidcloud-config
+    #   plaidcloud-rpc
 redis==4.6.0
     # via apache-superset (pyproject.toml)
+referencing==0.31.1
+    # via -r requirements/base.in
 requests==2.32.2
     # via
+    #   messytables
+    #   plaidcloud-rpc
     #   requests-cache
+    #   requests-futures
     #   shillelagh
 requests-cache==1.2.0
     # via shillelagh
+requests-futures==1.0.2
+    # via plaidcloud-rpc
 rich==13.9.4
     # via flask-limiter
+rpds-py==0.23.1
+    # via referencing
 rsa==4.9
     # via google-auth
 selenium==4.27.1
     # via apache-superset (pyproject.toml)
+setuptools==75.8.0
+    # via plaidcloud-rpc
 shillelagh==1.2.18
     # via apache-superset (pyproject.toml)
 shortid==0.1.2
@@ -335,6 +392,8 @@ simplejson==3.19.3
     # via apache-superset (pyproject.toml)
 six==1.16.0
     # via
+    #   html5lib
+    #   messytables
     #   prison
     #   python-dateutil
     #   url-normalize
@@ -349,11 +408,16 @@ sqlalchemy==1.4.54
     # via
     #   apache-superset (pyproject.toml)
     #   alembic
+    #   databend-sqlalchemy
     #   flask-appbuilder
     #   flask-sqlalchemy
     #   marshmallow-sqlalchemy
+    #   plaidcloud-rpc
     #   shillelagh
+    #   sqlalchemy-greenplum
     #   sqlalchemy-utils
+sqlalchemy-greenplum==0.2.1
+    # via plaidcloud-rpc
 sqlalchemy-utils==0.38.3
     # via
     #   apache-superset (pyproject.toml)
@@ -366,6 +430,8 @@ sshtunnel==0.4.0
     # via apache-superset (pyproject.toml)
 tabulate==0.8.10
     # via apache-superset (pyproject.toml)
+toolz==1.0.0
+    # via plaidcloud-rpc
 trio==0.28.0
     # via
     #   selenium
@@ -385,11 +451,14 @@ tzdata==2024.2
     #   celery
     #   kombu
     #   pandas
+unicodecsv==0.14.1
+    # via plaidcloud-rpc
 url-normalize==1.4.3
     # via requests-cache
 urllib3==1.26.18
     # via
     #   -r requirements/base.in
+    #   plaidcloud-rpc
     #   requests
     #   requests-cache
     #   selenium
@@ -400,6 +469,10 @@ vine==5.1.0
     #   kombu
 wcwidth==0.2.13
     # via prompt-toolkit
+webencodings==0.5.1
+    # via
+    #   bleach
+    #   html5lib
 websocket-client==1.8.0
     # via selenium
 werkzeug==3.1.3
@@ -422,7 +495,9 @@ wtforms==3.2.1
 wtforms-json==0.3.5
     # via apache-superset (pyproject.toml)
 xlrd==2.0.1
-    # via pandas
+    # via
+    #   messytables
+    #   pandas
 xlsxwriter==3.0.9
     # via
     #   apache-superset (pyproject.toml)
