@@ -15,11 +15,15 @@
 # specific language governing permissions and limitations
 # under the License.
 import logging
+from datetime import datetime
+from io import BytesIO
+from urllib import parse
 
-from flask import request, Response, url_for
+from flask import request, Response, url_for, send_file
 from flask_appbuilder.api import expose, protect, safe
 from marshmallow import ValidationError
 
+from superset import security_manager
 from superset.commands.dashboard.exceptions import (
     DashboardAccessDeniedError,
     DashboardNotFoundError,
@@ -32,6 +36,9 @@ from superset.dashboards.permalink.schemas import DashboardPermalinkStateSchema
 from superset.extensions import event_logger
 from superset.key_value.exceptions import KeyValueAccessDeniedError
 from superset.views.base_api import BaseSupersetApi, requires_json
+from superset.utils.core import override_user
+from superset.utils.screenshots import DashboardScreenshot
+from superset.utils.urls import headless_url
 
 logger = logging.getLogger(__name__)
 
@@ -227,3 +234,88 @@ class DashboardPermalinkRestApi(BaseSupersetApi):
             return self.response(403, message=str(ex))
         except DashboardNotFoundError as ex:
             return self.response(404, message=str(ex))
+
+    @expose("/permalink/<string:key>/pdf", methods=("GET",))
+    @protect()
+    @safe
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.get_pdf",
+        log_to_statsd=False,
+    )
+    def get_pdf(self, key: str) -> Response:
+        """Get a dashboard's pdf from permanent link.
+        ---
+        get:
+          summary: Get a PDF of a dashboard
+          parameters:
+          - in: path
+            schema:
+              type: string
+            name: key
+          responses:
+            200:
+              description: PDF of rendered dashboard for permanent link
+              content:
+                application/pdf:
+                  schema:
+                    type: string
+                    format: binary
+            400:
+              $ref: '#/components/responses/400'
+            401:
+              $ref: '#/components/responses/401'
+            404:
+              $ref: '#/components/responses/404'
+            422:
+              $ref: '#/components/responses/422'
+            500:
+              $ref: '#/components/responses/500'
+        """
+        try:
+            value = GetDashboardPermalinkCommand(key=key).run()
+            if not value:
+                return self.response_404()
+            dashboard_id, state = value["dashboardId"], value.get("state", {})
+            dashboard_url = headless_url(
+                url_for(
+                    "Superset.dashboard", dashboard_id_or_slug=dashboard_id,
+                    permalink_key=key,
+                    _external=False,
+                ),
+            )
+            if url_params := state.get("urlParams"):
+                params = parse.urlencode(url_params)
+                dashboard_url = f"{dashboard_url}&{params}"
+            if original_params := request.query_string.decode():
+                dashboard_url = f"{dashboard_url}&{original_params}"
+            if hash_ := state.get("anchor", state.get("hash")):
+                dashboard_url = f"{dashboard_url}#{hash_}"
+
+            logger.info("Create dashboard PDF for : %s", dashboard_url)
+
+            user = security_manager.find_user("admin")
+            with override_user(user):
+                screenshot = DashboardScreenshot(dashboard_url, None)
+                pdf = screenshot.get_pdf(user=user)
+                buf = BytesIO(pdf)
+                buf.seek(0)
+
+            timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
+            root = f"dashboard_pdf_{timestamp}"
+            filename = f"{root}.pdf"
+
+            response = send_file(
+                buf,
+                mimetype="application/pdf",
+                as_attachment=True,
+                download_name=filename,
+            )
+            if token := request.args.get("token"):
+                response.set_cookie(token, "done", max_age=600)
+            return response
+
+        except DashboardAccessDeniedError as ex:
+            return self.response(403, message=str(ex))
+        except DashboardNotFoundError as ex:
+            return self.response(404, message=str(ex))
+

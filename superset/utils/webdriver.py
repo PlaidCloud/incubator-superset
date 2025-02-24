@@ -396,6 +396,127 @@ class WebDriverPlaywright(WebDriverProxy):
                 browser.close()
             return img
 
+    def get_pdf(  # pylint: disable=too-many-locals, too-many-statements  # noqa: C901
+        self, url: str, element_name: str, user: User
+    ) -> bytes | None:
+        with sync_playwright() as playwright:
+            browser_args = app.config["WEBDRIVER_OPTION_ARGS"]
+            browser = playwright.chromium.launch(args=browser_args)
+            pixel_density = app.config["WEBDRIVER_WINDOW"].get("pixel_density", 1)
+            viewport_height = self._window[1]
+            viewport_width = self._window[0]
+            context = browser.new_context(
+                bypass_csp=True,
+                viewport={
+                    "height": viewport_height,
+                    "width": viewport_width,
+                },
+                device_scale_factor=pixel_density,
+            )
+            context.set_default_timeout(
+                app.config["SCREENSHOT_PLAYWRIGHT_DEFAULT_TIMEOUT"]
+            )
+            self.auth(user, context)
+            page = context.new_page()
+            try:
+                page.goto(
+                    url,
+                    wait_until=app.config["SCREENSHOT_PLAYWRIGHT_WAIT_EVENT"],
+                )
+            except PlaywrightTimeout:
+                logger.exception(
+                    "Web event %s not detected. Page %s might not have been fully loaded",  # noqa: E501
+                    app.config["SCREENSHOT_PLAYWRIGHT_WAIT_EVENT"],
+                    url,
+                )
+
+            img: bytes | None = None
+            selenium_headstart = app.config["SCREENSHOT_SELENIUM_HEADSTART"]
+            logger.debug("Sleeping for %i seconds", selenium_headstart)
+            page.wait_for_timeout(selenium_headstart * 1000)
+            element: Locator
+            try:
+                try:
+                    # page didn't load
+                    logger.debug(
+                        "Wait for the presence of %s at url: %s", element_name, url
+                    )
+                    element = page.locator(f".{element_name}")
+                    element.wait_for()
+                except PlaywrightTimeout:
+                    logger.exception("Timed out requesting url %s", url)
+                    raise
+
+                try:
+                    # chart containers didn't render
+                    logger.debug("Wait for chart containers to draw at url: %s", url)
+                    slice_container_locator = page.locator(".chart-container")
+                    for slice_container_elem in slice_container_locator.all():
+                        slice_container_elem.wait_for()
+                except PlaywrightTimeout:
+                    logger.exception(
+                        "Timed out waiting for chart containers to draw at url %s",
+                        url,
+                    )
+                    raise
+                try:
+                    # charts took too long to load
+                    logger.debug(
+                        "Wait for loading element of charts to be gone at url: %s", url
+                    )
+                    for loading_element in page.locator(".loading").all():
+                        loading_element.wait_for(state="detached")
+                except PlaywrightTimeout:
+                    logger.exception(
+                        "Timed out waiting for charts to load at url %s", url
+                    )
+                    raise
+
+                selenium_animation_wait = app.config[
+                    "SCREENSHOT_SELENIUM_ANIMATION_WAIT"
+                ]
+                logger.debug(
+                    "Wait %i seconds for chart animation", selenium_animation_wait
+                )
+                page.wait_for_timeout(selenium_animation_wait * 1000)
+                logger.debug(
+                    "Taking a PDF screenshot of url %s as user %s",
+                    url,
+                    user.username,
+                )
+                if app.config["SCREENSHOT_REPLACE_UNEXPECTED_ERRORS"]:
+                    unexpected_errors = WebDriverPlaywright.find_unexpected_errors(page)
+                    if unexpected_errors:
+                        logger.warning(
+                            "%i errors found in the screenshot. URL: %s. Errors are: %s",  # noqa: E501
+                            len(unexpected_errors),
+                            url,
+                            unexpected_errors,
+                        )
+                # generated_pdf = WebDriverPlaywright._get_screenshot(
+                #     page, element, element_name
+                # )
+                generated_pdf = page.pdf(
+                    format="A4",
+                    landscape=True,
+                    #print_backgrouod=True,
+                    margin={
+                        "top": "20px",
+                        "right": "20px",
+                        "bottom": "20px",
+                        "left": "20px",
+                    },
+                )
+
+            except PlaywrightTimeout:
+                # raise again for the finally block, but handled above
+                pass
+            except PlaywrightError:
+                logger.exception(
+                    "Encountered an unexpected error when requesting url %s", url
+                )
+            return generated_pdf
+
 
 class WebDriverSelenium(WebDriverProxy):
     def _create_firefox_driver(

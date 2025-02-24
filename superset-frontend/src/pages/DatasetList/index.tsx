@@ -24,7 +24,7 @@ import { Link, useHistory } from 'react-router-dom';
 import rison from 'rison';
 import {
   createFetchRelated,
-  createFetchDistinct,
+  // createFetchDistinct,
   createFetchOwners,
   createErrorHandler,
 } from 'src/views/CRUD/utils';
@@ -372,17 +372,17 @@ const DatasetList: FunctionComponent<DatasetListProps> = ({
         id: 'kind',
       },
       {
-        Header: t('Database'),
+        Header: t('Project'),
         accessor: 'database.database_name',
         size: 'xl',
         id: 'database.database_name',
       },
-      {
-        Header: t('Schema'),
-        accessor: 'schema',
-        size: 'lg',
-        id: 'schema',
-      },
+      // {
+      //   Header: t('Schema'),
+      //   accessor: 'schema',
+      //   size: 'lg',
+      //   id: 'schema',
+      // },
       {
         accessor: 'database',
         disableSortBy: true,
@@ -555,40 +555,40 @@ const DatasetList: FunctionComponent<DatasetListProps> = ({
           { label: t('Physical'), value: true },
         ],
       },
-      {
-        Header: t('Database'),
-        key: 'database',
-        id: 'database',
-        input: 'select',
-        operator: FilterOperator.RelationOneMany,
-        unfilteredLabel: 'All',
-        fetchSelects: createFetchRelated(
-          'dataset',
-          'database',
-          createErrorHandler(errMsg =>
-            t('An error occurred while fetching datasets: %s', errMsg),
-          ),
-        ),
-        paginate: true,
-        dropdownStyle: { minWidth: WIDER_DROPDOWN_WIDTH },
-      },
-      {
-        Header: t('Schema'),
-        key: 'schema',
-        id: 'schema',
-        input: 'select',
-        operator: FilterOperator.Equals,
-        unfilteredLabel: 'All',
-        fetchSelects: createFetchDistinct(
-          'dataset',
-          'schema',
-          createErrorHandler(errMsg =>
-            t('An error occurred while fetching schema values: %s', errMsg),
-          ),
-        ),
-        paginate: true,
-        dropdownStyle: { minWidth: WIDER_DROPDOWN_WIDTH },
-      },
+      // {
+      //   Header: t('Database'),
+      //   key: 'database',
+      //   id: 'database',
+      //   input: 'select',
+      //   operator: FilterOperator.RelationOneMany,
+      //   unfilteredLabel: 'All',
+      //   fetchSelects: createFetchRelated(
+      //     'dataset',
+      //     'database',
+      //     createErrorHandler(errMsg =>
+      //       t('An error occurred while fetching datasets: %s', errMsg),
+      //     ),
+      //   ),
+      //   paginate: true,
+      //   dropdownStyle: { minWidth: WIDER_DROPDOWN_WIDTH },
+      // },
+      // {
+      //   Header: t('Schema'),
+      //   key: 'schema',
+      //   id: 'schema',
+      //   input: 'select',
+      //   operator: FilterOperator.Equals,
+      //   unfilteredLabel: 'All',
+      //   fetchSelects: createFetchDistinct(
+      //     'dataset',
+      //     'schema',
+      //     createErrorHandler(errMsg =>
+      //       t('An error occurred while fetching schema values: %s', errMsg),
+      //     ),
+      //   ),
+      //   paginate: true,
+      //   dropdownStyle: { minWidth: WIDER_DROPDOWN_WIDTH },
+      // },
       {
         Header: t('Owner'),
         key: 'owner',

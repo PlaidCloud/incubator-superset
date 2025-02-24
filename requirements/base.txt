@@ -3,7 +3,9 @@
 -e ./superset-core
     # via apache-superset (pyproject.toml)
 alembic==1.15.2
-    # via flask-migrate
+    # via
+    #   flask-migrate
+    #   starrocks
 amqp==5.3.1
     # via kombu
 annotated-types==0.7.0
@@ -16,6 +18,8 @@ apsw==3.50.1.0
     # via shillelagh
 async-timeout==4.0.3
     # via -r requirements/base.in
+asyncmy2==0.2.20
+    # via starrocks
 attrs==25.3.0
     # via
     #   cattrs
@@ -24,6 +28,8 @@ attrs==25.3.0
     #   referencing
     #   requests-cache
     #   trio
+authlib==1.3.0
+    # via -r requirements/base.in
 babel==2.17.0
     # via flask-babel
 backoff==2.2.1
@@ -32,6 +38,8 @@ bcrypt==4.3.0
     # via paramiko
 billiard==4.2.1
     # via celery
+bleach==6.2.0
+    # via plaidcloud-rpc
 blinker==1.9.0
     # via flask
 bottleneck==1.5.0
@@ -89,10 +97,17 @@ croniter==6.0.0
 cryptography==46.0.5
     # via
     #   apache-superset (pyproject.toml)
+    #   authlib
     #   paramiko
     #   pyopenssl
+databend-driver==0.27.4
+    # via databend-sqlalchemy
+databend-sqlalchemy==0.5.2
+    # via -r requirements/base.in
 defusedxml==0.7.1
-    # via odfpy
+    # via
+    #   odfpy
+    #   python3-openid
 deprecated==1.2.18
     # via limits
 deprecation==2.1.0
@@ -117,6 +132,7 @@ flask==2.3.3
     #   flask-limiter
     #   flask-login
     #   flask-migrate
+    #   flask-openid
     #   flask-session
     #   flask-sqlalchemy
     #   flask-wtf
@@ -142,6 +158,8 @@ flask-login==0.6.3
     #   flask-appbuilder
 flask-migrate==3.1.0
     # via apache-superset (pyproject.toml)
+flask-openid==1.3.1
+    # via -r requirements/base.in
 flask-session==0.8.0
     # via apache-superset (pyproject.toml)
 flask-sqlalchemy==2.5.1
@@ -194,15 +212,13 @@ jinja2==3.1.6
 jsonpath-ng==1.7.0
     # via apache-superset (pyproject.toml)
 jsonschema==4.23.0
-    # via
-    #   flask-appbuilder
-    #   openapi-schema-validator
+    # via flask-appbuilder
 jsonschema-specifications==2025.4.1
-    # via
-    #   jsonschema
-    #   openapi-schema-validator
+    # via jsonschema
 kombu==5.5.3
     # via celery
+lark==1.3.1
+    # via starrocks
 limits==5.1.0
     # via flask-limiter
 mako==1.3.10
@@ -250,12 +266,12 @@ numpy==1.26.4
     #   pyarrow
 odfpy==1.4.1
     # via pandas
-openapi-schema-validator==0.6.3
-    # via -r requirements/base.in
 openpyxl==3.1.5
     # via pandas
 ordered-set==4.1.0
     # via flask-limiter
+orjson==3.10.15
+    # via plaidcloud-rpc
 outcome==1.3.0.post0
     # via
     #   trio
@@ -268,6 +284,7 @@ packaging==25.0
     #   gunicorn
     #   limits
     #   marshmallow
+    #   plaidcloud-rpc
     #   shillelagh
 pandas==2.1.4
     # via apache-superset (pyproject.toml)
@@ -281,6 +298,9 @@ pgsanity==0.2.9
     # via apache-superset (pyproject.toml)
 pillow==11.3.0
     # via apache-superset (pyproject.toml)
+    # via apache-superset (pyproject.toml)
+plaidcloud-rpc==1.6.3
+    # via -r requirements/base.in
 platformdirs==4.3.8
     # via requests-cache
 ply==3.11
@@ -291,9 +311,15 @@ prison==0.2.1
     # via flask-appbuilder
 prompt-toolkit==3.0.51
     # via click-repl
+psycopg2-binary==2.9.9
+    # via -r requirements/base.in
 pyarrow==16.1.0
     # via apache-superset (pyproject.toml)
 pyasn1==0.6.2
+    # via
+    #   apache-superset (pyproject.toml)
+    #   plaidcloud-rpc
+pyasn1==0.6.1
     # via
     #   pyasn1-modules
     #   rsa
@@ -316,7 +342,9 @@ pyjwt==2.10.1
     #   apache-superset (pyproject.toml)
     #   flask-appbuilder
     #   flask-jwt-extended
-    #   redis
+    #   plaidcloud-rpc
+pymysql==1.1.2
+    # via starrocks
 pynacl==1.6.2
     # via paramiko
 pyopenssl==25.3.0
@@ -336,6 +364,10 @@ python-dateutil==2.9.0.post0
     #   shillelagh
 python-dotenv==1.1.0
     # via apache-superset (pyproject.toml)
+python-geohash==0.8.5
+    # via apache-superset (pyproject.toml)
+python3-openid==3.2.0
+    # via flask-openid
 pytz==2025.2
     # via
     #   croniter
@@ -348,19 +380,23 @@ pyyaml==6.0.2
     #   apache-superset (pyproject.toml)
     #   apispec
 redis==5.3.1
+    #   plaidcloud-rpc
+redis==4.6.0
     # via apache-superset (pyproject.toml)
-referencing==0.36.2
+referencing==0.37.0
     # via
     #   jsonschema
     #   jsonschema-specifications
 requests==2.32.4
     # via
+    #   plaidcloud-rpc
     #   requests-cache
+    #   requests-futures
     #   shillelagh
 requests-cache==1.2.1
     # via shillelagh
-rfc3339-validator==0.1.4
-    # via openapi-schema-validator
+requests-futures==1.0.2
+    # via plaidcloud-rpc
 rich==13.9.4
     # via flask-limiter
 rpds-py==0.25.0
@@ -373,6 +409,8 @@ selenium==4.32.0
     # via apache-superset (pyproject.toml)
 setuptools==80.9.0
     # via -r requirements/base.in
+setuptools==80.9.0
+    # via plaidcloud-rpc
 shillelagh==1.4.3
     # via apache-superset (pyproject.toml)
 simplejson==3.20.1
@@ -381,7 +419,6 @@ six==1.17.0
     # via
     #   prison
     #   python-dateutil
-    #   rfc3339-validator
     #   wtforms-json
 slack-sdk==3.35.0
     # via apache-superset (pyproject.toml)
@@ -393,25 +430,31 @@ sqlalchemy==1.4.54
     # via
     #   apache-superset (pyproject.toml)
     #   alembic
-    #   apache-superset-core
+    #   databend-sqlalchemy
     #   flask-appbuilder
     #   flask-sqlalchemy
     #   marshmallow-sqlalchemy
+    #   plaidcloud-rpc
     #   shillelagh
     #   sqlalchemy-utils
+    #   starrocks
 sqlalchemy-utils==0.42.0
     # via
     #   apache-superset (pyproject.toml)
-    #   apache-superset-core
     #   flask-appbuilder
+    #   starrocks
 sqlglot==28.10.0
     # via
     #   apache-superset (pyproject.toml)
     #   apache-superset-core
 sshtunnel==0.4.0
     # via apache-superset (pyproject.toml)
+starrocks==1.3.3
+    # via -r requirements/base.in
 tabulate==0.9.0
     # via apache-superset (pyproject.toml)
+toolz==1.1.0
+    # via plaidcloud-rpc
 trio==0.30.0
     # via
     #   selenium
@@ -422,7 +465,6 @@ typing-extensions==4.15.0
     # via
     #   apache-superset (pyproject.toml)
     #   alembic
-    #   apache-superset-core
     #   cattrs
     #   limits
     #   pydantic
@@ -443,6 +485,7 @@ url-normalize==2.2.1
 urllib3==2.6.3
     # via
     #   -r requirements/base.in
+    #   plaidcloud-rpc
     #   requests
     #   requests-cache
     #   selenium

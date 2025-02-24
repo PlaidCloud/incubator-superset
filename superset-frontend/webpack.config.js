@@ -344,7 +344,10 @@ const config = {
     compression: isDevMode ? false : 'gzip',
   },
   output,
-  stats: 'minimal',
+  stats: {
+    warnings: false
+  },
+  // stats: 'minimal',
   /*
    Silence warning for missing export in @data-ui's internal structure. This
    issue arises from an internal implementation detail of @data-ui. As it's

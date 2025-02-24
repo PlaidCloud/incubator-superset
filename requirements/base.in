@@ -41,7 +41,15 @@ apispec>=6.0.0,<6.7.0
 marshmallow-sqlalchemy>=1.3.0,<1.4.1
 
 # needed for python 3.12 support
-openapi-schema-validator>=0.6.3
+# openapi-schema-validator>=0.6.3
+flask-openid
+psycopg2-binary==2.9.9
+plaidcloud-rpc>=1.6.3
+databend-sqlalchemy>=0.5.2
+authlib==1.3.0
+# If using starrocks from our own git repo, we need to add git package into Dockerfile
+# starrocks@git+https://github.com/rad-pat/sqlalchemy-starrocks.git@check-pr-action
+starrocks>=1.3.3
 
 # Pin setuptools <81 until all dependencies migrate from pkg_resources to importlib.metadata
 # pkg_resources is deprecated and will be removed in setuptools 81+ (around 2025-11-30)

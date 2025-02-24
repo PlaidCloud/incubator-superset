@@ -134,6 +134,18 @@ export default function Login() {
     SupersetClient.postForm(loginEndpoint, values, '');
   };
 
+  if (true && authType === AuthType.AuthOauth && providers.length === 1) {
+    // allow immediate login by only provider
+    useEffect(() => {
+      const provider = providers[0] as OAuthProvider;
+      // Hard redirect to backend OAuth endpoint
+      window.location.href = buildProviderLoginUrl(provider.name);
+    }, [authType, providers, nextUrl]);
+
+    // prevent flicker
+    return null;
+  }
+
   const getAuthIconElement = (
     providerName: string,
   ): React.JSX.Element | undefined => {

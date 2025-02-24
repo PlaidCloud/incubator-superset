@@ -18,7 +18,7 @@
 ######################################################################
 # Node stage to deal with static asset construction
 ######################################################################
-ARG PY_VER=3.11.14-slim-trixie
+ARG PY_VER=3.12.11-slim-bookworm
 
 # If BUILDPLATFORM is null, set it to 'amd64' (or leave as is otherwise).
 ARG BUILDPLATFORM=${BUILDPLATFORM:-amd64}
@@ -190,6 +190,7 @@ COPY --chmod=755 ./docker/entrypoints/run-server.sh /usr/bin/
 # Some debian libs
 RUN /app/docker/apt-install.sh \
       curl \
+#       git \
       libsasl2-dev \
       libsasl2-modules-gssapi-mit \
       libpq-dev \
@@ -205,6 +206,7 @@ COPY --from=superset-node /app/superset/static/assets superset/static/assets
 
 # TODO, when the next version comes out, use --exclude superset/translations
 COPY superset superset
+COPY plaid plaid
 # TODO in the meantime, remove the .po files
 RUN rm superset/translations/*/*/*.po
 
@@ -261,7 +263,7 @@ RUN --mount=type=cache,target=${SUPERSET_HOME}/.cache/uv \
 RUN --mount=type=cache,target=${SUPERSET_HOME}/.cache/uv \
     uv pip install -e .
 
-RUN uv pip install .[postgres]
+RUN uv pip install .[postgres,prophet]
 RUN python -m compileall /app/superset
 
 USER superset

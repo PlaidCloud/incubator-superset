@@ -17,14 +17,14 @@
 """merge_x_axis_sort_series_with_x_axis_sort
 
 Revision ID: 378cecfdba9f
-Revises: 32bf93dfe2a4
+Revises: 86beb9dd14eb
 Create Date: 2025-04-13 22:10:10.836273
 
 """
 
 # revision identifiers, used by Alembic.
 revision = "378cecfdba9f"
-down_revision = "32bf93dfe2a4"
+down_revision = "86beb9dd14eb"
 
 from alembic import op  # noqa: E402
 from sqlalchemy import Column, Integer, String, Text  # noqa: E402
