@@ -287,7 +287,7 @@ function QueryList({ addDangerToast }: QueryListProps) {
       },
       {
         accessor: QueryObjectColumns.DatabaseName,
-        Header: t('Database'),
+        Header: t('Project'),
         size: 'lg',
         id: QueryObjectColumns.DatabaseName,
       },
@@ -418,7 +418,7 @@ function QueryList({ addDangerToast }: QueryListProps) {
   const filters: ListViewFilters = useMemo(
     () => [
       {
-        Header: t('Database'),
+        Header: t('Project'),
         key: 'database',
         id: 'database',
         input: 'select',

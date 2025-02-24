@@ -18,7 +18,7 @@
 ######################################################################
 # Node stage to deal with static asset construction
 ######################################################################
-ARG PY_VER=3.11.13-slim-bookworm
+ARG PY_VER=3.12.11-slim-bookworm
 
 # If BUILDPLATFORM is null, set it to 'amd64' (or leave as is otherwise).
 ARG BUILDPLATFORM=${BUILDPLATFORM:-amd64}
@@ -201,6 +201,7 @@ COPY --from=superset-node /app/superset/static/assets superset/static/assets
 
 # TODO, when the next version comes out, use --exclude superset/translations
 COPY superset superset
+COPY plaid plaid
 # TODO in the meantime, remove the .po files
 RUN rm superset/translations/*/*/*.po
 
@@ -259,5 +260,6 @@ USER superset
 FROM lean AS ci
 USER root
 RUN uv pip install .[postgres]
+
 USER superset
 CMD ["/app/docker/entrypoints/docker-ci.sh"]
