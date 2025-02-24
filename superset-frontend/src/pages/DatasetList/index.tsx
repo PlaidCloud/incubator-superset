@@ -27,7 +27,7 @@ import { Link, useHistory } from 'react-router-dom';
 import rison from 'rison';
 import {
   createFetchRelated,
-  createFetchDistinct,
+  // createFetchDistinct,
   createErrorHandler,
 } from 'src/views/CRUD/utils';
 import { ColumnObject } from 'src/features/datasets/types';
@@ -350,15 +350,15 @@ const DatasetList: FunctionComponent<DatasetListProps> = ({
         size: 'md',
       },
       {
-        Header: t('Database'),
+        Header: t('Project'),
         accessor: 'database.database_name',
         size: 'lg',
       },
-      {
-        Header: t('Schema'),
-        accessor: 'schema',
-        size: 'lg',
-      },
+      // {
+      //   Header: t('Schema'),
+      //   accessor: 'schema',
+      //   size: 'lg',
+      // },
       {
         accessor: 'database',
         disableSortBy: true,
@@ -516,38 +516,38 @@ const DatasetList: FunctionComponent<DatasetListProps> = ({
           { label: t('Physical'), value: true },
         ],
       },
-      {
-        Header: t('Database'),
-        key: 'database',
-        id: 'database',
-        input: 'select',
-        operator: FilterOperator.RelationOneMany,
-        unfilteredLabel: 'All',
-        fetchSelects: createFetchRelated(
-          'dataset',
-          'database',
-          createErrorHandler(errMsg =>
-            t('An error occurred while fetching datasets: %s', errMsg),
-          ),
-        ),
-        paginate: true,
-      },
-      {
-        Header: t('Schema'),
-        key: 'schema',
-        id: 'schema',
-        input: 'select',
-        operator: FilterOperator.Equals,
-        unfilteredLabel: 'All',
-        fetchSelects: createFetchDistinct(
-          'dataset',
-          'schema',
-          createErrorHandler(errMsg =>
-            t('An error occurred while fetching schema values: %s', errMsg),
-          ),
-        ),
-        paginate: true,
-      },
+      // {
+      //   Header: t('Database'),
+      //   key: 'database',
+      //   id: 'database',
+      //   input: 'select',
+      //   operator: FilterOperator.RelationOneMany,
+      //   unfilteredLabel: 'All',
+      //   fetchSelects: createFetchRelated(
+      //     'dataset',
+      //     'database',
+      //     createErrorHandler(errMsg =>
+      //       t('An error occurred while fetching datasets: %s', errMsg),
+      //     ),
+      //   ),
+      //   paginate: true,
+      // },
+      // {
+      //   Header: t('Schema'),
+      //   key: 'schema',
+      //   id: 'schema',
+      //   input: 'select',
+      //   operator: FilterOperator.Equals,
+      //   unfilteredLabel: 'All',
+      //   fetchSelects: createFetchDistinct(
+      //     'dataset',
+      //     'schema',
+      //     createErrorHandler(errMsg =>
+      //       t('An error occurred while fetching schema values: %s', errMsg),
+      //     ),
+      //   ),
+      //   paginate: true,
+      // },
       {
         Header: t('Owner'),
         key: 'owner',

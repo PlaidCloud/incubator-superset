@@ -509,9 +509,10 @@ packaging==24.2
     #   marshmallow-sqlalchemy
     #   matplotlib
     #   pytest
+    #   python-calamine
     #   shillelagh
     #   sqlalchemy-bigquery
-pandas==2.0.3
+pandas==2.3.0
     # via
     #   -c requirements/base.txt
     #   apache-superset
@@ -584,8 +585,10 @@ protobuf==4.25.5
     #   proto-plus
 psutil==6.1.0
     # via apache-superset
-psycopg2-binary==2.9.6
-    # via apache-superset
+psycopg2-binary==2.9.9
+    # via
+    #   -c requirements/base.txt
+    #   apache-superset
 pyarrow==14.0.2
     # via
     #   -c requirements/base.txt
@@ -657,6 +660,10 @@ pytest-cov==6.0.0
     # via apache-superset
 pytest-mock==3.10.0
     # via apache-superset
+python-calamine==0.3.2
+    # via
+    #   -c requirements/base.txt
+    #   pandas
 python-dateutil==2.9.0.post0
     # via
     #   -c requirements/base.txt
@@ -739,8 +746,9 @@ selenium==4.27.1
     # via
     #   -c requirements/base.txt
     #   apache-superset
-setuptools==75.6.0
+setuptools==75.8.0
     # via
+    #   -c requirements/base.txt
     #   nodeenv
     #   pandas-gbq
     #   pydata-google-auth
