@@ -16,8 +16,9 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { SqlaFormData, VizType } from '@superset-ui/core';
+import { VizType } from '@superset-ui/core';
 import buildQuery from '../../src/Waterfall/buildQuery';
+import { EchartsWaterfallFormData } from 'plugins/plugin-chart-echarts/src/Waterfall/types';
 
 describe('Waterfall buildQuery', () => {
   const formData = {
@@ -30,7 +31,7 @@ describe('Waterfall buildQuery', () => {
   };
 
   it('should build query fields from form data', () => {
-    const queryContext = buildQuery(formData as unknown as SqlaFormData);
+    const queryContext = buildQuery(formData as unknown as EchartsWaterfallFormData);
     const [query] = queryContext.queries;
     expect(query.metrics).toEqual(['foo']);
     expect(query.columns?.[0]).toEqual(

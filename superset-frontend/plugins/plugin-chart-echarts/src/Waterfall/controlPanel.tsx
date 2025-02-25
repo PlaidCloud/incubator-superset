@@ -39,6 +39,42 @@ const config: ControlPanelConfig = {
         ['metric'],
         ['adhoc_filters'],
         ['row_limit'],
+        [
+          {
+            name: 'seriesOrderByColumn',
+            config: {
+              type: 'SelectControl',
+              label: t('Order Series By Column'),
+              description: t('Column to use for ordering the waterfall series with columns not in the chart'),
+              mapStateToProps: (state) => ({
+                choices: [
+                  [null, t('None')],
+                  ...(state.datasource?.columns || []).map(col => [col.column_name, col.column_name]),
+                ]
+              }),
+              default: null,
+              renderTrigger: true,
+            },
+          },
+        ],
+        [
+          {
+            name: 'seriesOrderDirection',
+            config: {
+              type: 'SelectControl',
+              label: t('Order Direction'),
+              choices: [
+                [null, t('None')],
+                ['ASC', t('Ascending')],
+                ['DESC', t('Descending')],
+              ],
+              default: null,
+              renderTrigger: true,
+              description: t('Ordering direction for the series, to be used with "Order Series By Column"'),
+            },
+          },
+        ]
+
       ],
     },
     {
@@ -55,6 +91,54 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
               default: false,
               description: t('Whether to display a legend for the chart'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'show_total',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show Total'),
+              default: true,
+              renderTrigger: true,
+              description: t('Show the total value in the waterfall chart'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'bold_total',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Bold Total'),
+              default: true,
+              renderTrigger: true,
+              description: t('Bold the total axis label in the waterfall chart'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'useFirstValueAsSubtotal',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Use first value as subtotal'),
+              default: false,
+              renderTrigger: true,
+              description: t('Render the first bar in the chart as a subtotal'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'bold_sub_total',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Bold first value as subtotal'),
+              default: true,
+              renderTrigger: true,
+              description: t('Bold the first bar axis label in the waterfall chart'),
             },
           },
         ],
@@ -106,6 +190,20 @@ const config: ControlPanelConfig = {
         ],
         [
           {
+            name: 'x_axis_label_distance',
+            config: {
+              type: 'TextControl',
+              label: t('X Axis Label Distance'),
+              description: t('Distance of the label from X axis (in pixels)'),
+              renderTrigger: true,
+              default: '25',
+              isInt: true,
+              // validators: [v => !Number.isNaN(v) && v >= 0],
+            },
+          },
+        ],
+        [
+          {
             name: 'x_axis_time_format',
             config: {
               ...sharedControls.x_axis_time_format,
@@ -134,6 +232,39 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'sort_x_axis',
+            config: {
+              type: 'SelectControl',
+              label: t('Sort X Axis'),
+              default: 'none',
+              choices: [
+                ['none', t('None')],
+                ['asc', t('Ascending')],
+                ['desc', t('Descending')],
+              ],
+              renderTrigger: true,
+              description: t('Sort X axis in ascending or descending order'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'orientation',
+            config: {
+              type: 'SelectControl',
+              label: t('Orientation'),
+              default: 'vertical',
+              choices: [
+                ['vertical', t('Vertical')],
+                ['horizontal', t('Horizontal')],
+              ],
+              renderTrigger: true,
+              description: t('Orientation of the chart'),
+            },
+          },
+        ],
         [<ControlSubSectionHeader>{t('Y Axis')}</ControlSubSectionHeader>],
         [
           {
@@ -146,10 +277,24 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'y_axis_label_distance',
+            config: {
+              type: 'TextControl',
+              label: t('Y Axis Label Distance'),
+              description: t('Distance of the label from Y axis (in pixels)'),
+              renderTrigger: true,
+              default: '25',
+              isInt: true,
+              // validators: [v => !Number.isNaN(v) && v >= 0],
+            },
+          },
+        ],
         ['y_axis_format'],
         ['currency_format'],
       ],
-    },
+    }
   ],
   controlOverrides: {
     groupby: {
