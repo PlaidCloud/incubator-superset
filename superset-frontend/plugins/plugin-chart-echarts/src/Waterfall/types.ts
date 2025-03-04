@@ -77,4 +77,4 @@ export interface EchartsWaterfallChartProps extends ChartProps {
 }
 
 export type WaterfallChartTransformedProps =
-  BaseTransformedProps<EchartsWaterfallFormData>
+  BaseTransformedProps<EchartsWaterfallFormData>;

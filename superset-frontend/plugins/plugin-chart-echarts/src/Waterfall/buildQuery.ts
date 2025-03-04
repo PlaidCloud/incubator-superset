@@ -16,10 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import {
-  buildQueryContext,
-  ensureIsArray,
-} from '@superset-ui/core';
+import { buildQueryContext, ensureIsArray } from '@superset-ui/core';
 import { EchartsWaterfallFormData } from './types';
 
 export default function buildQuery(formData: EchartsWaterfallFormData) {
@@ -32,8 +29,13 @@ export default function buildQuery(formData: EchartsWaterfallFormData) {
     return buildQueryContext(formData, baseQueryObject => [
       {
         ...baseQueryObject,
-        columns,
-        orderby: [[formData.seriesOrderByColumn, formData.seriesOrderDirection === 'ASC']],
+        columns: [...columns, formData.seriesOrderByColumn],
+        orderby: [
+          [
+            formData.seriesOrderByColumn,
+            formData.seriesOrderDirection === 'ASC',
+          ],
+        ],
       },
     ]);
   }

@@ -25,6 +25,7 @@ import {
   formatSelectOptions,
   sharedControls,
 } from '@superset-ui/chart-controls';
+import React from 'react';
 import { showValueControl } from '../controls';
 
 const config: ControlPanelConfig = {
@@ -45,12 +46,17 @@ const config: ControlPanelConfig = {
             config: {
               type: 'SelectControl',
               label: t('Order Series By Column'),
-              description: t('Column to use for ordering the waterfall series with columns not in the chart'),
-              mapStateToProps: (state) => ({
+              description: t(
+                'Column to use for ordering the waterfall series with columns not in the chart',
+              ),
+              mapStateToProps: state => ({
                 choices: [
                   [null, t('None')],
-                  ...(state.datasource?.columns || []).map(col => [col.column_name, col.column_name]),
-                ]
+                  ...(state.datasource?.columns || []).map(col => [
+                    col.column_name,
+                    col.column_name,
+                  ]),
+                ],
               }),
               default: null,
               renderTrigger: true,
@@ -70,11 +76,12 @@ const config: ControlPanelConfig = {
               ],
               default: null,
               renderTrigger: true,
-              description: t('Ordering direction for the series, to be used with "Order Series By Column"'),
+              description: t(
+                'Ordering direction for the series, to be used with "Order Series By Column"',
+              ),
             },
           },
-        ]
-
+        ],
       ],
     },
     {
@@ -114,7 +121,9 @@ const config: ControlPanelConfig = {
               label: t('Bold Total'),
               default: true,
               renderTrigger: true,
-              description: t('Bold the total axis label in the waterfall chart'),
+              description: t(
+                'Bold the total axis label in the waterfall chart',
+              ),
             },
           },
         ],
@@ -138,7 +147,9 @@ const config: ControlPanelConfig = {
               label: t('Bold first value as subtotal'),
               default: true,
               renderTrigger: true,
-              description: t('Bold the first bar axis label in the waterfall chart'),
+              description: t(
+                'Bold the first bar axis label in the waterfall chart',
+              ),
             },
           },
         ],
@@ -294,7 +305,7 @@ const config: ControlPanelConfig = {
         ['y_axis_format'],
         ['currency_format'],
       ],
-    }
+    },
   ],
   controlOverrides: {
     groupby: {
