@@ -356,7 +356,7 @@ export default function EchartsWaterfall(
   };
 
   const wrapXTicksLayoutText = (options: EChartsCoreOption) => {
-    const { xTicksLayout, xTicksWrapLength} = props.formData;
+    const { xTicksLayout, xTicksWrapLength } = props.formData;
 
     if (xTicksLayout !== 'flat') return options;
 
@@ -366,12 +366,12 @@ export default function EchartsWaterfall(
         ...(options.xAxis as any),
         axisLabel: {
           ...(options.xAxis as any)?.axisLabel,
-          formatter: function(value: string) {
+          formatter(value: string) {
             const regex = new RegExp(`.{1,${xTicksWrapLength}}`, 'g');
-            return value.match(regex)?.join('\n')
-          }
-        }
-      }
+            return value.match(regex)?.join('\n');
+          },
+        },
+      },
     };
   };
 
@@ -383,7 +383,6 @@ export default function EchartsWaterfall(
   const boldTotalOptions = getBoldTotalOptions(boldSubTotalOptions);
   const labelDistanceOptions = getLabelDistanceOptions(boldTotalOptions);
   const wrappedTextOptions = wrapXTicksLayoutText(labelDistanceOptions);
-
 
   return (
     <Echart
