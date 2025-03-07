@@ -355,6 +355,26 @@ export default function EchartsWaterfall(
     };
   };
 
+  const wrapXTicksLayoutText = (options: EChartsCoreOption) => {
+    const { xTicksLayout, xTicksWrapLength} = props.formData;
+
+    if (xTicksLayout !== 'flat') return options;
+
+    return {
+      ...options,
+      xAxis: {
+        ...(options.xAxis as any),
+        axisLabel: {
+          ...(options.xAxis as any)?.axisLabel,
+          formatter: function(value: string) {
+            const regex = new RegExp(`.{1,${xTicksWrapLength}}`, 'g');
+            return value.match(regex)?.join('\n')
+          }
+        }
+      }
+    };
+  };
+
   const subtotalOptions = getSubtotalOptions(echartOptions);
   const showTotalOptions = getShowTotalOptions(subtotalOptions);
   const sortedEchartOptions = getSortedOptions(showTotalOptions);
@@ -362,13 +382,15 @@ export default function EchartsWaterfall(
   const boldSubTotalOptions = getSubTotalBoldOptions(flippedEchartOptions);
   const boldTotalOptions = getBoldTotalOptions(boldSubTotalOptions);
   const labelDistanceOptions = getLabelDistanceOptions(boldTotalOptions);
+  const wrappedTextOptions = wrapXTicksLayoutText(labelDistanceOptions);
+
 
   return (
     <Echart
       refs={refs}
       height={height}
       width={width}
-      echartOptions={labelDistanceOptions}
+      echartOptions={wrappedTextOptions}
       eventHandlers={eventHandlers}
     />
   );
