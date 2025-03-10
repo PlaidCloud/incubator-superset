@@ -18,7 +18,7 @@
  */
 import { EChartsCoreOption } from 'echarts/core';
 import { useTheme } from '@superset-ui/core';
-import React from 'react';
+import React, { useRef } from 'react';
 import Echart from '../components/Echart';
 import { WaterfallChartTransformedProps } from './types';
 import { EventHandlers } from '../types';
@@ -30,6 +30,8 @@ export default function EchartsWaterfall(
     height,
     width,
     echartOptions,
+    setDataMask,
+    onContextMenu,
     refs,
     onLegendStateChanged,
     formData: {
@@ -43,11 +45,111 @@ export default function EchartsWaterfall(
       boldTotal,
       boldSubTotal,
     },
+    emitCrossFilters,
   } = props;
 
   const theme = useTheme();
+  const chartRef = useRef<any>(null);
 
   const eventHandlers: EventHandlers = {
+    click: params => {
+      if (!setDataMask || !emitCrossFilters) return;
+
+      const { name: value } = params;
+      const xAxisColumn = props.formData.xAxis;
+
+      // Don't filter on Total column
+      if (value === 'Total') return;
+
+      const isCurrentValue = props.filterState?.value === value;
+
+      if (isCurrentValue) {
+        // Clear the filter and visual state
+        setDataMask({
+          extraFormData: {},
+          filterState: {
+            value: null,
+          },
+        });
+
+        if (chartRef.current) {
+          const series = echartOptions.series as any[];
+          const updatedSeries = series.map(s => ({
+            ...s,
+            itemStyle: {
+              ...s.itemStyle,
+              opacity: 1,
+            },
+          }));
+
+          if (orientation === 'vertical') {
+            chartRef.current.getEchartInstance().setOption({
+              series: updatedSeries,
+            });
+          } else {
+            chartRef.current.getEchartInstance().setOption({
+              series: updatedSeries.map(s => ({
+                ...s,
+                data: [...s.data].reverse(),
+              })),
+            });
+          }
+        }
+        return;
+      }
+
+      // Set new filter
+      setDataMask({
+        extraFormData: {
+          filters: [
+            {
+              col: xAxisColumn,
+              op: '==',
+              val: value,
+            },
+          ],
+        },
+        filterState: {
+          value,
+        },
+      });
+
+      if (chartRef.current) {
+        const series = echartOptions.series as any[];
+        const xAxisLabel = echartOptions.xAxis as { data: (string | number)[] };
+        // get index of value in xAxisLabel
+        const valueIndex = (xAxisLabel?.data || []).indexOf(value);
+
+        const updatedSeries = series.map(s => ({
+          ...s,
+          data: s.data.map((d: any, idx: number) => ({
+            ...d,
+            itemStyle: {
+              ...d.itemStyle,
+              opacity: !Number.isNaN(d.value) && idx === valueIndex ? 1 : 0.3,
+            },
+          })),
+        }));
+
+        if (orientation === 'vertical') {
+          chartRef.current.getEchartInstance().setOption({
+            series: updatedSeries,
+          });
+        } else {
+          chartRef.current.getEchartInstance().setOption({
+            series: updatedSeries.map(s => ({
+              ...s,
+              data: [...s.data].reverse(),
+            })),
+          });
+        }
+      }
+    },
+    contextmenu: params => {
+      if (onContextMenu) {
+        onContextMenu(params.name, 0);
+      }
+    },
     legendselectchanged: payload => {
       onLegendStateChanged?.(payload.selected);
     },
@@ -360,19 +462,23 @@ export default function EchartsWaterfall(
 
     if (xTicksLayout !== 'flat') return options;
 
-    return {
-      ...options,
-      xAxis: {
-        ...(options.xAxis as any),
-        axisLabel: {
-          ...(options.xAxis as any)?.axisLabel,
-          formatter(value: string) {
-            const regex = new RegExp(`.{1,${xTicksWrapLength}}`, 'g');
-            return value.match(regex)?.join('\n');
+    if (orientation === 'vertical') {
+      return {
+        ...options,
+        xAxis: {
+          ...(options.xAxis as any),
+          axisLabel: {
+            ...(options.xAxis as any)?.axisLabel,
+            formatter(value: string) {
+              const regex = new RegExp(`.{1,${xTicksWrapLength}}`, 'g');
+              return value.match(regex)?.join('\n');
+            },
           },
         },
-      },
-    };
+      };
+    }
+
+    return options;
   };
 
   const subtotalOptions = getSubtotalOptions(echartOptions);
@@ -386,11 +492,12 @@ export default function EchartsWaterfall(
 
   return (
     <Echart
-      refs={refs}
+      ref={chartRef}
       height={height}
       width={width}
       echartOptions={wrappedTextOptions}
       eventHandlers={eventHandlers}
+      refs={refs}
     />
   );
 }

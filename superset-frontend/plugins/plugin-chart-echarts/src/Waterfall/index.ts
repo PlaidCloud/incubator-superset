@@ -27,6 +27,7 @@ import example2 from './images/example2.png';
 import example3 from './images/example3.png';
 import { EchartsWaterfallChartProps, EchartsWaterfallFormData } from './types';
 
+// TODO: Implement cross filtering
 export default class EchartsWaterfallChartPlugin extends ChartPlugin<
   EchartsWaterfallFormData,
   EchartsWaterfallChartProps

@@ -176,7 +176,9 @@ export default function transformProps(
     legendState,
     queriesData,
     hooks,
+    filterState,
     theme,
+    emitCrossFilters, // Add this
     inContextMenu,
   } = chartProps;
   const refs: Refs = {};
@@ -482,5 +484,7 @@ export default function transformProps(
     setDataMask,
     onContextMenu,
     onLegendStateChanged,
+    filterState,
+    emitCrossFilters, // Add this
   };
 }
