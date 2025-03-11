@@ -176,7 +176,9 @@ export default function transformProps(
     legendState,
     queriesData,
     hooks,
+    filterState,
     theme,
+    emitCrossFilters, // Add this
     inContextMenu,
   } = chartProps;
   const refs: Refs = {};
@@ -339,7 +341,7 @@ export default function transformProps(
     if (value === TOTAL_MARK) {
       return TOTAL_MARK;
     }
-    if (coltypeMapping[xAxisColumns[index]] === GenericDataType.TEMPORAL) {
+    if (coltypeMapping[xAxisColumns[index]] === GenericDataType.Temporal) {
       if (typeof value === 'string') {
         return getTimeFormatter(xAxisTimeFormat)(Number.parseInt(value, 10));
       }
@@ -482,5 +484,7 @@ export default function transformProps(
     setDataMask,
     onContextMenu,
     onLegendStateChanged,
+    filterState,
+    emitCrossFilters,
   };
 }
