@@ -329,104 +329,93 @@ export default function EchartsWaterfall(
     };
   };
 
-  const getSubTotalBoldOptions = (options: EChartsCoreOption) => {
-    if (!boldSubTotal) return options;
+  const getFormattedAxisOptions = (options: EChartsCoreOption) => {
+    const { xTicksLayout, xTicksWrapLength } = props.formData;
 
-    if (orientation === 'vertical')
-      return {
-        ...options,
-        xAxis: {
-          ...((options.xAxis as any) || {}),
-          axisLabel: {
-            ...((options.xAxis as any).axisLabel || {}),
-            formatter(value: string, index: number) {
-              if (index === 0) return `{subtotal|${value}}`;
-              return value;
-            },
-            rich: {
-              subtotal: {
-                fontWeight: 'bold',
-              },
-            },
-          },
-        },
-      };
+    // If no formatting needed, return original options
+    if (!boldTotal && !boldSubTotal && xTicksLayout !== 'flat') {
+      return options;
+    }
 
-    return {
-      ...options,
-      yAxis: {
-        ...((options.yAxis as any) || {}),
-        axisLabel: {
-          ...((options.yAxis as any).axisLabel || {}),
-          formatter(value: string, index: number) {
-            if (index === (options.yAxis as any).data.length - 1)
-              return `{subtotal|${value}}`;
-            return value;
-          },
-          rich: {
-            subtotal: {
-              fontWeight: 'bold',
-            },
-          },
-        },
-      },
-    };
-  };
-
-  const getBoldTotalOptions = (options: EChartsCoreOption) => {
-    if (!boldTotal) return options;
-
-    const totalsIndex =
-      ((options.series as any[]) || [])
+    // Get total indices for bold formatting
+    const totalsIndex = boldTotal
+      ? ((options.series as any[]) || [])
         .find(series => series.name === 'Total')
         ?.data.map((dataPoint: any, index: number) =>
           dataPoint.value !== '-' ? index : -1,
         )
-        .filter((index: number) => index !== -1) || [];
+        .filter((index: number) => index !== -1) || []
+      : [];
 
-    if (orientation === 'vertical')
+    const formatText = (value: string, index: number) => {
+      // Handle bold formatting first
+      let formattedValue = value;
+
+      if (orientation === 'vertical') {
+        if (index === 0 && boldSubTotal) {
+          formattedValue = `{subtotal|${value}}`;
+        } else if (totalsIndex.includes(index) && boldTotal) {
+          formattedValue = `{total|${value}}`;
+        }
+      } else {
+        const isLast = index === (options.yAxis as any).data.length - 1;
+        if (isLast && boldSubTotal) {
+          formattedValue = `{subtotal|${value}}`;
+        } else if (totalsIndex.includes(index) && boldTotal) {
+          formattedValue = `{total|${value}}`;
+        }
+      }
+
+      // Then handle text wrapping if needed
+      if (xTicksLayout === 'flat') {
+        const isRichText = formattedValue.includes('{') && formattedValue.includes('}');
+        const regex = new RegExp(`.{1,${xTicksWrapLength}}`, 'g');
+        if (isRichText) {
+          const match = formattedValue.match(/\{(.*?)\|(.*?)\}/);
+          if (match) {
+            const [_, style, text] = match;
+            const wrappedText = text.match(regex)?.join('\n');
+            return `{${style}|${wrappedText}}`
+          }
+        } else {
+          return formattedValue.match(regex)?.join('\n');
+        }
+      }
+
+      return formattedValue;
+    };
+
+    if (orientation === 'vertical') {
       return {
         ...options,
         xAxis: {
           ...(options.xAxis as any),
           axisLabel: {
-            ...(options.xAxis as any).axisLabel,
-            formatter(value: string, index: number) {
-              if (index === 0 && useFirstValueAsSubtotal)
-                return `{subtotal|${value}}`;
-              if (totalsIndex.includes(index)) return `{total|${value}}`;
-              return value;
-            },
+            ...(options.xAxis as any)?.axisLabel,
+            formatter: formatText,
+            overflow: 'break',
             rich: {
-              ...(options.xAxis as any).axisLabel.rich,
-              total: {
-                fontWeight: 'bold',
-              },
+              ...(options.xAxis as any)?.axisLabel?.rich,
+              subtotal: boldSubTotal ? { fontWeight: 'bold' } : undefined,
+              total: boldTotal ? { fontWeight: 'bold' } : undefined,
             },
           },
         },
       };
+    }
 
     return {
       ...options,
       yAxis: {
         ...(options.yAxis as any),
         axisLabel: {
-          ...(options.yAxis as any).axisLabel,
-          formatter(value: string, index: number) {
-            if (
-              index === (options.yAxis as any).data.length - 1 &&
-              useFirstValueAsSubtotal
-            )
-              return `{subtotal|${value}}`;
-            if (totalsIndex.includes(index)) return `{total|${value}}`;
-            return value;
-          },
+          ...(options.yAxis as any)?.axisLabel,
+          formatter: formatText,
+          overflow: 'break',
           rich: {
-            ...((options.yAxis as any).axisLabel.rich || {}),
-            total: {
-              fontWeight: 'bold',
-            },
+            ...(options.yAxis as any)?.axisLabel?.rich,
+            subtotal: boldSubTotal ? { fontWeight: 'bold' } : undefined,
+            total: boldTotal ? { fontWeight: 'bold' } : undefined,
           },
         },
       },
@@ -457,45 +446,19 @@ export default function EchartsWaterfall(
     };
   };
 
-  const wrapXTicksLayoutText = (options: EChartsCoreOption) => {
-    const { xTicksLayout, xTicksWrapLength } = props.formData;
-
-    if (xTicksLayout !== 'flat') return options;
-
-    if (orientation === 'vertical') {
-      return {
-        ...options,
-        xAxis: {
-          ...(options.xAxis as any),
-          axisLabel: {
-            ...(options.xAxis as any)?.axisLabel,
-            formatter(value: string) {
-              const regex = new RegExp(`.{1,${xTicksWrapLength}}`, 'g');
-              return value.match(regex)?.join('\n');
-            },
-          },
-        },
-      };
-    }
-
-    return options;
-  };
-
   const subtotalOptions = getSubtotalOptions(echartOptions);
   const showTotalOptions = getShowTotalOptions(subtotalOptions);
   const sortedEchartOptions = getSortedOptions(showTotalOptions);
   const flippedEchartOptions = getFlippedOptions(sortedEchartOptions);
-  const boldSubTotalOptions = getSubTotalBoldOptions(flippedEchartOptions);
-  const boldTotalOptions = getBoldTotalOptions(boldSubTotalOptions);
-  const labelDistanceOptions = getLabelDistanceOptions(boldTotalOptions);
-  const wrappedTextOptions = wrapXTicksLayoutText(labelDistanceOptions);
+  const formattedAxisOptions = getFormattedAxisOptions(flippedEchartOptions);
+  const labelDistanceOptions = getLabelDistanceOptions(formattedAxisOptions);
 
   return (
     <Echart
       ref={chartRef}
       height={height}
       width={width}
-      echartOptions={wrappedTextOptions}
+      echartOptions={labelDistanceOptions}
       eventHandlers={eventHandlers}
       refs={refs}
     />
