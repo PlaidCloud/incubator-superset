@@ -340,11 +340,11 @@ export default function EchartsWaterfall(
     // Get total indices for bold formatting
     const totalsIndex = boldTotal
       ? ((options.series as any[]) || [])
-        .find(series => series.name === 'Total')
-        ?.data.map((dataPoint: any, index: number) =>
-          dataPoint.value !== '-' ? index : -1,
-        )
-        .filter((index: number) => index !== -1) || []
+          .find(series => series.name === 'Total')
+          ?.data.map((dataPoint: any, index: number) =>
+            dataPoint.value !== '-' ? index : -1,
+          )
+          .filter((index: number) => index !== -1) || []
       : [];
 
     const formatText = (value: string, index: number) => {
@@ -368,14 +368,15 @@ export default function EchartsWaterfall(
 
       // Then handle text wrapping if needed
       if (xTicksLayout === 'flat') {
-        const isRichText = formattedValue.includes('{') && formattedValue.includes('}');
+        const isRichText =
+          formattedValue.includes('{') && formattedValue.includes('}');
         const regex = new RegExp(`.{1,${xTicksWrapLength}}`, 'g');
         if (isRichText) {
           const match = formattedValue.match(/\{(.*?)\|(.*?)\}/);
           if (match) {
             const [_, style, text] = match;
             const wrappedText = text.match(regex)?.join('\n');
-            return `{${style}|${wrappedText}}`
+            return `{${style}|${wrappedText}}`;
           }
         } else {
           return formattedValue.match(regex)?.join('\n');
