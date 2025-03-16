@@ -49,8 +49,11 @@ const config: ControlPanelConfig = {
               mapStateToProps: (state) => ({
                 choices: [
                   [null, t('None')],
-                  ...(state.datasource?.columns || []).map(col => [col.column_name, col.column_name]),
-                ]
+                  ...(state.datasource?.columns || []).map(col => [
+                    col.column_name, 
+                    col.column_name,
+                  ]),
+                ],
               }),
               default: null,
               renderTrigger: true,
@@ -73,8 +76,7 @@ const config: ControlPanelConfig = {
               description: t('Ordering direction for the series, to be used with "Order Series By Column"'),
             },
           },
-        ]
-
+        ],
       ],
     },
     {
@@ -231,6 +233,20 @@ const config: ControlPanelConfig = {
               description: t('The way the ticks are laid out on the X-axis'),
             },
           },
+          {
+            name: 'x_ticks_wrap_length',
+            config: {
+              type: 'TextControl',
+              label: t('X Tick Wrap Length'),
+              description: t(
+                'Maximum line length for wrapped text (when Flat layout is selected)',
+              ),
+              default: '20',
+              renderTrigger: true,
+              visibility: ({ controls }) =>
+                controls.x_ticks_layout.value === 'flat',
+            },
+          },
         ],
         [
           {
@@ -294,7 +310,7 @@ const config: ControlPanelConfig = {
         ['y_axis_format'],
         ['currency_format'],
       ],
-    }
+    },
   ],
   controlOverrides: {
     groupby: {
