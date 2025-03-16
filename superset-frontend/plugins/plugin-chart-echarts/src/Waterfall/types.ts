@@ -76,5 +76,10 @@ export interface EchartsWaterfallChartProps extends ChartProps {
   queriesData: ChartDataResponseResult[];
 }
 
-export type WaterfallChartTransformedProps =
-  BaseTransformedProps<EchartsWaterfallFormData>
+export interface WaterfallChartTransformedProps
+  extends BaseTransformedProps<EchartsWaterfallFormData> {
+  emitCrossFilters?: boolean;
+  filterState?: {
+    value?: string;
+  };
+}

@@ -16,13 +16,9 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import {
-  buildQueryContext,
-  ensureIsArray,
-} from '@superset-ui/core';
-import { EchartsWaterfallFormData } from './types';
+import { buildQueryContext, ensureIsArray, QueryFormData, } from '@superset-ui/core';
 
-export default function buildQuery(formData: EchartsWaterfallFormData) {
+export default function buildQuery(formData: QueryFormData) {
   const { x_axis, granularity_sqla, groupby } = formData;
   const columns = [
     ...ensureIsArray(x_axis || granularity_sqla),
@@ -32,8 +28,13 @@ export default function buildQuery(formData: EchartsWaterfallFormData) {
     return buildQueryContext(formData, baseQueryObject => [
       {
         ...baseQueryObject,
-        columns,
-        orderby: [[formData.seriesOrderByColumn, formData.seriesOrderDirection === 'ASC']],
+        columns: [...columns, formData.seriesOrderByColumn],
+        orderby: [
+          [
+            formData.seriesOrderByColumn,
+            formData.seriesOrderDirection === 'ASC',
+          ],
+        ],
       },
     ]);
   }
