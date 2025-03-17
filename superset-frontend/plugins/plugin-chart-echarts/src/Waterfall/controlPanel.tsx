@@ -242,6 +242,20 @@ const config: ControlPanelConfig = {
               description: t('The way the ticks are laid out on the X-axis'),
             },
           },
+          {
+            name: 'x_ticks_wrap_length',
+            config: {
+              type: 'TextControl',
+              label: t('X Tick Wrap Length'),
+              description: t(
+                'Maximum line length for wrapped text (when Flat layout is selected)',
+              ),
+              default: '20',
+              renderTrigger: true,
+              visibility: ({ controls }) =>
+                controls.x_ticks_layout.value === 'flat',
+            },
+          },
         ],
         [
           {
