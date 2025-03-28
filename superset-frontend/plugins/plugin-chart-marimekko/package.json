@@ -21,7 +21,7 @@
     "ts-types": "tsc --build",
     "test": "jest"
   },
-  "author": "My Name",
+  "author": "Woodfrog Pvt Ltd <Ananta Patil(https://github.com/anantaoutlook), Parth Manhas(https://github.com/parthmanhas)>",
   "license": "Apache-2.0",
   "publishConfig": {
     "access": "public"
