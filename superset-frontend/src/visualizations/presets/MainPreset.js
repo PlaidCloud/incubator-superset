@@ -80,7 +80,7 @@ import { PivotTableChartPlugin as PivotTableChartPluginV2 } from '@superset-ui/p
 import { HandlebarsChartPlugin } from '@superset-ui/plugin-chart-handlebars';
 import { FilterPlugins } from 'src/constants';
 import TimeTableChartPlugin from '../TimeTable';
-import { PluginChartMarimekko } from 'plugin-chart-marimekko';
+import { PluginChartMarimekko } from '@superset-ui/plugin-chart-marimekko';
 import { BigTextChart } from '@superset-ui/plugin-chart-big-text';
 
 export default class MainPreset extends Preset {
