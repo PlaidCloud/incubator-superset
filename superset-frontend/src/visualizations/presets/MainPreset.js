@@ -80,6 +80,7 @@ import { PivotTableChartPlugin as PivotTableChartPluginV2 } from '@superset-ui/p
 import { HandlebarsChartPlugin } from '@superset-ui/plugin-chart-handlebars';
 import { FilterPlugins } from 'src/constants';
 import TimeTableChartPlugin from '../TimeTable';
+import { PluginChartMarimekko } from 'plugin-chart-marimekko';
 
 export default class MainPreset extends Preset {
   constructor() {
@@ -184,6 +185,7 @@ export default class MainPreset extends Preset {
             },
           ],
         }).configure({ key: VizType.Cartodiagram }),
+        new PluginChartMarimekko().configure({ key: 'ext-marimekko' }),
         ...experimentalPlugins,
       ],
     });
