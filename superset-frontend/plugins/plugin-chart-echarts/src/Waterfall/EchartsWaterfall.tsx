@@ -210,12 +210,13 @@ export default function EchartsWaterfall(
   const getShowTotalOptions = (options: EChartsCoreOption) => {
     if (showTotal) return options;
 
-    const totalsIndex = ((options.series as any[]) || [])
-      .find(series => series.name === 'Total')
-      ?.data.map((dataPoint: any, index: number) =>
-        dataPoint.value !== '-' ? index : -1,
-      )
-      .filter((index: number) => index !== -1) || [];
+    const totalsIndex =
+      ((options.series as any[]) || [])
+        .find(series => series.name === 'Total')
+        ?.data.map((dataPoint: any, index: number) =>
+          dataPoint.value !== '-' ? index : -1,
+        )
+        .filter((index: number) => index !== -1) || [];
 
     const xAxisData = [
       ...((options.xAxis as { data: (string | number)[] }).data || []),
@@ -313,17 +314,17 @@ export default function EchartsWaterfall(
       },
       series: Array.isArray(options.series)
         ? options.series.map((series: any) => ({
-          ...series,
-          encode: {
-            x: series.encode?.y,
-            y: series.encode?.x,
-          },
-          data: [...series.data].reverse(),
-          label: {
-            ...(series.label || {}),
-            position: series.name === 'Decrease' ? 'left' : 'right',
-          },
-        }))
+            ...series,
+            encode: {
+              x: series.encode?.y,
+              y: series.encode?.x,
+            },
+            data: [...series.data].reverse(),
+            label: {
+              ...(series.label || {}),
+              position: series.name === 'Decrease' ? 'left' : 'right',
+            },
+          }))
         : [],
     };
   };
@@ -339,11 +340,11 @@ export default function EchartsWaterfall(
     // Get total indices for bold formatting
     const totalsIndex = boldTotal
       ? ((options.series as any[]) || [])
-        .find(series => series.name === 'Total')
-        ?.data.map((dataPoint: any, index: number) =>
-          dataPoint.value !== '-' ? index : -1,
-        )
-        .filter((index: number) => index !== -1) || []
+          .find(series => series.name === 'Total')
+          ?.data.map((dataPoint: any, index: number) =>
+            dataPoint.value !== '-' ? index : -1,
+          )
+          .filter((index: number) => index !== -1) || []
       : [];
 
     const formatText = (value: string, index: number) => {
