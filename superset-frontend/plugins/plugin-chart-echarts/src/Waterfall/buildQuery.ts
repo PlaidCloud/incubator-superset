@@ -16,7 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { buildQueryContext, ensureIsArray, QueryFormData, } from '@superset-ui/core';
+import {
+  buildQueryContext,
+  ensureIsArray,
+  QueryFormData,
+} from '@superset-ui/core';
 
 export default function buildQuery(formData: QueryFormData) {
   const { x_axis, granularity_sqla, groupby } = formData;

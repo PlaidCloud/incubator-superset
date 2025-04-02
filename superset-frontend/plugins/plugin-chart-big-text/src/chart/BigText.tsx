@@ -132,8 +132,8 @@ class BigNumberVis extends React.PureComponent<BigNumberVizProps> {
       bigNumber === null
         ? t('No data')
         : typeof bigNumber === 'number'
-        ? headerFormatter(bigNumber).toString()
-        : bigNumber?.toString();
+          ? headerFormatter(bigNumber).toString()
+          : bigNumber?.toString();
     const container = this.createTemporaryContainer();
     document.body.append(container);
     const fontSize = computeMaxFontSize({
