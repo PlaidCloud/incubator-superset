@@ -145,11 +145,16 @@ export default {
                 return true;
               },
               mapStateToProps(explore, _, chart) {
-                const verboseMap: Record<string, string> = explore?.datasource?.hasOwnProperty(
-                  'verbose_map',
-                )
-                  ? ((explore?.datasource as Dataset)?.verbose_map as Record<string, string>)
-                  : (explore?.datasource?.columns as unknown as Record<string, string>) ?? {};
+                const verboseMap: Record<string, string> =
+                  explore?.datasource?.hasOwnProperty('verbose_map')
+                    ? ((explore?.datasource as Dataset)?.verbose_map as Record<
+                        string,
+                        string
+                      >)
+                    : ((explore?.datasource?.columns as unknown as Record<
+                        string,
+                        string
+                      >) ?? {});
                 const { colnames, coltypes } =
                   chart?.queriesResponse?.[0] ?? {};
                 const numericColumns =
