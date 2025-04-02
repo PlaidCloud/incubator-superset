@@ -1,0 +1,187 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+import { GenericDataType, t } from '@superset-ui/core';
+import {
+  ControlPanelConfig,
+  D3_FORMAT_DOCS,
+  D3_TIME_FORMAT_OPTIONS,
+  Dataset,
+  getStandardizedControls,
+  sections,
+} from '@superset-ui/chart-controls';
+import {
+  DEFAULT_BACK_COLOR,
+  DEFAULT_TXT_COLOR,
+  headerFontSize,
+  subheaderFontSize,
+} from '../sharedControls';
+
+export default {
+  controlPanelSections: [
+    sections.legacyTimeseriesTime,
+    {
+      label: t('Query'),
+      expanded: true,
+      controlSetRows: [['columns'], ['adhoc_filters']],
+    },
+    {
+      label: t('Display settings'),
+      expanded: true,
+      tabOverride: 'data',
+      controlSetRows: [
+        [
+          {
+            name: 'subheader',
+            config: {
+              type: 'TextControl',
+              label: t('Subheader'),
+              renderTrigger: true,
+              description: t(
+                'Description text that shows up below your Big Number',
+              ),
+            },
+          },
+        ],
+      ],
+    },
+    {
+      label: t('Chart Options'),
+      expanded: true,
+      controlSetRows: [
+        // ['color_picker', null],
+        [
+          {
+            name: 'text_color',
+            config: {
+              label: t('Text Color'),
+              description: t('Text Color that shows chart Text'),
+              type: 'ColorPickerControl',
+              default: DEFAULT_TXT_COLOR,
+              renderTrigger: true,
+            },
+          },
+        ],
+        [
+          {
+            name: 'color',
+            config: {
+              label: t('Background Color'),
+              description: t('Background Color that shows chart background'),
+              type: 'ColorPickerControl',
+              default: DEFAULT_BACK_COLOR,
+              renderTrigger: true,
+            },
+          },
+        ],
+        [
+          {
+            name: 'sub_header_color_picker',
+            config: {
+              label: t('Sub Header Color'),
+              description: t('Color of the Sub Header location'),
+              type: 'ColorPickerControl',
+              default: DEFAULT_TXT_COLOR,
+              renderTrigger: true,
+            },
+          },
+        ],
+        [headerFontSize],
+        [subheaderFontSize],
+        ['y_axis_format'],
+        ['currency_format'],
+        [
+          {
+            name: 'time_format',
+            config: {
+              type: 'SelectControl',
+              freeForm: true,
+              label: t('Date format'),
+              renderTrigger: true,
+              choices: D3_TIME_FORMAT_OPTIONS,
+              description: D3_FORMAT_DOCS,
+              default: 'smart_date',
+            },
+          },
+        ],
+        [
+          {
+            name: 'force_timestamp_formatting',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Force date format'),
+              renderTrigger: true,
+              default: false,
+              description: t(
+                'Use date formatting even when metric value is not a timestamp',
+              ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'conditional_formatting',
+            config: {
+              type: 'ConditionalFormattingControl',
+              renderTrigger: true,
+              label: t('Conditional Formatting'),
+              description: t('Apply conditional color formatting to metric'),
+              shouldMapStateToProps() {
+                return true;
+              },
+              mapStateToProps(explore, _, chart) {
+                const verboseMap: Record<string, string> = explore?.datasource?.hasOwnProperty(
+                  'verbose_map',
+                )
+                  ? ((explore?.datasource as Dataset)?.verbose_map as Record<string, string>)
+                  : (explore?.datasource?.columns as unknown as Record<string, string>) ?? {};
+                const { colnames, coltypes } =
+                  chart?.queriesResponse?.[0] ?? {};
+                const numericColumns =
+                  Array.isArray(colnames) && Array.isArray(coltypes)
+                    ? colnames
+                        .filter(
+                          (colname: string, index: number) =>
+                            coltypes[index] === GenericDataType.Numeric,
+                        )
+                        .map(colname => ({
+                          value: colname,
+                          label: verboseMap[colname] ?? colname,
+                        }))
+                    : [];
+                return {
+                  columnOptions: numericColumns,
+                  verboseMap,
+                };
+              },
+            },
+          },
+        ],
+      ],
+    },
+  ],
+  controlOverrides: {
+    y_axis_format: {
+      label: t('Number format'),
+    },
+  },
+  formDataOverrides: formData => ({
+    ...formData,
+    metric: getStandardizedControls().shiftMetric(),
+  }),
+} as ControlPanelConfig;
