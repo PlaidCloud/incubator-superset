@@ -33,6 +33,7 @@ __email__ = "garrett.bates@tartansolutions.com"
 
 log = logging.getLogger(__name__)
 USE_REFRESH_TOKENS = False
+PROJECT_ACCESS = 'project_access'
 
 
 def get_project_role_name(project_id: str) -> str:
@@ -163,9 +164,11 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
         # LOGIN SUCCESS (only if user is now registered)
         if user:
+            self.store_user_project_access()
             self.update_user_auth_stat(user)
             return user
         else:
+            session[PROJECT_ACCESS] = []
             return None
 
     def sync_role_definitions(self):
@@ -220,36 +223,33 @@ class PlaidSecurityManager(SupersetSecurityManager):
             rpc_token = session['token']['access_token']
 
         rpc = SimpleRPC(rpc_token, uri=rpc_url, verify_ssl=False)
+        rpc._old_call_rpc = rpc.call_rpc
+        def superset_call_rpc(*args, **kwargs):
+            try:
+                rpc._old_call_rpc(*args, **kwargs)
+            except HTTPError as e:
+                if e.response.status_code == 401:
+                    logout_user()
+                    session.clear()
+                    raise Exception(
+                        'There were problems authenticating your access with PlaidCloud. '
+                        'If you see this message, please refresh your browser'
+                    ) from e
+                raise
 
-        try:
-            rpc.identity.me.scopes()  # Just checking authentication
-        except HTTPError as e:
-            if e.response.status_code == 401:
-                logout_user()
-                session.clear()
-                raise Exception('There were problems authenticating your access with PlaidCloud. If you see this message, please refresh your browser') from e
-            raise
-
+        rpc.call_rpc = superset_call_rpc
         return rpc
 
+    def store_user_project_access(self):
+        try:
+            projects = self.get_rpc().analyze.project.projects(keys=["id"])
+            project_ids = [str(uuid.UUID(p["id"])) for p in projects]
+            session[PROJECT_ACCESS] = project_ids
+        except:
+            session[PROJECT_ACCESS] = []  # No access
 
     def _can_access_project(self, project_id):
-        rpc = self.get_rpc()
-        try:
-            proj = rpc.analyze.project.project(project_id=project_id)
-        except:
-            proj = None
-
-        if not (proj and proj.get('id')) and '-' in project_id:
-            # Try again without dashes
-            smooshed_project_id = project_id.replace('-', '')
-            try:
-                proj = rpc.analyze.project.project(project_id=smooshed_project_id)
-            except:
-                proj = None
-
-        return proj and proj.get('id')
-
+        return str(uuid.UUID(project_id)) in session[PROJECT_ACCESS]
 
     def can_access_database(self, database: Union["Database", "DruidCluster"]) -> bool:
         log.debug(f"Can access database: {database}")
@@ -257,14 +257,6 @@ class PlaidSecurityManager(SupersetSecurityManager):
             self._can_access_project(str(database.uuid))
             or super().can_access_database(database)
         )
-
-
-    def can_access_schema(self, datasource: "BaseDatasource") -> bool:
-        if datasource.schema is None:
-            # Call the base method if there is no schema since there isn't a plaid schema.
-            return super().can_access_schema(datasource)
-        return self.can_access_datasource(datasource)
-
 
     def can_access_datasource(self, datasource: "BaseDatasource") -> bool:
         log.debug(f"Checking access to datasource: {datasource}")
@@ -278,14 +270,12 @@ class PlaidSecurityManager(SupersetSecurityManager):
             or super().can_access_datasource(datasource)
         )
 
-
     def is_owner(self, resource: Model) -> bool:
         from superset.models.slice import Slice  # a Slice is a chart
         if isinstance(resource, Slice):
             return super().is_owner(resource) or any([self.is_owner(dashboard) for dashboard in resource.dashboards])
 
         return super().is_owner(resource)
-
 
     # def get_project_ids(self):
     #     log.info(f"About to fetch user project ids")
@@ -305,9 +295,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
     def _get_project_dbs(self):
         from superset.models.core import Database
-        rpc = self.get_rpc()
-        projects = rpc.analyze.project.projects()
-        project_uuids = {str(uuid.UUID(project['id'])) for project in projects}
+        project_uuids = set(session[PROJECT_ACCESS])
         return self.get_session.query(Database).filter(Database.uuid.in_(project_uuids))
 
     def user_view_menu_names(self, permission_name: str) -> set[str]:
@@ -316,7 +304,6 @@ class PlaidSecurityManager(SupersetSecurityManager):
             return project_perms | super().user_view_menu_names(permission_name)
 
         return super().user_view_menu_names(permission_name)
-
 
     # - Database.perm!
     # So I think maybe the other thing to do is to override user_view_menu_names, and add accessible projects in if it's queried on "database_access "?
