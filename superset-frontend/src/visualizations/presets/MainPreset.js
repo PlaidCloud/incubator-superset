@@ -80,6 +80,9 @@ import { PivotTableChartPlugin as PivotTableChartPluginV2 } from '@superset-ui/p
 import { HandlebarsChartPlugin } from '@superset-ui/plugin-chart-handlebars';
 import { FilterPlugins } from 'src/constants';
 import TimeTableChartPlugin from '../TimeTable';
+import { PluginChartMarimekko } from '@superset-ui/plugin-chart-marimekko';
+import { BigTextChart } from '@superset-ui/plugin-chart-big-text';
+import { SupersetPluginChartWhale } from '@superset-ui/plugin-chart-whale';
 
 export default class MainPreset extends Preset {
   constructor() {
@@ -185,6 +188,9 @@ export default class MainPreset extends Preset {
           ],
         }).configure({ key: VizType.Cartodiagram }),
         ...experimentalPlugins,
+        new SupersetPluginChartWhale().configure({
+          key: 'ext-whale',
+        }),
       ],
     });
   }
