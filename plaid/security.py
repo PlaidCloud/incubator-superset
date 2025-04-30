@@ -8,7 +8,6 @@ import time
 import jwt
 from typing import Union, List, Optional
 
-from sqlalchemy import func, Table, MetaData
 from urllib.parse import urljoin
 from flask import session
 from flask_login import logout_user
@@ -95,12 +94,28 @@ class PlaidSecurityManager(SupersetSecurityManager):
             me.raise_for_status()
             data = me.json()
             log.debug("User info from Keycloak: %s", data)
+            # This is for using keycloak groups
+            # role_keys = []
+            # if 'Dashboard Read Only' in data.get('groups'):
+            #     role_keys.append('superset-gamma')
+            # if 'Dashboard Read and Write' in data.get('groups'):
+            #     role_keys.append('superset-alpha')
+            # if data.get('is_admin', False):
+            #     role_keys.append('superset-admin')
 
-            user_email = data['email'].lower()
-            role_keys = ["superset-plaid", "superset-gamma"]
-            if user_email.endswith('tartansolutions.com') or user_email.endswith('plaidcloud.com'):
-                role_keys.append("superset-admin")
-
+            # This is for using Keycloak roles - have to inspect the token
+            access_token = response.get('access_token')
+            decoded_token = jwt.decode(access_token, options={'verify_signature': False})
+            roles = set(decoded_token.get('realm_access', {}).get('roles', []))
+            log.debug('Decoded token: %s', decoded_token)
+            log.debug('Roles from token: %s', roles)
+            role_keys = []
+            if 'dashboard.dashboard.read' in roles:
+                role_keys.append('superset-gamma')
+            if 'dashboard.dashboard.write' in roles:
+                role_keys.append('superset-alpha')
+            if decoded_token.get('is_admin', False):
+                role_keys.append('superset-admin')
             return {
                 "username": data.get("name", data["preferred_username"]), # this matches OIDC implementation
                 "first_name": data.get("given_name", ""),
@@ -171,46 +186,46 @@ class PlaidSecurityManager(SupersetSecurityManager):
             session[PROJECT_ACCESS] = []
             return None
 
-    def sync_role_definitions(self):
-        """PlaidSecurityManager constructor.
-
-        Establishes a Plaid role (and Public, if configured to do so) after
-        invoking the super constructor.
-
-        Adds all permissions from Gamma to Plaid (and Public, if configured)
-
-        Args:
-            appbuilder (:obj:`AppBuilder`): F.A.B AppBuilder main object.
-        """
-        super().sync_role_definitions()
-
-        pvms = self._get_all_pvms()
-
-        self.set_role('Plaid', self.is_plaid_user_pvm, pvms)
-        plaid_role = self.find_role('Plaid')
-
-        if self.appbuilder.app.config.get('PUBLIC_ROLE_LIKE_PLAID', False):
-            self.set_role('Public', self.is_plaid_user_pvm, pvms)
-            public_role = self.find_role('Public')
-        else:
-            # Clear out public role.
-            self.set_role('Public', lambda pvm: False, pvms)
-
-
-    def is_plaid_user_pvm(self, pvm) -> bool:
-        """Determines which permission/view menu relations are in Plaid role.
-
-        This is written to be used by self.set_role() when creating the Plaid
-        role.
-
-        Args:
-            pvm (:obj:`PermissionView`): SQLA data model representing PVM.
-
-        Returns:
-            bool: True if a proper Plaid PVM. False otherwise.
-        """
-        perm = self.get_perms().get(pvm.permission.name)
-        return bool(perm) and pvm.view_menu.name in perm
+    # def sync_role_definitions(self):
+    #     """PlaidSecurityManager constructor.
+    #
+    #     Establishes a Plaid role (and Public, if configured to do so) after
+    #     invoking the super constructor.
+    #
+    #     Adds all permissions from Gamma to Plaid (and Public, if configured)
+    #
+    #     Args:
+    #         appbuilder (:obj:`AppBuilder`): F.A.B AppBuilder main object.
+    #     """
+    #     super().sync_role_definitions()
+    #
+    #     pvms = self._get_all_pvms()
+    #
+    #     self.set_role('Plaid', self.is_plaid_user_pvm, pvms)
+    #     plaid_role = self.find_role('Plaid')
+    #
+    #     if self.appbuilder.app.config.get('PUBLIC_ROLE_LIKE_PLAID', False):
+    #         self.set_role('Public', self.is_plaid_user_pvm, pvms)
+    #         public_role = self.find_role('Public')
+    #     else:
+    #         # Clear out public role.
+    #         self.set_role('Public', lambda pvm: False, pvms)
+    #
+    #
+    # def is_plaid_user_pvm(self, pvm) -> bool:
+    #     """Determines which permission/view menu relations are in Plaid role.
+    #
+    #     This is written to be used by self.set_role() when creating the Plaid
+    #     role.
+    #
+    #     Args:
+    #         pvm (:obj:`PermissionView`): SQLA data model representing PVM.
+    #
+    #     Returns:
+    #         bool: True if a proper Plaid PVM. False otherwise.
+    #     """
+    #     perm = self.get_perms().get(pvm.permission.name)
+    #     return bool(perm) and pvm.view_menu.name in perm
 
 
     def get_rpc(self) -> SimpleRPC:
@@ -349,37 +364,38 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
         return []
 
-
-    def get_table_ids(self):
-        rpc = self.get_rpc()
-        start = time.time()
-        tables = rpc.analyze.table.published_tables_by_project()
-        end = time.time()
-        table_ids = {str(uuid.UUID(table['id'].replace('analyzetable_', ''))) for table in tables}
-        log.debug(f"Fetched table IDs in {end - start}: {table_ids}")
-        return table_ids
-
-
-    def get_perms(self):
-        """Accesses plaid permission dictionary from config.
-
-        Returns:
-            dict: collection of view menus indexed by permission name.
-        """
-        return self.appbuilder.app.config.get('PLAID_BASE_PERMISSIONS')
+    # I can't see that this has been used anywhere
+    # def get_table_ids(self):
+    #     rpc = self.get_rpc()
+    #     start = time.time()
+    #     tables = rpc.analyze.table.published_tables_by_project()
+    #     end = time.time()
+    #     table_ids = {str(uuid.UUID(table['id'].replace('analyzetable_', ''))) for table in tables}
+    #     log.debug(f"Fetched table IDs in {end - start}: {table_ids}")
+    #     return table_ids
 
 
-    def add_user_to_project(self, user, project_id):
-        role = self.find_role(get_project_role_name(project_id))
+    # def get_perms(self):
+    #     """Accesses plaid permission dictionary from config.
+    #
+    #     Returns:
+    #         dict: collection of view menus indexed by permission name.
+    #     """
+    #     return self.appbuilder.app.config.get('PLAID_BASE_PERMISSIONS')
 
-        if not role:
-            return
 
-        if role not in user.roles:
-            user.roles.append(role)
-            log.debug(
-                "Appended %s to %s roles list.", role.name, user.username
-            )
+    # This looks unused
+    # def add_user_to_project(self, user, project_id):
+    #     role = self.find_role(get_project_role_name(project_id))
+    #
+    #     if not role:
+    #         return
+    #
+    #     if role not in user.roles:
+    #         user.roles.append(role)
+    #         log.debug(
+    #             "Appended %s to %s roles list.", role.name, user.username
+    #         )
 
     def set_oauth_session(self, provider, oauth_response):
         """
@@ -397,6 +413,9 @@ class PlaidSecurityManager(SupersetSecurityManager):
             return 'token' in session
         return False
 
+
+    # N.B. This method is called using FLASK_APP_MUTATOR in the superset-config secret
+    #  It makes this call to validate the token in a before_request handler
     def validate_oauth_token(self):
         def _internal_validate():
             try:
