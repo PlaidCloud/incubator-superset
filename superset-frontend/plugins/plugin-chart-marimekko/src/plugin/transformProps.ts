@@ -57,10 +57,18 @@ export default function transformProps(chartProps: ChartProps) {
     widthKey,
     showPercentage,
     title,
+    tooltipNumberFormat = 'SMART_NUMBER',
+    tooltipIncludeColumn = true,
+    tooltipShowPercentage = true,
+    xAxisLabel = '',
+    yAxisLabel = '',
+    showLegend = false,
+    showLabels = true,
+    labelColor = { r: 255, g: 255, b: 255, a: 1 },
+    sortByColumn,
+    sortOrder,
   } = formData;
   const data = queriesData[0].data as TimeseriesDataRecord[];
-
-  console.log('formData via TransformProps.ts', formData);
 
   return {
     width,
@@ -74,5 +82,15 @@ export default function transformProps(chartProps: ChartProps) {
     widthKey,
     showPercentage,
     title,
+    tooltipNumberFormat,
+    tooltipIncludeColumn,
+    tooltipShowPercentage,
+    xAxisLabel,
+    yAxisLabel,
+    showLegend,
+    showLabels,
+    labelColor,
+    sortByColumn,
+    sortOrder,
   };
 }
