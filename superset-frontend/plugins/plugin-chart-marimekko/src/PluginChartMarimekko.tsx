@@ -16,8 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { useTheme } from '@superset-ui/core';
-import React from 'react';
+import React, { useEffect, createRef } from 'react';
+import { getNumberFormatter } from '@superset-ui/core';
 import ReactECharts from 'echarts-for-react';
 import { PluginChartMarimekkoProps } from './types';
 
@@ -40,18 +40,17 @@ export default function PluginChartMarimekko(props: PluginChartMarimekkoProps) {
     widthKey: widthKeyProp,
     showPercentage = false,
     title: chartTitle,
+    tooltipIncludeColumn,
+    tooltipNumberFormat,
+    tooltipShowPercentage,
+    xAxisLabel,
+    yAxisLabel,
+    showLegend,
+    showLabels,
+    labelColor,
+    sortByColumn,
+    sortOrder = 'DESC',
   } = props;
-
-  const theme = useTheme();
-
-  // Often, you just want to access the DOM and do whatever you want.
-  // Here, you can do that with createRef, and the useEffect hook.
-
-  if (!heightKeyProp || !widthKeyProp) {
-    throw new Error(
-      `Height and width keys are required. The "Height key" (Customize -> Height Key) will be converted to "height" and "Width Key" (Customize -> Width Key) will be converted to "width" internally.`,
-    );
-  }
 
   // check if rawData exists and has data
   if (propsData.length === 0) {
@@ -82,20 +81,65 @@ export default function PluginChartMarimekko(props: PluginChartMarimekkoProps) {
   const widthKey = widthKeyProp || numericKeys[1];
 
   interface GroupData {
+    group: string;
     total: number;
     values: any[];
   }
 
   // Group data dynamically by the primary key
-  const groups: { [key: string]: GroupData } = {};
+  const groups: GroupData[] = [];
+  const processedGroups = new Set<string>();
+
   rawData.forEach(item => {
     const group = item[groupKey];
-    if (!groups[group]) {
-      groups[group] = { total: 0, values: [] };
+
+    // If this group hasn't been processed yet, create a new entry
+    if (!processedGroups.has(group)) {
+      groups.push({
+        group,
+        total: 0,
+        values: [],
+      });
+      processedGroups.add(group);
     }
-    groups[group].values.push(item);
-    groups[group].total += item[widthKey];
+
+    // Find the group and update it
+    const groupIndex = groups.findIndex(g => g.group === group);
+    groups[groupIndex].values.push(item);
+    groups[groupIndex].total += item[widthKey];
   });
+
+  // Apply sorting based on different column types
+  if (sortByColumn) {
+    if (sortByColumn === groupKey) {
+      // Sort groups by their names, ensuring string comparison
+      groups.sort((a, b) => {
+        const aStr = String(a.group);
+        const bStr = String(b.group);
+
+        if (sortOrder === 'DESC') {
+          return bStr.localeCompare(aStr);
+        }
+        return aStr.localeCompare(bStr);
+      });
+    } else {
+      // Handle existing sorting logic for height/width
+      groups.forEach(group => {
+        group.values.sort((a, b) => {
+          const aValue = sortByColumn === heightKeyProp ? a.height : a.width;
+          const bValue = sortByColumn === heightKeyProp ? b.height : b.width;
+          return sortOrder === 'DESC' ? bValue - aValue : aValue - bValue;
+        });
+      });
+
+      // If sorting by width, also sort the groups
+      if (sortByColumn === widthKeyProp) {
+        groups.sort((a, b) =>
+          sortOrder === 'DESC' ? b.total - a.total : a.total - b.total,
+        );
+      }
+    }
+  }
 
   // Prepare x-axis & y-axis data dynamically
   let currentXStart = 0;
@@ -139,21 +183,17 @@ export default function PluginChartMarimekko(props: PluginChartMarimekkoProps) {
   // yOffsetMap to track yStart when showPercentage = false
   const yOffsetMap: { [key: string]: number } = {};
 
-  Object.keys(groups).forEach(group => {
-    const groupWidth = groups[group].total;
+  Object.values(groups).forEach(({ group, total: groupWidth, values }) => {
     let currentYStart = 0;
 
     // Calculate total for 100% stacking
-    const totalHeight = groups[group].values.reduce(
-      (sum, item) => sum + item[heightKey],
-      0,
-    );
+    const totalHeight = values.reduce((sum, item) => sum + item[heightKey], 0);
 
     if (!yOffsetMap[group]) {
       yOffsetMap[group] = 0;
     }
 
-    groups[group].values.forEach((item, categoryIndex) => {
+    values.forEach((item, categoryIndex) => {
       const value = item[heightKey];
       const percentage = ((value / totalHeight) * 100).toFixed(1); // % height
       const segmentArea = (value / groupWidth) * 100; // Proportional area
@@ -194,13 +234,19 @@ export default function PluginChartMarimekko(props: PluginChartMarimekkoProps) {
     currentXStart += groupWidth;
   });
 
+  const getLabelColor = (color: {
+    r: number;
+    g: number;
+    b: number;
+    a: number;
+  }) => `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a})`;
+
   // Calculate dynamic axisTick values and labels at the center of each block
   const xAxisValues: number[] = [];
   const xAxisLabels: string[] = [];
   let cumulativeWidth = 0;
 
-  Object.keys(groups).forEach(group => {
-    const groupWidth = groups[group].total;
+  Object.values(groups).forEach(({ group, total: groupWidth }) => {
     const midpoint = cumulativeWidth + groupWidth / 2; // Center of the block
     xAxisValues.push(midpoint);
     xAxisLabels.push(group);
@@ -217,6 +263,7 @@ export default function PluginChartMarimekko(props: PluginChartMarimekkoProps) {
         const maxHeight = Math.max(...allHeights);
         return Math.round(maxHeight / 10) * 10;
       })();
+
   // Final ECharts option
   const option: echarts.EChartsOption = {
     title: {
@@ -224,7 +271,7 @@ export default function PluginChartMarimekko(props: PluginChartMarimekkoProps) {
       left: 'center',
     },
     legend: {
-      show: true,
+      show: showLegend,
       top: 'bottom', // Position of the legend
       data: [...new Set(rawData.map(item => item[categoryKey]))], // Unique categories
     },
@@ -235,16 +282,39 @@ export default function PluginChartMarimekko(props: PluginChartMarimekkoProps) {
           params as echarts.DefaultLabelFormatterCallbackParams;
         const values = typedParams.value as any[];
         const [group, category, , , , , value, percentage] = values;
+        const { raw } = typedParams.data as any;
 
-        return `
-        <b>${category} - ${group}</b><br/>
-        ${heightKeyProp} (height): ${value} <br/>
-        ${widthKeyProp} (width): ${(typedParams.data as any).raw[widthKeyProp]} <br/>
-        Percentage: ${percentage}%<br/>
-      `;
+        // Create number formatter based on props
+        const numberFormatter = getNumberFormatter(tooltipNumberFormat);
+
+        // Format the values using the configured options
+        const formattedValue = numberFormatter(value);
+        const formattedWidth = numberFormatter(raw[widthKeyProp]);
+
+        // Build tooltip content based on configuration
+        let tooltipContent = '';
+
+        // Add header
+        tooltipContent += `<b>${category} - ${group}</b><br/>`;
+
+        // Add column names if enabled
+        if (tooltipIncludeColumn) {
+          tooltipContent += `${heightKeyProp}: ${formattedValue}<br/>`;
+          tooltipContent += `${widthKeyProp}: ${formattedWidth}<br/>`;
+        }
+
+        // Add percentage if enabled
+        if (tooltipShowPercentage) {
+          tooltipContent += `Percentage: ${percentage}%`;
+        }
+
+        return tooltipContent;
       },
     },
     xAxis: {
+      name: xAxisLabel,
+      nameLocation: 'middle',
+      nameGap: 30,
       type: 'value' as const,
       min: 0,
       max: cumulativeWidth,
@@ -268,6 +338,9 @@ export default function PluginChartMarimekko(props: PluginChartMarimekkoProps) {
       },
     },
     yAxis: {
+      name: yAxisLabel,
+      nameLocation: 'middle',
+      nameGap: 40,
       type: 'value',
       min: 0,
       max: yAxisMax,
@@ -275,6 +348,7 @@ export default function PluginChartMarimekko(props: PluginChartMarimekkoProps) {
         formatter: showPercentage ? '{value}%' : '{value}',
       },
     },
+
     series: data.map(item => ({
       name: item.name,
       type: 'custom',
@@ -297,16 +371,36 @@ export default function PluginChartMarimekko(props: PluginChartMarimekkoProps) {
           style: api.style(),
         };
       },
+      labelLayout(params) {
+        const rectWidth = params.rect.width;
+        const rectHeight = params.rect.height;
+
+        // Base font size on the smaller dimension to ensure text fits
+        const widthBasedSize = rectWidth / 8;
+        const heightBasedSize = rectHeight / 4;
+
+        // Use the smaller of the two sizes to ensure text fits in both dimensions
+        const fontSize = Math.min(
+          widthBasedSize,
+          heightBasedSize,
+          // Set maximum font size
+          24,
+        );
+        const MIN_FONT_SIZE = 6;
+
+        return {
+          fontSize: fontSize < MIN_FONT_SIZE ? 0 : fontSize, // Hide text if too small
+        };
+      },
       label: {
-        show: true,
+        show: showLabels,
         position: 'inside',
         // @ts-ignore
-        formatter(params: { value: any[] }) {
-          const value = params.value[6]; // Absolute value
-          const percentage = params.value[7]; // Percentage
-          return showPercentage ? `${percentage}%` : value;
+        formatter(params: any) {
+          const text = params.value[1];
+          return text;
         },
-        color: theme.colors.grayscale.light5,
+        color: getLabelColor(labelColor ?? { r: 246, g: 246, b: 246, a: 1 }),
         fontSize: 14,
       },
       dimensions: [

@@ -44,4 +44,15 @@ export type PluginChartMarimekkoProps = PluginChartMarimekkoStylesProps &
     widthKey: string;
     showPercentage: boolean;
     title: string;
+    showLegend?: boolean;
+    showLabels?: boolean;
+    sortByColumn?: string;
+    sortOrder?: string;
+    labelColor?: { r: number; g: number; b: number; a: number };
+    yAxisLabel?: string;
+    xAxisLabel?: string;
+    tooltipNumberFormat?: string;
+    tooltipTimeFormat?: string;
+    tooltipShowPercentage?: boolean;
+    tooltipIncludeColumn?: boolean;
   };

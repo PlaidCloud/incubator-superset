@@ -20,6 +20,8 @@ import { t, validateNonEmpty } from '@superset-ui/core';
 import {
   ControlPanelConfig,
   sharedControls,
+  D3_FORMAT_OPTIONS,
+  // D3_FORMAT_DOCS,
 } from '@superset-ui/chart-controls';
 
 const config: ControlPanelConfig = {
@@ -134,7 +136,7 @@ const config: ControlPanelConfig = {
       ],
     },
     {
-      label: t('Mekko Controls'),
+      label: t('Chart Options'),
       expanded: true,
       controlSetRows: [
         [
@@ -144,7 +146,6 @@ const config: ControlPanelConfig = {
               type: 'TextControl',
               default: '',
               renderTrigger: true,
-              // ^ this makes it apply instantaneously, without triggering a "run query" button
               label: t('Chart Title'),
               description: t('The title for the chart'),
             },
@@ -152,16 +153,89 @@ const config: ControlPanelConfig = {
         ],
         [
           {
-            name: 'height_key',
+            name: 'show_legend',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show Legend'),
+              default: true,
+              renderTrigger: true,
+              description: t('Whether to display the legend'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'show_labels',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show Labels'),
+              default: true,
+              renderTrigger: true,
+              description: t('Show value labels inside the bars'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'label_color',
+            config: {
+              type: 'ColorPickerControl',
+              label: t('Label Color'),
+              description: t('Color of the labels inside bars'),
+              default: { r: 246, g: 246, b: 246, a: 1 },
+              renderTrigger: true,
+              visibility: ({ controls }) => !!controls?.show_labels?.value,
+            },
+          },
+        ],
+        [
+          {
+            name: 'x_axis_label',
             config: {
               type: 'TextControl',
               default: '',
               renderTrigger: true,
-              // ^ this makes it apply instantaneously, without triggering a "run query" button
-              label: t('Height Key'),
-              description: t(
-                'This string key will be used to determine the height of the bar',
-              ),
+              label: t('X Axis Label'),
+              description: t('Label for the X axis'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'y_axis_label',
+            config: {
+              type: 'TextControl',
+              default: '',
+              renderTrigger: true,
+              label: t('Y Axis Label'),
+              description: t('Label for the Y axis'),
+            },
+          },
+        ],
+      ],
+    },
+    {
+      label: t('Mekko Controls'),
+      expanded: true,
+      controlSetRows: [
+        [
+          {
+            name: 'height_key',
+            config: {
+              type: 'SelectControl',
+              default: null,
+              renderTrigger: true,
+              label: t('Height Key (Y Axis)'),
+              description: t('Column to determine the height of the bar'),
+              validators: [validateNonEmpty],
+              mapStateToProps: ({ datasource }) => ({
+                choices:
+                  datasource?.columns?.map(c => [
+                    c.column_name,
+                    c.column_name,
+                  ]) || [],
+                operators: datasource?.columns || [],
+              }),
             },
           },
         ],
@@ -169,14 +243,58 @@ const config: ControlPanelConfig = {
           {
             name: 'width_key',
             config: {
-              type: 'TextControl',
-              default: '',
+              type: 'SelectControl',
+              default: null,
               renderTrigger: true,
-              // ^ this makes it apply instantaneously, without triggering a "run query" button
-              label: t('Width Key'),
-              description: t(
-                'This string key will be used to determine the width of the column',
-              ),
+              label: t('Width Key (X Axis)'),
+              description: t('Column to determine the width of the column'),
+              validators: [validateNonEmpty],
+              mapStateToProps: ({ datasource }) => ({
+                choices:
+                  datasource?.columns?.map(c => [
+                    c.column_name,
+                    c.column_name,
+                  ]) || [],
+                operators: datasource?.columns || [],
+              }),
+            },
+          },
+        ],
+        [
+          {
+            name: 'sort_by_column',
+            config: {
+              type: 'SelectControl',
+              label: t('Sort By'),
+              default: null,
+              description: t('Column to sort the data by'),
+              renderTrigger: true,
+              clearable: true,
+              mapStateToProps: ({ datasource }) => ({
+                choices:
+                  datasource?.columns?.map(c => [
+                    c.column_name,
+                    c.column_name,
+                  ]) || [],
+                operators: datasource?.columns || [],
+              }),
+            },
+          },
+        ],
+        [
+          {
+            name: 'sort_order',
+            config: {
+              type: 'SelectControl',
+              label: t('Sort Order'),
+              default: 'DESC',
+              choices: [
+                ['ASC', t('Ascending')],
+                ['DESC', t('Descending')],
+              ],
+              renderTrigger: true,
+              description: t('Sort direction'),
+              visibility: ({ controls }) => !!controls?.sort_by_column?.value,
             },
           },
         ],
@@ -191,6 +309,50 @@ const config: ControlPanelConfig = {
               description: t(
                 'Show values as percentages instead of absolute numbers',
               ),
+            },
+          },
+        ],
+      ],
+    },
+    {
+      label: t('Tooltip'),
+      expanded: true,
+      controlSetRows: [
+        [
+          {
+            name: 'tooltip_number_format',
+            config: {
+              type: 'SelectControl',
+              freeForm: true,
+              label: t('Tooltip Number Format'),
+              renderTrigger: true,
+              default: 'SMART_NUMBER',
+              choices: D3_FORMAT_OPTIONS,
+              description: t('Format for tooltip values'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'tooltip_include_column',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Include Column Names'),
+              default: true,
+              renderTrigger: true,
+              description: t('Include column names in tooltip'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'tooltip_show_percentage',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show Percentages in Tooltip'),
+              default: true,
+              renderTrigger: true,
+              description: t('Include percentage values in tooltip'),
             },
           },
         ],
