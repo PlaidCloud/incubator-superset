@@ -40,10 +40,7 @@ export default function EchartsWaterfall(
       showTotal,
       useFirstValueAsSubtotal,
       totalColor,
-      xAxisLabelDistance,
-      yAxisLabelDistance,
-      boldTotal,
-      boldSubTotal,
+      boldLabels,
     },
     emitCrossFilters,
   } = props;
@@ -210,12 +207,13 @@ export default function EchartsWaterfall(
   const getShowTotalOptions = (options: EChartsCoreOption) => {
     if (showTotal) return options;
 
-    const totalsIndex = ((options.series as any[]) || [])
-      .find(series => series.name === 'Total')
-      ?.data.map((dataPoint: any, index: number) => 
-        dataPoint.value !== '-' ? index : -1,
-    )
-      .filter((index: number) => index !== -1) || [];
+    const totalsIndex =
+      ((options.series as any[]) || [])
+        .find(series => series.name === 'Total')
+        ?.data.map((dataPoint: any, index: number) =>
+          dataPoint.value !== '-' ? index : -1,
+        )
+        .filter((index: number) => index !== -1) || [];
 
     const xAxisData = [
       ...((options.xAxis as { data: (string | number)[] }).data || []),
@@ -252,9 +250,9 @@ export default function EchartsWaterfall(
       }
       const aStr = String(a);
       const bStr = String(b);
-      return sortXAxis === 'asc' 
-      ? aStr.localeCompare(bStr) 
-      : bStr.localeCompare(aStr);
+      return sortXAxis === 'asc'
+        ? aStr.localeCompare(bStr)
+        : bStr.localeCompare(aStr);
     });
 
     const indexMap = new Map(xAxisData.map((val, index) => [val, index]));
@@ -312,19 +310,19 @@ export default function EchartsWaterfall(
         nameLocation: 'middle',
       },
       series: Array.isArray(options.series)
-      ? options.series.map((series: any) => ({
-        ...series,
-        encode: {
-          x: series.encode?.y,
-          y: series.encode?.x,
-        },
-        data: [...series.data].reverse(),
-        label: {
-          ...(series.label || {}),
-          position: series.name === 'Decrease' ? 'left' : 'right',
-        },
-      })) 
-      : [],
+        ? options.series.map((series: any) => ({
+          ...series,
+          encode: {
+            x: series.encode?.y,
+            y: series.encode?.x,
+          },
+          data: [...series.data].reverse(),
+          label: {
+            ...(series.label || {}),
+            position: series.name === 'Decrease' ? 'left' : 'right',
+          },
+        }))
+        : [],
     };
   };
 
@@ -332,12 +330,12 @@ export default function EchartsWaterfall(
     const { xTicksLayout, xTicksWrapLength } = props.formData;
 
     // If no formatting needed, return original options
-    if (!boldTotal && !boldSubTotal && xTicksLayout !== 'flat') {
+    if (boldLabels === 'none' && xTicksLayout !== 'flat') {
       return options;
     }
 
     // Get total indices for bold formatting
-    const totalsIndex = boldTotal
+    const totalsIndex = ['total', 'both'].includes(boldLabels)
       ? ((options.series as any[]) || [])
         .find(series => series.name === 'Total')
         ?.data.map((dataPoint: any, index: number) =>
@@ -351,37 +349,82 @@ export default function EchartsWaterfall(
       let formattedValue = value;
 
       if (orientation === 'vertical') {
-        if (index === 0 && boldSubTotal) {
+        if (index === 0 && ['subtotal', 'both'].includes(boldLabels)) {
           formattedValue = `{subtotal|${value}}`;
-        } else if (totalsIndex.includes(index) && boldTotal) {
+        } else if (totalsIndex.includes(index) && ['total', 'both'].includes(boldLabels)) {
           formattedValue = `{total|${value}}`;
         }
       } else {
-        const isLast = index === (options.yAxis as any).data.length - 1;
-        if (isLast && boldSubTotal) {
+        const axisData = (options.yAxis as { data?: any[] })?.data || [];
+        const isLast = index === axisData.length - 1;
+        if (isLast && ['subtotal', 'both'].includes(boldLabels)) {
           formattedValue = `{subtotal|${value}}`;
-        } else if (totalsIndex.includes(index) && boldTotal) {
+        } else if (totalsIndex.includes(index) && ['total', 'both'].includes(boldLabels)) {
           formattedValue = `{total|${value}}`;
         }
       }
 
-      // Then handle text wrapping if needed
-      if (xTicksLayout === 'flat') {
-        const isRichText = formattedValue.includes('{') && formattedValue.includes('}');
-        const regex = new RegExp(`.{1,${xTicksWrapLength}}`, 'g');
-        if (isRichText) {
-          const match = formattedValue.match(/\{(.*?)\|(.*?)\}/);
-          if (match) {
-            const [_, style, text] = match;
-            const wrappedText = text.match(regex)?.join('\n');
-            return `{${style}|${wrappedText}}`
+      // get the width of xAxis to calculate the maxCharsPerLine
+      const getAxisRange = (options: EChartsCoreOption) => {
+        if (orientation === 'vertical') {
+          const xAxis = options.xAxis as any;
+          const grid = options.grid as any;
+
+          // Get actual chart area width accounting for grid margins
+          const availableWidth = width - (grid?.left || 0) - (grid?.right || 0);
+
+          if (xAxis?.type === 'value') {
+            const range = xAxis.max - xAxis.min;
+            return Math.min(range, availableWidth);
+          }
+          if (xAxis?.type === 'category') {
+            const categories = xAxis.data?.length || 1;
+            // Calculate space per category
+            return availableWidth / categories;
           }
         } else {
-          return formattedValue.match(regex)?.join('\n');
-        }
-      }
+          const yAxis = options.yAxis as any;
+          const grid = options.grid as any;
 
-      return formattedValue;
+          // Get actual chart area height accounting for grid margins
+          const availableHeight =
+            height - (grid?.top || 0) - (grid?.bottom || 0);
+
+          if (yAxis?.type === 'value') {
+            const range = yAxis.max - yAxis.min;
+            return Math.min(range, availableHeight);
+          }
+          if (yAxis?.type === 'category') {
+            const categories = yAxis.data?.length || 1;
+            // Calculate space per category
+            return availableHeight / categories;
+          }
+        }
+
+        // Fallback to a reasonable default
+        return orientation === 'vertical' ? width * 0.8 : height * 0.8;
+      };
+
+      // Handle text wrapping if needed
+      const maxWidth = getAxisRange(options); // chart width
+      const maxCharsPerLine = Math.floor(maxWidth / xTicksWrapLength); // Approx chars per line
+
+      const words = formattedValue.split(' ');
+      let line = '';
+      let wrappedText = '';
+
+      words.forEach(word => {
+        if ((line + word).length > maxCharsPerLine) {
+          wrappedText += `${line.trim()}\n`;
+          line = `${word} `;
+        } else {
+          line += `${word} `;
+        }
+      });
+
+      wrappedText += line.trim();
+
+      return wrappedText;
     };
 
     if (orientation === 'vertical') {
@@ -395,8 +438,8 @@ export default function EchartsWaterfall(
             overflow: 'break',
             rich: {
               ...(options.xAxis as any)?.axisLabel?.rich,
-              subtotal: boldSubTotal ? { fontWeight: 'bold' } : undefined,
-              total: boldTotal ? { fontWeight: 'bold' } : undefined,
+              subtotal: ['subtotal', 'both'].includes(boldLabels) ? { fontWeight: 'bold' } : undefined,
+              total: ['total', 'both'].includes(boldLabels) ? { fontWeight: 'bold' } : undefined,
             },
           },
         },
@@ -413,34 +456,10 @@ export default function EchartsWaterfall(
           overflow: 'break',
           rich: {
             ...(options.yAxis as any)?.axisLabel?.rich,
-            subtotal: boldSubTotal ? { fontWeight: 'bold' } : undefined,
-            total: boldTotal ? { fontWeight: 'bold' } : undefined,
+            subtotal: ['subtotal', 'both'].includes(boldLabels) ? { fontWeight: 'bold' } : undefined,
+            total: ['total', 'both'].includes(boldLabels) ? { fontWeight: 'bold' } : undefined,
           },
         },
-      },
-    };
-  };
-
-  const getLabelDistanceOptions = (options: EChartsCoreOption) => {
-    if (Number.isNaN(Number(xAxisLabelDistance))) {
-      console.error('xAxisLabelDistance should be a number');
-      return options;
-    }
-
-    if (Number.isNaN(Number(yAxisLabelDistance))) {
-      console.error('yAxisLabelDistance should be a number');
-      return options;
-    }
-
-    return {
-      ...options,
-      xAxis: {
-        ...(options.xAxis as any),
-        nameGap: Number(xAxisLabelDistance),
-      },
-      yAxis: {
-        ...(options.yAxis as any),
-        nameGap: Number(yAxisLabelDistance),
       },
     };
   };
@@ -450,14 +469,13 @@ export default function EchartsWaterfall(
   const sortedEchartOptions = getSortedOptions(showTotalOptions);
   const flippedEchartOptions = getFlippedOptions(sortedEchartOptions);
   const formattedAxisOptions = getFormattedAxisOptions(flippedEchartOptions);
-  const labelDistanceOptions = getLabelDistanceOptions(formattedAxisOptions);
 
   return (
     <Echart
       ref={chartRef}
       height={height}
       width={width}
-      echartOptions={labelDistanceOptions}
+      echartOptions={formattedAxisOptions}
       eventHandlers={eventHandlers}
       refs={refs}
     />

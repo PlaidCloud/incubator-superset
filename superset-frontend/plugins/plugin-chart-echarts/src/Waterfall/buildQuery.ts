@@ -16,7 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { buildQueryContext, ensureIsArray, QueryFormData, } from '@superset-ui/core';
+import {
+  buildQueryContext,
+  ensureIsArray,
+  QueryFormData,
+} from '@superset-ui/core';
 
 export default function buildQuery(formData: QueryFormData) {
   const { x_axis, granularity_sqla, groupby } = formData;
@@ -24,11 +28,16 @@ export default function buildQuery(formData: QueryFormData) {
     ...ensureIsArray(x_axis || granularity_sqla),
     ...ensureIsArray(groupby),
   ];
+
+  if (columns.indexOf(formData.seriesOrderByColumn) === -1) {
+    columns.push(formData.seriesOrderByColumn);
+  }
+
   if (formData.seriesOrderByColumn && formData.seriesOrderDirection) {
     return buildQueryContext(formData, baseQueryObject => [
       {
         ...baseQueryObject,
-        columns: [...columns, formData.seriesOrderByColumn],
+        columns,
         orderby: [
           [
             formData.seriesOrderByColumn,
