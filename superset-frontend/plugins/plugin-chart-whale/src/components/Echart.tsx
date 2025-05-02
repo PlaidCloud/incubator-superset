@@ -1,0 +1,157 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+import {
+  useRef,
+  useEffect,
+  useMemo,
+  forwardRef,
+  useImperativeHandle,
+  useCallback,
+  Ref,
+} from 'react';
+import { styled } from '@superset-ui/core';
+import { EChartsType, init } from 'echarts';
+import { EchartsHandler, EchartsProps, EchartsStylesProps } from '../types';
+
+const Styles = styled.div<EchartsStylesProps>`
+  height: ${({ height }) => height}px;
+  width: ${({ width }) => width}px;
+`;
+
+function Echart(
+  {
+    width,
+    height,
+    echartOptions,
+    eventHandlers,
+    zrEventHandlers,
+    selectedValues = {},
+    refs,
+  }: EchartsProps,
+  ref: Ref<EchartsHandler>,
+) {
+  const divRef = useRef<HTMLDivElement>(null);
+  if (refs) {
+    // eslint-disable-next-line no-param-reassign
+    refs.divRef = divRef;
+  }
+  const chartRef = useRef<EChartsType>();
+  const currentSelection = useMemo(
+    () => Object.keys(selectedValues) || [],
+    [selectedValues],
+  );
+  const previousSelection = useRef<string[]>([]);
+  const previousOptions = useRef<any>(null);
+
+  useImperativeHandle(ref, () => ({
+    getEchartInstance: () => chartRef.current as any,
+  }));
+
+  // Function to initialize or get the chart instance
+  const getChartInstance = useCallback(() => {
+    if (!divRef.current) return null;
+
+    if (!chartRef.current) {
+      chartRef.current = init(divRef.current);
+    }
+
+    return chartRef.current;
+  }, []);
+
+  // Set chart options and register event handlers
+  useEffect(() => {
+    const chart = getChartInstance();
+    if (!chart || !echartOptions) return;
+
+    // Store the options so we can reapply them on resize if needed
+    previousOptions.current = echartOptions;
+
+    // Register event handlers
+    Object.entries(eventHandlers || {}).forEach(([name, handler]) => {
+      chart.off(name);
+      chart.on(name, handler);
+    });
+
+    Object.entries(zrEventHandlers || {}).forEach(([name, handler]) => {
+      chart.getZr().off(name);
+      chart.getZr().on(name, handler);
+    });
+
+    // Apply options
+    chart.setOption(echartOptions, true);
+  }, [echartOptions, eventHandlers, zrEventHandlers, getChartInstance]);
+
+  // highlighting
+  useEffect(() => {
+    if (!chartRef.current) return;
+    chartRef.current.dispatchAction({
+      type: 'downplay',
+      dataIndex: previousSelection.current.filter(
+        value => !currentSelection.includes(value),
+      ),
+    });
+    if (currentSelection.length) {
+      chartRef.current.dispatchAction({
+        type: 'highlight',
+        dataIndex: currentSelection,
+      });
+    }
+    previousSelection.current = currentSelection;
+  }, [currentSelection]);
+
+  // Handle resize properly
+  const handleSizeChange = useCallback(() => {
+    if (!chartRef.current) return;
+
+    // Using a small timeout helps ensure the DOM has updated before we resize
+    setTimeout(() => {
+      if (chartRef.current) {
+        chartRef.current.resize();
+
+        // Reapply options after resize to ensure chart is rendered properly
+        if (previousOptions.current) {
+          chartRef.current.setOption(previousOptions.current);
+        }
+      }
+    }, 0);
+  }, []);
+
+  // Handle initialization and cleanup
+  useEffect(() => {
+    // Initialize on mount
+    getChartInstance();
+
+    // Clean up on unmount
+    return () => {
+      if (chartRef.current) {
+        chartRef.current.dispose();
+        chartRef.current = undefined;
+      }
+    };
+  }, [getChartInstance]);
+
+  // Handle size changes
+  useEffect(() => {
+    handleSizeChange();
+  }, [width, height, handleSizeChange]);
+
+  return <Styles ref={divRef} height={height} width={width} />;
+}
+
+export default forwardRef(Echart);
