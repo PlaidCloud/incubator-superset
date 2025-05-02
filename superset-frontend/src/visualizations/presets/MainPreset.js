@@ -82,6 +82,7 @@ import { FilterPlugins } from 'src/constants';
 import TimeTableChartPlugin from '../TimeTable';
 import { PluginChartMarimekko } from '@superset-ui/plugin-chart-marimekko';
 import { BigTextChart } from '@superset-ui/plugin-chart-big-text';
+import { SupersetPluginChartWhale } from '@superset-ui/plugin-chart-whale';
 
 export default class MainPreset extends Preset {
   constructor() {
@@ -188,6 +189,7 @@ export default class MainPreset extends Preset {
         }).configure({ key: VizType.Cartodiagram }),
         new BigTextChart().configure({ key: 'superset-big-text' }),
         new PluginChartMarimekko().configure({ key: 'ext-marimekko' }),
+        new SupersetPluginChartWhale().configure({ key: 'ext-whale' }),
         ...experimentalPlugins,
       ],
     });
