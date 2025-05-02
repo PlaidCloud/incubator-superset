@@ -97,7 +97,8 @@ class BigNumberVis extends React.PureComponent<BigNumberVizProps> {
       !formatTime ||
       !showTimestamp ||
       typeof timestamp === 'string' ||
-      typeof timestamp === 'boolean'
+      typeof timestamp === 'boolean' ||
+      typeof timestamp === 'bigint'
     )
       return null;
     const text = timestamp === null ? '' : formatTime(timestamp);
