@@ -245,7 +245,8 @@ class PlaidSecurityManager(SupersetSecurityManager):
             projects = self.get_rpc().analyze.project.projects(keys=["id"])
             project_ids = [str(uuid.UUID(p["id"])) for p in projects]
             session[PROJECT_ACCESS] = project_ids
-        except:
+        except Exception as e:
+            log.error(str(e))
             session[PROJECT_ACCESS] = []  # No access
 
     def _can_access_project(self, project_id):
