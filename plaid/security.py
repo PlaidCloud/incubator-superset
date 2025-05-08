@@ -226,7 +226,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         rpc._old_call_rpc = rpc.call_rpc
         def superset_call_rpc(*args, **kwargs):
             try:
-                rpc._old_call_rpc(*args, **kwargs)
+                return rpc._old_call_rpc(*args, **kwargs)
             except HTTPError as e:
                 if e.response.status_code == 401:
                     logout_user()
