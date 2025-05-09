@@ -265,18 +265,20 @@ class PlaidSecurityManager(SupersetSecurityManager):
             session[PROJECT_ACCESS] = []  # No access
 
     def _can_access_project(self, project_id):
+        log.info(dict(session))
         return str(uuid.UUID(project_id)) in session[PROJECT_ACCESS]
 
     def can_access_database(self, database: Union["Database", "DruidCluster"]) -> bool:
-        log.debug(f"Can access database: {database}")
+        log.info(f"Can access database: {database}")
         return (
             self._can_access_project(str(database.uuid))
             or super().can_access_database(database)
         )
 
     def can_access_datasource(self, datasource: "BaseDatasource") -> bool:
-        log.debug(f"Checking access to datasource: {datasource}")
+        log.info(f"Checking access to datasource: {datasource}")
         if datasource.schema is None:
+            log.info(f"No Schema: {datasource}")
             # Call the base method if there is no schema since there isn't a plaid schema.
             return super().can_access_datasource(datasource)
 
