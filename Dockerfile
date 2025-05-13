@@ -261,5 +261,34 @@ USER superset
 FROM lean AS ci
 USER root
 RUN uv pip install .[postgres]
+
+# Install chrome webdriver (https://superset.apache.org/docs/installation/kubernetes/#enable-alerts-and-reports)
+RUN apt-get update && \
+    apt-get install -y curl wget zip jq
+
+RUN export STABLE_CHROME_RELEASE=$(curl -s https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json | jq '.channels.Stable') && \
+    export STABLE_CHROME_URL=$(echo "${STABLE_CHROME_RELEASE}" | jq -r '.downloads.chrome[] | select(.platform == "linux64") | .url') && \
+    export STABLE_CHROMEDRIVER_URL=$(echo "${STABLE_CHROME_RELEASE}" | jq -r '.downloads.chromedriver[] | select(.platform == "linux64") | .url') && \
+    # Chrome
+    wget ${STABLE_CHROME_URL} && \
+    unzip chrome-linux64.zip -d /usr/local/ && \
+    chmod +x /usr/local/chrome-linux64/chrome && \
+    ln -s /usr/local/chrome-linux64/chrome /usr/bin/google-chrome && \
+    chmod 755 /usr/bin/google-chrome && \
+    while read pkg; do \
+      apt-get satisfy -y --no-install-recommends "${pkg}"; \
+    done < /usr/local/chrome-linux64/deb.deps && \
+    # ChromeDriver
+    wget ${STABLE_CHROMEDRIVER_URL} && \
+    # unzip chromedriver-linux64.zip
+    # chmod +x chromedriver-linux64/chromedriver
+    # mv chromedriver-linux64/chromedriver /usr/bin
+    unzip -j chromedriver-linux64.zip -d /usr/bin && \
+    chmod 755 /usr/bin/chromedriver && \
+    # Clean up
+    apt-get autoremove -yqq --purge && \
+    apt-get clean && \
+    rm -f chrome-linux64.zip chromedriver-linux64.zip chromedriver-linux64
+
 USER superset
 CMD ["/app/docker/entrypoints/docker-ci.sh"]
