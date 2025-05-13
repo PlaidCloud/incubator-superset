@@ -260,7 +260,7 @@ USER superset
 ######################################################################
 FROM lean AS ci
 USER root
-RUN uv pip install .[postgres]
+RUN uv pip install .[postgres,thumbnails]
 
 # Install chrome webdriver (https://superset.apache.org/docs/installation/kubernetes/#enable-alerts-and-reports)
 RUN apt-get update && \
