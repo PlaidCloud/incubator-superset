@@ -311,17 +311,17 @@ export default function EchartsWaterfall(
       },
       series: Array.isArray(options.series)
         ? options.series.map((series: any) => ({
-            ...series,
-            encode: {
-              x: series.encode?.y,
-              y: series.encode?.x,
-            },
-            data: [...series.data].reverse(),
-            label: {
-              ...(series.label || {}),
-              position: series.name === 'Decrease' ? 'left' : 'right',
-            },
-          }))
+          ...series,
+          encode: {
+            x: series.encode?.y,
+            y: series.encode?.x,
+          },
+          data: [...series.data].reverse(),
+          label: {
+            ...(series.label || {}),
+            position: series.name === 'Decrease' ? 'left' : 'right',
+          },
+        }))
         : [],
     };
   };
