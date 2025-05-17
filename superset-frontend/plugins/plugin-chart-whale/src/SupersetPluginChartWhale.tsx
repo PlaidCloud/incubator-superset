@@ -16,35 +16,22 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { styled } from '@superset-ui/core';
 import { allEventHandlers } from '../../plugin-chart-echarts/src/utils/eventHandlers';
 import { WhaleChartTransformedProps } from './types';
 import Echart from './components/Echart';
-
-interface StylesProps {
-  height: number;
-  width: number;
-}
-
-const Styles = styled.div<StylesProps>`
-  height: ${({ height }) => height}px;
-  width: ${({ width }) => width}px;
-`;
 
 export default function SupersetPluginChartWhale(
   props: WhaleChartTransformedProps,
 ) {
   const { height, width, echartOptions, refs } = props;
-  const eventHandlers = allEventHandlers(props);
+    const eventHandlers = allEventHandlers(props);
   return (
-    <Styles height={height} width={width}>
-      <Echart
-        refs={refs}
-        height={height}
-        width={width}
-        echartOptions={echartOptions}
-        eventHandlers={eventHandlers}
-      />
-    </Styles>
+    <Echart
+      refs={refs}
+      height={height * 0.999}
+      width={width * 0.999}
+      echartOptions={echartOptions}
+      eventHandlers={eventHandlers}
+    />
   );
 }

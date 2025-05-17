@@ -22,6 +22,8 @@ import {
   getStandardizedControls,
   dndGroupByControl,
   sharedControls,
+  D3_FORMAT_DOCS,
+  D3_FORMAT_OPTIONS,
 } from '@superset-ui/chart-controls';
 import { WhaleChartType } from '../types';
 
@@ -55,10 +57,9 @@ const config: ControlPanelConfig = {
               ...sharedControls.metrics,
               label: t('Tooltip-only Metrics'),
               description: t('Metrics that will appear in the tooltip but not be plotted on the chart'),
-              validators: []
-
-            }
-          }
+              validators: [],
+            },
+          },
         ],
         ['adhoc_filters'],
         ['row_limit'],
@@ -78,7 +79,7 @@ const config: ControlPanelConfig = {
               default: WhaleChartType.Whale,
               choices: [
                 [WhaleChartType.Whale, t('Whale Chart')],
-                [WhaleChartType.Bar, t('Bar Chart')],
+                [WhaleChartType.Bar, t('Ranked Bar Chart')],
               ],
               renderTrigger: true,
             },
@@ -93,20 +94,6 @@ const config: ControlPanelConfig = {
               default: false,
               renderTrigger: true,
               description: t('Enable data zooming controls'),
-            },
-          },
-        ],
-        [
-          {
-            name: 'autoDetectYAxisScale',
-            config: {
-              type: 'CheckboxControl',
-              label: t('Auto Dual Axis'),
-              default: true,
-              description: t(
-                'Automatically detect metrics with different scales and plot them on a secondary Y-axis',
-              ),
-              renderTrigger: true,
             },
           },
         ],
@@ -137,52 +124,74 @@ const config: ControlPanelConfig = {
       ],
     },
     {
-      label: t('Whale Chart Settings'),
+      label: t('Colors'),
+      expanded: true,
+      controlSetRows: [
+        ['color_scheme'],
+        [
+          {
+            name: 'useManualColors',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Set Custom Colors'),
+              default: true,
+              renderTrigger: true,
+              description: t('Use custom colors instead of superset theme colors'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'positive_color',
+            config: {
+              label: t('Positive'),
+              type: 'ColorPickerControl',
+              default: { r: 90, g: 193, b: 137, a: 1 },
+              renderTrigger: true,
+              description: t('Color for positive values'),
+              visibility: ({ controls }) => Boolean(controls?.useManualColors?.value),
+            },
+          },
+          {
+            name: 'neutral_color',
+            config: {
+              label: t('Neutral'),
+              type: 'ColorPickerControl',
+              default: { r: 102, g: 102, b: 102, a: 1 },
+              renderTrigger: true,
+              description: t('Color for zero values'),
+              visibility: ({ controls }) => Boolean(controls?.useManualColors?.value),
+            },
+          },
+          {
+            name: 'negative_color',
+            config: {
+              label: t('Negative'),
+              type: 'ColorPickerControl',
+              default: { r: 224, g: 67, b: 85, a: 1 },
+              renderTrigger: true,
+              description: t('Color for negative values'),
+              visibility: ({ controls }) => Boolean(controls?.useManualColors?.value),
+            },
+          },
+        ],
+      ],
+    },
+    {
+      label: t('Axes'),
       expanded: true,
       controlSetRows: [
         [
           {
-            name: 'headerText',
-            config: {
-              type: 'TextControl',
-              default: '',
-              renderTrigger: true,
-              label: t('Header Text'),
-              description: t('The text you want to see in the header'),
-            },
-          },
-        ],
-        [
-          {
-            name: 'headerFontSize',
+            name: 'y_axis_format',
             config: {
               type: 'SelectControl',
-              label: t('Header Font Size'),
-              default: 'xl',
-              choices: [
-                // [value, label]
-                ['xxs', t('xx-small')],
-                ['xs', t('x-small')],
-                ['s', t('small')],
-                ['m', t('medium')],
-                ['l', t('large')],
-                ['xl', t('x-large')],
-                ['xxl', t('xx-large')],
-              ],
+              freeForm: true,
+              label: t('Number Format'),
               renderTrigger: true,
-              description: t('The size of your header font'),
-            },
-          },
-        ],
-        [
-          {
-            name: 'boldText',
-            config: {
-              type: 'CheckboxControl',
-              label: t('Bold Text'),
-              default: false,
-              renderTrigger: true,
-              description: t('A checkbox to make the header bold'),
+              default: 'SMART_NUMBER',
+              choices: D3_FORMAT_OPTIONS,
+              description: `${D3_FORMAT_DOCS}`,
             },
           },
         ],
