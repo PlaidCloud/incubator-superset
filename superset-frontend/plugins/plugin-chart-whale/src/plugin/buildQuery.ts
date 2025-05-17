@@ -24,11 +24,11 @@ import { buildQueryContext, QueryFormData } from '@superset-ui/core';
  * and returns the query object that will be passed to the API.
  */
 export default function buildQuery(formData: QueryFormData) {
-  // Include both regular metrics and tooltip-only metrics in the query
+  // Include regular metrics and tooltip-only metrics in the query
   const { metrics = [], tooltipOnlyMetrics = [] } = formData;
   
   return buildQueryContext(formData, baseQueryObject => {
-    // Get all metrics needed for the query
+    // Get all metrics needed for the query - combine all metric types
     const allMetrics = [...metrics, ...tooltipOnlyMetrics];
     
     return [{
