@@ -58,6 +58,8 @@ class BigNumberVis extends React.PureComponent<BigNumberVizProps> {
     headerColor: '',
   };
 
+  containerRef = React.createRef<HTMLDivElement>();
+
   getClassName() {
     const { className, showTrendLine, bigNumberFallback } = this.props;
     const fallbackClass = bigNumberFallback ? 'is-fallback-value' : '';
@@ -97,11 +99,11 @@ class BigNumberVis extends React.PureComponent<BigNumberVizProps> {
       !formatTime ||
       !showTimestamp ||
       typeof timestamp === 'string' ||
-      typeof timestamp === 'boolean' ||
-      typeof timestamp === 'bigint'
+      typeof timestamp === 'boolean'
     )
       return null;
-    const text = timestamp === null ? '' : formatTime(timestamp);
+    const text = timestamp === null ? '' :
+      typeof timestamp === 'bigint' ? formatTime(Number(timestamp)) : formatTime(timestamp);
     const container = this.createTemporaryContainer();
     document.body.append(container);
     const fontSize = computeMaxFontSize({
@@ -126,24 +128,76 @@ class BigNumberVis extends React.PureComponent<BigNumberVizProps> {
     );
   }
 
-  renderHeader(maxHeight: number) {
-    const { bigNumber, width, mainColor, headerFormatter } = this.props;
+  componentDidMount() {
+    this.applyHeightToParents();
+  }
+
+  applyHeightToParents() {
+    if (!this.containerRef.current) return;
+
+    // Start from the component's DOM element
+    let element: HTMLElement = this.containerRef.current;
+    let chartSliceParent: HTMLElement | null = null;
+
+    // First, traverse up to find the chart-slice container
+    while (element.parentElement) {
+      element = element.parentElement;
+      if (element.tagName === 'DIV') {
+
+        if (element.classList.contains('slice_container')) {
+          element.style.height = '100%';
+        }
+
+        if (element.classList.contains('chart-slice')) {
+          chartSliceParent = element;
+          element.style.flexDirection = 'row-reverse';
+          element.style.alignItems = 'flex-start';
+          element.style.justifyContent = 'space-between';
+          element.style.height = '100%';
+        }
+
+        if (element.classList.contains('dashboard-component')) {
+          break;
+        }
+      }
+    }
+
+    // Now find the header-title sibling within the chart-slice container
+    if (chartSliceParent) {
+      // Find all direct children with class 'header-title'
+      const headerTitleNode = chartSliceParent.firstChild?.firstChild;
+      const dashboardComponentNode = chartSliceParent.lastChild;
+
+      if (headerTitleNode && headerTitleNode instanceof HTMLElement) {
+        console.log('Found header-title element as sibling');
+        headerTitleNode.style.display = 'none';
+      }
+
+      if (dashboardComponentNode && dashboardComponentNode instanceof HTMLElement) {
+        console.log('Found dashboard-component element as sibling');
+        dashboardComponentNode.style.height = '100%';
+      }
+
+      // Make the slice_container (if present) 100% height
+      const sliceContainer = chartSliceParent.closest('.slice_container');
+      if (sliceContainer) {
+        console.log('Found slice_container, setting height: 100%');
+        (sliceContainer as HTMLElement).style.height = '100%';
+      }
+    }
+  }
+
+  renderHeader() {
+    const { bigNumber, headerFontSize, width, mainColor, headerFormatter } = this.props;
     // @ts-ignore
     const text =
       bigNumber === null
         ? t('No data')
         : typeof bigNumber === 'number'
           ? headerFormatter(bigNumber).toString()
-          : bigNumber?.toString();
+          : bigNumber ? bigNumber.toString() : t('No data');
     const container = this.createTemporaryContainer();
     document.body.append(container);
-    const fontSize = computeMaxFontSize({
-      text: (text || '').charAt(0),
-      maxWidth: width - 8, // Decrease 8px for more precise font size
-      maxHeight,
-      className: 'header-line',
-      container,
-    });
     container.remove();
 
     const onContextMenu = (e: MouseEvent<HTMLDivElement>) => {
@@ -152,13 +206,21 @@ class BigNumberVis extends React.PureComponent<BigNumberVizProps> {
         this.props.onContextMenu(e.nativeEvent.clientX, e.nativeEvent.clientY);
       }
     };
+
+    const fontSize = computeMaxFontSize({
+      text: text.charAt(0),
+      maxWidth: width - 8, // Decrease 8px for more precise font size
+      idealFontSize: 200 * headerFontSize,
+      className: 'header-line',
+      container,
+    });
+
     return (
       <div
         className="header-line"
         style={{
           fontSize,
           color: mainColor,
-          height: maxHeight,
         }}
         onContextMenu={onContextMenu}
       >
@@ -167,7 +229,7 @@ class BigNumberVis extends React.PureComponent<BigNumberVizProps> {
     );
   }
 
-  renderSubheader(maxHeight: number) {
+  renderSubheader() {
     const { bigNumber, subheader, width, bigNumberFallback, subheaderColor } =
       this.props;
     let fontSize = 0;
@@ -188,7 +250,7 @@ class BigNumberVis extends React.PureComponent<BigNumberVizProps> {
       fontSize = computeMaxFontSize({
         text,
         maxWidth: width,
-        maxHeight,
+        idealFontSize: 200 * this.props.subheaderFontSize,
         className: 'subheader-line',
         container,
       });
@@ -198,7 +260,6 @@ class BigNumberVis extends React.PureComponent<BigNumberVizProps> {
           className="subheader-line"
           style={{
             fontSize,
-            height: maxHeight,
             color: subheaderColor,
           }}
         >
@@ -210,22 +271,39 @@ class BigNumberVis extends React.PureComponent<BigNumberVizProps> {
   }
 
   render() {
-    const { height, headerFontSize, subheaderFontSize, mainHeaderColor } =
+    const { mainHeaderColor, subheader } =
       this.props;
     const className = this.getClassName();
-    console.log('bigtext', headerFontSize);
+    
+    // Determine if subheader exists
+    const hasSubheader = !!subheader;
+    
+    // Calculate proportional heights based on content
+    const headerRatio = hasSubheader ? 0.7 : 1.0; // 70% if subheader exists, 100% otherwise
+    const subheaderRatio = hasSubheader ? 0.3 : 0; // 30% if subheader exists, 0 otherwise
+    
     return (
       <div
         className={className}
+        ref={this.containerRef}
         style={{
-          height: height / 2,
+          height: "100%", // Use full height instead of height/2
+          width: "100%",
           backgroundColor: mainHeaderColor,
           borderRadius: '5px',
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         {this.renderFallbackWarning()}
-        {this.renderHeader(Math.ceil(headerFontSize * height))}
-        {this.renderSubheader(Math.ceil(subheaderFontSize * height))}
+        <div style={{ height: `${headerRatio * 100}%`, width: "100%" }}>
+          {this.renderHeader()}
+        </div>
+        {hasSubheader && (
+          <div style={{ height: `${subheaderRatio * 100}%`, width: "100%" }}>
+            {this.renderSubheader()}
+          </div>
+        )}
       </div>
     );
   }
