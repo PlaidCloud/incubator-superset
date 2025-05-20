@@ -16,7 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { GenericDataType, t } from '@superset-ui/core';
+import {
+  GenericDataType,
+  createSmartDateFormatter,
+  t,
+} from '@superset-ui/core';
 import {
   ControlPanelConfig,
   D3_FORMAT_DOCS,
@@ -38,13 +42,9 @@ export default {
     {
       label: t('Query'),
       expanded: true,
-      controlSetRows: [['columns'], ['adhoc_filters']],
-    },
-    {
-      label: t('Display settings'),
-      expanded: true,
-      tabOverride: 'data',
       controlSetRows: [
+        ['columns'], 
+        ['adhoc_filters'],
         [
           {
             name: 'subheader',
@@ -115,7 +115,7 @@ export default {
               renderTrigger: true,
               choices: D3_TIME_FORMAT_OPTIONS,
               description: D3_FORMAT_DOCS,
-              default: 'smart_date',
+              default: createSmartDateFormatter().id,
             },
           },
         ],
@@ -148,26 +148,26 @@ export default {
                 const verboseMap: Record<string, string> =
                   explore?.datasource?.hasOwnProperty('verbose_map')
                     ? ((explore?.datasource as Dataset)?.verbose_map as Record<
-                        string,
-                        string
-                      >)
+                      string,
+                      string
+                    >)
                     : ((explore?.datasource?.columns as unknown as Record<
-                        string,
-                        string
-                      >) ?? {});
+                      string,
+                      string
+                    >) ?? {});
                 const { colnames, coltypes } =
                   chart?.queriesResponse?.[0] ?? {};
                 const numericColumns =
                   Array.isArray(colnames) && Array.isArray(coltypes)
                     ? colnames
-                        .filter(
-                          (colname: string, index: number) =>
-                            coltypes[index] === GenericDataType.Numeric,
-                        )
-                        .map(colname => ({
-                          value: colname,
-                          label: verboseMap[colname] ?? colname,
-                        }))
+                      .filter(
+                        (colname: string, index: number) =>
+                          coltypes[index] === GenericDataType.Numeric,
+                      )
+                      .map(colname => ({
+                        value: colname,
+                        label: verboseMap[colname] ?? colname,
+                      }))
                     : [];
                 return {
                   columnOptions: numericColumns,
