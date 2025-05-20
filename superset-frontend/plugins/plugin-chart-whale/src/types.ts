@@ -11,7 +11,7 @@
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * "AS IS" BASIS,
  * KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations
  * under the License.
@@ -75,12 +75,15 @@ export type WhaleFormData = QueryFormData &
     boldText: boolean;
     // New properties
     chartType: WhaleChartType;
-    useSecondaryAxis: boolean;
-    autoDetectYAxisScale: boolean;
-    secondaryMetricAxis?: number[];
-    tooltipOnlyMetrics?: string[]; // List of metrics to only show in tooltip
+    tooltipOnlyMetrics?: QueryFormMetric[]; // Metrics to only show in tooltip
     showPareto: boolean;
     showValueOnHover: boolean;
+    zoomable: boolean;
+    y_axis_format?: string;
+    // New color properties
+    positive_color?: ColorPickerValue;
+    negative_color?: ColorPickerValue;
+    y_axis_label?: string;
   };
 
 export interface ProcessedDataRecord extends DataRecord {
@@ -98,6 +101,23 @@ export interface EchartsStylesProps {
 export interface EchartsHandler {
   getEchartInstance: () => EChartsType | undefined;
 }
+
+// ===== Chart Style Types =====
+
+export interface ColorPickerValue {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
+
+export type ChartColors = {
+  pareto: string;
+  // New color properties for positive, negative values
+  positive: string;
+  neutral: string;
+  negative: string;
+};
 
 // Props for Echarts component
 export interface EchartsProps {
@@ -165,9 +185,6 @@ export type WhaleChartTransformedProps = BaseTransformedProps<WhaleFormData> &
   CrossFilterTransformedProps & {
     data: ProcessedDataRecord[];
     legendData?: OptionName[];
-    boldText: boolean;
-    headerFontSize: string;
-    headerText: string;
     xValueFormatter?: TimeFormatter | StringConstructor;
     xAxis?: {
       label: string;
@@ -176,26 +193,14 @@ export type WhaleChartTransformedProps = BaseTransformedProps<WhaleFormData> &
     onFocusedSeries?: (series: string | null) => void;
   };
 
-export interface ChartColors {
-  primary: string;
-  areaTop: string;
-  areaBottom: string;
-  secondary: string;
-  pareto: string;
-}
-
-export interface MetricRange {
-  min: number;
-  max: number;
-  range: number;
-  index: number;
-}
-
 export interface TooltipParam {
   seriesName: string;
   value: [number, number];
   data: {
     name?: string;
+    cumulativeTotal?: number;
+    absoluteValue?: number;
+    [key: string]: any; // For additional properties
   };
   dataIndex: number;
 }
