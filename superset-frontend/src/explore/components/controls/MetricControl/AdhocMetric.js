@@ -60,20 +60,31 @@ function inferSqlExpressionAggregate(adhocMetric) {
 
 export default class AdhocMetric {
   constructor(adhocMetric) {
-    this.expressionType = adhocMetric.expressionType || EXPRESSION_TYPES.SIMPLE;
-    if (this.expressionType === EXPRESSION_TYPES.SIMPLE) {
-      // try to be clever in the case of transitioning from Sql expression back to simple expression
-      const inferredColumn = inferSqlExpressionColumn(adhocMetric);
-      this.column =
-        adhocMetric.column ||
-        (inferredColumn && { column_name: inferredColumn });
-      this.aggregate =
-        adhocMetric.aggregate || inferSqlExpressionAggregate(adhocMetric);
-      this.sqlExpression = null;
-    } else if (this.expressionType === EXPRESSION_TYPES.SQL) {
-      this.sqlExpression = adhocMetric.sqlExpression;
-      this.column = null;
+    this.emptyRowHeading = adhocMetric.emptyRowHeading || false;
+    this.emptyRowHeadingText = adhocMetric.emptyRowHeadingText || "";
+    if (this.emptyRowHeading) {
+      this.expressionType = undefined; // Or a specific type like 'HEADING' if you define one
+      this.column = {
+        column_name: '__heading__'
+      };
       this.aggregate = null;
+      this.sqlExpression = null;
+    } else {
+      this.expressionType = adhocMetric.expressionType || EXPRESSION_TYPES.SIMPLE;
+      if (this.expressionType === EXPRESSION_TYPES.SIMPLE) {
+        // try to be clever in the case of transitioning from Sql expression back to simple expression
+        const inferredColumn = inferSqlExpressionColumn(adhocMetric);
+        this.column =
+          adhocMetric.column ||
+          (inferredColumn && { column_name: inferredColumn });
+        this.aggregate =
+          adhocMetric.aggregate || inferSqlExpressionAggregate(adhocMetric);
+        this.sqlExpression = null;
+      } else if (this.expressionType === EXPRESSION_TYPES.SQL) {
+        this.sqlExpression = adhocMetric.sqlExpression;
+        this.column = null;
+        this.aggregate = null;
+      }
     }
     this.datasourceWarning = !!adhocMetric.datasourceWarning;
     this.hasCustomLabel = !!(adhocMetric.hasCustomLabel && adhocMetric.label);
@@ -134,11 +145,15 @@ export default class AdhocMetric {
       adhocMetric.sqlExpression === this.sqlExpression &&
       adhocMetric.aggregate === this.aggregate &&
       (adhocMetric.column && adhocMetric.column.column_name) ===
-        (this.column && this.column.column_name)
+      (this.column && this.column.column_name) && 
+      adhocMetric.emptyRowHeadingText === this.emptyRowHeadingText
     );
   }
 
   isValid() {
+    if (this.emptyRowHeading && this.emptyRowHeadingText) {
+      return true;
+    }
     if (this.expressionType === EXPRESSION_TYPES.SIMPLE) {
       return !!(this.column && this.aggregate);
     }
