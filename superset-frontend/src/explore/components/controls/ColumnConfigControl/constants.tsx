@@ -38,7 +38,10 @@ export type SharedColumnConfigProp =
   | 'horizontalAlign'
   | 'truncateLongCells'
   | 'showCellBars'
-  | 'currencyFormat';
+  | 'currencyFormat'
+  | 'indent'
+  | 'boldText'
+  | 'italicText';
 
 const d3NumberFormat: ControlFormItemSpec<'Select'> = {
   allowNewOptions: true,
@@ -152,6 +155,39 @@ const currencyFormat: ControlFormItemSpec<'CurrencyControl'> = {
   ),
   debounceDelay: 200,
 };
+
+const indent: ControlFormItemSpec = {
+  controlType: 'Input',
+  label: t('Indent (px)'),
+  description: t('Text indentation in pixels'),
+  placeholder: '0',
+  width: 120,
+  defaultValue: 0,
+  debounceDelay: 400,
+  validators: [
+    (value: any) => {
+      if (value && (isNaN(Number(value)) || Number(value) < 0)) {
+        return t('Indent must be a positive number');
+      }
+      return false;
+    },
+  ],
+};
+
+const boldText: ControlFormItemSpec = {
+  controlType: 'Checkbox',
+  label: t('Bold'),
+  description: t('Display text in bold'),
+  defaultValue: false,
+};
+
+const italicText: ControlFormItemSpec = {
+  controlType: 'Checkbox',
+  label: t('Italic'),
+  description: t('Display text in italic'),
+  defaultValue: false,
+};
+
 /**
  * All configurable column formatting properties.
  */
@@ -174,6 +210,9 @@ export const SHARED_COLUMN_CONFIG_PROPS = {
   alignPositiveNegative,
   colorPositiveNegative,
   currencyFormat,
+  indent,
+  boldText,
+  italicText,
 };
 
 export const DEFAULT_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {

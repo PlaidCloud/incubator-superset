@@ -128,17 +128,14 @@ export const DndLabelsContainer = styled.div<{
   ${({ theme, isLoading, canDrop, isDragging, isOver }) => `
   position: relative;
   padding: ${theme.gridUnit}px;
-  border: ${
-    !isLoading && isDragging
-      ? `dashed 1px ${
-          canDrop ? theme.colors.info.dark1 : theme.colors.error.dark1
-        }`
-      : `solid 1px ${
-          isLoading && isDragging
-            ? theme.colors.warning.light1
-            : theme.colors.grayscale.light2
-        }`
-  };
+  border: ${!isLoading && isDragging
+      ? `dashed 1px ${canDrop ? theme.colors.info.dark1 : theme.colors.error.dark1
+      }`
+      : `solid 1px ${isLoading && isDragging
+        ? theme.colors.warning.light1
+        : theme.colors.grayscale.light2
+      }`
+    };
   border-radius: ${theme.gridUnit}px;
   &:before,
   &:after {
@@ -148,8 +145,7 @@ export const DndLabelsContainer = styled.div<{
   }
   &:before {
     display: ${isDragging || isLoading ? 'block' : 'none'};
-    background-color: ${
-      canDrop ? theme.colors.primary.base : theme.colors.error.light1
+    background-color: ${canDrop ? theme.colors.primary.base : theme.colors.error.light1
     };
     z-index: ${theme.zIndex.aboveDashboardCharts};
     opacity: ${theme.opacity.light};
@@ -160,8 +156,7 @@ export const DndLabelsContainer = styled.div<{
   }
   &:after {
     display: ${isLoading || (canDrop && isOver) ? 'block' : 'none'};
-    background-color: ${
-      isLoading ? theme.colors.grayscale.light3 : theme.colors.primary.base
+    background-color: ${isLoading ? theme.colors.grayscale.light3 : theme.colors.primary.base
     };
     z-index: ${theme.zIndex.dropdown};
     opacity: ${theme.opacity.mediumLight};
@@ -175,8 +170,8 @@ export const DndLabelsContainer = styled.div<{
 
   &:before {
     ${({ theme, isLoading }) =>
-      isLoading &&
-      css`
+    isLoading &&
+    css`
         animation: ${borderPulse} 2s ease-in infinite;
         background: linear-gradient(currentColor 0 0) 0 100%/0% 3px no-repeat;
         background-size: 100% ${theme.gridUnit / 2}px;
@@ -205,12 +200,12 @@ export const AddControlLabel = styled.div<{
 
   :hover {
     background-color: ${({ cancelHover, theme }) =>
-      cancelHover ? 'inherit' : theme.colors.grayscale.light4};
+    cancelHover ? 'inherit' : theme.colors.grayscale.light4};
   }
 
   :active {
     background-color: ${({ cancelHover, theme }) =>
-      cancelHover ? 'inherit' : theme.colors.grayscale.light3};
+    cancelHover ? 'inherit' : theme.colors.grayscale.light3};
   }
 `;
 
@@ -381,10 +376,15 @@ export const OptionControlLabel = ({
       >
         <Icons.XSmall iconColor={theme.colors.grayscale.light1} />
       </CloseContainer>
-      <Label data-test="control-label">
-        {isFunction && <Icons.FieldDerived />}
-        {getLabelContent()}
-      </Label>
+      {!adhocMetric?.emptyRowHeading ?
+        <Label data-test="control-label">
+          {isFunction && <Icons.FieldDerived />}
+          {getLabelContent()}
+        </Label>
+        :
+        <Label data-test="control-label">
+          {getLabelContent()}
+        </Label>}
       {(!!datasourceWarningMessage || isExtra) && (
         <StyledInfoTooltipWithTrigger
           icon="exclamation-triangle"

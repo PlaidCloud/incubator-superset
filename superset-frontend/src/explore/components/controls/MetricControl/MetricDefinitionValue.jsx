@@ -56,15 +56,44 @@ export default function MetricDefinitionValue({
     savedMetrics.find(metric => metric.metric_name === metricName);
 
   let savedMetric;
+  let isPlainObjectRepresentingAdhocOrHeading = false;
+
   if (typeof option === 'string') {
+    // Option is a string, so it's a name of a saved metric
     savedMetric = getSavedMetricByName(option);
-  } else if (option.metric_name) {
-    savedMetric = option;
+  } else if (typeof option === 'object' && option !== null) {
+    // Option is an object
+    if (option.metric_name) {
+      // It has a metric_name, so it represents a saved metric
+      savedMetric = option; // Assuming 'option' itself is the saved metric data
+    } else if (
+      // Check if it's a plain object representing an ad-hoc metric or heading
+      // (i.e., not an AdhocMetric instance but has defining ad-hoc properties)
+      !(option instanceof AdhocMetric) &&
+      (option.emptyRowHeading === true)
+    ) {
+      isPlainObjectRepresentingAdhocOrHeading = true;
+    }
   }
 
-  if (option instanceof AdhocMetric || savedMetric) {
-    const adhocMetric =
-      option instanceof AdhocMetric ? option : new AdhocMetric({});
+  if (option instanceof AdhocMetric || savedMetric || isPlainObjectRepresentingAdhocOrHeading) {
+    let adhocMetricForChild; // This will be the AdhocMetric instance passed to AdhocMetricOption
+
+    if (option instanceof AdhocMetric) {
+      adhocMetricForChild = option;
+    } else if (isPlainObjectRepresentingAdhocOrHeading) {
+      const metricInitObject = { ...option };
+      if (option.emptyRowHeading === true && typeof option.emptyRowHeadingText === 'string') {
+        metricInitObject.label = option.emptyRowHeadingText;
+        metricInitObject.hasCustomLabel = true;
+      }
+      adhocMetricForChild = new AdhocMetric(metricInitObject);
+    } else {
+      // Otherwise, it must be a saved metric (resolvedSavedMetric is true).
+      // Create an AdhocMetric instance based on the saved metric data.
+      // (The AdhocMetric constructor can take saved metric fields)
+      adhocMetricForChild = new AdhocMetric(savedMetric || {});
+    }
 
     const metricOptionProps = {
       onMetricEdit,
@@ -72,7 +101,7 @@ export default function MetricDefinitionValue({
       columns,
       savedMetricsOptions,
       datasource,
-      adhocMetric,
+      adhocMetric: adhocMetricForChild,
       onMoveLabel,
       onDropLabel,
       index,

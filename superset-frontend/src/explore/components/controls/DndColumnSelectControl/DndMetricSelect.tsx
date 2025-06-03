@@ -359,8 +359,8 @@ const DndMetricSelect = (props: any) => {
   }, [droppedItem]);
 
   const ghostButtonText = tn(
-    'Drop a column/metric here or click',
-    'Drop columns/metrics here or click',
+    'Drop a column/metric or click',
+    'Drop columns/metrics or click',
     multi ? 2 : 1,
   );
 
