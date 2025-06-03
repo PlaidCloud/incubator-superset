@@ -83,6 +83,7 @@ import TimeTableChartPlugin from '../TimeTable';
 import { PluginChartMarimekko } from '@superset-ui/plugin-chart-marimekko';
 import { BigTextChart } from '@superset-ui/plugin-chart-big-text';
 import { SupersetPluginChartWhale } from '@superset-ui/plugin-chart-whale';
+import { TableChartTransposePlugin } from '@superset-ui/plugin-chart-table-transpose';
 
 export default class MainPreset extends Preset {
   constructor() {
@@ -194,6 +195,7 @@ export default class MainPreset extends Preset {
         new SupersetPluginChartWhale().configure({
           key: 'ext-whale',
         }),
+        new TableChartTransposePlugin().configure({ key: 'ext-table-transpose' }),
       ],
     });
   }
