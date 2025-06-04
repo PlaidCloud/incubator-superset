@@ -24,6 +24,7 @@ import {
   MutableRefObject,
   CSSProperties,
   DragEvent,
+  useEffect,
 } from 'react';
 
 import {
@@ -71,6 +72,7 @@ export interface DataTableProps<D extends object> extends TableOptions<D> {
   onColumnOrderChange: () => void;
   renderGroupingHeaders?: () => JSX.Element;
   renderTimeComparisonDropdown?: () => JSX.Element;
+  custom_css?: string; // custom CSS class to apply to the table
 }
 
 export interface RenderHTMLCellProps extends HTMLProps<HTMLTableCellElement> {
@@ -105,6 +107,7 @@ export default typedMemo(function DataTable<D extends object>({
   onColumnOrderChange,
   renderGroupingHeaders,
   renderTimeComparisonDropdown,
+  custom_css,
   ...moreUseTableOptions
 }: DataTableProps<D>): JSX.Element {
   const tableHooks: PluginHook<D>[] = [
@@ -202,6 +205,30 @@ export default typedMemo(function DataTable<D extends object>({
     },
     ...tableHooks,
   );
+
+  useEffect(() => {
+    if (custom_css) {
+      const styleId = 'table-transpose-custom-css';
+      let styleElement = document.getElementById(styleId) as HTMLStyleElement;
+
+      if (!styleElement) {
+        styleElement = document.createElement('style');
+        styleElement.id = styleId;
+        document.head.appendChild(styleElement);
+      }
+
+      styleElement.textContent = custom_css;
+
+      return () => {
+        // Clean up the style element when component unmounts or CSS changes
+        if (styleElement && styleElement.parentNode) {
+          styleElement.parentNode.removeChild(styleElement);
+        }
+      };
+    }
+    return undefined;
+  }, [custom_css]);
+
   // make setPageSize accept 0
   const setPageSize = (size: number) => {
     if (serverPagination) {
