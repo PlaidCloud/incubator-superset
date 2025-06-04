@@ -95,6 +95,7 @@ export type TableChartFormData = QueryFormData & {
   column_config?: Record<string, TableColumnConfig>;
   allow_rearrange_columns?: boolean;
   enable_pivot?: boolean;
+  custom_css?: string;
 };
 
 export interface TableChartProps extends ChartProps {
@@ -151,6 +152,7 @@ export interface TableChartTransformedProps<D extends DataRecord = DataRecord> {
   basicColorColumnFormatters?: { [Key: string]: BasicColorFormatterType }[];
   startDateOffset?: string;
   rowConfig?: any;
+  custom_css?: string;
 }
 
 export enum ColorSchemeEnum {
