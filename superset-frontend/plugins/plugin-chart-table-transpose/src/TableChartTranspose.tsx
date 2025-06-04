@@ -267,7 +267,8 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     isUsingTimeComparison,
     basicColorFormatters,
     basicColorColumnFormatters,
-    rowConfig
+    rowConfig,
+    custom_css,
   } = props;
   const comparisonColumns = [
     { key: 'all', label: t('Display all') },
@@ -1109,6 +1110,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         renderTimeComparisonDropdown={
           isUsingTimeComparison ? renderTimeComparisonDropdown : undefined
         }
+        custom_css={custom_css}
       />
     </Styles>
   );
