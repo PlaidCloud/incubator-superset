@@ -286,6 +286,7 @@ const config: ControlPanelConfig = {
           {
             name: 'groupby',
             override: {
+              multi: false,
               visibility: isAggMode,
               resetOnHide: false,
               mapStateToProps: (
