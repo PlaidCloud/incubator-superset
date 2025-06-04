@@ -697,8 +697,8 @@ const config: ControlPanelConfig = {
                 metrics.forEach(metric => {
                   if (metric && typeof metric === 'object' && (metric as any).emptyRowHeading === false) {
                     const adhocMetric = metric as AdhocMetric;
-                    const label = adhocMetric.label || 
-                      ('sqlExpression' in adhocMetric ? adhocMetric.sqlExpression : null) || 
+                    const label = adhocMetric.label ||
+                      ('sqlExpression' in adhocMetric ? adhocMetric.sqlExpression : null) ||
                       'Metric';
                     rowNames.push(label);
                     rowTypes.push(GenericDataType.String);
@@ -878,6 +878,21 @@ const config: ControlPanelConfig = {
                   verboseMap,
                 };
               },
+            },
+          },
+        ],
+        [
+          {
+            name: 'custom_css',
+            config: {
+              type: 'TextAreaControl',
+              label: t('Custom CSS'),
+              renderTrigger: true,
+              default: '',
+              description: t('Apply custom CSS to the table. Use .superset-data-ui-table to target the table element.'),
+              language: 'css',
+              minLines: 10,
+              maxLines: 30,
             },
           },
         ],
