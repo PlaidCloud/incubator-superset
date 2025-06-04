@@ -783,6 +783,8 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           const isSummaryRowFirstColumn = (row.original.__is_summary__ || false) && i === 0;
           const rowTextAlign = isFirstColumn && rowConfig?.[row.original.metric as string]?.horizontalAlign || null;
 
+          className = className.replace('right-border-only', '');
+
           let backgroundColor;
           let arrow = '';
           const originKey = column.key.substring(column.label.length).trim();
@@ -906,6 +908,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
             },
             className: [
               className,
+              row.original.__isHeading === false ? 'right-border-only' : '',
               value == null ? 'dt-is-null' : '',
               isActiveFilterValue(key, value) ? ' dt-is-active-filter' : '',
             ].join(' '),
@@ -965,7 +968,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           <th
             id={`header-${column.key}`}
             title={t('Shift + Click to sort by multiple columns')}
-            className={[className, col.isSorted ? 'is-sorted' : ''].join(' ')}
+            className={[className.replace('right-border-only', ''), col.isSorted ? 'is-sorted' : ''].join(' ')}
             style={{
               ...sharedStyle,
               ...style,
