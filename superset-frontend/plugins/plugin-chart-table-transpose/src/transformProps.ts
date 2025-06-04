@@ -640,6 +640,7 @@ const transformProps = (
     comparison_type,
     metrics: formDataMetrics = [],
     enable_pivot,
+    custom_css,
   } = formData;
   const isUsingTimeComparison =
     !isEmpty(time_compare) &&
@@ -880,6 +881,7 @@ const transformProps = (
     startDateOffset,
     basicColorColumnFormatters,
     rowConfig: chartProps.rawFormData.row_config,
+    custom_css,
   };
 };
 
