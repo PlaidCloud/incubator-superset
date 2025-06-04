@@ -498,7 +498,7 @@ function transposeData(
     // Always add the "Total" column header
     {
       key: 'rowTotal',
-      label: t('Total'),
+      label: t('All Segments'),
       dataType: GenericDataType.Numeric,
       isMetric: false,
       isPercentMetric: false,
