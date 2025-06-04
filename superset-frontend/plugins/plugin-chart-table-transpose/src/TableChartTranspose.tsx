@@ -748,7 +748,22 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         // so we ask TS not to check.
         accessor: ((datum: D) => datum[key]) as never,
         Cell: ({ value, row }: { value: DataRecordValue; row: Row<D> }) => {
-          const [isHtml, text] = formatColumnValue(column, value);
+          // Check if this row has a specific formatter (for transposed tables)
+          const rowFormatter = row.original.__formatter__;
+
+          // Skip formatter for the first column (metric names column)
+          const shouldApplyFormatter = i !== 0;
+
+          // Only use rowFormatter if it's a valid formatter type and not the first column
+          const effectiveFormatter = shouldApplyFormatter && (typeof rowFormatter === 'function' ||
+            (typeof rowFormatter === 'object' && rowFormatter !== null && !Array.isArray(rowFormatter) && !(rowFormatter instanceof Date)))
+            ? rowFormatter
+            : (shouldApplyFormatter ? column.formatter : undefined);
+
+          const [isHtml, text] = formatColumnValue(
+            { ...column, formatter: effectiveFormatter },
+            value,
+          );
           const html = isHtml && allowRenderHtml ? { __html: text } : undefined;
 
           const isFirstColumn = i === 0;
