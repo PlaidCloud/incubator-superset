@@ -449,6 +449,7 @@ function transposeData(
   data: DataRecord[], // Original data rows from the query
   originalDataColumns: DataColumnMeta[], // Metadata for original data columns
   formDataMetricsInOrder: any[], // formData.metrics, defining the order of rows
+  showTotals?: boolean, // Add showTotals parameter
 ): {
   transposedData: DataRecord[];
   transposedColumns: DataColumnMeta[];
@@ -495,7 +496,7 @@ function transposeData(
       isPercentMetric: false,
       isNumeric: false,
     },
-    // Always add the "Total" column header
+    // Always add the "Total" column header for row totals
     {
       key: 'rowTotal',
       label: t('All Segments'),
@@ -507,8 +508,9 @@ function transposeData(
     ...dynamicColumnHeaders,
   ];
 
-
   const transposedDataRows: DataRecord[] = [];
+  // Object to store column sums if we need to show totals
+  const columnSums: Record<string, number> = {};
 
   formDataMetricsInOrder.forEach(metricOrHeadingItem => {
     const newRow: DataRecord = {};
@@ -552,6 +554,10 @@ function transposeData(
           if (typeof cellValue === 'number' && !Number.isNaN(cellValue)) {
             currentRowSum += cellValue;
             currentRowHasNumeric = true;
+            // Also sum for column totals
+            if (showTotals) {
+              columnSums[headerCol.key] = (columnSums[headerCol.key] || 0) + cellValue;
+            }
           }
         });
       } else {
@@ -570,6 +576,10 @@ function transposeData(
             if (typeof cellValue === 'number' && !Number.isNaN(cellValue)) {
               currentRowSum += cellValue;
               currentRowHasNumeric = true;
+              // Also sum for column totals
+              if (showTotals) {
+                columnSums[headerCol.key] = (columnSums[headerCol.key] || 0) + cellValue;
+              }
             }
           });
         } else {
@@ -592,9 +602,30 @@ function transposeData(
       newRow.__isHeading = false;
       // Always set rowTotal for non-heading rows
       newRow.rowTotal = currentRowHasNumeric ? currentRowSum : null;
+      // Sum for the rowTotal column
+      if (showTotals && currentRowHasNumeric) {
+        columnSums.rowTotal = (columnSums.rowTotal || 0) + currentRowSum;
+      }
     }
     transposedDataRows.push(newRow);
   });
+
+  // Add totals row if showTotals is true
+  if (showTotals && Object.keys(columnSums).length > 0) {
+    const totalsRow: DataRecord = {
+      metric: t('Summary'),
+      __is_summary__: true, // Mark this as a totals row
+    };
+    
+    // Add the sum for each column
+    transposedColumnHeaders.forEach(col => {
+      if (col.key !== 'metric') {
+        totalsRow[col.key] = columnSums[col.key] || null;
+      }
+    });
+    
+    transposedDataRows.push(totalsRow);
+  }
 
   return {
     transposedData: transposedDataRows,
@@ -823,12 +854,22 @@ const transformProps = (
 
   let passedData = isUsingTimeComparison ? comparisonData || [] : data;
   let passedColumns = isUsingTimeComparison ? comparisonColumns : columns;
+  let passedTotals = totals; // Keep track of totals separately
 
   // Handle pivot/transpose AFTER comparison processing
   if (enable_pivot) {
-    const { transposedData, transposedColumns } = transposeData(passedData, passedColumns, formDataMetrics);
+    const { transposedData, transposedColumns } = transposeData(
+      passedData, 
+      passedColumns, 
+      formDataMetrics,
+      showTotals // Pass showTotals flag
+    );
     passedData = transposedData;
     passedColumns = transposedColumns;
+    
+    // When transposed, totals are already included in the data as a row
+    // Set passedTotals to undefined to avoid double rendering
+    passedTotals = undefined;
   }
 
   const basicColorFormatters =
@@ -850,7 +891,7 @@ const transformProps = (
     width,
     isRawRecords: queryMode === QueryMode.Raw,
     data: passedData,
-    totals,
+    totals: passedTotals, // Use passedTotals instead of totals
     columns: passedColumns,
     serverPagination,
     metrics,
