@@ -751,6 +751,9 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           // Check if this row has a specific formatter (for transposed tables)
           const rowFormatter = row.original.__formatter__;
 
+          // Check if we're in transpose mode (presence of __formatter__ or __is_summary__ indicates transpose)
+          const isTransposed = rowFormatter !== undefined || row.original.__is_summary__ !== undefined;
+
           // Skip formatter for the first column (metric names column)
           const shouldApplyFormatter = i !== 0;
 
@@ -760,9 +763,15 @@ export default function TableChart<D extends DataRecord = DataRecord>(
             ? rowFormatter
             : (shouldApplyFormatter ? column.formatter : undefined);
 
+          // Check if value should be displayed as "-" in transpose mode
+          let displayValue = value;
+          if (isTransposed && i !== 0 && (value === null || value === undefined || value === 0 || value === '')) {
+            displayValue = '-';
+          }
+
           const [isHtml, text] = formatColumnValue(
             { ...column, formatter: effectiveFormatter },
-            value,
+            displayValue,
           );
           const html = isHtml && allowRenderHtml ? { __html: text } : undefined;
 
