@@ -471,6 +471,14 @@ function transposeData(
   const headerKeyForOriginalData =
     firstDimensionCol?.key || originalDataColumns[0]?.key;
 
+  // Create a map to store formatters for each metric
+  const metricFormatters = new Map<string, any>();
+  originalDataColumns.forEach(col => {
+    if (col.isMetric || col.isPercentMetric) {
+      metricFormatters.set(col.key, col.formatter);
+    }
+  });
+
   const dynamicColumnHeaders = data.length > 0 ? data.map((originalDataRow, index) => {
     const label = String(
       headerKeyForOriginalData && originalDataRow[headerKeyForOriginalData] !== undefined
@@ -480,10 +488,11 @@ function transposeData(
     return {
       key: label,  // Use label as key instead of `col_${index}`
       label: label,
-      dataType: GenericDataType.String,
+      dataType: GenericDataType.Numeric, // Changed to Numeric since these will contain metric values
       isMetric: false,
       isPercentMetric: false,
-      isNumeric: false,
+      isNumeric: true, // Changed to true since these columns will contain numeric values
+      // We'll assign formatters dynamically per cell based on the metric
     };
   }) : [];
 
@@ -538,6 +547,11 @@ function transposeData(
         col => col.key === itemIdentifier,
       );
 
+      // Store the formatter for this metric row
+      if (correspondingOriginalColumn?.formatter) {
+        (newRow as any).__formatter__ = correspondingOriginalColumn.formatter;
+      }
+
       if (correspondingOriginalColumn) {
         displayLabel = correspondingOriginalColumn.label || itemIdentifier;
         const originalDataKey = correspondingOriginalColumn.key;
@@ -566,6 +580,12 @@ function transposeData(
         if (fallbackColumn) {
           displayLabel = fallbackColumn.label || metricLabelFallback;
           const originalDataKey = fallbackColumn.key;
+          
+          // Store the formatter for this metric row
+          if (fallbackColumn.formatter) {
+            (newRow as any).__formatter__ = fallbackColumn.formatter;
+          }
+          
           dynamicColumnHeaders.forEach((headerCol, dynamicColIndex) => {
             const originalDataRow = data[dynamicColIndex];
             let cellValue = null;
@@ -616,6 +636,20 @@ function transposeData(
       metric: t('Summary'),
       __is_summary__: true, // Mark this as a totals row
     };
+    
+    // Find the last non-heading row to get formatters
+    let lastNonHeadingRow: DataRecord | null = null;
+    for (let i = transposedDataRows.length - 1; i >= 0; i--) {
+      if (!transposedDataRows[i].__isHeading) {
+        lastNonHeadingRow = transposedDataRows[i];
+        break;
+      }
+    }
+    
+    // If we found a non-heading row, copy its formatter
+    if (lastNonHeadingRow && lastNonHeadingRow.__formatter__) {
+      totalsRow.__formatter__ = lastNonHeadingRow.__formatter__;
+    }
     
     // Add the sum for each column
     transposedColumnHeaders.forEach(col => {
