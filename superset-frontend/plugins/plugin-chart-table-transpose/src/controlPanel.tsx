@@ -108,7 +108,26 @@ export const TRANSPOSE_ROW_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {
     [
       { name: 'horizontalAlign', override: { defaultValue: 'left' } },
     ],
-    ['indent', 'boldText', 'italicText'],
+    ['boldText', 'italicText'],
+    ['indent']
+  ],
+  [GenericDataType.Numeric]: [
+    {
+      tab: t('Display'),
+      children: [
+        [
+          { name: 'horizontalAlign', override: { defaultValue: 'right' } },
+        ],
+      ],
+    },
+    {
+      tab: t('Number formatting'),
+      children: [
+        ['d3NumberFormat'],
+        ['d3SmallNumberFormat'],
+        ['currencyFormat'],
+      ],
+    },
   ],
 };
 
@@ -567,6 +586,8 @@ const config: ControlPanelConfig = {
               width: 400,
               height: 320,
               renderTrigger: true,
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                !controls?.enable_pivot?.value,
               shouldMapStateToProps() {
                 return true;
               },
@@ -695,13 +716,27 @@ const config: ControlPanelConfig = {
                 const rowTypes: GenericDataType[] = [];
 
                 metrics.forEach(metric => {
-                  if (metric && typeof metric === 'object' && (metric as any).emptyRowHeading === false) {
-                    const adhocMetric = metric as AdhocMetric;
-                    const label = adhocMetric.label ||
-                      ('sqlExpression' in adhocMetric ? adhocMetric.sqlExpression : null) ||
-                      'Metric';
-                    rowNames.push(label);
-                    rowTypes.push(GenericDataType.String);
+                  if (metric) {
+                    if (typeof metric === 'string') {
+                      // Simple metric (column name)
+                      rowNames.push(metric);
+                      rowTypes.push(GenericDataType.Numeric); // Assume numeric for simple metrics
+                    } else if (typeof metric === 'object' && (metric as any).emptyRowHeading !== true) {
+                      const adhocMetric = metric as AdhocMetric;
+                      const label = adhocMetric.label ||
+                        ('sqlExpression' in adhocMetric ? adhocMetric.sqlExpression : null) ||
+                        ('column' in adhocMetric && (adhocMetric as AdhocMetricSimple).column?.column_name) ||
+                        'Metric';
+                      rowNames.push(label);
+
+                      // Check if it's an aggregate metric
+                      const isAggregateMetric =
+                        (adhocMetric.expressionType === 'SQL' && adhocMetric.sqlExpression) ||
+                        (adhocMetric.expressionType === 'SIMPLE' && adhocMetric.aggregate);
+
+                      // Set data type based on whether it's an aggregate
+                      rowTypes.push(isAggregateMetric ? GenericDataType.Numeric : GenericDataType.String);
+                    }
                   }
                 });
 

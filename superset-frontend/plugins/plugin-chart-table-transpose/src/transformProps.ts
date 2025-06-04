@@ -35,6 +35,7 @@ import {
   SMART_DATE_ID,
   TimeFormats,
   TimeFormatter,
+  createSmartNumberFormatter,
 } from '@superset-ui/core';
 import {
   ColorFormatters,
@@ -445,11 +446,38 @@ const getPageSize = (
 const defaultServerPaginationData = {};
 const defaultColorFormatters = [] as ColorFormatters;
 
+function createFormatter(config: {
+  numberFormat?: string;
+  smallNumberFormat?: string;
+  currencyFormat?: { symbol?: string; symbolPosition?: string };
+}) {
+  if (config.currencyFormat && config.currencyFormat.symbol) {
+    return new CurrencyFormatter({
+      d3Format: config.numberFormat,
+      currency: config.currencyFormat as Currency,
+    });
+  }
+  
+  if (config.smallNumberFormat && config.numberFormat) {
+    return createSmartNumberFormatter({
+      id: config.numberFormat,
+      description: config.smallNumberFormat,
+    });
+  }
+  
+  if (config.numberFormat) {
+    return getNumberFormatter(config.numberFormat);
+  }
+  
+  return undefined;
+}
+
 function transposeData(
   data: DataRecord[], // Original data rows from the query
   originalDataColumns: DataColumnMeta[], // Metadata for original data columns
   formDataMetricsInOrder: any[], // formData.metrics, defining the order of rows
   showTotals?: boolean, // Add showTotals parameter
+  rowConfig?: Record<string, any>, // Add rowConfig parameter
 ): {
   transposedData: DataRecord[];
   transposedColumns: DataColumnMeta[];
@@ -555,6 +583,23 @@ function transposeData(
       if (correspondingOriginalColumn) {
         displayLabel = correspondingOriginalColumn.label || itemIdentifier;
         const originalDataKey = correspondingOriginalColumn.key;
+        
+        // Get row configuration for this metric
+        const rowConfigForMetric = rowConfig?.[displayLabel];
+        
+        // Create a custom formatter if row config has number formatting
+        if (rowConfigForMetric && (rowConfigForMetric.d3NumberFormat || rowConfigForMetric.d3SmallNumberFormat || rowConfigForMetric.currencyFormat)) {
+          const formatter = createFormatter({
+            numberFormat: rowConfigForMetric.d3NumberFormat,
+            smallNumberFormat: rowConfigForMetric.d3SmallNumberFormat,
+            currencyFormat: rowConfigForMetric.currencyFormat,
+          });
+          if (formatter) {
+            (newRow as any).__formatter__ = formatter;
+          }
+        } else if (correspondingOriginalColumn.formatter) {
+          (newRow as any).__formatter__ = correspondingOriginalColumn.formatter;
+        }
 
         dynamicColumnHeaders.forEach((headerCol, dynamicColIndex) => {
           const originalDataRow = data[dynamicColIndex];
@@ -563,7 +608,7 @@ function transposeData(
             cellValue = originalDataRow[originalDataKey];
           }
           newRow[headerCol.key] = cellValue;
-
+          
           // Always sum for rowTotal if the cell value is numeric
           if (typeof cellValue === 'number' && !Number.isNaN(cellValue)) {
             currentRowSum += cellValue;
@@ -896,7 +941,8 @@ const transformProps = (
       passedData, 
       passedColumns, 
       formDataMetrics,
-      showTotals // Pass showTotals flag
+      showTotals, // Pass showTotals flag,
+      formData.row_config
     );
     passedData = transposedData;
     passedColumns = transposedColumns;
