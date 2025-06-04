@@ -35,8 +35,11 @@ function formatValue(
   value: DataRecordValue,
 ): [boolean, string] {
   // render undefined as empty string
-  if (value === undefined) {
+  if (value == undefined) {
     return [false, ''];
+  }
+  if (value === '-') {
+    return [false, '-'];
   }
   // render null as `N/A`
   if (
