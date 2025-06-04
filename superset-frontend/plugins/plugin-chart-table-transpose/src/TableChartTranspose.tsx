@@ -756,7 +756,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           const isBoldText = isFirstColumn && rowConfig?.[row.original.metric as string]?.boldText || false;
           const isItalicText = isFirstColumn && rowConfig?.[row.original.metric as string]?.italicText || false;
           const indent = isFirstColumn && rowConfig?.[row.original.metric as string]?.indent || 0;
-
+          const isSummaryRowFirstColumn = (row.original.__is_summary__ || false) && i === 0;
           const rowTextAlign = isFirstColumn && rowConfig?.[row.original.metric as string]?.horizontalAlign || null;
 
           let backgroundColor;
@@ -803,7 +803,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
             white-space: ${value instanceof Date ? 'nowrap' : undefined};
             position: relative;
             background: ${backgroundColor || undefined};
-            ${(isBoldText || isRowTotal) ? 'font-weight: bold;' : ''}
+            ${(isBoldText || isRowTotal || isSummaryRowFirstColumn) ? 'font-weight: bold;' : ''}
             ${isItalicText ? 'font-style: italic;' : ''}
             ${indent && i === 0 ? `padding-left: ${indent}px !important;` : ''}
           `;
