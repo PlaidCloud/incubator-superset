@@ -256,7 +256,7 @@ const DashboardContentWrapper = styled.div`
 
     & .dashboard-component-tabs-content {
       & > div:not(:last-child):not(.empty-droptarget) {
-        margin-bottom: ${theme.gridUnit * 4}px;
+        margin-bottom: ${theme.gridUnit * 2}px;
       }
 
       & > .empty-droptarget {
@@ -266,12 +266,12 @@ const DashboardContentWrapper = styled.div`
       }
 
       & > .empty-droptarget:first-child:not(.empty-droptarget--full) {
-        height: ${theme.gridUnit * 4}px;
+        height: ${theme.gridUnit * 2}px;
         top: 0;
       }
 
       & > .empty-droptarget:last-child {
-        height: ${theme.gridUnit * 4}px;
+        height: ${theme.gridUnit * 2}px;
         bottom: ${-theme.gridUnit * 4}px;
       }
     }
