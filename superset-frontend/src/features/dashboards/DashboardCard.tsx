@@ -92,6 +92,7 @@ function DashboardCard({
         endpoint: `/api/v1/dashboard/${dashboard.id}`,
       }).then(({ json = {} }) => {
         setThumbnailUrl(json.result?.thumbnail_url || '');
+        //dashboard.thumbnail_url = json.result?.thumbnail_url || '';
         setFetchingThumbnail(false);
       });
     }
