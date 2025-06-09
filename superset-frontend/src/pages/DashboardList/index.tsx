@@ -134,7 +134,6 @@ const DASHBOARD_COLUMNS_TO_FETCH = [
   'certified_by',
   'certification_details',
   'changed_on',
-  'thumbnail_url',
 ];
 
 function DashboardList(props: DashboardListProps) {
