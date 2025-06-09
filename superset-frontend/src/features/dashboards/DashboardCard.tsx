@@ -92,6 +92,7 @@ function DashboardCard({
         endpoint: `/api/v1/dashboard/${dashboard.id}`,
       }).then(({ json = {} }) => {
         setThumbnailUrl(json.result?.thumbnail_url || '');
+        //dashboard.thumbnail_url = json.result?.thumbnail_url || '';
         setFetchingThumbnail(false);
       });
     }
@@ -161,7 +162,7 @@ function DashboardCard({
         }
         url={bulkSelectEnabled ? undefined : dashboard.url}
         linkComponent={Link}
-        imgURL={dashboard.thumbnail_url}
+        imgURL={thumbnailUrl}
         imgFallbackURL="/static/assets/images/dashboard-card-fallback.svg"
         description={t('Modified %s', dashboard.changed_on_delta_humanized)}
         coverLeft={<FacePile users={dashboard.owners || []} />}
