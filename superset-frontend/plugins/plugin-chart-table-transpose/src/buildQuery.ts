@@ -69,7 +69,7 @@ const buildQuery: BuildQuery<TableChartFormData> = (
 
   // Filter out heading objects from metrics before sending to API
   const filteredMetrics = metrics.filter(
-    (metric: any) => !(metric.column.column_name.startsWith('__heading')),
+    (metric: any) => !(metric.column?.column_name.startsWith('__heading')),
   );
   formData = {
     ...rest,
