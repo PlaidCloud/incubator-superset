@@ -58,12 +58,12 @@ const GridContent = styled.div`
     flex-direction: column;
     /* gutters between rows */
     & > div:not(:last-child):not(.empty-droptarget) {
-      ${!editMode && `margin-bottom: ${theme.gridUnit * 2}px`};
+      ${!editMode && `margin-bottom: ${theme.gridUnit * 4}px`};
     }
 
     .empty-droptarget {
       width: 100%;
-      height: ${theme.gridUnit * 2}px;
+      height: ${theme.gridUnit * 4}px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -82,7 +82,7 @@ const GridContent = styled.div`
     }
 
     & > .empty-droptarget:first-child {
-      height: ${theme.gridUnit * 2}px;
+      height: ${theme.gridUnit * 4}px;
       margin-top: ${theme.gridUnit * -4}px;
     }
 
