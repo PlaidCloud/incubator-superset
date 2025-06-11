@@ -327,7 +327,7 @@ const StyledDashboardContent = styled.div<{
       height: 100%;
       background-color: ${theme.colors.grayscale.light5};
       position: relative;
-      padding: ${theme.gridUnit * 2}px;
+      padding: ${theme.gridUnit * 4}px;
       overflow-y: visible;
 
       // transitionable traits to show filter relevance
