@@ -932,7 +932,7 @@ const config: ControlPanelConfig = {
         !Boolean(controls?.enable_pivot?.value)
     },
     {
-      label: t('Visual formatting'),
+      label: t('Custom Css'),
       expanded: false,
       controlSetRows: [
         [
@@ -951,6 +951,8 @@ const config: ControlPanelConfig = {
           },
         ],
       ],
+      visibility: ({ controls }: ControlPanelsContainerProps) =>
+        Boolean(controls?.enable_pivot?.value)
     },
     {
       ...sections.timeComparisonControls({
