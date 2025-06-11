@@ -28,4 +28,5 @@ flask-openid
 psycopg2-binary==2.9.9
 plaidcloud-config @ git+https://github.com/PlaidCloud/plaidcloud-config.git@master#subdirectory=python
 plaidcloud-rpc @ git+https://github.com/PlaidCloud/plaid-rpc.git@master
+databend-sqlalchemy @ git+https://github.com/PlaidCloud/databend-sqlalchemy.git@main
 authlib==1.3.0
