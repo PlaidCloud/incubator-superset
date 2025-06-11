@@ -457,18 +457,18 @@ function createFormatter(config: {
       currency: config.currencyFormat as Currency,
     });
   }
-  
+
   if (config.smallNumberFormat && config.numberFormat) {
     return createSmartNumberFormatter({
       id: config.numberFormat,
       description: config.smallNumberFormat,
     });
   }
-  
+
   if (config.numberFormat) {
     return getNumberFormatter(config.numberFormat);
   }
-  
+
   return undefined;
 }
 
@@ -583,10 +583,10 @@ function transposeData(
       if (correspondingOriginalColumn) {
         displayLabel = correspondingOriginalColumn.label || itemIdentifier;
         const originalDataKey = correspondingOriginalColumn.key;
-        
+
         // Get row configuration for this metric
         const rowConfigForMetric = rowConfig?.[displayLabel];
-        
+
         // Create a custom formatter if row config has number formatting
         if (rowConfigForMetric && (rowConfigForMetric.d3NumberFormat || rowConfigForMetric.d3SmallNumberFormat || rowConfigForMetric.currencyFormat)) {
           const formatter = createFormatter({
@@ -608,7 +608,7 @@ function transposeData(
             cellValue = originalDataRow[originalDataKey];
           }
           newRow[headerCol.key] = cellValue;
-          
+
           // Always sum for rowTotal if the cell value is numeric
           if (typeof cellValue === 'number' && !Number.isNaN(cellValue)) {
             currentRowSum += cellValue;
@@ -625,12 +625,12 @@ function transposeData(
         if (fallbackColumn) {
           displayLabel = fallbackColumn.label || metricLabelFallback;
           const originalDataKey = fallbackColumn.key;
-          
+
           // Store the formatter for this metric row
           if (fallbackColumn.formatter) {
             (newRow as any).__formatter__ = fallbackColumn.formatter;
           }
-          
+
           dynamicColumnHeaders.forEach((headerCol, dynamicColIndex) => {
             const originalDataRow = data[dynamicColIndex];
             let cellValue = null;
@@ -681,7 +681,7 @@ function transposeData(
       metric: t('Summary'),
       __is_summary__: true, // Mark this as a totals row
     };
-    
+
     // Find the last non-heading row to get formatters
     let lastNonHeadingRow: DataRecord | null = null;
     for (let i = transposedDataRows.length - 1; i >= 0; i--) {
@@ -690,19 +690,19 @@ function transposeData(
         break;
       }
     }
-    
+
     // If we found a non-heading row, copy its formatter
     if (lastNonHeadingRow && lastNonHeadingRow.__formatter__) {
       totalsRow.__formatter__ = lastNonHeadingRow.__formatter__;
     }
-    
+
     // Add the sum for each column
     transposedColumnHeaders.forEach(col => {
       if (col.key !== 'metric') {
         totalsRow[col.key] = columnSums[col.key] || null;
       }
     });
-    
+
     transposedDataRows.push(totalsRow);
   }
 
@@ -941,19 +941,19 @@ const transformProps = (
     // Find the metric column to sort by
     const sortMetricLabel = getMetricLabel(timeseries_limit_metric);
     const sortColumn = passedColumns.find(col => col.key === sortMetricLabel);
-    
+
     if (sortColumn && sortColumn.isMetric) {
       passedData = [...passedData].sort((a, b) => {
         const aValue = a[sortColumn.key];
         const bValue = b[sortColumn.key];
-        
+
         // Handle null/undefined values
         if (aValue == null && bValue == null) return 0;
         if (aValue == null) return 1;
         if (bValue == null) return -1;
-        
+
         // Sort based on sortDesc
-        return sortDesc 
+        return sortDesc
           ? (bValue as number) - (aValue as number)
           : (aValue as number) - (bValue as number);
       });
@@ -963,48 +963,70 @@ const transformProps = (
   // Handle pivot/transpose AFTER comparison processing
   if (enable_pivot) {
     const { transposedData, transposedColumns } = transposeData(
-      passedData, 
-      passedColumns, 
+      passedData,
+      passedColumns,
       formDataMetrics,
       showTotals,
       formData.row_config
     );
     passedData = transposedData;
     passedColumns = transposedColumns;
-    
+
     // Apply sorting for transpose mode (after transpose)
     if (sortDesc !== undefined && queryMode === QueryMode.Aggregate) {
-      // In transpose mode, sort by the "All Segments" (rowTotal) column
-      passedData = [...passedData].sort((a, b) => {
-        // Don't sort heading rows or summary rows
-        if (a.__isHeading || b.__isHeading) {
-          if (a.__isHeading && !b.__isHeading) return -1;
-          if (!a.__isHeading && b.__isHeading) return 1;
-          return 0;
+      // Create a map to store original positions of heading rows
+      const headingPositions = new Map<number, DataRecord>();
+      passedData.forEach((row, index) => {
+        if (row.__isHeading) {
+          headingPositions.set(index, row);
         }
-        
-        // Keep summary row at the bottom
-        if (a.__is_summary__ || b.__is_summary__) {
-          if (a.__is_summary__ && !b.__is_summary__) return 1;
-          if (!a.__is_summary__ && b.__is_summary__) return -1;
-          return 0;
-        }
-        
+      });
+
+      // Extract non-heading, non-summary rows for sorting
+      const dataRowsToSort = passedData.filter(row => !row.__isHeading && !row.__is_summary__);
+      const summaryRow = passedData.find(row => row.__is_summary__);
+
+      // Sort only the data rows
+      dataRowsToSort.sort((a, b) => {
         const aValue = a.rowTotal;
         const bValue = b.rowTotal;
-        
+
         // Handle null/undefined values
         if (aValue == null && bValue == null) return 0;
         if (aValue == null) return 1;
         if (bValue == null) return -1;
-        
+
         // Sort based on sortDesc
-        return sortDesc 
+        return sortDesc
           ? (bValue as number) - (aValue as number)
           : (aValue as number) - (bValue as number);
       });
+
+      // Reconstruct the data array preserving heading positions
+      const sortedData: DataRecord[] = [];
+      let dataRowIndex = 0;
+
+      for (let i = 0; i < passedData.length; i++) {
+        if (headingPositions.has(i)) {
+          // Insert heading at its original position
+          sortedData.push(headingPositions.get(i)!);
+        } else if (!passedData[i].__is_summary__) {
+          // Insert next sorted data row
+          if (dataRowIndex < dataRowsToSort.length) {
+            sortedData.push(dataRowsToSort[dataRowIndex]);
+            dataRowIndex++;
+          }
+        }
+      }
+
+      // Add summary row at the end if it exists
+      if (summaryRow) {
+        sortedData.push(summaryRow);
+      }
+
+      passedData = sortedData;
     }
-    
+
     // When transposed, totals are already included in the data as a row
     passedTotals = undefined;
   }
