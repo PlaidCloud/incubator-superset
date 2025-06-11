@@ -751,6 +751,7 @@ const transformProps = (
     metrics: formDataMetrics = [],
     enable_pivot,
     custom_css,
+    timeseries_limit_metric,
   } = formData;
   const isUsingTimeComparison =
     !isEmpty(time_compare) &&
@@ -933,7 +934,31 @@ const transformProps = (
 
   let passedData = isUsingTimeComparison ? comparisonData || [] : data;
   let passedColumns = isUsingTimeComparison ? comparisonColumns : columns;
-  let passedTotals = totals; // Keep track of totals separately
+  let passedTotals = totals;
+
+  // Apply sorting for non-transpose mode (before transpose)
+  if (!enable_pivot && sortDesc !== undefined && queryMode === QueryMode.Aggregate && timeseries_limit_metric) {
+    // Find the metric column to sort by
+    const sortMetricLabel = getMetricLabel(timeseries_limit_metric);
+    const sortColumn = passedColumns.find(col => col.key === sortMetricLabel);
+    
+    if (sortColumn && sortColumn.isMetric) {
+      passedData = [...passedData].sort((a, b) => {
+        const aValue = a[sortColumn.key];
+        const bValue = b[sortColumn.key];
+        
+        // Handle null/undefined values
+        if (aValue == null && bValue == null) return 0;
+        if (aValue == null) return 1;
+        if (bValue == null) return -1;
+        
+        // Sort based on sortDesc
+        return sortDesc 
+          ? (bValue as number) - (aValue as number)
+          : (aValue as number) - (bValue as number);
+      });
+    }
+  }
 
   // Handle pivot/transpose AFTER comparison processing
   if (enable_pivot) {
@@ -941,14 +966,46 @@ const transformProps = (
       passedData, 
       passedColumns, 
       formDataMetrics,
-      showTotals, // Pass showTotals flag,
+      showTotals,
       formData.row_config
     );
     passedData = transposedData;
     passedColumns = transposedColumns;
     
+    // Apply sorting for transpose mode (after transpose)
+    if (sortDesc !== undefined && queryMode === QueryMode.Aggregate) {
+      // In transpose mode, sort by the "All Segments" (rowTotal) column
+      passedData = [...passedData].sort((a, b) => {
+        // Don't sort heading rows or summary rows
+        if (a.__isHeading || b.__isHeading) {
+          if (a.__isHeading && !b.__isHeading) return -1;
+          if (!a.__isHeading && b.__isHeading) return 1;
+          return 0;
+        }
+        
+        // Keep summary row at the bottom
+        if (a.__is_summary__ || b.__is_summary__) {
+          if (a.__is_summary__ && !b.__is_summary__) return 1;
+          if (!a.__is_summary__ && b.__is_summary__) return -1;
+          return 0;
+        }
+        
+        const aValue = a.rowTotal;
+        const bValue = b.rowTotal;
+        
+        // Handle null/undefined values
+        if (aValue == null && bValue == null) return 0;
+        if (aValue == null) return 1;
+        if (bValue == null) return -1;
+        
+        // Sort based on sortDesc
+        return sortDesc 
+          ? (bValue as number) - (aValue as number)
+          : (aValue as number) - (bValue as number);
+      });
+    }
+    
     // When transposed, totals are already included in the data as a row
-    // Set passedTotals to undefined to avoid double rendering
     passedTotals = undefined;
   }
 
@@ -971,7 +1028,7 @@ const transformProps = (
     width,
     isRawRecords: queryMode === QueryMode.Raw,
     data: passedData,
-    totals: passedTotals, // Use passedTotals instead of totals
+    totals: passedTotals,
     columns: passedColumns,
     serverPagination,
     metrics,
