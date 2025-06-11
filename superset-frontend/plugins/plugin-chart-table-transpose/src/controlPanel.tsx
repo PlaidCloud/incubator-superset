@@ -400,15 +400,26 @@ const config: ControlPanelConfig = {
         [
           {
             name: 'percent_metrics',
-            config: percentMetricsControl,
+            config: {
+              ...percentMetricsControl,
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                isAggMode({ controls }) && !Boolean(controls?.enable_pivot?.value)
+            },
           },
         ],
-        ['adhoc_filters'],
+        [{
+          name: 'adhoc_filters',
+          override: {
+            visibility: ({ controls }: ControlPanelsContainerProps) =>
+              isAggMode({ controls }) && !Boolean(controls?.enable_pivot?.value)
+          },
+        }],
         [
           {
             name: 'timeseries_limit_metric',
             override: {
-              visibility: isAggMode,
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                isAggMode({ controls }) && !Boolean(controls?.enable_pivot?.value),
               resetOnHide: false,
             },
           },
@@ -916,6 +927,14 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+      ],
+      visibility: ({ controls }: ControlPanelsContainerProps) =>
+        !Boolean(controls?.enable_pivot?.value)
+    },
+    {
+      label: t('Visual formatting'),
+      expanded: false,
+      controlSetRows: [
         [
           {
             name: 'custom_css',
@@ -939,7 +958,8 @@ const config: ControlPanelConfig = {
         showCalculationType: false,
         showFullChoices: false,
       }),
-      visibility: isAggMode,
+      visibility: ({ controls }: ControlPanelsContainerProps) =>
+        isAggMode({ controls }) && !Boolean(controls?.enable_pivot?.value)
     },
     PIVOT_CONTROLS,
   ],
