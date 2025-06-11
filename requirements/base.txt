@@ -90,10 +90,12 @@ cryptography==43.0.3
     #   authlib
     #   paramiko
     #   pyopenssl
-databend-driver==0.25.4
+databend-driver==0.27.4
     # via databend-sqlalchemy
-databend-sqlalchemy@git+https://github.com/PlaidCloud/databend-sqlalchemy.git@59e8dc8177e2400d0ace5b952d1f2d52e11c8205#egg=databend-sqlalchemy
-    # via plaidcloud-rpc
+databend-sqlalchemy @ git+https://github.com/PlaidCloud/databend-sqlalchemy.git@c463b77bee2b5a57bc871d2c109061d7fcf22454
+    # via
+    #   -r requirements/base.in
+    #   plaidcloud-rpc
 defusedxml==0.7.1
     # via
     #   odfpy
@@ -249,6 +251,7 @@ numpy==1.26.4
     #   bottleneck
     #   numexpr
     #   pandas
+    #   pyarrow
 odfpy==1.4.1
     # via pandas
 openpyxl==3.1.5
@@ -269,8 +272,9 @@ packaging==24.2
     #   marshmallow
     #   marshmallow-sqlalchemy
     #   plaidcloud-rpc
+    #   python-calamine
     #   shillelagh
-pandas==2.0.3
+pandas==2.3.0
     # via apache-superset (pyproject.toml)
 paramiko==3.5.0
     # via
@@ -282,7 +286,7 @@ pgsanity==0.2.9
     # via apache-superset (pyproject.toml)
 plaidcloud-config @ git+https://github.com/PlaidCloud/plaidcloud-config.git@306dd73d32d4de6692d2204806f3b0a835304592#subdirectory=python
     # via -r requirements/base.in
-plaidcloud-rpc @ git+https://github.com/PlaidCloud/plaid-rpc.git@e95bed8dab09db58c74a047f735c39b1773791c1
+plaidcloud-rpc @ git+https://github.com/PlaidCloud/plaid-rpc.git@4cf66b9f14265a6a230dd519d6bb5704d43baf90
     # via -r requirements/base.in
 platformdirs==3.8.1
     # via requests-cache
@@ -300,7 +304,9 @@ psycopg2-binary==2.9.9
     #   plaidcloud-rpc
     #   sqlalchemy-greenplum
 pyarrow==14.0.2
-    # via apache-superset (pyproject.toml)
+    # via
+    #   apache-superset (pyproject.toml)
+    #   plaidcloud-rpc
 pyasn1==0.6.1
     # via
     #   pyasn1-modules
@@ -327,6 +333,8 @@ pyrsistent==0.20.0
     # via jsonschema
 pysocks==1.7.1
     # via urllib3
+python-calamine==0.3.2
+    # via pandas
 python-dateutil==2.9.0.post0
     # via
     #   apache-superset (pyproject.toml)
@@ -450,8 +458,6 @@ tzdata==2024.2
     #   celery
     #   kombu
     #   pandas
-unicodecsv==0.14.1
-    # via plaidcloud-rpc
 url-normalize==1.4.3
     # via requests-cache
 urllib3==1.26.18
