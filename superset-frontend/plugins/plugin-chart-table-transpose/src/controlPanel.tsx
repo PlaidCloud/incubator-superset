@@ -407,13 +407,7 @@ const config: ControlPanelConfig = {
             },
           },
         ],
-        [{
-          name: 'adhoc_filters',
-          override: {
-            visibility: ({ controls }: ControlPanelsContainerProps) =>
-              isAggMode({ controls }) && !Boolean(controls?.enable_pivot?.value)
-          },
-        }],
+        ['adhoc_filters'],
         [
           {
             name: 'timeseries_limit_metric',
