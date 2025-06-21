@@ -973,59 +973,59 @@ const transformProps = (
     passedColumns = transposedColumns;
 
     // Apply sorting for transpose mode (after transpose)
-    if (sortDesc !== undefined && queryMode === QueryMode.Aggregate) {
-      // Create a map to store original positions of heading rows
-      const headingPositions = new Map<number, DataRecord>();
-      passedData.forEach((row, index) => {
-        if (row.__isHeading) {
-          headingPositions.set(index, row);
-        }
-      });
+    // if (sortDesc !== undefined && queryMode === QueryMode.Aggregate) {
+    //   // Create a map to store original positions of heading rows
+    //   const headingPositions = new Map<number, DataRecord>();
+    //   passedData.forEach((row, index) => {
+    //     if (row.__isHeading) {
+    //       headingPositions.set(index, row);
+    //     }
+    //   });
 
-      // Extract non-heading, non-summary rows for sorting
-      const dataRowsToSort = passedData.filter(row => !row.__isHeading && !row.__is_summary__);
-      const summaryRow = passedData.find(row => row.__is_summary__);
+    //   // Extract non-heading, non-summary rows for sorting
+    //   const dataRowsToSort = passedData.filter(row => !row.__isHeading && !row.__is_summary__);
+    //   const summaryRow = passedData.find(row => row.__is_summary__);
 
-      // Sort only the data rows
-      dataRowsToSort.sort((a, b) => {
-        const aValue = a.rowTotal;
-        const bValue = b.rowTotal;
+    //   // Sort only the data rows
+    //   dataRowsToSort.sort((a, b) => {
+    //     const aValue = a.rowTotal;
+    //     const bValue = b.rowTotal;
 
-        // Handle null/undefined values
-        if (aValue == null && bValue == null) return 0;
-        if (aValue == null) return 1;
-        if (bValue == null) return -1;
+    //     // Handle null/undefined values
+    //     if (aValue == null && bValue == null) return 0;
+    //     if (aValue == null) return 1;
+    //     if (bValue == null) return -1;
 
-        // Sort based on sortDesc
-        return sortDesc
-          ? (bValue as number) - (aValue as number)
-          : (aValue as number) - (bValue as number);
-      });
+    //     // Sort based on sortDesc
+    //     return sortDesc
+    //       ? (bValue as number) - (aValue as number)
+    //       : (aValue as number) - (bValue as number);
+    //   });
 
-      // Reconstruct the data array preserving heading positions
-      const sortedData: DataRecord[] = [];
-      let dataRowIndex = 0;
+    //   // Reconstruct the data array preserving heading positions
+    //   const sortedData: DataRecord[] = [];
+    //   let dataRowIndex = 0;
 
-      for (let i = 0; i < passedData.length; i++) {
-        if (headingPositions.has(i)) {
-          // Insert heading at its original position
-          sortedData.push(headingPositions.get(i)!);
-        } else if (!passedData[i].__is_summary__) {
-          // Insert next sorted data row
-          if (dataRowIndex < dataRowsToSort.length) {
-            sortedData.push(dataRowsToSort[dataRowIndex]);
-            dataRowIndex++;
-          }
-        }
-      }
+    //   for (let i = 0; i < passedData.length; i++) {
+    //     if (headingPositions.has(i)) {
+    //       // Insert heading at its original position
+    //       sortedData.push(headingPositions.get(i)!);
+    //     } else if (!passedData[i].__is_summary__) {
+    //       // Insert next sorted data row
+    //       if (dataRowIndex < dataRowsToSort.length) {
+    //         sortedData.push(dataRowsToSort[dataRowIndex]);
+    //         dataRowIndex++;
+    //       }
+    //     }
+    //   }
 
-      // Add summary row at the end if it exists
-      if (summaryRow) {
-        sortedData.push(summaryRow);
-      }
+    //   // Add summary row at the end if it exists
+    //   if (summaryRow) {
+    //     sortedData.push(summaryRow);
+    //   }
 
-      passedData = sortedData;
-    }
+    //   passedData = sortedData;
+    // }
 
     // When transposed, totals are already included in the data as a row
     passedTotals = undefined;
