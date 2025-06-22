@@ -234,12 +234,8 @@ export default function PluginChartMarimekko(props: PluginChartMarimekkoProps) {
     currentXStart += groupWidth;
   });
 
-  const getLabelColor = (color: {
-    r: number;
-    g: number;
-    b: number;
-    a: number;
-  }) => `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a})`;
+  const getLabelColor = (color: { r: number; g: number; b: number; a: number }) =>
+    `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a})`;
 
   // Calculate dynamic axisTick values and labels at the center of each block
   const xAxisValues: number[] = [];
@@ -257,12 +253,12 @@ export default function PluginChartMarimekko(props: PluginChartMarimekkoProps) {
   const yAxisMax = showPercentage
     ? 100
     : (() => {
-        const allHeights = Object.values(groups).map(group =>
-          group.values.reduce((acc, curr) => acc + curr.height, 0),
-        );
-        const maxHeight = Math.max(...allHeights);
-        return Math.round(maxHeight / 10) * 10;
-      })();
+      const allHeights = Object.values(groups).map(group =>
+        group.values.reduce((acc, curr) => acc + curr.height, 0),
+      );
+      const maxHeight = Math.max(...allHeights);
+      return Math.round(maxHeight / 10) * 10;
+    })();
 
   // Final ECharts option
   const option: echarts.EChartsOption = {
