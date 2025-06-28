@@ -496,9 +496,7 @@ function transposeData(
     col => !col.isMetric && !col.isPercentMetric,
   );
   // Use the key of the first dimension column to get header values from original data rows.
-  // Fallback to the first column's key if no clear dimension is found.
-  const headerKeyForOriginalData =
-    firstDimensionCol?.key || originalDataColumns[0]?.key;
+  const headerKeyForOriginalData = firstDimensionCol?.key;
 
   // Create a map to store formatters for each metric
   const metricFormatters = new Map<string, any>();
@@ -508,22 +506,28 @@ function transposeData(
     }
   });
 
-  const dynamicColumnHeaders = data.length > 0 ? data.map((originalDataRow, index) => {
-    const label = String(
-      headerKeyForOriginalData && originalDataRow[headerKeyForOriginalData] !== undefined
-        ? originalDataRow[headerKeyForOriginalData]
-        : `Value ${index + 1}`,
-    );
-    return {
-      key: label,  // Use label as key instead of `col_${index}`
-      label: label,
-      dataType: GenericDataType.Numeric, // Changed to Numeric since these will contain metric values
-      isMetric: false,
-      isPercentMetric: false,
-      isNumeric: true, // Changed to true since these columns will contain numeric values
-      // We'll assign formatters dynamically per cell based on the metric
-    };
-  }) : [];
+  const filteredDataForDynamicColumnHeaders = data.length > 0 ? data.filter(
+    originalDataRow =>
+      headerKeyForOriginalData &&
+      originalDataRow[headerKeyForOriginalData] !== undefined) : [];
+
+  const dynamicColumnHeaders = filteredDataForDynamicColumnHeaders.length > 0 ?
+    filteredDataForDynamicColumnHeaders.map((originalDataRow) => {
+      const label = headerKeyForOriginalData
+        ? String(originalDataRow[headerKeyForOriginalData])
+        : '';
+      return {
+        key: label,  // Use label as key instead of `col_${index}`
+        label: label,
+        dataType: GenericDataType.Numeric, // Changed to Numeric since these will contain metric values
+        isMetric: false,
+        isPercentMetric: false,
+        isNumeric: true, // Changed to true since these columns will contain numeric values
+        // We'll assign formatters dynamically per cell based on the metric
+      };
+    }) : []; // Filter out undefined values
+
+
 
   const transposedColumnHeaders: DataColumnMeta[] = [
     {
@@ -545,6 +549,57 @@ function transposeData(
     },
     ...dynamicColumnHeaders,
   ];
+
+  if (dynamicColumnHeaders.length === 0) {
+    // simple transpose if no dynamic headers
+    const originalRows = data.map(row => {
+      const newRow: DataRecord = {};
+      originalDataColumns.forEach(col => {
+        newRow[col.key] = row[col.key];
+        // Assign formatter if available
+        if (metricFormatters.has(col.key)) {
+          (newRow as any).__formatter__ = metricFormatters.get(col.key);
+        }
+      });
+      return newRow;
+    })
+
+    const newRows = formDataMetricsInOrder.map(metricOrHeadingItem => {
+      const newRow: DataRecord = {};
+      if (
+        typeof metricOrHeadingItem === 'object' &&
+        metricOrHeadingItem.emptyRowHeading === true
+      ) {
+        newRow.__isHeading = true;
+        // Set the heading text in the 'metric' column
+        newRow.metric = metricOrHeadingItem.emptyRowHeadingText || '';
+        // Blank out all other columns for this heading row
+        transposedColumnHeaders.forEach(headerCol => {
+          if (headerCol.key !== 'metric') { // Skip the 'metric' column as it has the heading
+            newRow[headerCol.key] = '';
+          }
+        });
+      } else {
+        const itemIdentifier = getMetricLabel(metricOrHeadingItem);
+        newRow.metric = itemIdentifier;
+        newRow.__isHeading = false;
+        originalRows.forEach(originalRow => {
+          newRow.rowTotal = originalRow[itemIdentifier];
+          // Assign formatter if available
+          if (metricFormatters.has(itemIdentifier)) {
+            (newRow as any).__formatter__ = metricFormatters.get(itemIdentifier);
+          }
+        });
+      }
+      return newRow;
+    });
+
+    return {
+      transposedData: newRows,
+      transposedColumns: transposedColumnHeaders,
+    };
+
+  }
 
   const transposedDataRows: DataRecord[] = [];
   // Object to store column sums if we need to show totals
@@ -667,7 +722,9 @@ function transposeData(
       }
       newRow.__isHeading = false;
       // Always set rowTotal for non-heading rows
-      newRow.rowTotal = currentRowHasNumeric ? currentRowSum : null;
+      if (dynamicColumnHeaders.length > 0) {
+        newRow.rowTotal = currentRowHasNumeric ? currentRowSum : null;
+      }
       // Sum for the rowTotal column
       if (showTotals && currentRowHasNumeric) {
         columnSums.rowTotal = (columnSums.rowTotal || 0) + currentRowSum;
