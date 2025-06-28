@@ -500,6 +500,21 @@ const config: ControlPanelConfig = {
               resetOnHide: false,
             },
           },
+          {
+            name: 'summary_position',
+            config: {
+              type: 'RadioButtonControl',
+              label: t('Summary position'),
+              default: 'bottom',
+              options: [
+                ['top', t('Top')],
+                ['bottom', t('Bottom')],
+              ],
+              description: t('Choose whether to display the summary at the top or bottom of the table.'),
+              visibility: ({ controls }) => Boolean(controls?.show_totals?.value),
+              renderTrigger: true,
+            },
+          },
         ],
       ],
     },
