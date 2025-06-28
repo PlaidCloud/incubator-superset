@@ -458,6 +458,7 @@ function createFormatter(config: {
     });
   }
 
+
   if (config.smallNumberFormat && config.numberFormat) {
     return createSmartNumberFormatter({
       id: config.numberFormat,
@@ -752,6 +753,7 @@ const transformProps = (
     enable_pivot,
     custom_css,
     timeseries_limit_metric,
+    summary_position = 'bottom',
   } = formData;
   const isUsingTimeComparison =
     !isEmpty(time_compare) &&
@@ -972,60 +974,18 @@ const transformProps = (
     passedData = transposedData;
     passedColumns = transposedColumns;
 
-    // Apply sorting for transpose mode (after transpose)
-    // if (sortDesc !== undefined && queryMode === QueryMode.Aggregate) {
-    //   // Create a map to store original positions of heading rows
-    //   const headingPositions = new Map<number, DataRecord>();
-    //   passedData.forEach((row, index) => {
-    //     if (row.__isHeading) {
-    //       headingPositions.set(index, row);
-    //     }
-    //   });
+    // Find and remove the summary row if present
+    let summaryRowIdx = transposedData.findIndex(row => row.__is_summary__);
+    let summaryRow = summaryRowIdx !== -1 ? transposedData.splice(summaryRowIdx, 1)[0] : undefined;
 
-    //   // Extract non-heading, non-summary rows for sorting
-    //   const dataRowsToSort = passedData.filter(row => !row.__isHeading && !row.__is_summary__);
-    //   const summaryRow = passedData.find(row => row.__is_summary__);
-
-    //   // Sort only the data rows
-    //   dataRowsToSort.sort((a, b) => {
-    //     const aValue = a.rowTotal;
-    //     const bValue = b.rowTotal;
-
-    //     // Handle null/undefined values
-    //     if (aValue == null && bValue == null) return 0;
-    //     if (aValue == null) return 1;
-    //     if (bValue == null) return -1;
-
-    //     // Sort based on sortDesc
-    //     return sortDesc
-    //       ? (bValue as number) - (aValue as number)
-    //       : (aValue as number) - (bValue as number);
-    //   });
-
-    //   // Reconstruct the data array preserving heading positions
-    //   const sortedData: DataRecord[] = [];
-    //   let dataRowIndex = 0;
-
-    //   for (let i = 0; i < passedData.length; i++) {
-    //     if (headingPositions.has(i)) {
-    //       // Insert heading at its original position
-    //       sortedData.push(headingPositions.get(i)!);
-    //     } else if (!passedData[i].__is_summary__) {
-    //       // Insert next sorted data row
-    //       if (dataRowIndex < dataRowsToSort.length) {
-    //         sortedData.push(dataRowsToSort[dataRowIndex]);
-    //         dataRowIndex++;
-    //       }
-    //     }
-    //   }
-
-    //   // Add summary row at the end if it exists
-    //   if (summaryRow) {
-    //     sortedData.push(summaryRow);
-    //   }
-
-    //   passedData = sortedData;
-    // }
+    // Insert summary row at the desired position
+    if (summaryRow) {
+      if (summary_position === 'top') {
+        transposedData.unshift(summaryRow);
+      } else {
+        transposedData.push(summaryRow);
+      }
+    }
 
     // When transposed, totals are already included in the data as a row
     passedTotals = undefined;
