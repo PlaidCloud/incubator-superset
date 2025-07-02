@@ -53,6 +53,7 @@ export type TableColumnConfig = {
   boldText?: boolean;
   italicText?: boolean;
   fontSize?: number;
+  disableSortBy?: boolean;
 };
 
 export interface DataColumnMeta {

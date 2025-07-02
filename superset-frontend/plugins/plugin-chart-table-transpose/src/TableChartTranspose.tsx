@@ -679,7 +679,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
   );
 
   const getColumnConfigs = useCallback(
-    (column: DataColumnMeta, i: number): ColumnWithLooseAccessor<D> => {
+    (column: DataColumnMeta, i: number): ColumnWithLooseAccessor<D> & { label: string } => {
       const {
         key,
         label,
@@ -1046,6 +1046,8 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         ) : undefined,
         sortDescFirst: sortDesc,
         sortType: getSortTypeByDataType(dataType),
+        disableSortBy: config.disableSortBy || false,
+        label
       };
     },
     [
