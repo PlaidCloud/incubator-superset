@@ -49,9 +49,10 @@ export type TableColumnConfig = {
   colorPositiveNegative?: boolean;
   truncateLongCells?: boolean;
   currencyFormat?: Currency;
-  indent?: number;      // Add this
-  boldText?: boolean;   // Add this
-  italicText?: boolean; // Add this
+  indent?: number; 
+  boldText?: boolean;
+  italicText?: boolean;
+  fontSize?: number;
 };
 
 export interface DataColumnMeta {
