@@ -109,7 +109,7 @@ export const TRANSPOSE_ROW_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {
       { name: 'horizontalAlign', override: { defaultValue: 'left' } },
     ],
     ['boldText', 'italicText'],
-    ['indent']
+    ['indent', 'fontSize']
   ],
   [GenericDataType.Numeric]: [
     {

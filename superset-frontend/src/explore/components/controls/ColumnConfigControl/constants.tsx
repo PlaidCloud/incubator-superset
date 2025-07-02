@@ -41,7 +41,8 @@ export type SharedColumnConfigProp =
   | 'currencyFormat'
   | 'indent'
   | 'boldText'
-  | 'italicText';
+  | 'italicText'
+  | 'fontSize';
 
 const d3NumberFormat: ControlFormItemSpec<'Select'> = {
   allowNewOptions: true,
@@ -156,6 +157,22 @@ const currencyFormat: ControlFormItemSpec<'CurrencyControl'> = {
   debounceDelay: 200,
 };
 
+const fontSize: ControlFormItemSpec = {
+  controlType: 'Input',
+  label: t('Font Size (px)'),
+  description: t('Keep Empty for default size'),
+  width: 120,
+  debounceDelay: 400,
+  validators: [
+    (value: any) => {
+      if (value && (isNaN(Number(value)) || Number(value) < 0)) {
+        return t('Font Size must be a positive number');
+      }
+      return false;
+    },
+  ],
+};
+
 const indent: ControlFormItemSpec = {
   controlType: 'Input',
   label: t('Indent (px)'),
@@ -213,6 +230,7 @@ export const SHARED_COLUMN_CONFIG_PROPS = {
   indent,
   boldText,
   italicText,
+  fontSize,
 };
 
 export const DEFAULT_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {
