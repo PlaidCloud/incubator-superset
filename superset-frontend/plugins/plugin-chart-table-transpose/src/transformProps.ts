@@ -537,6 +537,9 @@ function transposeData(
       isMetric: false,
       isPercentMetric: false,
       isNumeric: false,
+      config: {
+        disableSortBy: true,
+      }
     },
     // Always add the "Total" column header for row totals
     {
