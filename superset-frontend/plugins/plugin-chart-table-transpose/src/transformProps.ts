@@ -799,7 +799,7 @@ const transformProps = (
     page_length: pageLength,
     server_pagination: serverPagination = false,
     server_page_length: serverPageLength = 10,
-    order_desc: sortDesc = false,
+    order_sort: sortOrder = false,
     query_mode: queryMode,
     show_totals: showTotals,
     conditional_formatting: conditionalFormatting,
@@ -999,7 +999,7 @@ const transformProps = (
   let passedTotals = totals;
 
   // Apply sorting for non-transpose mode (before transpose)
-  if (!enable_pivot && sortDesc !== undefined && queryMode === QueryMode.Aggregate && timeseries_limit_metric) {
+  if (!enable_pivot && sortOrder !== "none" && queryMode === QueryMode.Aggregate && timeseries_limit_metric) {
     // Find the metric column to sort by
     const sortMetricLabel = getMetricLabel(timeseries_limit_metric);
     const sortColumn = passedColumns.find(col => col.key === sortMetricLabel);
@@ -1015,7 +1015,7 @@ const transformProps = (
         if (bValue == null) return -1;
 
         // Sort based on sortDesc
-        return sortDesc
+        return sortOrder === "desc"
           ? (bValue as number) - (aValue as number)
           : (aValue as number) - (bValue as number);
       });
@@ -1035,7 +1035,7 @@ const transformProps = (
     passedColumns = transposedColumns;
 
     // Apply sorting for transpose mode (after transpose)
-    if (sortDesc !== undefined) {
+    if (sortOrder !== "none") {
 
       // In transpose mode, find the metric row that corresponds to the sort metric
       const sortableRows = passedData.filter(row =>
@@ -1069,7 +1069,7 @@ const transformProps = (
           if (bValue == null) return -1;
 
           // Sort based on sortDesc
-          return sortDesc
+          return sortOrder === "desc"
             ? (bValue as number) - (aValue as number)
             : (aValue as number) - (bValue as number);
         });
@@ -1149,7 +1149,7 @@ const transformProps = (
     alignPositiveNegative,
     colorPositiveNegative,
     showCellBars,
-    sortDesc,
+    sortDesc: sortOrder,
     includeSearch,
     rowCount,
     pageSize: serverPagination
