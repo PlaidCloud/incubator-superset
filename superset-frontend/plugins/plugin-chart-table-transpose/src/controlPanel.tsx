@@ -473,15 +473,21 @@ const config: ControlPanelConfig = {
         ],
         [
           {
-            name: 'order_desc',
+            name: 'order_sort',
             config: {
-              type: 'CheckboxControl',
-              label: t('Sort descending'),
-              default: true,
+              type: 'RadioButtonControl',
+              label: t('Sort order'),
+              default: "none",
+              options: [
+                ["none", t('None')],
+                ["asc", t('Ascending')],
+                ["desc", t('Descending')],
+              ],
               description: t(
-                'If enabled, this control sorts the results/values descending, otherwise it sorts the results ascending.',
+                'Choose the sort order for the results. None means no sorting will be applied.',
               ),
-              visibility: isAggMode,
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                isAggMode({ controls }) && Boolean(controls?.enable_pivot?.value),
               resetOnHide: false,
             },
           },
