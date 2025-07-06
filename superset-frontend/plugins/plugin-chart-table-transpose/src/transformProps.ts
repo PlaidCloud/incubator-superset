@@ -1034,6 +1034,73 @@ const transformProps = (
     passedData = transposedData;
     passedColumns = transposedColumns;
 
+    // Apply sorting for transpose mode (after transpose)
+    if (sortDesc !== undefined) {
+
+      // In transpose mode, find the metric row that corresponds to the sort metric
+      const sortableRows = passedData.filter(row =>
+        !row.__isHeading && !row.__is_summary__
+      );
+
+      // If we found the metric row, sort all non-heading/non-summary rows by rowTotal
+      if (sortableRows.length > 0) {
+        const headingRowsIndex: {index: number, row: DataRecord}[] = [];
+        passedData.filter((row, index) => {
+          if (row.__isHeading) {
+            headingRowsIndex.push({
+              index,
+              row
+            });
+            return true;
+          }
+          return false;
+        });
+        const summaryRows = passedData.filter(row => row.__is_summary__);
+        const dataRows = passedData.filter(row => !row.__isHeading && !row.__is_summary__);
+
+        const sortedDataRows = [...dataRows].sort((a, b) => {
+          // Sort by rowTotal (which represents the total across all segments)
+          const aValue = a.rowTotal;
+          const bValue = b.rowTotal;
+
+          // Handle null/undefined values
+          if (aValue == null && bValue == null) return 0;
+          if (aValue == null) return 1;
+          if (bValue == null) return -1;
+
+          // Sort based on sortDesc
+          return sortDesc
+            ? (bValue as number) - (aValue as number)
+            : (aValue as number) - (bValue as number);
+        });
+
+        let headingSummaryIndexPointer = 0;
+        const sortedData: DataRecord[] = [];
+        for(let i = 0; i < passedData.length; i++) {
+          // prioritize heading rows, then data rows, then summary rows for same index
+          if (headingRowsIndex[headingSummaryIndexPointer] && i === headingRowsIndex[headingSummaryIndexPointer].index) {
+            sortedData.push(headingRowsIndex[headingSummaryIndexPointer].row);
+            headingSummaryIndexPointer++;
+          }
+          else if (sortedDataRows[i - headingRowsIndex.length] && i >= headingRowsIndex.length && i < headingRowsIndex.length + sortedDataRows.length) {
+            sortedData.push(sortedDataRows[i - headingRowsIndex.length]);
+          }
+        }
+
+        // Reconstruct the data maintaining heading positions and moving summary to desired position
+        passedData = sortedData;
+
+        // Handle summary row positioning separately
+        if (summaryRows.length > 0) {
+          if (summary_position === 'top') {
+            passedData = [...summaryRows, ...passedData];
+          } else {
+            passedData = [...passedData, ...summaryRows];
+          }
+        }
+      }
+    }
+
     // Find and remove the summary row if present
     let summaryRowIdx = transposedData.findIndex(row => row.__is_summary__);
     let summaryRow = summaryRowIdx !== -1 ? transposedData.splice(summaryRowIdx, 1)[0] : undefined;
