@@ -42,8 +42,7 @@ export type SharedColumnConfigProp =
   | 'indent'
   | 'boldText'
   | 'italicText'
-  | 'fontSize'
-  | 'indentNegative';
+  | 'fontSize';
 
 const d3NumberFormat: ControlFormItemSpec<'Select'> = {
   allowNewOptions: true,
@@ -192,24 +191,6 @@ const indent: ControlFormItemSpec = {
   ],
 };
 
-const indentNegative: ControlFormItemSpec = {
-  controlType: 'Input',
-  label: t('Indent (px)'),
-  description: t('Text indentation in pixels, use negative value to indent from right'),
-  placeholder: '0',
-  width: 120,
-  defaultValue: 0,
-  debounceDelay: 400,
-  validators: [
-    (value: any) => {
-      if (value && (isNaN(Number(value)))) {
-        return t('Indent must be a number');
-      }
-      return false;
-    },
-  ],
-};
-
 const boldText: ControlFormItemSpec = {
   controlType: 'Checkbox',
   label: t('Bold'),
@@ -250,7 +231,6 @@ export const SHARED_COLUMN_CONFIG_PROPS = {
   boldText,
   italicText,
   fontSize,
-  indentNegative,
 };
 
 export const DEFAULT_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {
