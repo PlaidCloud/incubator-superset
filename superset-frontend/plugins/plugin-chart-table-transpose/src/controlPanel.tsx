@@ -116,6 +116,7 @@ export const TRANSPOSE_ROW_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {
       tab: t('Display'),
       children: [
         [
+          'indent',
           { name: 'horizontalAlign', override: { defaultValue: 'right' } },
         ],
       ],
