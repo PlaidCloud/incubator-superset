@@ -779,7 +779,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           const isRowTotal = value === row.original.rowTotal;
           const isBoldText = isFirstColumn && rowConfig?.[row.original.metric as string]?.boldText || false;
           const isItalicText = isFirstColumn && rowConfig?.[row.original.metric as string]?.italicText || false;
-          const indentNegative = isFirstColumn && rowConfig?.[row.original.metric as string]?.indentNegative || 0;
+          const indent = isFirstColumn && rowConfig?.[row.original.metric as string]?.indent || 0;
           const fontSize = isFirstColumn && rowConfig?.[row.original.metric as string]?.fontSize || null;
           const isSummaryRowFirstColumn = (row.original.__is_summary__ || false) && i === 0;
           const rowTextAlign = isFirstColumn && rowConfig?.[row.original.metric as string]?.horizontalAlign || null;
@@ -825,25 +825,17 @@ export default function TableChart<D extends DataRecord = DataRecord>(
                 : '';
           }
 
-          const StyledCell = styled.td`
+            const StyledCell = styled.td`
             text-align: ${rowTextAlign || sharedStyle.textAlign};;
             white-space: ${value instanceof Date ? 'nowrap' : undefined};
             position: relative;
             background: ${backgroundColor || undefined};
-            box-sizing: border-box;
+            width: ${columnWidth ? columnWidth - indent : 'auto'};
             ${(isBoldText || isRowTotal || isSummaryRowFirstColumn) ? 'font-weight: bold;' : ''}
             ${isItalicText ? 'font-style: italic;' : ''}
-            ${indentNegative !== null && indentNegative !== undefined && i === 0 ? (() => {
-              // Convert pixel indent to percentage of cell width
-              const baseCellWidth = columnWidth || 150; // Default width
-              const indentPercent = (Math.abs(indentNegative) / baseCellWidth) * 100;
-
-              return indentNegative >= 0
-                ? `padding-left: ${indentPercent}% !important;`
-                : `padding-right: ${indentPercent}% !important;`;
-            })() : ''}
+            ${indent !== null && indent !== undefined && indent > 0 && i === 0 ? `padding-left: ${indent}px !important;` : ''}
             ${fontSize ? `font-size: ${fontSize}px !important;` : ''}
-          `;
+            `;
 
           const cellBarStyles = css`
             position: absolute;
