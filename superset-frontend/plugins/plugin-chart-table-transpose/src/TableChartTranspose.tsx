@@ -779,7 +779,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           const isRowTotal = value === row.original.rowTotal;
           const isBoldText = isFirstColumn && rowConfig?.[row.original.metric as string]?.boldText || false;
           const isItalicText = isFirstColumn && rowConfig?.[row.original.metric as string]?.italicText || false;
-          const indent = isFirstColumn && rowConfig?.[row.original.metric as string]?.indent || 0;
+          const indentNegative = isFirstColumn && rowConfig?.[row.original.metric as string]?.indentNegative || 0;
           const fontSize = isFirstColumn && rowConfig?.[row.original.metric as string]?.fontSize || null;
           const isSummaryRowFirstColumn = (row.original.__is_summary__ || false) && i === 0;
           const rowTextAlign = isFirstColumn && rowConfig?.[row.original.metric as string]?.horizontalAlign || null;
@@ -830,9 +830,18 @@ export default function TableChart<D extends DataRecord = DataRecord>(
             white-space: ${value instanceof Date ? 'nowrap' : undefined};
             position: relative;
             background: ${backgroundColor || undefined};
+            box-sizing: border-box;
             ${(isBoldText || isRowTotal || isSummaryRowFirstColumn) ? 'font-weight: bold;' : ''}
             ${isItalicText ? 'font-style: italic;' : ''}
-            ${indent && i === 0 ? `padding-left: ${indent}px !important;` : ''}
+            ${indentNegative !== null && indentNegative !== undefined && i === 0 ? (() => {
+              // Convert pixel indent to percentage of cell width
+              const baseCellWidth = columnWidth || 150; // Default width
+              const indentPercent = (Math.abs(indentNegative) / baseCellWidth) * 100;
+
+              return indentNegative >= 0
+                ? `padding-left: ${indentPercent}% !important;`
+                : `padding-right: ${indentPercent}% !important;`;
+            })() : ''}
             ${fontSize ? `font-size: ${fontSize}px !important;` : ''}
           `;
 
