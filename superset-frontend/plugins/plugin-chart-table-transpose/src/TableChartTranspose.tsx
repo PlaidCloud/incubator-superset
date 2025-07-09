@@ -793,6 +793,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           const isSummaryRowFirstColumn = (row.original.__is_summary__ || false) && i === 0;
           const rowTextAlign = isFirstColumn && rowConfig?.[row.original.metric as string]?.horizontalAlign || null;
           const textColor = isFirstColumn && rowConfig?.[row.original.metric as string]?.textColor || null; // Add this line
+          const isUnderlineText = isFirstColumn && rowConfig?.[row.original.metric as string]?.underlineText || false; // Add this line
 
           // Column Text Align takes preceddence over Row Text Align
           const columnTextAlign = transposeColumnConfig?.[column.key]?.horizontalAlign;
@@ -850,6 +851,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
             color: ${textColor || 'inherit'};
             ${(isBoldText || isRowTotal || isSummaryRowFirstColumn) ? 'font-weight: bold;' : ''}
             ${isItalicText ? 'font-style: italic;' : ''}
+            ${isUnderlineText ? 'text-decoration: underline;' : ''} 
             ${indent !== null && indent !== undefined && indent > 0 && i === 0 ? `padding-left: ${indent}px !important;` : ''}
             ${fontSize ? `font-size: ${fontSize}px !important;` : ''}
             `;
