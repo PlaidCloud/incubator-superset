@@ -155,6 +155,7 @@ export interface TableChartTransformedProps<D extends DataRecord = DataRecord> {
   startDateOffset?: string;
   rowConfig?: any;
   custom_css?: string;
+  transposeColumnConfig?: Record<string, TableColumnConfig>;
 }
 
 export enum ColorSchemeEnum {
