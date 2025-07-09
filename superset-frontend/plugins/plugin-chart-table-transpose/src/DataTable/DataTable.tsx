@@ -25,6 +25,8 @@ import {
   CSSProperties,
   DragEvent,
   useEffect,
+  useMemo,
+  useState,
 } from 'react';
 
 import {
@@ -38,6 +40,7 @@ import {
   FilterType,
   IdType,
   Row,
+  Column,
 } from 'react-table';
 import { matchSorter, rankings } from 'match-sorter';
 import { typedMemo, usePrevious } from '@superset-ui/core';
@@ -139,6 +142,8 @@ export default typedMemo(function DataTable<D extends object>({
   const wrapperRef = userWrapperRef || defaultWrapperRef;
   const paginationData = JSON.stringify(serverPaginationData);
 
+  const [currentSortBy, setCurrentSortBy] = useState<Array<{ id: string, desc: boolean }>>([]);
+
   const defaultGetTableSize = useCallback(() => {
     if (wrapperRef.current) {
       // `initialWidth` and `initialHeight` could be also parameters like `100%`
@@ -176,6 +181,108 @@ export default typedMemo(function DataTable<D extends object>({
     [],
   );
 
+  // Now create processedData using the sortBy state
+  const processedData = useMemo(() => {
+    // Check if we have transposed data (contains __isHeading or __is_summary__)
+    const hasTransposedData = data.some(row =>
+      ('__isHeading' in row && row.__isHeading) ||
+      ('__is_summary__' in row && row.__is_summary__)
+    );
+
+    // If not transposed data, return original data for normal React Table sorting
+    if (!hasTransposedData) {
+      return data;
+    }
+
+    // Only apply custom sorting logic for transposed data
+    const frozenRows: { row: D; index: number }[] = [];
+    const sortableRows: { row: D; index: number }[] = [];
+
+    data.forEach((row, index) => {
+      if (
+        ('__isHeading' in row && row.__isHeading) ||
+        ('__is_summary__' in row && row.__is_summary__)
+      ) {
+        frozenRows.push({ row, index });
+      } else {
+        sortableRows.push({ row, index });
+      }
+    });
+
+    // Apply sorting manually to sortableRows
+    let sortedRows = [...sortableRows];
+
+    if (currentSortBy && currentSortBy.length > 0) {
+      sortedRows.sort((a, b) => {
+        // Process multiple sort columns
+        for (const sortColumn of currentSortBy) {
+          const { id, desc } = sortColumn;
+
+          // Find the column definition to get its sortType
+          const column = columns.find(
+            col => col.id === id || col.accessor === id,
+          ) as Column<D> & { label: string };
+          const sortType = column?.sortType;
+          const columnLabel = column.label === "All Segments" ? "rowTotal" : column.label;
+
+          const aVal = a.row[columnLabel as keyof D];
+          const bVal = b.row[columnLabel as keyof D];
+
+          // Handle null/undefined values
+          if (aVal == null && bVal == null) continue; // Equal, check next sort column
+          if (aVal == null) return desc ? -1 : 1;
+          if (bVal == null) return desc ? 1 : -1;
+
+          let compareResult = 0;
+
+          // Apply sort based on sortType
+          if (sortType === 'datetime') {
+            const aTime = new Date(aVal as any).getTime();
+            const bTime = new Date(bVal as any).getTime();
+            compareResult = aTime - bTime;
+          } else if (
+            sortType === 'number' ||
+            (typeof aVal === 'number' && typeof bVal === 'number')
+          ) {
+            compareResult = (aVal as number) - (bVal as number);
+          } else {
+            // Default string comparison
+            compareResult = String(aVal).localeCompare(String(bVal));
+          }
+
+          // Apply desc order if needed
+          if (compareResult !== 0) {
+            return desc ? -compareResult : compareResult;
+          }
+          // If equal, continue to next sort column
+        }
+        return 0;
+      });
+    }
+
+    // Reconstruct the data maintaining frozen row positions
+    const result: D[] = [];
+    let sortableIndex = 0;
+
+    data.forEach(originalRow => {
+      if (
+        ('__isHeading' in originalRow && originalRow.__isHeading) ||
+        ('__is_summary__' in originalRow && originalRow.__is_summary__)
+      ) {
+        // Keep frozen rows at their original positions
+        result.push(originalRow);
+      } else {
+        // Use sorted sortable rows
+        if (sortableIndex < sortedRows.length) {
+          result.push(sortedRows[sortableIndex].row);
+          sortableIndex++;
+        }
+      }
+    });
+
+    return result;
+  }, [data, currentSortBy, columns]); // Include sortBy and columns in dependencies
+
   const {
     getTableProps,
     getTableBodyProps,
@@ -191,20 +298,37 @@ export default typedMemo(function DataTable<D extends object>({
     wrapStickyTable,
     setColumnOrder,
     allColumns,
-    state: { pageIndex, pageSize, globalFilter: filterValue, sticky = {} },
+    state: { pageIndex, pageSize, globalFilter: filterValue, sticky = {}, sortBy },
   } = useTable<D>(
     {
       columns,
-      data,
+      data: processedData,
       initialState,
       getTableSize: defaultGetTableSize,
       globalFilter: defaultGlobalFilter,
       sortTypes,
       autoResetSortBy: !isEqual(columnNames, previousColumnNames),
+      // Only use manual sorting for transposed data
+      manualSortBy: data.some(row =>
+        ('__isHeading' in row && row.__isHeading) ||
+        ('__is_summary__' in row && row.__is_summary__)
+      ),
       ...moreUseTableOptions,
     },
     ...tableHooks,
   );
+
+  // Only update currentSortBy for transposed data
+  useEffect(() => {
+    const hasTransposedData = data.some(row =>
+      ('__isHeading' in row && row.__isHeading) ||
+      ('__is_summary__' in row && row.__is_summary__)
+    );
+
+    if (hasTransposedData && sortBy && !isEqual(sortBy, currentSortBy)) {
+      setCurrentSortBy(sortBy.map(({ id, desc }) => ({ id, desc: desc ?? false })));
+    }
+  }, [sortBy, currentSortBy, data]);
 
   useEffect(() => {
     if (custom_css) {
@@ -305,13 +429,13 @@ export default typedMemo(function DataTable<D extends object>({
       </thead>
       <tbody {...getTableBodyProps()}>
         {page && page.length > 0 ? (
-          page.map(row => {
+          page.map((row, rowIndex) => {
             prepareRow(row);
             const { key: rowKey, ...rowProps } = row.getRowProps();
             return (
-              <tr key={rowKey || row.id} {...rowProps} role="row">
-                {row.cells.map(cell =>
-                  cell.render('Cell', { key: cell.column.id }),
+              <tr key={rowKey || `row-${rowIndex}`} {...rowProps} role="row">
+                {row.cells.map((cell, cellIndex) =>
+                  cell.render('Cell', { key: cell.column.id || `cell-${cellIndex}` }),
                 )}
               </tr>
             );

@@ -107,17 +107,29 @@ export const TRANSPOSE_ROW_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {
   [GenericDataType.String]: [
     [
       { name: 'horizontalAlign', override: { defaultValue: 'left' } },
+      {
+        name: 'textColor', override: {
+          description: t('Text color for the metric header (e.g., #ffffff, rgba(255,255,255,0.5), beige, black, or transparent)'),
+        }
+      }
     ],
-    ['boldText', 'italicText'],
-    ['indent']
+    ['boldText', 'italicText', 'underlineText'],
+    ['indent', 'fontSize', 'rowColor'],
   ],
   [GenericDataType.Numeric]: [
     {
       tab: t('Display'),
       children: [
         [
-          { name: 'horizontalAlign', override: { defaultValue: 'right' } },
+          { name: 'horizontalAlign', override: { defaultValue: 'right' }, },
+          {
+            name: 'textColor', override: {
+              description: t('Text color for the metric header (e.g., #ffffff, rgba(255,255,255,0.5), beige, black, or transparent)'),
+            }
+          }
         ],
+        ['boldText', 'italicText', 'underlineText'],
+        ['indent', 'fontSize', 'rowColor'],
       ],
     },
     {
@@ -128,6 +140,14 @@ export const TRANSPOSE_ROW_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {
         ['currencyFormat'],
       ],
     },
+  ],
+};
+
+export const TRANSPOSE_COLUMN_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {
+  [GenericDataType.Numeric]: [
+    [
+      { name: 'horizontalAlign', override: { defaultValue: 'right' } },
+    ],
   ],
 };
 
@@ -473,16 +493,55 @@ const config: ControlPanelConfig = {
         ],
         [
           {
-            name: 'order_desc',
+            name: 'order_sort',
+            config: {
+              type: 'RadioButtonControl',
+              label: t('Sort Row order'),
+              default: "none",
+              options: [
+                ["none", t('None')],
+                ["asc", t('Ascending')],
+                ["desc", t('Descending')],
+              ],
+              description: t(
+                'Choose the sort order for the rows. None means no sorting will be applied.',
+              ),
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                isAggMode({ controls }) && Boolean(controls?.enable_pivot?.value),
+              resetOnHide: false,
+            },
+          },
+        ],
+        [
+          {
+            name: 'show_all_segments',
             config: {
               type: 'CheckboxControl',
-              label: t('Sort descending'),
+              label: t('Show All Segments column'),
               default: true,
-              description: t(
-                'If enabled, this control sorts the results/values descending, otherwise it sorts the results ascending.',
-              ),
-              visibility: isAggMode,
+              description: t('Show or hide the All Segments total column in transposed table'),
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                isAggMode({ controls }) && Boolean(controls?.enable_pivot?.value),
               resetOnHide: false,
+            },
+          },
+          {
+            name: 'all_segments_position',
+            config: {
+              type: 'RadioButtonControl',
+              label: t('All Segments position'),
+              default: 'start',
+              options: [
+                ['start', t('Start')],
+                ['end', t('End')],
+              ],
+              description: t('Choose whether to display the All Segments column at the start or end of the table'),
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                isAggMode({ controls }) &&
+                Boolean(controls?.enable_pivot?.value) &&
+                Boolean(controls?.show_all_segments?.value),
+              resetOnHide: false,
+              renderTrigger: true,
             },
           },
         ],
@@ -500,7 +559,42 @@ const config: ControlPanelConfig = {
               resetOnHide: false,
             },
           },
+          {
+            name: 'summary_position',
+            config: {
+              type: 'RadioButtonControl',
+              label: t('Summary position'),
+              default: 'bottom',
+              options: [
+                ['top', t('Top')],
+                ['bottom', t('Bottom')],
+              ],
+              description: t('Choose whether to display the summary at the top or bottom of the table.'),
+              visibility: ({ controls }) => Boolean(controls?.show_totals?.value),
+              renderTrigger: true,
+            },
+          },
         ],
+        [{
+          name: 'column_sort_order',
+          config: {
+            type: 'RadioButtonControl',
+            label: t('Column sort order'),
+            default: 'none',
+            options: [
+              ['none', t('None')],
+              ['asc', t('Ascending (A-Z)')],
+              ['desc', t('Descending (Z-A)')],
+            ],
+            description: t('Sort columns, except "metrics" and "All Segments"'),
+            visibility: ({ controls }: ControlPanelsContainerProps) =>
+              isAggMode({ controls }) &&
+              Boolean(controls?.enable_pivot?.value),
+            resetOnHide: false,
+            renderTrigger: true,
+          },
+        },
+        ]
       ],
     },
     {
@@ -764,6 +858,105 @@ const config: ControlPanelConfig = {
                 return {
                   columnsPropsObject: { colnames: rowNames, coltypes: rowTypes },
                   configFormLayout: TRANSPOSE_ROW_CONFIG_FORM_LAYOUT,
+                };
+              },
+            },
+          },
+        ],
+        [
+          {
+            name: 'transpose_column_config',
+            config: {
+              type: 'ColumnConfigControl',
+              label: t('Customize transposed columns'),
+              description: t('Customize alignment and formatting for each transposed column'),
+              width: 400,
+              height: 320,
+              renderTrigger: true,
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                Boolean(controls?.enable_pivot?.value),
+              shouldMapStateToProps() {
+                return true;
+              },
+              mapStateToProps(explore, _, chart) {
+                const enablePivot = explore?.form_data?.enable_pivot;
+
+                if (!enablePivot) {
+                  return {
+                    columnsPropsObject: { colnames: [], coltypes: [] },
+                    configFormLayout: TRANSPOSE_CONFIG_FORM_LAYOUT,
+                  };
+                }
+
+                // Get the groupby columns to determine what will become column headers
+                const groupbyColumns = ensureIsArray(explore?.form_data?.groupby);
+                const groupbyColumnNames = groupbyColumns.map(col => {
+                  if (typeof col === 'string') {
+                    return col;
+                  } else if (col && typeof col === 'object') {
+                    if (isPhysicalColumn(col)) {
+                      return col;
+                    } else if (isAdhocColumn(col)) {
+                      return col.label || 'Column';
+                    }
+                    return 'Column';
+                  }
+                  return 'Column';
+                });
+
+                // Get the actual data values that will become column headers
+                const dataValues = chart?.queriesResponse?.[0]?.data || [];
+                const firstGroupbyColumn = groupbyColumnNames[0];
+
+                // Extract unique values from the first groupby column
+                const uniqueColumnValues = firstGroupbyColumn && dataValues.length > 0
+                  ? [...new Set(dataValues.map((row: any) => row[firstGroupbyColumn]))]
+                    .filter(val => val !== null && val !== undefined)
+                    .map(val => String(val))
+                    .sort() // Sort alphabetically for consistent ordering
+                  : [];
+
+                // Build the transposed column structure
+                const colnames: string[] = []; // First column is always 'metric'
+                const coltypes: GenericDataType[] = [];
+
+                // Add All Segments column if enabled
+                if (explore?.form_data?.show_all_segments !== false) {
+                  colnames.push('All Segments');
+                  coltypes.push(GenericDataType.Numeric);
+                }
+
+                // Add columns for each unique value from the groupby
+                uniqueColumnValues.forEach(colValue => {
+                  colnames.push(colValue);
+                  coltypes.push(GenericDataType.Numeric);
+                });
+
+                // Handle time comparison if enabled
+                const timeComparisonStatus = !!explore?.controls?.time_compare?.value;
+                if (timeComparisonStatus) {
+                  const updatedColnames: string[] = [];
+                  const updatedColtypes: GenericDataType[] = [];
+
+                  colnames.forEach((colname, index) => {
+                    if (coltypes[index] === GenericDataType.Numeric && colname !== 'metric') {
+                      updatedColnames.push(...generateComparisonColumns(colname));
+                      updatedColtypes.push(...generateComparisonColumnTypes(4));
+                    } else {
+                      updatedColnames.push(colname);
+                      updatedColtypes.push(coltypes[index]);
+                    }
+                  });
+
+                  return {
+                    columnsPropsObject: { colnames: updatedColnames, coltypes: updatedColtypes },
+                    configFormLayout: TRANSPOSE_COLUMN_CONFIG_FORM_LAYOUT,
+                  };
+                }
+
+                return {
+                  columnsPropsObject: { colnames, coltypes },
+                  configFormLayout: TRANSPOSE_COLUMN_CONFIG_FORM_LAYOUT,
                 };
               },
             },

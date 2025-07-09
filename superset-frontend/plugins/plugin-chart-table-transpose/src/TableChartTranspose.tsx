@@ -268,6 +268,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     basicColorFormatters,
     basicColorColumnFormatters,
     rowConfig,
+    transposeColumnConfig,
     custom_css,
   } = props;
   const comparisonColumns = [
@@ -679,7 +680,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
   );
 
   const getColumnConfigs = useCallback(
-    (column: DataColumnMeta, i: number): ColumnWithLooseAccessor<D> => {
+    (column: DataColumnMeta, i: number): ColumnWithLooseAccessor<D> & { label: string } => {
       const {
         key,
         label,
@@ -748,6 +749,11 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         // so we ask TS not to check.
         accessor: ((datum: D) => datum[key]) as never,
         Cell: ({ value, row }: { value: DataRecordValue; row: Row<D> }) => {
+          const isEmptyRow = row.original.isEmpty === true;
+
+          // Get row color from row configuration
+          const rowColor = row.original.__rowColor__;
+
           // Check if this row has a specific formatter (for transposed tables)
           const rowFormatter = row.original.__formatter__;
 
@@ -765,7 +771,10 @@ export default function TableChart<D extends DataRecord = DataRecord>(
 
           // Check if value should be displayed as "-" in transpose mode
           let displayValue = value;
-          if (isTransposed && i !== 0 && (value === null || value === undefined || value === 0 || value === '')) {
+          if (isEmptyRow) {
+            // For empty rows, use invisible character for all columns except first
+            displayValue = i === 0 ? (row.original.metric || '\u200B') : '\u200B';
+          } else if (isTransposed && i !== 0 && (value === null || value === undefined || value === 0 || value === '')) {
             displayValue = '-';
           }
 
@@ -780,8 +789,14 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           const isBoldText = isFirstColumn && rowConfig?.[row.original.metric as string]?.boldText || false;
           const isItalicText = isFirstColumn && rowConfig?.[row.original.metric as string]?.italicText || false;
           const indent = isFirstColumn && rowConfig?.[row.original.metric as string]?.indent || 0;
+          const fontSize = isFirstColumn && rowConfig?.[row.original.metric as string]?.fontSize || null;
           const isSummaryRowFirstColumn = (row.original.__is_summary__ || false) && i === 0;
           const rowTextAlign = isFirstColumn && rowConfig?.[row.original.metric as string]?.horizontalAlign || null;
+          const textColor = isFirstColumn && rowConfig?.[row.original.metric as string]?.textColor || null; // Add this line
+          const isUnderlineText = isFirstColumn && rowConfig?.[row.original.metric as string]?.underlineText || false; // Add this line
+
+          // Column Text Align takes preceddence over Row Text Align
+          const columnTextAlign = transposeColumnConfig?.[column.key]?.horizontalAlign;
 
           className = className.replace('right-border-only', '');
 
@@ -824,15 +839,22 @@ export default function TableChart<D extends DataRecord = DataRecord>(
                 : '';
           }
 
+          const cellBackgroundColor = typeof rowColor === 'string' ? rowColor :
+            typeof backgroundColor === 'string' ? backgroundColor :
+              undefined;
+
           const StyledCell = styled.td`
-            text-align: ${rowTextAlign || sharedStyle.textAlign};;
+            text-align: ${columnTextAlign || rowTextAlign || sharedStyle.textAlign};
             white-space: ${value instanceof Date ? 'nowrap' : undefined};
             position: relative;
-            background: ${backgroundColor || undefined};
+            background: ${cellBackgroundColor};
+            color: ${textColor || 'inherit'};
             ${(isBoldText || isRowTotal || isSummaryRowFirstColumn) ? 'font-weight: bold;' : ''}
             ${isItalicText ? 'font-style: italic;' : ''}
-            ${indent && i === 0 ? `padding-left: ${indent}px !important;` : ''}
-          `;
+            ${isUnderlineText ? 'text-decoration: underline;' : ''} 
+            ${indent !== null && indent !== undefined && indent > 0 && i === 0 ? `padding-left: ${indent}px !important;` : ''}
+            ${fontSize ? `font-size: ${fontSize}px !important;` : ''}
+            `;
 
           const cellBarStyles = css`
             position: absolute;
@@ -934,7 +956,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           // render `Cell`. This saves some time for large tables.
           return (
             <StyledCell {...cellProps}>
-              {valueRange && (
+              {valueRange && !isEmptyRow && (
                 <div
                   /* The following classes are added to support custom CSS styling */
                   className={cx(
@@ -952,67 +974,77 @@ export default function TableChart<D extends DataRecord = DataRecord>(
                   className="dt-truncate-cell"
                   style={columnWidth ? { width: columnWidth } : undefined}
                 >
-                  {arrow && <span css={arrowStyles}>{arrow}</span>}
+                  {!isEmptyRow && arrow && <span css={arrowStyles}>{arrow}</span>}
                   {text}
                 </div>
               ) : (
                 <>
-                  {arrow && <span css={arrowStyles}>{arrow}</span>}
+                  {!isEmptyRow && arrow && <span css={arrowStyles}>{arrow}</span>}
                   {text}
                 </>
               )}
             </StyledCell>
           );
         },
-        Header: ({ column: col, onClick, style, onDragStart, onDrop }) => (
-          <th
-            id={`header-${column.key}`}
-            title={t('Shift + Click to sort by multiple columns')}
-            className={[className.replace('right-border-only', ''), col.isSorted ? 'is-sorted' : ''].join(' ')}
-            style={{
-              ...sharedStyle,
-              ...style,
-            }}
-            onKeyDown={(e: ReactKeyboardEvent<HTMLElement>) => {
-              // programatically sort column on keypress
-              if (Object.values(ACTION_KEYS).includes(e.key)) {
-                col.toggleSortBy();
-              }
-            }}
-            role="columnheader button"
-            onClick={onClick}
-            data-column-name={col.id}
-            {...(allowRearrangeColumns && {
-              draggable: 'true',
-              onDragStart,
-              onDragOver: e => e.preventDefault(),
-              onDragEnter: e => e.preventDefault(),
-              onDrop,
-            })}
-            tabIndex={0}
-          >
-            {/* can't use `columnWidth &&` because it may also be zero */}
-            {config.columnWidth ? (
-              // column width hint
-              <div
-                style={{
-                  width: columnWidth,
-                  height: 0.01,
-                }}
-              />
-            ) : null}
-            <div
-              data-column-name={col.id}
-              css={{
-                display: 'inline-flex',
-                alignItems: 'flex-end',
+        Header: ({ column: col, onClick, style, onDragStart, onDrop }) => {
+          // Get column-specific configuration from transposeColumnConfig
+          const columnConfig = transposeColumnConfig?.[column.key] || transposeColumnConfig?.[column.label] || {};
+          const headerTextAlign = columnConfig.horizontalAlign || sharedStyle.textAlign;
+
+          return (
+            <th
+              id={`header-${column.key}`}
+              title={t('Shift + Click to sort by multiple columns')}
+              className={[className.replace('right-border-only', ''), col.isSorted ? 'is-sorted' : ''].join(' ')}
+              style={{
+                ...sharedStyle,
+                ...style,
+                textAlign: headerTextAlign,
               }}
+              onKeyDown={(e: ReactKeyboardEvent<HTMLElement>) => {
+                // programatically sort column on keypress
+                if (Object.values(ACTION_KEYS).includes(e.key)) {
+                  col.toggleSortBy();
+                }
+              }}
+              role="columnheader button"
+              onClick={onClick}
+              data-column-name={col.id}
+              {...(allowRearrangeColumns && {
+                draggable: 'true',
+                onDragStart,
+                onDragOver: e => e.preventDefault(),
+                onDragEnter: e => e.preventDefault(),
+                onDrop,
+              })}
+              tabIndex={0}
             >
-              <span data-column-name={col.id}>{label}</span>
-              <SortIcon column={col} />
-            </div>
-          </th>
-        ),
+              {/* can't use `columnWidth &&` because it may also be zero */}
+              {config.columnWidth ? (
+                // column width hint
+                <div
+                  style={{
+                    width: columnWidth,
+                    height: 0.01,
+                  }}
+                />
+              ) : null}
+              <div
+                data-column-name={col.id}
+                css={{
+                  display: 'inline-flex',
+                  alignItems: 'flex-end',
+                  justifyContent: headerTextAlign === 'center' ? 'center' :
+                    headerTextAlign === 'right' ? 'flex-end' : 'flex-start',
+                  width: '100%',
+                }}
+              >
+                <span data-column-name={col.id}>{label}</span>
+                <SortIcon column={col} />
+              </div>
+            </th>
+          );
+        },
         Footer: totals ? (
           i === 0 ? (
             <th>
@@ -1044,6 +1076,8 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         ) : undefined,
         sortDescFirst: sortDesc,
         sortType: getSortTypeByDataType(dataType),
+        disableSortBy: config.disableSortBy || false,
+        label
       };
     },
     [
