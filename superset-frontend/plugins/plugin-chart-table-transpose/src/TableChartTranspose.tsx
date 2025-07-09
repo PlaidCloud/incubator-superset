@@ -268,6 +268,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     basicColorFormatters,
     basicColorColumnFormatters,
     rowConfig,
+    transposeColumnConfig,
     custom_css,
   } = props;
   const comparisonColumns = [
@@ -784,6 +785,9 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           const isSummaryRowFirstColumn = (row.original.__is_summary__ || false) && i === 0;
           const rowTextAlign = isFirstColumn && rowConfig?.[row.original.metric as string]?.horizontalAlign || null;
 
+          // Column Text Align takes preceddence over Row Text Align
+          const columnTextAlign = transposeColumnConfig?.[column.key]?.horizontalAlign;
+
           className = className.replace('right-border-only', '');
 
           let backgroundColor;
@@ -825,12 +829,11 @@ export default function TableChart<D extends DataRecord = DataRecord>(
                 : '';
           }
 
-            const StyledCell = styled.td`
-            text-align: ${rowTextAlign || sharedStyle.textAlign};;
+          const StyledCell = styled.td`
+            text-align: ${columnTextAlign || rowTextAlign || sharedStyle.textAlign};
             white-space: ${value instanceof Date ? 'nowrap' : undefined};
             position: relative;
             background: ${backgroundColor || undefined};
-            width: ${columnWidth ? columnWidth - indent : 'auto'};
             ${(isBoldText || isRowTotal || isSummaryRowFirstColumn) ? 'font-weight: bold;' : ''}
             ${isItalicText ? 'font-style: italic;' : ''}
             ${indent !== null && indent !== undefined && indent > 0 && i === 0 ? `padding-left: ${indent}px !important;` : ''}
@@ -967,55 +970,65 @@ export default function TableChart<D extends DataRecord = DataRecord>(
             </StyledCell>
           );
         },
-        Header: ({ column: col, onClick, style, onDragStart, onDrop }) => (
-          <th
-            id={`header-${column.key}`}
-            title={t('Shift + Click to sort by multiple columns')}
-            className={[className.replace('right-border-only', ''), col.isSorted ? 'is-sorted' : ''].join(' ')}
-            style={{
-              ...sharedStyle,
-              ...style,
-            }}
-            onKeyDown={(e: ReactKeyboardEvent<HTMLElement>) => {
-              // programatically sort column on keypress
-              if (Object.values(ACTION_KEYS).includes(e.key)) {
-                col.toggleSortBy();
-              }
-            }}
-            role="columnheader button"
-            onClick={onClick}
-            data-column-name={col.id}
-            {...(allowRearrangeColumns && {
-              draggable: 'true',
-              onDragStart,
-              onDragOver: e => e.preventDefault(),
-              onDragEnter: e => e.preventDefault(),
-              onDrop,
-            })}
-            tabIndex={0}
-          >
-            {/* can't use `columnWidth &&` because it may also be zero */}
-            {config.columnWidth ? (
-              // column width hint
-              <div
-                style={{
-                  width: columnWidth,
-                  height: 0.01,
-                }}
-              />
-            ) : null}
-            <div
-              data-column-name={col.id}
-              css={{
-                display: 'inline-flex',
-                alignItems: 'flex-end',
+        Header: ({ column: col, onClick, style, onDragStart, onDrop }) => {
+          // Get column-specific configuration from transposeColumnConfig
+          const columnConfig = transposeColumnConfig?.[column.key] || transposeColumnConfig?.[column.label] || {};
+          const headerTextAlign = columnConfig.horizontalAlign || sharedStyle.textAlign;
+
+          return (
+            <th
+              id={`header-${column.key}`}
+              title={t('Shift + Click to sort by multiple columns')}
+              className={[className.replace('right-border-only', ''), col.isSorted ? 'is-sorted' : ''].join(' ')}
+              style={{
+                ...sharedStyle,
+                ...style,
+                textAlign: headerTextAlign,
               }}
+              onKeyDown={(e: ReactKeyboardEvent<HTMLElement>) => {
+                // programatically sort column on keypress
+                if (Object.values(ACTION_KEYS).includes(e.key)) {
+                  col.toggleSortBy();
+                }
+              }}
+              role="columnheader button"
+              onClick={onClick}
+              data-column-name={col.id}
+              {...(allowRearrangeColumns && {
+                draggable: 'true',
+                onDragStart,
+                onDragOver: e => e.preventDefault(),
+                onDragEnter: e => e.preventDefault(),
+                onDrop,
+              })}
+              tabIndex={0}
             >
-              <span data-column-name={col.id}>{label}</span>
-              <SortIcon column={col} />
-            </div>
-          </th>
-        ),
+              {/* can't use `columnWidth &&` because it may also be zero */}
+              {config.columnWidth ? (
+                // column width hint
+                <div
+                  style={{
+                    width: columnWidth,
+                    height: 0.01,
+                  }}
+                />
+              ) : null}
+              <div
+                data-column-name={col.id}
+                css={{
+                  display: 'inline-flex',
+                  alignItems: 'flex-end',
+                  justifyContent: headerTextAlign === 'center' ? 'center' :
+                    headerTextAlign === 'right' ? 'flex-end' : 'flex-start',
+                  width: '100%',
+                }}
+              >
+                <span data-column-name={col.id}>{label}</span>
+                <SortIcon column={col} />
+              </div>
+            </th>
+          );
+        },
         Footer: totals ? (
           i === 0 ? (
             <th>
