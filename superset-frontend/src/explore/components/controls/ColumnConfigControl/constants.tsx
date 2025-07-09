@@ -42,7 +42,61 @@ export type SharedColumnConfigProp =
   | 'indent'
   | 'boldText'
   | 'italicText'
-  | 'fontSize';
+  | 'fontSize'
+  | 'rowColor'
+  | 'textColor';
+
+export const textColor: ControlFormItemSpec = {
+  controlType: 'Input',
+  label: t('Text color'),
+  description: t('Text color for the table cell (e.g., #000000, rgba(0,0,0,0.5), red, or transparent)'),
+  placeholder: 'transparent',
+  width: 150,
+  debounceDelay: 200,
+  validators: [
+    (value: any) => {
+      if (value) {
+        // Create a temporary element to test if the color is valid
+        const tempElement = document.createElement('div');
+        tempElement.style.color = value;
+
+        // If the browser accepts the color, it will be set, otherwise it remains empty
+        const isValidColor = tempElement.style.color !== '' || value.toLowerCase() === 'transparent';
+
+        if (!isValidColor) {
+          return t('Must be a valid color value (hex, rgb, hsl, or CSS color name)');
+        }
+      }
+      return false;
+    }
+  ],
+};
+
+export const rowColor: ControlFormItemSpec = {
+  controlType: 'Input',
+  label: t('Row color'),
+  description: t('Background color for the table row (e.g., #ffffff, rgba(255,255,255,0.5), beige, black, or transparent)'),
+  placeholder: 'transparent',
+  width: 150,
+  debounceDelay: 200,
+  validators: [
+    (value: any) => {
+      if (value) {
+        // Create a temporary element to test if the color is valid
+        const tempElement = document.createElement('div');
+        tempElement.style.color = value;
+
+        // If the browser accepts the color, it will be set, otherwise it remains empty
+        const isValidColor = tempElement.style.color !== '' || value.toLowerCase() === 'transparent';
+
+        if (!isValidColor) {
+          return t('Must be a valid color value (hex, rgb, hsl, or CSS color name)');
+        }
+      }
+      return false;
+    },
+  ],
+};
 
 const d3NumberFormat: ControlFormItemSpec<'Select'> = {
   allowNewOptions: true,
@@ -215,7 +269,7 @@ export const SHARED_COLUMN_CONFIG_PROPS = {
     label: t('Small number format'),
     description: t(
       'D3 number format for numbers between -1.0 and 1.0, ' +
-        'useful when you want to have different significant digits for small and large numbers',
+      'useful when you want to have different significant digits for small and large numbers',
     ),
   },
   d3TimeFormat,
@@ -231,6 +285,8 @@ export const SHARED_COLUMN_CONFIG_PROPS = {
   boldText,
   italicText,
   fontSize,
+  rowColor,
+  textColor,
 };
 
 export const DEFAULT_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {

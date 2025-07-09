@@ -751,6 +751,9 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         Cell: ({ value, row }: { value: DataRecordValue; row: Row<D> }) => {
           const isEmptyRow = row.original.isEmpty === true;
 
+          // Get row color from row configuration
+          const rowColor = row.original.__rowColor__;
+
           // Check if this row has a specific formatter (for transposed tables)
           const rowFormatter = row.original.__formatter__;
 
@@ -789,6 +792,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           const fontSize = isFirstColumn && rowConfig?.[row.original.metric as string]?.fontSize || null;
           const isSummaryRowFirstColumn = (row.original.__is_summary__ || false) && i === 0;
           const rowTextAlign = isFirstColumn && rowConfig?.[row.original.metric as string]?.horizontalAlign || null;
+          const textColor = isFirstColumn && rowConfig?.[row.original.metric as string]?.textColor || null; // Add this line
 
           // Column Text Align takes preceddence over Row Text Align
           const columnTextAlign = transposeColumnConfig?.[column.key]?.horizontalAlign;
@@ -834,11 +838,16 @@ export default function TableChart<D extends DataRecord = DataRecord>(
                 : '';
           }
 
+          const cellBackgroundColor = typeof rowColor === 'string' ? rowColor :
+            typeof backgroundColor === 'string' ? backgroundColor :
+              undefined;
+
           const StyledCell = styled.td`
             text-align: ${columnTextAlign || rowTextAlign || sharedStyle.textAlign};
             white-space: ${value instanceof Date ? 'nowrap' : undefined};
             position: relative;
-            background: ${backgroundColor || undefined};
+            background: ${cellBackgroundColor};
+            color: ${textColor || 'inherit'};
             ${(isBoldText || isRowTotal || isSummaryRowFirstColumn) ? 'font-weight: bold;' : ''}
             ${isItalicText ? 'font-style: italic;' : ''}
             ${indent !== null && indent !== undefined && indent > 0 && i === 0 ? `padding-left: ${indent}px !important;` : ''}
