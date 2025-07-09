@@ -640,7 +640,11 @@ function transposeData(
 
     if (metricOrHeadingItem.isEmpty) {
       newRow.metric = '\u200B',
-      newRow.isEmpty = true;
+        newRow.isEmpty = true;
+      const emptyRowConfig = rowConfig?.[''] || rowConfig?.['empty'];
+      if (emptyRowConfig?.rowColor) {
+        newRow.__rowColor__ = emptyRowConfig.rowColor;
+      }
       transposedDataRows.push(newRow);
       return;
     }
@@ -652,6 +656,11 @@ function transposeData(
       newRow.__isHeading = true;
       // Set the heading text in the 'metric' column
       newRow.metric = metricOrHeadingItem.emptyRowHeadingText || '';
+
+      const headingRowConfig = rowConfig?.[metricOrHeadingItem.emptyRowHeadingText || ''];
+      if (headingRowConfig?.rowColor) {
+        newRow.__rowColor__ = headingRowConfig.rowColor;
+      }
 
       // Blank out all other columns for this heading row
       transposedColumnHeaders.forEach(headerCol => {
@@ -677,6 +686,11 @@ function transposeData(
 
         // Get row configuration for this metric
         const rowConfigForMetric = rowConfig?.[displayLabel];
+
+        // Add row color if configured
+        if (rowConfigForMetric?.rowColor) {
+          newRow.__rowColor__ = rowConfigForMetric.rowColor;
+        }
 
         // Create a custom formatter if row config has number formatting
         if (rowConfigForMetric && (rowConfigForMetric.d3NumberFormat || rowConfigForMetric.d3SmallNumberFormat || rowConfigForMetric.currencyFormat)) {

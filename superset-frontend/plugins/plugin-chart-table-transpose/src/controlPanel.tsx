@@ -107,19 +107,29 @@ export const TRANSPOSE_ROW_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {
   [GenericDataType.String]: [
     [
       { name: 'horizontalAlign', override: { defaultValue: 'left' } },
+      {
+        name: 'textColor', override: {
+          description: t('Text color for the metric header (e.g., #ffffff, rgba(255,255,255,0.5), beige, black, or transparent)'),
+        }
+      }
     ],
     ['boldText', 'italicText'],
-    ['indent', 'fontSize']
+    ['indent', 'fontSize', 'rowColor'],
   ],
   [GenericDataType.Numeric]: [
     {
       tab: t('Display'),
       children: [
         [
-          { name: 'horizontalAlign', override: { defaultValue: 'right' } },
+          { name: 'horizontalAlign', override: { defaultValue: 'right' }, },
+          {
+            name: 'textColor', override: {
+              description: t('Text color for the metric header (e.g., #ffffff, rgba(255,255,255,0.5), beige, black, or transparent)'),
+            }
+          }
         ],
-        ['boldText', 'italicText'],
-        ['indent', 'fontSize'],
+
+        ['indent', 'fontSize', 'rowColor'],
       ],
     },
     {
