@@ -495,6 +495,39 @@ const config: ControlPanelConfig = {
         ],
         [
           {
+            name: 'show_all_segments',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show All Segments column'),
+              default: true,
+              description: t('Show or hide the All Segments total column in transposed table'),
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                isAggMode({ controls }) && Boolean(controls?.enable_pivot?.value),
+              resetOnHide: false,
+            },
+          },
+          {
+            name: 'all_segments_position',
+            config: {
+              type: 'RadioButtonControl',
+              label: t('All Segments position'),
+              default: 'start',
+              options: [
+                ['start', t('Start')],
+                ['end', t('End')],
+              ],
+              description: t('Choose whether to display the All Segments column at the start or end of the table'),
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                isAggMode({ controls }) && 
+                Boolean(controls?.enable_pivot?.value) && 
+                Boolean(controls?.show_all_segments?.value),
+              resetOnHide: false,
+              renderTrigger: true,
+            },
+          },
+        ],
+        [
+          {
             name: 'show_totals',
             config: {
               type: 'CheckboxControl',

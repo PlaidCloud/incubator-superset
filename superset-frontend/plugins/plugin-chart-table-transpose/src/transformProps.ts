@@ -479,6 +479,8 @@ function transposeData(
   formDataMetricsInOrder: any[], // formData.metrics, defining the order of rows
   showTotals?: boolean, // Add showTotals parameter
   rowConfig?: Record<string, any>, // Add rowConfig parameter
+  showAllSegments: boolean = true, // New parameter
+  allSegmentsPosition: 'start' | 'end' = 'start' // New parameter
 ): {
   transposedData: DataRecord[];
   transposedColumns: DataColumnMeta[];
@@ -542,15 +544,27 @@ function transposeData(
       }
     },
     // Always add the "Total" column header for row totals
-    {
-      key: 'rowTotal',
-      label: t('All Segments'),
-      dataType: GenericDataType.Numeric,
-      isMetric: false,
-      isPercentMetric: false,
-      isNumeric: true,
-    },
+    ...(showAllSegments && allSegmentsPosition === 'start' ? [
+      {
+        key: 'rowTotal',
+        label: t('All Segments'),
+        dataType: GenericDataType.Numeric,
+        isMetric: false,
+        isPercentMetric: false,
+        isNumeric: true,
+      },
+    ] : []),
     ...dynamicColumnHeaders,
+    ...(showAllSegments && allSegmentsPosition === 'end' ? [
+      {
+        key: 'rowTotal',
+        label: t('All Segments'),
+        dataType: GenericDataType.Numeric,
+        isMetric: false,
+        isPercentMetric: false,
+        isNumeric: true,
+      },
+    ] : []),
   ];
 
   if (dynamicColumnHeaders.length === 0) {
@@ -814,6 +828,8 @@ const transformProps = (
     custom_css,
     timeseries_limit_metric,
     summary_position = 'bottom',
+    show_all_segments = true,
+    all_segments_position = 'start',
   } = formData;
   const isUsingTimeComparison =
     !isEmpty(time_compare) &&
@@ -1029,7 +1045,9 @@ const transformProps = (
       passedColumns,
       formDataMetrics,
       showTotals,
-      formData.row_config
+      formData.row_config,
+      show_all_segments,
+      all_segments_position
     );
     passedData = transposedData;
     passedColumns = transposedColumns;
@@ -1044,7 +1062,7 @@ const transformProps = (
 
       // If we found the metric row, sort all non-heading/non-summary rows by rowTotal
       if (sortableRows.length > 0) {
-        const headingRowsIndex: {index: number, row: DataRecord}[] = [];
+        const headingRowsIndex: { index: number, row: DataRecord }[] = [];
         passedData.filter((row, index) => {
           if (row.__isHeading) {
             headingRowsIndex.push({
@@ -1076,7 +1094,7 @@ const transformProps = (
 
         let headingSummaryIndexPointer = 0;
         const sortedData: DataRecord[] = [];
-        for(let i = 0; i < passedData.length; i++) {
+        for (let i = 0; i < passedData.length; i++) {
           // prioritize heading rows, then data rows, then summary rows for same index
           if (headingRowsIndex[headingSummaryIndexPointer] && i === headingRowsIndex[headingSummaryIndexPointer].index) {
             sortedData.push(headingRowsIndex[headingSummaryIndexPointer].row);
