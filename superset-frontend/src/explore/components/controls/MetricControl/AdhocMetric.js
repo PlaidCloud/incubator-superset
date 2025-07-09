@@ -62,6 +62,7 @@ export default class AdhocMetric {
   constructor(adhocMetric) {
     this.emptyRowHeading = adhocMetric.emptyRowHeading || false;
     this.emptyRowHeadingText = adhocMetric.emptyRowHeadingText || "";
+    this.isEmpty = adhocMetric.isEmpty || false;
     if (this.emptyRowHeading) {
       this.expressionType = undefined; // Or a specific type like 'HEADING' if you define one
       this.column = {
@@ -145,7 +146,7 @@ export default class AdhocMetric {
       adhocMetric.sqlExpression === this.sqlExpression &&
       adhocMetric.aggregate === this.aggregate &&
       (adhocMetric.column && adhocMetric.column.column_name) ===
-      (this.column && this.column.column_name) && 
+      (this.column && this.column.column_name) &&
       adhocMetric.emptyRowHeadingText === this.emptyRowHeadingText
     );
   }

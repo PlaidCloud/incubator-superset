@@ -638,6 +638,13 @@ function transposeData(
     let currentRowSum = 0;
     let currentRowHasNumeric = false;
 
+    if (metricOrHeadingItem.isEmpty) {
+      newRow.metric = '\u200B',
+      newRow.isEmpty = true;
+      transposedDataRows.push(newRow);
+      return;
+    }
+
     if (
       typeof metricOrHeadingItem === 'object' &&
       metricOrHeadingItem.emptyRowHeading === true
