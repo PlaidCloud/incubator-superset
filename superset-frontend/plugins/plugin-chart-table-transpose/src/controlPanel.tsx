@@ -133,6 +133,14 @@ export const TRANSPOSE_ROW_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {
   ],
 };
 
+export const TRANSPOSE_COLUMN_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {
+  [GenericDataType.Numeric]: [
+    [
+      { name: 'horizontalAlign', override: { defaultValue: 'right' } },
+    ],
+  ],
+};
+
 function getQueryMode(controls: ControlStateMapping): QueryMode {
   const mode = controls?.query_mode?.value;
   if (mode === QueryMode.Aggregate || mode === QueryMode.Raw) {
@@ -840,6 +848,105 @@ const config: ControlPanelConfig = {
                 return {
                   columnsPropsObject: { colnames: rowNames, coltypes: rowTypes },
                   configFormLayout: TRANSPOSE_ROW_CONFIG_FORM_LAYOUT,
+                };
+              },
+            },
+          },
+        ],
+        [
+          {
+            name: 'transpose_column_config',
+            config: {
+              type: 'ColumnConfigControl',
+              label: t('Customize transposed columns'),
+              description: t('Customize alignment and formatting for each transposed column'),
+              width: 400,
+              height: 320,
+              renderTrigger: true,
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                Boolean(controls?.enable_pivot?.value),
+              shouldMapStateToProps() {
+                return true;
+              },
+              mapStateToProps(explore, _, chart) {
+                const enablePivot = explore?.form_data?.enable_pivot;
+
+                if (!enablePivot) {
+                  return {
+                    columnsPropsObject: { colnames: [], coltypes: [] },
+                    configFormLayout: TRANSPOSE_CONFIG_FORM_LAYOUT,
+                  };
+                }
+
+                // Get the groupby columns to determine what will become column headers
+                const groupbyColumns = ensureIsArray(explore?.form_data?.groupby);
+                const groupbyColumnNames = groupbyColumns.map(col => {
+                  if (typeof col === 'string') {
+                    return col;
+                  } else if (col && typeof col === 'object') {
+                    if (isPhysicalColumn(col)) {
+                      return col;
+                    } else if (isAdhocColumn(col)) {
+                      return col.label || 'Column';
+                    }
+                    return 'Column';
+                  }
+                  return 'Column';
+                });
+
+                // Get the actual data values that will become column headers
+                const dataValues = chart?.queriesResponse?.[0]?.data || [];
+                const firstGroupbyColumn = groupbyColumnNames[0];
+
+                // Extract unique values from the first groupby column
+                const uniqueColumnValues = firstGroupbyColumn && dataValues.length > 0
+                  ? [...new Set(dataValues.map((row: any) => row[firstGroupbyColumn]))]
+                    .filter(val => val !== null && val !== undefined)
+                    .map(val => String(val))
+                    .sort() // Sort alphabetically for consistent ordering
+                  : [];
+
+                // Build the transposed column structure
+                const colnames: string[] = []; // First column is always 'metric'
+                const coltypes: GenericDataType[] = [];
+
+                // Add All Segments column if enabled
+                if (explore?.form_data?.show_all_segments !== false) {
+                  colnames.push('All Segments');
+                  coltypes.push(GenericDataType.Numeric);
+                }
+
+                // Add columns for each unique value from the groupby
+                uniqueColumnValues.forEach(colValue => {
+                  colnames.push(colValue);
+                  coltypes.push(GenericDataType.Numeric);
+                });
+
+                // Handle time comparison if enabled
+                const timeComparisonStatus = !!explore?.controls?.time_compare?.value;
+                if (timeComparisonStatus) {
+                  const updatedColnames: string[] = [];
+                  const updatedColtypes: GenericDataType[] = [];
+
+                  colnames.forEach((colname, index) => {
+                    if (coltypes[index] === GenericDataType.Numeric && colname !== 'metric') {
+                      updatedColnames.push(...generateComparisonColumns(colname));
+                      updatedColtypes.push(...generateComparisonColumnTypes(4));
+                    } else {
+                      updatedColnames.push(colname);
+                      updatedColtypes.push(coltypes[index]);
+                    }
+                  });
+
+                  return {
+                    columnsPropsObject: { colnames: updatedColnames, coltypes: updatedColtypes },
+                    configFormLayout: TRANSPOSE_COLUMN_CONFIG_FORM_LAYOUT,
+                  };
+                }
+
+                return {
+                  columnsPropsObject: { colnames, coltypes },
+                  configFormLayout: TRANSPOSE_COLUMN_CONFIG_FORM_LAYOUT,
                 };
               },
             },
