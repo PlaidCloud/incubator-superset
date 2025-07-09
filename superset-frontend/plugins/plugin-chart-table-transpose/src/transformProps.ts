@@ -479,8 +479,9 @@ function transposeData(
   formDataMetricsInOrder: any[], // formData.metrics, defining the order of rows
   showTotals?: boolean, // Add showTotals parameter
   rowConfig?: Record<string, any>, // Add rowConfig parameter
-  showAllSegments: boolean = true, // New parameter
-  allSegmentsPosition: 'start' | 'end' = 'start' // New parameter
+  showAllSegments: boolean = true,
+  allSegmentsPosition: 'start' | 'end' = 'start',
+  column_sort_order: 'none' | 'asc' | 'desc' = 'none',
 ): {
   transposedData: DataRecord[];
   transposedColumns: DataColumnMeta[];
@@ -513,7 +514,7 @@ function transposeData(
       headerKeyForOriginalData &&
       originalDataRow[headerKeyForOriginalData] !== undefined) : [];
 
-  const dynamicColumnHeaders = filteredDataForDynamicColumnHeaders.length > 0 ?
+  let dynamicColumnHeaders = filteredDataForDynamicColumnHeaders.length > 0 ?
     filteredDataForDynamicColumnHeaders.map((originalDataRow) => {
       const label = headerKeyForOriginalData
         ? String(originalDataRow[headerKeyForOriginalData])
@@ -529,7 +530,17 @@ function transposeData(
       };
     }) : []; // Filter out undefined values
 
-
+  if (column_sort_order !== 'none') {
+    dynamicColumnHeaders = dynamicColumnHeaders.sort((a, b) => {
+      if (column_sort_order === 'asc') {
+        return a.label.localeCompare(b.label);
+      } else if (column_sort_order === 'desc') {
+        return b.label.localeCompare(a.label);
+      }
+      // If no sorting is applied, keep the original order
+      return 0;
+    });
+  }
 
   const transposedColumnHeaders: DataColumnMeta[] = [
     {
@@ -830,6 +841,7 @@ const transformProps = (
     summary_position = 'bottom',
     show_all_segments = true,
     all_segments_position = 'start',
+    column_sort_order = 'none',
   } = formData;
   const isUsingTimeComparison =
     !isEmpty(time_compare) &&
@@ -1047,7 +1059,8 @@ const transformProps = (
       showTotals,
       formData.row_config,
       show_all_segments,
-      all_segments_position
+      all_segments_position,
+      column_sort_order
     );
     passedData = transposedData;
     passedColumns = transposedColumns;
