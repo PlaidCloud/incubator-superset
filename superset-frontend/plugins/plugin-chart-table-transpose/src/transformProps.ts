@@ -1199,6 +1199,7 @@ const transformProps = (
     startDateOffset,
     basicColorColumnFormatters,
     rowConfig: chartProps.rawFormData.row_config,
+    transposeColumnConfig: chartProps.rawFormData.transpose_column_config,
     custom_css,
   };
 };
