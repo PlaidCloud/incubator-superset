@@ -477,7 +477,7 @@ const config: ControlPanelConfig = {
             name: 'order_sort',
             config: {
               type: 'RadioButtonControl',
-              label: t('Sort order'),
+              label: t('Sort Row order'),
               default: "none",
               options: [
                 ["none", t('None')],
@@ -485,7 +485,7 @@ const config: ControlPanelConfig = {
                 ["desc", t('Descending')],
               ],
               description: t(
-                'Choose the sort order for the results. None means no sorting will be applied.',
+                'Choose the sort order for the rows. None means no sorting will be applied.',
               ),
               visibility: ({ controls }: ControlPanelsContainerProps) =>
                 isAggMode({ controls }) && Boolean(controls?.enable_pivot?.value),
@@ -518,8 +518,8 @@ const config: ControlPanelConfig = {
               ],
               description: t('Choose whether to display the All Segments column at the start or end of the table'),
               visibility: ({ controls }: ControlPanelsContainerProps) =>
-                isAggMode({ controls }) && 
-                Boolean(controls?.enable_pivot?.value) && 
+                isAggMode({ controls }) &&
+                Boolean(controls?.enable_pivot?.value) &&
                 Boolean(controls?.show_all_segments?.value),
               resetOnHide: false,
               renderTrigger: true,
@@ -556,6 +556,26 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [{
+          name: 'column_sort_order',
+          config: {
+            type: 'RadioButtonControl',
+            label: t('Column sort order'),
+            default: 'none',
+            options: [
+              ['none', t('None')],
+              ['asc', t('Ascending (A-Z)')],
+              ['desc', t('Descending (Z-A)')],
+            ],
+            description: t('Sort columns, except "metrics" and "All Segments"'),
+            visibility: ({ controls }: ControlPanelsContainerProps) =>
+              isAggMode({ controls }) &&
+              Boolean(controls?.enable_pivot?.value),
+            resetOnHide: false,
+            renderTrigger: true,
+          },
+        },
+        ]
       ],
     },
     {
