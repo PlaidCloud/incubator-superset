@@ -749,6 +749,8 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         // so we ask TS not to check.
         accessor: ((datum: D) => datum[key]) as never,
         Cell: ({ value, row }: { value: DataRecordValue; row: Row<D> }) => {
+          const isEmptyRow = row.original.isEmpty === true;
+
           // Check if this row has a specific formatter (for transposed tables)
           const rowFormatter = row.original.__formatter__;
 
@@ -766,7 +768,10 @@ export default function TableChart<D extends DataRecord = DataRecord>(
 
           // Check if value should be displayed as "-" in transpose mode
           let displayValue = value;
-          if (isTransposed && i !== 0 && (value === null || value === undefined || value === 0 || value === '')) {
+          if (isEmptyRow) {
+            // For empty rows, use invisible character for all columns except first
+            displayValue = i === 0 ? (row.original.metric || '\u200B') : '\u200B';
+          } else if (isTransposed && i !== 0 && (value === null || value === undefined || value === 0 || value === '')) {
             displayValue = '-';
           }
 
@@ -940,7 +945,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           // render `Cell`. This saves some time for large tables.
           return (
             <StyledCell {...cellProps}>
-              {valueRange && (
+              {valueRange && !isEmptyRow && (
                 <div
                   /* The following classes are added to support custom CSS styling */
                   className={cx(
@@ -958,12 +963,12 @@ export default function TableChart<D extends DataRecord = DataRecord>(
                   className="dt-truncate-cell"
                   style={columnWidth ? { width: columnWidth } : undefined}
                 >
-                  {arrow && <span css={arrowStyles}>{arrow}</span>}
+                  {!isEmptyRow && arrow && <span css={arrowStyles}>{arrow}</span>}
                   {text}
                 </div>
               ) : (
                 <>
-                  {arrow && <span css={arrowStyles}>{arrow}</span>}
+                  {!isEmptyRow && arrow && <span css={arrowStyles}>{arrow}</span>}
                   {text}
                 </>
               )}
