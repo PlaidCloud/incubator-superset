@@ -44,7 +44,15 @@ export type SharedColumnConfigProp =
   | 'italicText'
   | 'fontSize'
   | 'rowColor'
-  | 'textColor';
+  | 'textColor'
+  | 'underlineText';
+
+const underlineText: ControlFormItemSpec = {
+  controlType: 'Checkbox',
+  label: t('Underline'),
+  description: t('Display text with underline'),
+  defaultValue: false,
+};
 
 export const textColor: ControlFormItemSpec = {
   controlType: 'Input',
@@ -287,6 +295,7 @@ export const SHARED_COLUMN_CONFIG_PROPS = {
   fontSize,
   rowColor,
   textColor,
+  underlineText
 };
 
 export const DEFAULT_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {

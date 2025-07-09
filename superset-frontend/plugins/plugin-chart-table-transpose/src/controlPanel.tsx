@@ -113,7 +113,7 @@ export const TRANSPOSE_ROW_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {
         }
       }
     ],
-    ['boldText', 'italicText'],
+    ['boldText', 'italicText', 'underlineText'],
     ['indent', 'fontSize', 'rowColor'],
   ],
   [GenericDataType.Numeric]: [
@@ -128,7 +128,7 @@ export const TRANSPOSE_ROW_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {
             }
           }
         ],
-
+        ['boldText', 'italicText', 'underlineText'],
         ['indent', 'fontSize', 'rowColor'],
       ],
     },
