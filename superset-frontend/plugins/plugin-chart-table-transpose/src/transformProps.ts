@@ -530,16 +530,25 @@ function transposeData(
       };
     }) : []; // Filter out undefined values
 
+  let dynamicColumnHeadersSortOrder: number[] = dynamicColumnHeaders.map((header, index) => index);
   if (column_sort_order !== 'none') {
-    dynamicColumnHeaders = dynamicColumnHeaders.sort((a, b) => {
+    const indexedHeaders = dynamicColumnHeaders.map((header, index) => ({
+      header,
+      originalIndex: index,
+    }));
+
+    // Sort the indexed headers
+    const sortedIndexedHeaders = indexedHeaders.sort((a, b) => {
       if (column_sort_order === 'asc') {
-        return a.label.localeCompare(b.label);
+        return a.header.label.localeCompare(b.header.label);
       } else if (column_sort_order === 'desc') {
-        return b.label.localeCompare(a.label);
+        return b.header.label.localeCompare(a.header.label);
       }
-      // If no sorting is applied, keep the original order
       return 0;
     });
+
+    dynamicColumnHeaders = sortedIndexedHeaders.map(item => item.header);
+    dynamicColumnHeadersSortOrder = sortedIndexedHeaders.map(item => item.originalIndex);
   }
 
   const transposedColumnHeaders: DataColumnMeta[] = [
@@ -706,8 +715,9 @@ function transposeData(
           (newRow as any).__formatter__ = correspondingOriginalColumn.formatter;
         }
 
-        dynamicColumnHeaders.forEach((headerCol, dynamicColIndex) => {
-          const originalDataRow = data[dynamicColIndex];
+        dynamicColumnHeaders.forEach((headerCol, sortedIndex) => {
+          const originalDataIndex = dynamicColumnHeadersSortOrder[sortedIndex]; // Map to original data index
+          const originalDataRow = data[originalDataIndex];
           let cellValue = null;
           if (originalDataRow) {
             cellValue = originalDataRow[originalDataKey];
