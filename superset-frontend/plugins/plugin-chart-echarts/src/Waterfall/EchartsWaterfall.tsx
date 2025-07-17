@@ -321,7 +321,7 @@ export default function EchartsWaterfall(
             ...(series.label || {}),
             position: series.name === 'Decrease' ? 'left' : 'right',
           },
-        }))
+        }))P
         : [],
     };
   };
@@ -337,11 +337,11 @@ export default function EchartsWaterfall(
     // Get total indices for bold formatting
     const totalsIndex = ['total', 'both'].includes(boldLabels)
       ? ((options.series as any[]) || [])
-          .find(series => series.name === 'Total')
-          ?.data.map((dataPoint: any, index: number) =>
-            dataPoint.value !== '-' ? index : -1,
-          )
-          .filter((index: number) => index !== -1) || []
+        .find(series => series.name === 'Total')
+        ?.data.map((dataPoint: any, index: number) =>
+          dataPoint.value !== '-' ? index : -1,
+        )
+        .filter((index: number) => index !== -1) || []
       : [];
 
     const formatText = (value: string, index: number) => {

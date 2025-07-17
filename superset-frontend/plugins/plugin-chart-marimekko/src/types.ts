@@ -27,11 +27,6 @@ export interface PluginChartMarimekkoStylesProps {
   width: number;
   headerFontSize: keyof typeof supersetTheme.typography.sizes;
   boldText: boolean;
-  tooltipNumberFormat?: string;
-  tooltipIncludeColumn?: boolean;
-  tooltipShowPercentage?: boolean;
-  xAxisLabel?: string;
-  yAxisLabel?: string;
 }
 
 interface PluginChartMarimekkoCustomizeProps {
@@ -54,4 +49,10 @@ export type PluginChartMarimekkoProps = PluginChartMarimekkoStylesProps &
     sortByColumn?: string;
     sortOrder?: string;
     labelColor?: { r: number; g: number; b: number; a: number };
+    yAxisLabel?: string;
+    xAxisLabel?: string;
+    tooltipNumberFormat?: string;
+    tooltipTimeFormat?: string;
+    tooltipShowPercentage?: boolean;
+    tooltipIncludeColumn?: boolean;
   };

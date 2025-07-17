@@ -357,7 +357,15 @@ class ExtraCache:
                 flt.get("expressionType") == "SIMPLE"
                 and flt.get("clause") == "WHERE"
                 and flt.get("subject") == column
-                and val
+                and (
+                    val
+                    # IS_NULL and IS_NOT_NULL operators do not have a value
+                    or op
+                    in (
+                        FilterOperator.IS_NULL.value,
+                        FilterOperator.IS_NOT_NULL.value,
+                    )
+                )
             ):
                 if remove_filter:
                     if column not in self.removed_filters:
@@ -589,6 +597,12 @@ class BaseTemplateProcessor:
     def set_context(self, **kwargs: Any) -> None:
         self._context.update(kwargs)
         self._context.update(context_addons())
+
+    def get_context(self) -> dict[str, Any]:
+        """
+        Returns the current template context.
+        """
+        return self._context.copy()
 
     def process_template(self, sql: str, **kwargs: Any) -> str:
         """Processes a sql template

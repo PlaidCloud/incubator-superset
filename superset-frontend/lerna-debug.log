@@ -1,0 +1,34 @@
+0 silly argv {
+0 silly argv   _: [ 'exec' ],
+0 silly argv   stream: true,
+0 silly argv   concurrency: 10,
+0 silly argv   scope: '@superset-ui/!(demo|generator-superset)\n',
+0 silly argv   args: [
+0 silly argv     '', '', '', '',
+0 silly argv     '', '', ''
+0 silly argv   ],
+0 silly argv   '--': [
+0 silly argv     'babel',
+0 silly argv     '--config-file=../../babel.config.js',
+0 silly argv     'src',
+0 silly argv     '--extensions',
+0 silly argv     '".ts,.tsx,.js,.jsx"',
+0 silly argv     '--copy-files',
+0 silly argv     '--out-dir',
+0 silly argv     'lib'
+0 silly argv   ],
+0 silly argv   lernaVersion: '8.1.9',
+0 silly argv   '$0': 'node_modules/.bin/lerna',
+0 silly argv   cmd: ''
+0 silly argv }
+1 notice cli v8.1.9
+2 verbose packageConfigs Explicit "packages" configuration found in lerna.json. Resolving packages using the configured glob(s): ["packages/*","plugins/*","src/setup/*"]
+3 verbose rootPath /home/woodfrog/superset-5.0/superset-frontend
+4 error Error: Failed to create directory: /home/woodfrog/superset-5.0/superset-frontend/node_modules/.cache/nx-workspace-data
+4 error     at ensureCacheDirectory (/home/woodfrog/superset-5.0/superset-frontend/node_modules/nx/src/project-graph/nx-deps-cache.js:37:19)
+4 error     at readFileMapCache (/home/woodfrog/superset-5.0/superset-frontend/node_modules/nx/src/project-graph/nx-deps-cache.js:43:5)
+4 error     at buildProjectGraphAndSourceMapsWithoutDaemon (/home/woodfrog/superset-5.0/superset-frontend/node_modules/nx/src/project-graph/project-graph.js:102:221)
+4 error     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+4 error     at async createProjectGraphAndSourceMapsAsync (/home/woodfrog/superset-5.0/superset-frontend/node_modules/nx/src/project-graph/project-graph.js:213:25)
+4 error     at async createProjectGraphAsync (/home/woodfrog/superset-5.0/superset-frontend/node_modules/nx/src/project-graph/project-graph.js:203:39)
+4 error     at async detectProjects (/home/woodfrog/superset-5.0/superset-frontend/node_modules/lerna/dist/index.js:2999:25)

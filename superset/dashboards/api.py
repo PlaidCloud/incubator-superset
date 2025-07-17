@@ -217,6 +217,7 @@ class DashboardRestApi(BaseSupersetModelRestApi):
         "tags.id",
         "tags.name",
         "tags.type",
+        "uuid",
     ]
 
     list_select_columns = list_columns + ["changed_on", "created_on", "changed_by_fk"]
@@ -1302,6 +1303,7 @@ class DashboardRestApi(BaseSupersetModelRestApi):
                 current_user=current_user,
                 dashboard_id=dashboard.id,
                 force=False,
+                cache_key=cache_key,
             )
             return self.response(
                 202,
