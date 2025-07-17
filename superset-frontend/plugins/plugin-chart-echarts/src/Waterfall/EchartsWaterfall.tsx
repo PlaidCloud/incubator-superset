@@ -321,7 +321,7 @@ export default function EchartsWaterfall(
             ...(series.label || {}),
             position: series.name === 'Decrease' ? 'left' : 'right',
           },
-        }))P
+        }))
         : [],
     };
   };
