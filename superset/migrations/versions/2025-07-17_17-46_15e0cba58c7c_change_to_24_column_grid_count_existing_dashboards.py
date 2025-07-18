@@ -54,7 +54,7 @@ def upgrade():
                     continue
                     
                 position_data = json.loads(position_json_str)
-                # # print(f"Parsed position_data keys: {list(position_data.keys())}")
+                # print(f"Parsed position_data keys: {list(position_data.keys())}")
                 
                 updated_data = double_grid_dimensions(position_data)
                 # print(f"--------------------position_data to update: {json.dumps(updated_data)}...")
@@ -82,8 +82,10 @@ def upgrade():
 
                 updated_count += 1
                 # print(f"Successfully updated dashboard {dashboard_id}")
+                session.commit()
                 
             except Exception as e:
+                session.rollback()
                 logger.error(f"Failed to update dashboard {dashboard_id}: {e}")
                 logger.error(f"Position JSON was: {position_json_str}")
         
@@ -91,10 +93,13 @@ def upgrade():
         
         if updated_count == 0:
             logger.warning("No dashboards were updated. All dashboards may have null position_json.")
-        
+            
     except SQLAlchemyError as e:
+        session.rollback()
         logger.error(f"Failed to execute migration: {e}")
         raise
+    finally:
+        session.close()
 
 def downgrade():
     """
@@ -132,21 +137,26 @@ def downgrade():
                     }
                 )
                 reverted_count += 1
+                session.commit()
                 
             except Exception as e:
+                session.rollback()
                 logger.error(f"Failed to revert dashboard {dashboard_id}: {e}")
         
         # print(f"Downgrade completed. Reverted: {reverted_count} dashboards")
         
     except SQLAlchemyError as e:
+        session.rollback()
         logger.error(f"Failed to revert migration: {e}")
         raise
+    finally:
+        session.close()
 
 def double_grid_dimensions(position_data):
     """
     Double width and height values in position_json
     """
-    # # print(f"double_grid_dimensions called with: {type(position_data)}")
+    # print(f"double_grid_dimensions called with: {type(position_data)}")
     
     if not isinstance(position_data, dict):
         logger.warning(f"position_data is not dict, it's {type(position_data)}")
@@ -155,38 +165,38 @@ def double_grid_dimensions(position_data):
     updated_data = {}
     
     for component_id, component in position_data.items():
-        # # print(f"Processing component {component_id}: {type(component)}")
+        # print(f"Processing component {component_id}: {type(component)}")
         
         if isinstance(component, dict):
             updated_component = component.copy()
             
             if 'meta' in component:
                 meta = component['meta'].copy()
-                # # print(f"Original meta for {component_id}: {meta}")
+                # print(f"Original meta for {component_id}: {meta}")
                 
                 # Double width
                 if 'width' in meta:
                     old_width = meta['width']
                     meta['width'] = meta['width'] * 2
-                    # # print(f"Width changed from {old_width} to {meta['width']}")
+                    # print(f"Width changed from {old_width} to {meta['width']}")
                 
                 # Double height  
                 if 'height' in meta:
                     old_height = meta['height']
                     meta['height'] = meta['height'] * 2
-                    # # print(f"Height changed from {old_height} to {meta['height']}")
+                    # print(f"Height changed from {old_height} to {meta['height']}")
                 
                 updated_component['meta'] = meta
-                # # print(f"Updated meta for {component_id}: {meta}")
+                # print(f"Updated meta for {component_id}: {meta}")
             # else:
                 # print(f"Component {component_id} has no meta field")
             
             updated_data[component_id] = updated_component
         else:
-            # # print(f"Component {component_id} is not dict, keeping as-is")
+            # print(f"Component {component_id} is not dict, keeping as-is")
             updated_data[component_id] = component
     
-    # # print(f"Returning updated_data with keys: {list(updated_data.keys())}")
+    # print(f"Returning updated_data with keys: {list(updated_data.keys())}")
     return updated_data
 
 def halve_grid_dimensions(position_data):
