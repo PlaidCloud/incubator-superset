@@ -55,12 +55,19 @@ def upgrade():
                 # print(f"Parsed position_data keys: {list(position_data.keys())}")
                 
                 updated_data = double_grid_dimensions(position_data)
-                print(f"--------------------Updated position_data: {json.dumps(updated_data)}...")
+                print(f"--------------------position_data to update: {json.dumps(updated_data)}...")
                 
                 connection.execute(
                     text("UPDATE dashboards SET position_json = :position_json WHERE id = :id"),
                     {
                         "position_json": json.dumps(updated_data),
+                        "id": dashboard_id
+                    }
+                )
+                print(f"--------------------Updated position_data:")
+                connection.execute(
+                    text("SELECT id, position_json from dashboards where id = :id"),
+                    {
                         "id": dashboard_id
                     }
                 )
