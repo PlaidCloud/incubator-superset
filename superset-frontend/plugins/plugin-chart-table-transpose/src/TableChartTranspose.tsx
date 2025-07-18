@@ -785,7 +785,8 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           const html = isHtml && allowRenderHtml ? { __html: text } : undefined;
 
           const isFirstColumn = i === 0;
-          const isRowTotal = value === row.original.rowTotal;
+          const isAllSegmentsColumn = column.label === 'All Segments'
+          const isRowTotal = isAllSegmentsColumn && value === row.original.rowTotal;
           const isBoldText = isFirstColumn && rowConfig?.[row.original.metric as string]?.boldText || false;
           const isItalicText = isFirstColumn && rowConfig?.[row.original.metric as string]?.italicText || false;
           const indent = isFirstColumn && rowConfig?.[row.original.metric as string]?.indent || 0;
@@ -796,7 +797,8 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           const isUnderlineText = isFirstColumn && rowConfig?.[row.original.metric as string]?.underlineText || false; // Add this line
 
           // Column Text Align takes preceddence over Row Text Align
-          const columnTextAlign = transposeColumnConfig?.[column.key]?.horizontalAlign;
+          const columnTextAlign = transposeColumnConfig?.[column.key]?.horizontalAlign ||
+            transposeColumnConfig?.[column.label]?.horizontalAlign;
 
           className = className.replace('right-border-only', '');
 
