@@ -74,12 +74,10 @@ def upgrade():
                 )
                 updated_row = updated_result.fetchone()
                 if updated_row:
-                    print(f"Updated position_json: {updated_row[1]}")
+                    print(f"Updated position_json for dashboard_id {updated_row[0]}: {updated_row[1]}")
                 else:
                     print(f"Could not retrieve updated data for dashboard {dashboard_id}")
 
-                updated_count += 1
-                print(f"Successfully updated dashboard {dashboard_id}")
                 updated_count += 1
                 print(f"Successfully updated dashboard {dashboard_id}")
                 
