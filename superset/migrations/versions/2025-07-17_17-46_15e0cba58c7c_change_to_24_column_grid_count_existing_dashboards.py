@@ -15,6 +15,7 @@ import logging
 from alembic import op
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +23,11 @@ def upgrade():
     """
     Double width and height values in dashboard position_json
     """
-    connection = op.get_bind()
+    bind = op.get_bind()
+    session = Session(bind=bind)
     
     try:
-        result = connection.execute(
+        result = session.execute(
             text("SELECT id, position_json FROM dashboards")
         )
         
@@ -57,7 +59,7 @@ def upgrade():
                 updated_data = double_grid_dimensions(position_data)
                 # print(f"--------------------position_data to update: {json.dumps(updated_data)}...")
                 
-                connection.execute(
+                session.execute(
                     text("UPDATE dashboards SET position_json = :position_json WHERE id = :id"),
                     {
                         "position_json": json.dumps(updated_data),
@@ -66,7 +68,7 @@ def upgrade():
                 )
 
                 # print(f"--------------------Updated position_data:")
-                # updated_result = connection.execute(
+                # updated_result = session.execute(
                 #     text("SELECT id, position_json from dashboards where id = :id"),
                 #     {
                 #         "id": dashboard_id
@@ -98,10 +100,11 @@ def downgrade():
     """
     Halve width and height values in dashboard position_json
     """
-    connection = op.get_bind()
+    bind = op.get_bind()
+    session = Session(bind=bind)
     
     try:
-        result = connection.execute(
+        result = session.execute(
             text("SELECT id, position_json FROM dashboards WHERE position_json IS NOT NULL")
         )
         
@@ -121,7 +124,7 @@ def downgrade():
                 position_data = json.loads(position_json_str)
                 reverted_data = halve_grid_dimensions(position_data)
                 
-                connection.execute(
+                session.execute(
                     text("UPDATE dashboards SET position_json = :position_json WHERE id = :id"),
                     {
                         "position_json": json.dumps(reverted_data),
