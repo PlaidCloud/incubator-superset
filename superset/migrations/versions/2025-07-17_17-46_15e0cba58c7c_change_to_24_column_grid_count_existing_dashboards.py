@@ -26,21 +26,31 @@ def upgrade():
     
     try:
         result = connection.execute(
-            text("SELECT id, position_json FROM dashboards WHERE position_json IS NOT NULL")
+            text("SELECT id, position_json FROM dashboards")
         )
+        
+        # Convert result to list to check if empty
+        rows = result.fetchall()
+        
+        if len(rows) == 0:
+            raise Exception("No dashboards found in the database. Migration cannot proceed.")
         
         updated_count = 0
         total_dashboards = 0
         
-        for row in result:
+        for row in rows:
             total_dashboards += 1
             dashboard_id = row[0]
             position_json_str = row[1]
             
             logger.info(f"Processing dashboard {dashboard_id}")
-            logger.debug(f"Original position_json: {position_json_str[:200]}...")
+            logger.debug(f"Original position_json: {position_json_str[:200] if position_json_str else 'None'}...")
             
             try:
+                if position_json_str is None:
+                    logger.info(f"Dashboard {dashboard_id} has no position_json, skipping")
+                    continue
+                    
                 position_data = json.loads(position_json_str)
                 logger.debug(f"Parsed position_data keys: {list(position_data.keys())}")
                 
@@ -63,6 +73,9 @@ def upgrade():
         
         logger.info(f"Migration completed. Total: {total_dashboards}, Updated: {updated_count} dashboards")
         
+        if updated_count == 0:
+            logger.warning("No dashboards were updated. All dashboards may have null position_json.")
+        
     except SQLAlchemyError as e:
         logger.error(f"Failed to execute migration: {e}")
         raise
@@ -78,9 +91,15 @@ def downgrade():
             text("SELECT id, position_json FROM dashboards WHERE position_json IS NOT NULL")
         )
         
+        # Convert result to list to check if empty
+        rows = result.fetchall()
+        
+        if len(rows) == 0:
+            raise Exception("No dashboards with position_json found in the database. Downgrade cannot proceed.")
+        
         reverted_count = 0
         
-        for row in result:
+        for row in rows:
             dashboard_id = row[0]
             position_json_str = row[1]
             
