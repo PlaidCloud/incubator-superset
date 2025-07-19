@@ -154,7 +154,7 @@ const defaultTheme = {
     max: 3000,
   },
   transitionTiming: 0.3,
-  gridUnit: 4,
+  gridUnit: 3,
   brandIconMaxWidth: 37,
 };
 
