@@ -49,9 +49,11 @@ export type TableColumnConfig = {
   colorPositiveNegative?: boolean;
   truncateLongCells?: boolean;
   currencyFormat?: Currency;
-  indent?: number;      // Add this
-  boldText?: boolean;   // Add this
-  italicText?: boolean; // Add this
+  indent?: number; 
+  boldText?: boolean;
+  italicText?: boolean;
+  fontSize?: number;
+  disableSortBy?: boolean;
 };
 
 export interface DataColumnMeta {
@@ -153,6 +155,7 @@ export interface TableChartTransformedProps<D extends DataRecord = DataRecord> {
   startDateOffset?: string;
   rowConfig?: any;
   custom_css?: string;
+  transposeColumnConfig?: Record<string, TableColumnConfig>;
 }
 
 export enum ColorSchemeEnum {
