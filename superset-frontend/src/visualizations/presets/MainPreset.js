@@ -193,6 +193,10 @@ export default class MainPreset extends Preset {
         new SupersetPluginChartWhale().configure({ key: 'ext-whale' }),
         new TableChartTransposePlugin().configure({ key: 'ext-table-transpose' }),
         ...experimentalPlugins,
+        new SupersetPluginChartWhale().configure({
+          key: 'ext-whale',
+        }),
+        new TableChartTransposePlugin().configure({ key: 'ext-table-transpose' }),
       ],
     });
   }

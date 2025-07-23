@@ -458,6 +458,8 @@ tzdata==2024.2
     #   celery
     #   kombu
     #   pandas
+unicodecsv==0.14.1
+    # via plaidcloud-rpc
 url-normalize==1.4.3
     # via requests-cache
 urllib3==1.26.18
