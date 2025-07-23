@@ -80,7 +80,9 @@ cffi==1.17.1
     # via
     #   -c requirements/base.txt
     #   cryptography
+    #   gevent
     #   pynacl
+    #   trio
 cfgv==3.4.0
     # via pre-commit
 charset-normalizer==3.4.0
@@ -120,7 +122,10 @@ colorama==0.4.6
     # via
     #   -c requirements/base.txt
     #   apache-superset
+    #   click
     #   flask-appbuilder
+    #   pytest
+    #   tqdm
 contourpy==1.0.7
     # via matplotlib
 coverage==7.6.8
@@ -314,10 +319,6 @@ grpcio==1.68.0
     #   grpcio-status
 grpcio-status==1.60.1
     # via google-api-core
-gunicorn==23.0.0
-    # via
-    #   -c requirements/base.txt
-    #   apache-superset
 h11==0.16.0
     # via
     #   -c requirements/base.txt
@@ -460,6 +461,7 @@ numpy==1.26.4
     #   pandas
     #   pandas-gbq
     #   prophet
+    #   pyarrow
 oauthlib==3.2.2
     # via requests-oauthlib
 odfpy==1.4.1
@@ -491,15 +493,15 @@ packaging==24.2
     #   deprecation
     #   docker
     #   google-cloud-bigquery
-    #   gunicorn
     #   limits
     #   marshmallow
     #   marshmallow-sqlalchemy
     #   matplotlib
     #   pytest
+    #   python-calamine
     #   shillelagh
     #   sqlalchemy-bigquery
-pandas==2.0.3
+pandas==2.3.0
     # via
     #   -c requirements/base.txt
     #   apache-superset
@@ -572,8 +574,10 @@ protobuf==4.25.5
     #   proto-plus
 psutil==6.1.0
     # via apache-superset
-psycopg2-binary==2.9.6
-    # via apache-superset
+psycopg2-binary==2.9.9
+    # via
+    #   -c requirements/base.txt
+    #   apache-superset
 pyarrow==14.0.2
     # via
     #   -c requirements/base.txt
@@ -645,6 +649,10 @@ pytest-cov==6.0.0
     # via apache-superset
 pytest-mock==3.10.0
     # via apache-superset
+python-calamine==0.3.2
+    # via
+    #   -c requirements/base.txt
+    #   pandas
 python-dateutil==2.9.0.post0
     # via
     #   -c requirements/base.txt
@@ -677,6 +685,8 @@ pytz==2024.2
     #   flask-babel
     #   pandas
     #   trino
+pywin32==311
+    # via docker
 pyxlsb==1.0.10
     # via
     #   -c requirements/base.txt
@@ -727,8 +737,9 @@ selenium==4.27.1
     # via
     #   -c requirements/base.txt
     #   apache-superset
-setuptools==75.6.0
+setuptools==75.8.0
     # via
+    #   -c requirements/base.txt
     #   nodeenv
     #   pandas-gbq
     #   pydata-google-auth
@@ -834,6 +845,7 @@ tzdata==2024.2
     #   celery
     #   kombu
     #   pandas
+    #   tzlocal
 tzlocal==5.2
     # via trino
 url-normalize==1.4.3
@@ -855,6 +867,8 @@ vine==5.1.0
     #   kombu
 virtualenv==20.23.1
     # via pre-commit
+waitress==3.0.2
+    # via apache-superset
 wcwidth==0.2.13
     # via
     #   -c requirements/base.txt
