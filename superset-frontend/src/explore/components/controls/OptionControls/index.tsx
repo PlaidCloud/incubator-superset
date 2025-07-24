@@ -381,10 +381,15 @@ export const OptionControlLabel = ({
       >
         <Icons.XSmall iconColor={theme.colors.grayscale.light1} />
       </CloseContainer>
-      <Label data-test="control-label">
-        {isFunction && <Icons.FieldDerived />}
-        {getLabelContent()}
-      </Label>
+      {!adhocMetric?.emptyRowHeading ?
+        <Label data-test="control-label">
+          {isFunction && <Icons.FieldDerived />}
+          {getLabelContent()}
+        </Label>
+        :
+        <Label data-test="control-label">
+          {getLabelContent()}
+        </Label>}
       {(!!datasourceWarningMessage || isExtra) && (
         <StyledInfoTooltipWithTrigger
           icon="exclamation-triangle"

@@ -50,6 +50,9 @@ import {
   StyledColumnOption,
 } from 'src/explore/components/optionRenderers';
 import { getColumnKeywords } from 'src/explore/controlUtils/getColumnKeywords';
+import { Input } from 'src/components/Input';
+import { hasCustomLabels } from 'src/components/Select/utils';
+import Label from 'src/components/Label';
 
 const propTypes = {
   onChange: PropTypes.func.isRequired,
@@ -85,6 +88,7 @@ const StyledSelect = styled(Select)`
 `;
 
 export const SAVED_TAB_KEY = 'SAVED';
+export const HEADING_TAB_KEY = 'HEADING'; // Add this new constant
 
 export default class AdhocMetricEditPopover extends PureComponent {
   // "Saved" is a default tab unless there are no saved metrics for dataset
@@ -98,6 +102,7 @@ export default class AdhocMetricEditPopover extends PureComponent {
     this.onAggregateChange = this.onAggregateChange.bind(this);
     this.onSavedMetricChange = this.onSavedMetricChange.bind(this);
     this.onSqlExpressionChange = this.onSqlExpressionChange.bind(this);
+    this.onHeadingChange = this.onHeadingChange.bind(this);
     this.onDragDown = this.onDragDown.bind(this);
     this.onMouseMove = this.onMouseMove.bind(this);
     this.onMouseUp = this.onMouseUp.bind(this);
@@ -105,12 +110,14 @@ export default class AdhocMetricEditPopover extends PureComponent {
     this.handleAceEditorRef = this.handleAceEditorRef.bind(this);
     this.refreshAceEditor = this.refreshAceEditor.bind(this);
     this.getDefaultTab = this.getDefaultTab.bind(this);
+    this.onEmptyRowChange = this.onEmptyRowChange.bind(this);
 
     this.state = {
       adhocMetric: this.props.adhocMetric,
       savedMetric: this.props.savedMetric,
       width: POPOVER_INITIAL_WIDTH,
       height: POPOVER_INITIAL_HEIGHT,
+      currentTab: this.getDefaultTab(), // Add this to track current tab
     };
     document.addEventListener('mouseup', this.onMouseUp);
   }
@@ -122,10 +129,10 @@ export default class AdhocMetricEditPopover extends PureComponent {
   componentDidUpdate(prevProps, prevState) {
     if (
       prevState.adhocMetric?.sqlExpression !==
-        this.state.adhocMetric?.sqlExpression ||
+      this.state.adhocMetric?.sqlExpression ||
       prevState.adhocMetric?.aggregate !== this.state.adhocMetric?.aggregate ||
       prevState.adhocMetric?.column?.column_name !==
-        this.state.adhocMetric?.column?.column_name ||
+      this.state.adhocMetric?.column?.column_name ||
       prevState.savedMetric?.metric_name !== this.state.savedMetric?.metric_name
     ) {
       this.props.getCurrentLabel({
@@ -145,6 +152,16 @@ export default class AdhocMetricEditPopover extends PureComponent {
   getDefaultTab() {
     const { adhocMetric, savedMetric, savedMetricsOptions, isNewMetric } =
       this.props;
+
+    if (adhocMetric.emptyRowHeading || adhocMetric.isEmpty) {
+      return HEADING_TAB_KEY;
+    }
+
+    // If this is a heading metric, default to heading tab
+    if (adhocMetric.emptyRowHeading) {
+      return HEADING_TAB_KEY;
+    }
+
     if (isDefined(adhocMetric.column) || isDefined(adhocMetric.sqlExpression)) {
       return adhocMetric.expressionType;
     }
@@ -233,6 +250,22 @@ export default class AdhocMetricEditPopover extends PureComponent {
     }));
   }
 
+  onHeadingChange(event) {
+    this.setState(prevState => ({
+      adhocMetric: prevState.adhocMetric.duplicateWith({
+        emptyRowHeading: true,
+        emptyRowHeadingText: event.target.value,
+        isEmpty: false,
+        // Clear other fields when using heading
+        column: undefined,
+        aggregate: undefined,
+        sqlExpression: undefined,
+        expressionType: undefined,
+      }),
+      savedMetric: undefined,
+    }));
+  }
+
   onDragDown(e) {
     this.dragStartX = e.clientX;
     this.dragStartY = e.clientY;
@@ -260,6 +293,7 @@ export default class AdhocMetricEditPopover extends PureComponent {
   }
 
   onTabChange(tab) {
+    this.setState({ currentTab: tab }); // Update current tab in state
     this.refreshAceEditor();
     this.props.getCurrentTab(tab);
   }
@@ -290,6 +324,23 @@ export default class AdhocMetricEditPopover extends PureComponent {
     return <StyledMetricOption metric={savedMetric} showType />;
   }
 
+  onEmptyRowChange(event) {
+    const isEmpty = event.target.checked;
+    this.setState(prevState => ({
+      adhocMetric: prevState.adhocMetric.duplicateWith({
+        emptyRowHeading: isEmpty || !!prevState.adhocMetric.emptyRowHeadingText,
+        isEmpty: isEmpty,
+        emptyRowHeadingText: isEmpty ? '' : prevState.adhocMetric.emptyRowHeadingText,
+        // Clear other fields when using empty row
+        column: undefined,
+        aggregate: undefined,
+        sqlExpression: undefined,
+        expressionType: undefined,
+      }),
+      savedMetric: undefined,
+    }));
+  }
+
   render() {
     const {
       adhocMetric: propsAdhocMetric,
@@ -304,7 +355,7 @@ export default class AdhocMetricEditPopover extends PureComponent {
       isLabelModified,
       ...popoverProps
     } = this.props;
-    const { adhocMetric, savedMetric } = this.state;
+    const { adhocMetric, savedMetric, currentTab } = this.state;
     const keywords = sqlKeywords.concat(getColumnKeywords(columns));
 
     const columnValue =
@@ -339,22 +390,40 @@ export default class AdhocMetricEditPopover extends PureComponent {
       autoFocus: true,
     };
 
-    const stateIsValid = adhocMetric.isValid() || savedMetric?.metric_name;
-    const hasUnsavedChanges =
-      isLabelModified ||
-      isNewMetric ||
-      !adhocMetric.equals(propsAdhocMetric) ||
+    const stateIsValid = adhocMetric.isValid() || savedMetric?.metric_name ||
+      (adhocMetric.emptyRowHeading && (adhocMetric.emptyRowHeadingText || adhocMetric.isEmpty));
+
+    let adhocMetricContentChanged = !adhocMetric.equals(propsAdhocMetric);
+    // If propsAdhocMetric exists and both are headings, explicitly check text change
+    if (
+      propsAdhocMetric &&
+      (propsAdhocMetric.emptyRowHeading || propsAdhocMetric.isEmpty) &&
+      (adhocMetric.emptyRowHeading || adhocMetric.isEmpty)
+    ) {
+      if (adhocMetric.emptyRowHeadingText !== propsAdhocMetric.emptyRowHeadingText ||
+        adhocMetric.isEmpty !== propsAdhocMetric.isEmpty) {
+        adhocMetricContentChanged = true;
+      }
+    }
+
+    const savedMetricContentChanged =
       (!(
         typeof savedMetric?.metric_name === 'undefined' &&
         typeof propsSavedMetric?.metric_name === 'undefined'
       ) &&
         savedMetric?.metric_name !== propsSavedMetric?.metric_name);
 
+    const hasUnsavedChanges =
+      isLabelModified ||
+      isNewMetric ||
+      adhocMetricContentChanged ||
+      savedMetricContentChanged;
+
     let extra = {};
     if (datasource?.extra) {
       try {
         extra = JSON.parse(datasource.extra);
-      } catch {} // eslint-disable-line no-empty
+      } catch { } // eslint-disable-line no-empty
     }
 
     return (
@@ -495,6 +564,54 @@ export default class AdhocMetricEditPopover extends PureComponent {
               className="filter-sql-editor"
               wrapEnabled
             />
+          </Tabs.TabPane>
+          <Tabs.TabPane
+            key={HEADING_TAB_KEY}
+            tab={t('Heading')}
+            data-test="adhoc-metric-edit-tab#heading"
+          >
+            <div style={{ padding: '0px 0' }}>
+              <FormItem
+                label={
+                  <span>
+                    {t('Section Heading')}
+                    <Tooltip title={t('This will create an empty row with only the heading text in the first column when the table is transposed')}>
+                      <i
+                        className="fa fa-info-circle"
+                        style={{ marginLeft: '8px', color: '#666', cursor: 'help' }}
+                      />
+                    </Tooltip>
+                  </span>
+                }
+              >
+                <Input
+                  placeholder={t('Enter heading text')}
+                  value={adhocMetric.emptyRowHeadingText || ''}
+                  onChange={this.onHeadingChange}
+                  autoFocus
+                  data-test="heading-input"
+                />
+              </FormItem>
+              <FormItem>
+                <Label>
+                  <Input
+                    type="checkbox"
+                    checked={adhocMetric.isEmpty || false}
+                    onChange={this.onEmptyRowChange}
+                    data-test="empty-row-checkbox"
+                  />
+                  <span style={{ marginLeft: '8px' }}>
+                    {t('Empty row')}
+                  </span>
+                  <Tooltip title={t('Create a completely empty row for spacing in the transposed table')}>
+                    <i
+                      className="fa fa-info-circle"
+                      style={{ marginLeft: '8px', color: '#666', cursor: 'help' }}
+                    />
+                  </Tooltip>
+                </Label>
+              </FormItem>
+            </div>
           </Tabs.TabPane>
         </Tabs>
         <div>
