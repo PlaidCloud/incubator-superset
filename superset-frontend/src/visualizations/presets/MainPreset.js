@@ -82,6 +82,7 @@ import { HandlebarsChartPlugin } from '@superset-ui/plugin-chart-handlebars';
 import { FilterPlugins } from 'src/constants';
 import AgGridTableChartPlugin from '@superset-ui/plugin-chart-ag-grid-table';
 import TimeTableChartPlugin from '../TimeTable';
+import { SupersetPluginChartWhale } from '@superset-ui/plugin-chart-whale';
 
 export default class MainPreset extends Preset {
   constructor() {
@@ -191,6 +192,7 @@ export default class MainPreset extends Preset {
             },
           ],
         }).configure({ key: VizType.Cartodiagram }),
+        new SupersetPluginChartWhale().configure({ key: 'ext-whale' }),
         ...experimentalPlugins,
         ...agGridTablePlugin,
       ],
