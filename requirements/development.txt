@@ -80,9 +80,7 @@ cffi==1.17.1
     # via
     #   -c requirements/base.txt
     #   cryptography
-    #   gevent
     #   pynacl
-    #   trio
 cfgv==3.4.0
     # via pre-commit
 charset-normalizer==3.4.0
@@ -122,10 +120,7 @@ colorama==0.4.6
     # via
     #   -c requirements/base.txt
     #   apache-superset
-    #   click
     #   flask-appbuilder
-    #   pytest
-    #   tqdm
 contourpy==1.0.7
     # via matplotlib
 coverage==7.6.8
@@ -319,6 +314,10 @@ grpcio==1.68.0
     #   grpcio-status
 grpcio-status==1.60.1
     # via google-api-core
+gunicorn==23.0.0
+    # via
+    #   -c requirements/base.txt
+    #   apache-superset
 h11==0.16.0
     # via
     #   -c requirements/base.txt
@@ -493,6 +492,7 @@ packaging==24.2
     #   deprecation
     #   docker
     #   google-cloud-bigquery
+    #   gunicorn
     #   limits
     #   marshmallow
     #   marshmallow-sqlalchemy
@@ -685,8 +685,6 @@ pytz==2024.2
     #   flask-babel
     #   pandas
     #   trino
-pywin32==311
-    # via docker
 pyxlsb==1.0.10
     # via
     #   -c requirements/base.txt
@@ -845,7 +843,6 @@ tzdata==2024.2
     #   celery
     #   kombu
     #   pandas
-    #   tzlocal
 tzlocal==5.2
     # via trino
 url-normalize==1.4.3
@@ -867,8 +864,6 @@ vine==5.1.0
     #   kombu
 virtualenv==20.23.1
     # via pre-commit
-waitress==3.0.2
-    # via apache-superset
 wcwidth==0.2.13
     # via
     #   -c requirements/base.txt

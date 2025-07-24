@@ -54,8 +54,6 @@ cffi==1.17.1
     # via
     #   cryptography
     #   pynacl
-chardet==5.2.0
-    # via messytables
 charset-normalizer==3.4.0
     # via requests
 click==8.1.7
@@ -92,10 +90,8 @@ cryptography==43.0.3
     #   pyopenssl
 databend-driver==0.27.4
     # via databend-sqlalchemy
-databend-sqlalchemy @ git+https://github.com/PlaidCloud/databend-sqlalchemy.git@c463b77bee2b5a57bc871d2c109061d7fcf22454
-    # via
-    #   -r requirements/base.in
-    #   plaidcloud-rpc
+databend-sqlalchemy==0.5.2
+    # via -r requirements/base.in
 defusedxml==0.7.1
     # via
     #   odfpy
@@ -176,8 +172,6 @@ hashids==1.3.1
     # via apache-superset (pyproject.toml)
 holidays==0.25
     # via apache-superset (pyproject.toml)
-html5lib==1.1
-    # via messytables
 humanize==4.11.0
     # via apache-superset (pyproject.toml)
 idna==3.10
@@ -199,8 +193,6 @@ jinja2==3.1.4
     # via
     #   flask
     #   flask-babel
-json-table-schema==0.2.1
-    # via messytables
 jsonpath-ng==1.7.0
     # via apache-superset (pyproject.toml)
 jsonschema==4.17.3
@@ -211,8 +203,6 @@ korean-lunar-calendar==0.3.1
     # via holidays
 limits==3.13.0
     # via flask-limiter
-lxml==5.3.1
-    # via messytables
 mako==1.3.6
     # via
     #   apache-superset (pyproject.toml)
@@ -235,8 +225,6 @@ marshmallow-sqlalchemy==0.28.2
     # via flask-appbuilder
 mdurl==0.1.2
     # via markdown-it-py
-messytables @ git+https://github.com/PlaidCloud/messytables.git@4469aaf21ebc2fa6527386299573e64cbefa5844#egg=messytables
-    # via plaidcloud-rpc
 msgpack==1.0.8
     # via apache-superset (pyproject.toml)
 msgspec==0.18.6
@@ -284,9 +272,9 @@ parsedatetime==2.6
     # via apache-superset (pyproject.toml)
 pgsanity==0.2.9
     # via apache-superset (pyproject.toml)
-plaidcloud-config @ git+https://github.com/PlaidCloud/plaidcloud-config.git@306dd73d32d4de6692d2204806f3b0a835304592#subdirectory=python
+plaidcloud-config @ git+https://github.com/PlaidCloud/plaidcloud-config.git@b2f57e5796ed40be91f8a9b94435af396baa0463#subdirectory=python
     # via -r requirements/base.in
-plaidcloud-rpc @ git+https://github.com/PlaidCloud/plaid-rpc.git@4cf66b9f14265a6a230dd519d6bb5704d43baf90
+plaidcloud-rpc==1.6.3
     # via -r requirements/base.in
 platformdirs==3.8.1
     # via requests-cache
@@ -299,10 +287,7 @@ prison==0.2.1
 prompt-toolkit==3.0.48
     # via click-repl
 psycopg2-binary==2.9.9
-    # via
-    #   -r requirements/base.in
-    #   plaidcloud-rpc
-    #   sqlalchemy-greenplum
+    # via -r requirements/base.in
 pyarrow==14.0.2
     # via
     #   apache-superset (pyproject.toml)
@@ -342,15 +327,12 @@ python-dateutil==2.9.0.post0
     #   croniter
     #   flask-appbuilder
     #   holidays
-    #   messytables
     #   pandas
     #   shillelagh
 python-dotenv==1.0.1
     # via apache-superset (pyproject.toml)
 python-geohash==0.8.5
     # via apache-superset (pyproject.toml)
-python-magic==0.4.27
-    # via messytables
 python3-openid==3.2.0
     # via flask-openid
 pytz==2024.2
@@ -372,7 +354,6 @@ referencing==0.31.1
     # via -r requirements/base.in
 requests==2.32.2
     # via
-    #   messytables
     #   plaidcloud-rpc
     #   requests-cache
     #   requests-futures
@@ -399,8 +380,6 @@ simplejson==3.19.3
     # via apache-superset (pyproject.toml)
 six==1.16.0
     # via
-    #   html5lib
-    #   messytables
     #   prison
     #   python-dateutil
     #   url-normalize
@@ -421,10 +400,7 @@ sqlalchemy==1.4.54
     #   marshmallow-sqlalchemy
     #   plaidcloud-rpc
     #   shillelagh
-    #   sqlalchemy-greenplum
     #   sqlalchemy-utils
-sqlalchemy-greenplum==0.2.1
-    # via plaidcloud-rpc
 sqlalchemy-utils==0.38.3
     # via
     #   apache-superset (pyproject.toml)
@@ -475,9 +451,7 @@ vine==5.1.0
 wcwidth==0.2.13
     # via prompt-toolkit
 webencodings==0.5.1
-    # via
-    #   bleach
-    #   html5lib
+    # via bleach
 websocket-client==1.8.0
     # via selenium
 werkzeug==3.1.3
@@ -500,9 +474,7 @@ wtforms==3.2.1
 wtforms-json==0.3.5
     # via apache-superset (pyproject.toml)
 xlrd==2.0.1
-    # via
-    #   messytables
-    #   pandas
+    # via pandas
 xlsxwriter==3.0.9
     # via
     #   apache-superset (pyproject.toml)
