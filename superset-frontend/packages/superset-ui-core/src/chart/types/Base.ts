@@ -55,11 +55,24 @@ export enum AppSection {
   Embedded = 'EMBEDDED',
 }
 
-export type FilterState = { value?: any; [key: string]: any };
+export type FilterState = {
+  value?: any;
+  selectedValues?: any[] | null;
+  filters?: Record<string, any>;
+  multiColumnFilters?: Array<{
+    column: string;
+    value: any;
+    operator?: string;
+  }>;
+  [key: string]: any;
+};
 
 export type DataMask = {
   extraFormData?: ExtraFormData;
   filterState?: FilterState;
+  currentState?: {
+    value?: any;
+  };
   ownState?: JsonObject;
 };
 
