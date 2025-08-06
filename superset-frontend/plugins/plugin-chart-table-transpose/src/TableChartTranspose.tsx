@@ -383,7 +383,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           filters:
             updatedFilters && Object.keys(updatedFilters).length
               ? updatedFilters
-              : null,
+              : undefined,
         },
       },
       isCurrentValueSelected: isActiveFilterValue(key, value),
