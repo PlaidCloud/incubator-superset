@@ -323,18 +323,21 @@ export default function TableChart<D extends DataRecord = DataRecord>(
 
   const getCrossFilterDataMask = (key: string, value: DataRecordValue) => {
     let updatedFilters = { ...(filters || {}) };
+
+    // Check if this value is already selected for this column
     if (filters && isActiveFilterValue(key, value)) {
-      updatedFilters = {};
+      // Remove the value from the filter
+      const currentValues = updatedFilters[key] || [];
+      updatedFilters[key] = currentValues.filter(val => val !== value);
+
+      // If no values left, remove the column filter entirely
+      if (updatedFilters[key].length === 0) {
+        delete updatedFilters[key];
+      }
     } else {
-      updatedFilters = {
-        [key]: [value],
-      };
-    }
-    if (
-      Array.isArray(updatedFilters[key]) &&
-      updatedFilters[key].length === 0
-    ) {
-      delete updatedFilters[key];
+      // Add the value to existing filters for this column
+      const currentValues = updatedFilters[key] || [];
+      updatedFilters[key] = [...currentValues, value];
     }
 
     const groupBy = Object.keys(updatedFilters);
@@ -347,7 +350,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         const valueLabels = filterValues.map(value =>
           isTimestamp ? timestampFormatter(value) : value,
         );
-        labelElements.push(`${valueLabels.join(', ')}`);
+        labelElements.push(`${col}: ${valueLabels.join(', ')}`);
       }
     });
 
@@ -375,12 +378,12 @@ export default function TableChart<D extends DataRecord = DataRecord>(
                 }),
         },
         filterState: {
-          label: labelElements.join(', '),
+          label: labelElements.join(' & '),
           value: groupByValues.length ? groupByValues : null,
           filters:
             updatedFilters && Object.keys(updatedFilters).length
               ? updatedFilters
-              : null,
+              : undefined,
         },
       },
       isCurrentValueSelected: isActiveFilterValue(key, value),
@@ -388,13 +391,64 @@ export default function TableChart<D extends DataRecord = DataRecord>(
   };
 
   const toggleFilter = useCallback(
-    function toggleFilter(key: string, val: DataRecordValue) {
+    function toggleFilter(key: string, val: DataRecordValue, event?: React.MouseEvent) {
       if (!emitCrossFilters) {
         return;
       }
-      setDataMask(getCrossFilterDataMask(key, val).dataMask);
+
+      // Check if Ctrl/Cmd key is pressed for multi-select
+      if (event?.ctrlKey || event?.metaKey) {
+        // Multi-select mode: add/remove values from the same column
+        setDataMask(getCrossFilterDataMask(key, val).dataMask);
+      } else if (event?.shiftKey) {
+        // Shift key: clear all filters and set only this value
+        const singleValueFilter = {
+          [key]: [val]
+        };
+
+        const labelElements = [`${key}: ${val}`];
+
+        setDataMask({
+          extraFormData: {
+            filters: [{
+              col: key,
+              op: 'IN' as const,
+              val: [val instanceof Date ? val.getTime() : val!],
+              grain: key === DTTM_ALIAS ? timeGrain : undefined,
+            }],
+          },
+          filterState: {
+            label: labelElements.join(', '),
+            value: [[val]],
+            filters: singleValueFilter,
+          },
+        });
+      } else {
+        // Regular click: replace all filters with this single value
+        const singleValueFilter = {
+          [key]: [val]
+        };
+
+        const labelElements = [`${key}: ${val}`];
+
+        setDataMask({
+          extraFormData: {
+            filters: [{
+              col: key,
+              op: 'IN' as const,
+              val: [val instanceof Date ? val.getTime() : val!],
+              grain: key === DTTM_ALIAS ? timeGrain : undefined,
+            }],
+          },
+          filterState: {
+            label: labelElements.join(', '),
+            value: [[val]],
+            filters: singleValueFilter,
+          },
+        });
+      }
     },
-    [emitCrossFilters, getCrossFilterDataMask, setDataMask],
+    [emitCrossFilters, getCrossFilterDataMask, setDataMask, timeGrain],
   );
 
   const getSharedStyle = (column: DataColumnMeta): CSSProperties => {
@@ -795,6 +849,19 @@ export default function TableChart<D extends DataRecord = DataRecord>(
             white-space: ${value instanceof Date ? 'nowrap' : undefined};
             position: relative;
             background: ${backgroundColor || undefined};
+          
+            /* Add visual hints for multi-value filtering */
+            &.dt-is-filter {
+              cursor: pointer;
+              
+              &:hover {
+                background-color: ${theme.colors.primary.light4};
+              }
+              
+              &:hover::after {
+                opacity: 1;
+              }
+            }
           `;
 
           const cellBarStyles = css`
@@ -850,10 +917,10 @@ export default function TableChart<D extends DataRecord = DataRecord>(
             title: typeof value === 'number' ? String(value) : undefined,
             onClick:
               emitCrossFilters && !valueRange && !isMetric
-                ? () => {
+                ? (event: React.MouseEvent) => {
                     // allow selecting text in a cell
                     if (!getSelectedText()) {
-                      toggleFilter(key, value);
+                      toggleFilter(key, value, event);
                     }
                   }
                 : undefined,
