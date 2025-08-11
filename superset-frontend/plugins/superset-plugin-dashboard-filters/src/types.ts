@@ -41,9 +41,11 @@ export type SupersetPluginDashboardFiltersProps =
   SupersetPluginDashboardFiltersStylesProps &
     SupersetPluginDashboardFiltersCustomizeProps & {
       data: TimeseriesDataRecord[];
-      cols: string[];
+      col: string[];
       filterState?: {
         selectedValues?: string[];
       };
+      setDataMask: any;
+      selectState: any;
       // add typing here for the props you pass in from transformProps.ts!
     };
