@@ -60,8 +60,8 @@ const Styles = styled.div<SupersetPluginDashboardFiltersStylesProps>`
 export default function SupersetPluginDashboardFilters(
   props: SupersetPluginDashboardFiltersProps,
 ) {
-  const { data, height, width, cols } = props;
-  const { setDataMask, filterState, ownState } = props as any;
+  const { data, height, width, col, setDataMask, filterState, selectState } =
+    props;
   const { headerFontSize = 'l', boldText = false } = (props as any) ?? {};
 
   const originalDataRef = useRef<TimeseriesDataRecord[] | null>(null);
@@ -72,7 +72,7 @@ export default function SupersetPluginDashboardFilters(
     originalDataRef.current = data;
   }
 
-  const key = cols[0];
+  const key = Array.isArray(col) ? col[0] : col;
   const rootElem = createRef<HTMLDivElement>();
 
   // State to track selected values
@@ -82,17 +82,23 @@ export default function SupersetPluginDashboardFilters(
 
   useEffect(() => {
     if (!setDataMask || !key) return;
-    const alreadySet = ownState && Array.isArray(ownState.options);
+    const alreadySet = selectState && Array.isArray(selectState.options);
     const source = originalDataRef.current ?? data;
     if (!alreadySet && source) {
       const uniq = [
         ...new Set(
           source
-            .map((item: Record<string, any>) => item[key])
+            .map((item: Record<string, any>) => item[key as string])
             .filter(v => v !== null && v !== undefined),
         ),
       ].map(v => ({ label: String(v), value: String(v) }));
-      setDataMask({ ownState: { options: uniq } });
+      setDataMask({
+        filterState: {
+          selectState: {
+            options: uniq,
+          },
+        },
+      });
     }
     // do not depend on filterState; only initialize once per data/key
   }, [setDataMask, key, data]);
@@ -164,19 +170,19 @@ export default function SupersetPluginDashboardFilters(
     JSON.stringify(selectedValues) !== JSON.stringify(pendingValues);
 
   const options = React.useMemo(() => {
-    if (ownState && Array.isArray(ownState.options)) return ownState.options;
+    if (selectState && Array.isArray(selectState.options)) return selectState.options;
     const source = originalDataRef.current ?? data;
     if (!source || !key) return [];
     const uniq = [
       ...new Set(
         source
-          .map((item: Record<string, any>) => item[key])
+          .map((item: Record<string, any>) => item[key as string])
           .filter(v => v !== null && v !== undefined),
       ),
     ];
     return uniq.map(v => ({ label: String(v), value: String(v) }));
-    // rely on ownState/options rather than current data to keep options stable
-  }, [ownState, key]);
+    // rely on selectState/options rather than current data to keep options stable
+  }, [selectState, key]);
   return (
     <Styles
       ref={rootElem}

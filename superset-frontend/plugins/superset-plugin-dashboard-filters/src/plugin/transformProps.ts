@@ -27,14 +27,14 @@ export default function transformProps(chartProps: ChartProps) {
     hooks: { setDataMask } = {},
     filterState,
   } = chartProps;
-  const { cols } = formData;
+  const { col } = formData;
   const data = queriesData[0].data as TimeseriesDataRecord[];
 
   return {
     width,
     height,
     data,
-    cols,
+    col,
     setDataMask,
     filterState,
   };
