@@ -16,9 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { useEffect, createRef } from 'react';
+import React, { useEffect, createRef, useState, useRef } from 'react';
+import { Select, Button, Space } from 'antd';
 import { styled } from '@superset-ui/core';
-import { SupersetPluginDashboardFiltersProps, SupersetPluginDashboardFiltersStylesProps } from './types';
+import type { TimeseriesDataRecord } from '@superset-ui/core';
+import {
+  SupersetPluginDashboardFiltersProps,
+  SupersetPluginDashboardFiltersStylesProps,
+} from './types';
 
 // The following Styles component is a <div> element, which has been styled using Emotion
 // For docs, visit https://emotion.sh/docs/styled
@@ -28,21 +33,15 @@ import { SupersetPluginDashboardFiltersProps, SupersetPluginDashboardFiltersStyl
 // https://github.com/apache-superset/superset-ui/blob/master/packages/superset-ui-core/src/style/index.ts
 
 const Styles = styled.div<SupersetPluginDashboardFiltersStylesProps>`
-  background-color: ${({ theme }) => theme.colors.secondary.light2};
   padding: ${({ theme }) => theme.gridUnit * 4}px;
   border-radius: ${({ theme }) => theme.gridUnit * 2}px;
   height: ${({ height }) => height}px;
   width: ${({ width }) => width}px;
 
-  h3 {
-    /* You can use your props to control CSS! */
-    margin-top: 0;
-    margin-bottom: ${({ theme }) => theme.gridUnit * 3}px;
-    font-size: ${({ theme, headerFontSize }) =>
-      theme.typography.sizes[headerFontSize]}px;
-    font-weight: ${({ theme, boldText }) =>
-      theme.typography.weights[boldText ? 'bold' : 'normal']};
-  }
+  /* Horizontal scroll */
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 
   pre {
     height: ${({ theme, headerFontSize, height }) =>
@@ -58,32 +57,174 @@ const Styles = styled.div<SupersetPluginDashboardFiltersStylesProps>`
  *  * FormData (your controls!) provided as props by transformProps.ts
  */
 
-export default function SupersetPluginDashboardFilters(props: SupersetPluginDashboardFiltersProps) {
-  // height and width are the height and width of the DOM element as it exists in the dashboard.
-  // There is also a `data` prop, which is, of course, your DATA 🎉
-  const { data, height, width } = props;
+export default function SupersetPluginDashboardFilters(
+  props: SupersetPluginDashboardFiltersProps,
+) {
+  const { data, height, width, cols } = props;
+  const { setDataMask, filterState, ownState } = props as any;
+  const { headerFontSize = 'l', boldText = false } = (props as any) ?? {};
 
+  const originalDataRef = useRef<TimeseriesDataRecord[] | null>(null);
+
+  // Set original data only once
+  // Set original data only once
+  if (!originalDataRef.current && data) {
+    originalDataRef.current = data;
+  }
+
+  const key = cols[0];
   const rootElem = createRef<HTMLDivElement>();
 
-  // Often, you just want to access the DOM and do whatever you want.
-  // Here, you can do that with createRef, and the useEffect hook.
+  // State to track selected values
+  const [selectedValues, setSelectedValues] = useState<string[]>([]);
+  // State to track pending changes (before apply)
+  const [pendingValues, setPendingValues] = useState<string[]>([]);
+
   useEffect(() => {
-    const root = rootElem.current as HTMLElement;
-    console.log('Plugin element', root);
-  });
+    if (!setDataMask || !key) return;
+    const alreadySet = ownState && Array.isArray(ownState.options);
+    const source = originalDataRef.current ?? data;
+    if (!alreadySet && source) {
+      const uniq = [
+        ...new Set(
+          source
+            .map((item: Record<string, any>) => item[key])
+            .filter(v => v !== null && v !== undefined),
+        ),
+      ].map(v => ({ label: String(v), value: String(v) }));
+      setDataMask({ ownState: { options: uniq } });
+    }
+    // do not depend on filterState; only initialize once per data/key
+  }, [setDataMask, key, data]);
 
-  console.log('Plugin props', props);
+  // Initialize selected values from filterState if available
+  useEffect(() => {
+    if (filterState?.selectedValues) {
+      setSelectedValues(filterState.selectedValues);
+      setPendingValues(filterState.selectedValues);
+    }
+  }, [filterState]);
 
+  // Handle selection change (doesn't emit immediately)
+  const handleSelectionChange = (values: string[]) => {
+    setPendingValues(values);
+  };
+
+  // Apply filters
+  const handleApply = () => {
+    setSelectedValues(pendingValues);
+
+    // Emit the filter state for cross-filtering
+    if (setDataMask && key) {
+      setDataMask({
+        extraFormData: {
+          adhoc_filters:
+            pendingValues.length === 0
+              ? []
+              : [
+                  {
+                    clause: 'WHERE',
+                    subject: key,
+                    operator: pendingValues.length > 1 ? 'IN' : '==',
+                    comparator:
+                      pendingValues.length > 1
+                        ? pendingValues
+                        : pendingValues[0],
+                    expressionType: 'SIMPLE',
+                  },
+                ],
+        },
+        filterState: {
+          selectedValues: pendingValues,
+        },
+      });
+    }
+  };
+
+  // Reset filters
+  const handleReset = () => {
+    setPendingValues([]);
+    setSelectedValues([]);
+
+    // Clear the filter state
+    if (setDataMask) {
+      setDataMask({
+        extraFormData: {
+          adhoc_filters: [],
+        },
+        filterState: {
+          selectedValues: [],
+        },
+      });
+    }
+  };
+
+  // Check if there are pending changes
+  const hasChanges =
+    JSON.stringify(selectedValues) !== JSON.stringify(pendingValues);
+
+  const options = React.useMemo(() => {
+    if (ownState && Array.isArray(ownState.options)) return ownState.options;
+    const source = originalDataRef.current ?? data;
+    if (!source || !key) return [];
+    const uniq = [
+      ...new Set(
+        source
+          .map((item: Record<string, any>) => item[key])
+          .filter(v => v !== null && v !== undefined),
+      ),
+    ];
+    return uniq.map(v => ({ label: String(v), value: String(v) }));
+    // rely on ownState/options rather than current data to keep options stable
+  }, [ownState, key]);
   return (
     <Styles
       ref={rootElem}
-      boldText={props.boldText}
-      headerFontSize={props.headerFontSize}
       height={height}
       width={width}
+      headerFontSize={headerFontSize}
+      boldText={boldText}
     >
-      <h3>{props.headerText}</h3>
-      <pre>${JSON.stringify(data, null, 2)}</pre>
+      <h4>{key}</h4>
+      <Select
+        mode="multiple"
+        style={{ width: '100%', marginBottom: '12px' }}
+        placeholder="Select options"
+        value={pendingValues}
+        onChange={handleSelectionChange}
+        options={options}
+        showSearch
+        filterOption={(input, option) =>
+          String(option?.label ?? '')
+            .toLowerCase()
+            .includes(input.toLowerCase())
+        }
+      />
+
+      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+        <Button type="primary" onClick={handleApply} disabled={!hasChanges}>
+          Apply ({pendingValues.length})
+        </Button>
+
+        <Button
+          onClick={handleReset}
+          disabled={selectedValues.length === 0 && pendingValues.length === 0}
+        >
+          Reset
+        </Button>
+      </Space>
+
+      {/* Debug info */}
+      {/* <div style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
+        <div>Applied: {selectedValues.length} items</div>
+        <div>Pending: {pendingValues.length} items</div>
+        {hasChanges && (
+          <div style={{ color: 'orange' }}>Changes pending...</div>
+        )}
+        {selectedValues.length > 0 && (
+          <div>Applied values: {selectedValues.join(', ')}</div>
+        )}
+      </div> */}
     </Styles>
   );
 }
