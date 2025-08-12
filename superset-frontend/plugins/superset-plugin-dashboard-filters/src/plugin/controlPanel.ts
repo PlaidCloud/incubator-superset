@@ -114,6 +114,17 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'allow_multiple',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Allow multiple values'),
+              description: t('Enable selecting more than one column'),
+              default: false,
+            },
+          },
+        ],
       ],
     },
   ],

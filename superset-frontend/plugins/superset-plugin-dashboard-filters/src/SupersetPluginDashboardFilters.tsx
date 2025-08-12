@@ -60,8 +60,16 @@ const Styles = styled.div<SupersetPluginDashboardFiltersStylesProps>`
 export default function SupersetPluginDashboardFilters(
   props: SupersetPluginDashboardFiltersProps,
 ) {
-  const { data, height, width, col, setDataMask, filterState, selectState } =
-    props;
+  const {
+    data,
+    height,
+    width,
+    col,
+    setDataMask,
+    filterState,
+    selectState,
+    allowMultiple,
+  } = props;
   const { headerFontSize = 'l', boldText = false } = (props as any) ?? {};
 
   const originalDataRef = useRef<TimeseriesDataRecord[] | null>(null);
@@ -170,7 +178,8 @@ export default function SupersetPluginDashboardFilters(
     JSON.stringify(selectedValues) !== JSON.stringify(pendingValues);
 
   const options = React.useMemo(() => {
-    if (selectState && Array.isArray(selectState.options)) return selectState.options;
+    if (selectState && Array.isArray(selectState.options))
+      return selectState.options;
     const source = originalDataRef.current ?? data;
     if (!source || !key) return [];
     const uniq = [
@@ -193,11 +202,15 @@ export default function SupersetPluginDashboardFilters(
     >
       <h4>{key}</h4>
       <Select
-        mode="multiple"
+        mode={allowMultiple ? 'multiple' : undefined}
         style={{ width: '100%', marginBottom: '12px' }}
         placeholder="Select options"
-        value={pendingValues}
-        onChange={handleSelectionChange}
+        value={allowMultiple ? pendingValues : (pendingValues[0] ?? undefined)}
+        onChange={(val: any) =>
+          allowMultiple
+            ? handleSelectionChange(val as string[])
+            : handleSelectionChange(val ? [val as string] : [])
+        }
         options={options}
         showSearch
         filterOption={(input, option) =>
