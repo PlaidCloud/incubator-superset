@@ -108,8 +108,8 @@ const config: ControlPanelConfig = {
             name: 'col',
             config: {
               ...sharedControls.groupby,
-              label: t('Column'),
-              description: t('Column to fetch distinct values from'),
+              label: t('Columns'),
+              description: t('Columns to group by'),
               multi: false,
             },
           },
@@ -120,46 +120,8 @@ const config: ControlPanelConfig = {
             config: {
               type: 'CheckboxControl',
               label: t('Allow multiple values'),
+              description: t('Enable selecting more than one column'),
               default: false,
-            },
-          },
-        ],
-        [
-          {
-            name: 'has_default_value',
-            config: {
-              type: 'CheckboxControl',
-              label: t('Has default value'),
-              default: false,
-            },
-          },
-        ],
-        [
-          {
-            name: 'default_value',
-            config: {
-              type: 'SelectAsyncControl',
-              label: t('Default value'),
-              description: t('Default value for the filter'),
-              mutator: (data: any) => {
-                const { result } = data;
-                if (!result) {
-                  return [];
-                }
-                const options = result[0].data;
-                const key = Object.keys(options[0])[0];
-                return options.map((o: any) => ({
-                  value: o[key],
-                  label: o[key],
-                }));
-              },
-              multi: false,
-              freeForm: true,
-              method: 'POST',
-              dataEndpoint: '/api/v1/chart/data',
-              visibility: ({ controls }: { controls: any }) =>
-                Boolean(controls?.has_default_value?.value),
-              postPayload: {"datasource":{"id":26,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["channel_1"],"metrics":[],"orderby":[["channel_1",true]],"annotation_layers":[],"row_limit":1000,"series_limit":0,"order_desc":true,"url_params":{"native_filters_key":"oB-BqY_0C-Q"},"custom_params":{},"custom_form_data":{}}],"form_data":{"enableEmptyFilter":false,"defaultToFirstItem":false,"multiSelect":true,"searchAllOptions":false,"inverseSelection":false,"datasource":"26__table","groupby":["channel_1"],"adhoc_filters":[],"extra_filters":[],"extra_form_data":{},"metrics":["count"],"row_limit":1000,"showSearch":true,"defaultValue":["cypress-tests"],"url_params":{"native_filters_key":"oB-BqY_0C-Q"},"inView":true,"viz_type":"filter_select","type":"NATIVE_FILTER","dashboardId":6,"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}
             },
           },
         ],

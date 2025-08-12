@@ -17,7 +17,6 @@
  * under the License.
  */
 import {
-  ChartProps,
   QueryFormData,
   supersetTheme,
   TimeseriesDataRecord,
@@ -49,8 +48,5 @@ export type SupersetPluginDashboardFiltersProps =
       setDataMask: any;
       selectState: any;
       allowMultiple: boolean;
-      defaultValue: string | undefined;
-      datasource: string;
-      dashboardId: ChartProps;
       // add typing here for the props you pass in from transformProps.ts!
     };

@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { createRef, useState, useRef } from 'react';
+import React, { useEffect, createRef, useState, useRef } from 'react';
 import { Select, Button, Space } from 'antd';
 import { styled } from '@superset-ui/core';
 import type { TimeseriesDataRecord } from '@superset-ui/core';
@@ -60,12 +60,21 @@ const Styles = styled.div<SupersetPluginDashboardFiltersStylesProps>`
 export default function SupersetPluginDashboardFilters(
   props: SupersetPluginDashboardFiltersProps,
 ) {
-  const { data, height, width, col, setDataMask, allowMultiple, defaultValue } =
-    props;
+  const {
+    data,
+    height,
+    width,
+    col,
+    setDataMask,
+    filterState,
+    selectState,
+    allowMultiple,
+  } = props;
   const { headerFontSize = 'l', boldText = false } = (props as any) ?? {};
 
   const originalDataRef = useRef<TimeseriesDataRecord[] | null>(null);
 
+  // Set original data only once
   // Set original data only once
   if (!originalDataRef.current && data) {
     originalDataRef.current = data;
@@ -77,9 +86,38 @@ export default function SupersetPluginDashboardFilters(
   // State to track selected values
   const [selectedValues, setSelectedValues] = useState<string[]>([]);
   // State to track pending changes (before apply)
-  const [pendingValues, setPendingValues] = useState<string[]>(
-    defaultValue ? [defaultValue] : [],
-  );
+  const [pendingValues, setPendingValues] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!setDataMask || !key) return;
+    const alreadySet = selectState && Array.isArray(selectState.options);
+    const source = originalDataRef.current ?? data;
+    if (!alreadySet && source) {
+      const uniq = [
+        ...new Set(
+          source
+            .map((item: Record<string, any>) => item[key as string])
+            .filter(v => v !== null && v !== undefined),
+        ),
+      ].map(v => ({ label: String(v), value: String(v) }));
+      setDataMask({
+        filterState: {
+          selectState: {
+            options: uniq,
+          },
+        },
+      });
+    }
+    // do not depend on filterState; only initialize once per data/key
+  }, [setDataMask, key, data]);
+
+  // Initialize selected values from filterState if available
+  useEffect(() => {
+    if (filterState?.selectedValues) {
+      setSelectedValues(filterState.selectedValues);
+      setPendingValues(filterState.selectedValues);
+    }
+  }, [filterState]);
 
   // Handle selection change (doesn't emit immediately)
   const handleSelectionChange = (values: string[]) => {
@@ -119,11 +157,10 @@ export default function SupersetPluginDashboardFilters(
 
   // Reset filters
   const handleReset = () => {
-    const resetValues = defaultValue ? [defaultValue] : [];
-    setPendingValues(resetValues);
+    setPendingValues([]);
     setSelectedValues([]);
 
-    // Clear the filter state or set to default
+    // Clear the filter state
     if (setDataMask) {
       setDataMask({
         extraFormData: {
@@ -141,8 +178,8 @@ export default function SupersetPluginDashboardFilters(
     JSON.stringify(selectedValues) !== JSON.stringify(pendingValues);
 
   const options = React.useMemo(() => {
-    // if (selectState && Array.isArray(selectState.options))
-    //   return selectState.options;
+    if (selectState && Array.isArray(selectState.options))
+      return selectState.options;
     const source = originalDataRef.current ?? data;
     if (!source || !key) return [];
     const uniq = [
@@ -154,7 +191,7 @@ export default function SupersetPluginDashboardFilters(
     ];
     return uniq.map(v => ({ label: String(v), value: String(v) }));
     // rely on selectState/options rather than current data to keep options stable
-  }, [key]);
+  }, [selectState, key]);
   return (
     <Styles
       ref={rootElem}
@@ -169,7 +206,6 @@ export default function SupersetPluginDashboardFilters(
         style={{ width: '100%', marginBottom: '12px' }}
         placeholder="Select options"
         value={allowMultiple ? pendingValues : (pendingValues[0] ?? undefined)}
-        defaultValue={defaultValue}
         onChange={(val: any) =>
           allowMultiple
             ? handleSelectionChange(val as string[])
@@ -191,11 +227,7 @@ export default function SupersetPluginDashboardFilters(
 
         <Button
           onClick={handleReset}
-          disabled={
-            selectedValues.length === 0 &&
-            pendingValues.length === 0 &&
-            !defaultValue
-          }
+          disabled={selectedValues.length === 0 && pendingValues.length === 0}
         >
           Reset
         </Button>

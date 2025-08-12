@@ -25,9 +25,9 @@ export default function transformProps(chartProps: ChartProps) {
     formData,
     queriesData,
     hooks: { setDataMask } = {},
+    filterState,
   } = chartProps;
-  const { col, allowMultiple, defaultValue, datasource, dashboardId } =
-    formData;
+  const { col, allowMultiple } = formData;
   const data = queriesData[0].data as TimeseriesDataRecord[];
 
   return {
@@ -36,9 +36,7 @@ export default function transformProps(chartProps: ChartProps) {
     data,
     col,
     setDataMask,
+    filterState,
     allowMultiple,
-    defaultValue,
-    datasource,
-    dashboardId,
   };
 }
