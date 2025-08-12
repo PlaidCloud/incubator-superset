@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import React from 'react';
 import { useEffect, useState } from 'react';
 import { t, SupersetClient, getClientErrorObject } from '@superset-ui/core';
 import ControlHeader from 'src/explore/components/ControlHeader';
@@ -30,6 +31,8 @@ interface SelectAsyncControlProps extends SelectAsyncProps {
   addDangerToast: (error: string) => void;
   ariaLabel?: string;
   dataEndpoint: string;
+  postPayload?: Record<string, any>; // Optional POST data
+  method?: 'GET' | 'POST'; // HTTP method
   default?: SelectValue;
   mutator?: (
     response: Record<string, any>,
@@ -52,6 +55,8 @@ const SelectAsyncControl = ({
   allowClear = true,
   ariaLabel,
   dataEndpoint,
+  method = 'GET',
+  postPayload,
   multi = true,
   mutator,
   onChange,
@@ -91,10 +96,23 @@ const SelectAsyncControl = ({
         const { error } = e;
         addDangerToast(t('Error while fetching data: %s', error));
       });
-    const loadOptions = () =>
-      SupersetClient.get({
+
+    const loadOptions = () => {
+      if (method === 'POST') {
+        return SupersetClient.post({
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          endpoint: dataEndpoint,
+          body: JSON.stringify(postPayload),
+        });
+      }
+      return SupersetClient.get({
         endpoint: dataEndpoint,
-      })
+      });
+    };
+    const executeRequest = () =>
+      loadOptions()
         .then(response => {
           const data = mutator
             ? mutator(response.json, value)
@@ -107,9 +125,17 @@ const SelectAsyncControl = ({
         });
 
     if (!loaded) {
-      loadOptions();
+      executeRequest();
     }
-  }, [addDangerToast, dataEndpoint, mutator, value, loaded]);
+  }, [
+    addDangerToast,
+    dataEndpoint,
+    method,
+    postPayload,
+    mutator,
+    value,
+    loaded,
+  ]);
 
   return (
     <Select
