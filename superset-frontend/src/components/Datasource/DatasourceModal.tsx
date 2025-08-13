@@ -16,8 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { FunctionComponent, useState, useRef } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import {
+  FunctionComponent,
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+} from 'react';
+import { useSelector } from 'react-redux';
 import Alert from 'src/components/Alert';
 import Button from 'src/components/Button';
 import {
@@ -33,16 +39,8 @@ import Modal from 'src/components/Modal';
 import AsyncEsmComponent from 'src/components/AsyncEsmComponent';
 import ErrorMessageWithStackTrace from 'src/components/ErrorMessage/ErrorMessageWithStackTrace';
 import withToasts from 'src/components/MessageToasts/withToasts';
-import {
-  startMetaDataLoading,
-  stopMetaDataLoading,
-  syncDatasourceMetadata,
-} from 'src/explore/actions/exploreActions';
-import {
-  fetchSyncedColumns,
-  updateColumns,
-} from 'src/components/Datasource/utils';
 import { DatasetObject } from '../../features/datasets/types';
+import Checkbox from '../Checkbox';
 
 const DatasourceEditor = AsyncEsmComponent(() => import('./DatasourceEditor'));
 
@@ -95,14 +93,14 @@ function buildExtraJsonObject(
 
 const DatasourceModal: FunctionComponent<DatasourceModalProps> = ({
   addSuccessToast,
-  addDangerToast,
   datasource,
   onDatasourceSave,
   onHide,
   show,
 }) => {
-  const dispatch = useDispatch();
   const [currentDatasource, setCurrentDatasource] = useState(datasource);
+  const syncColumnsRef = useRef(false);
+  const [confirmModal, setConfirmModal] = useState<any>(null);
   const currencies = useSelector<
     {
       common: {
@@ -186,34 +184,10 @@ const DatasourceModal: FunctionComponent<DatasourceModalProps> = ({
     setIsSaving(true);
     try {
       await SupersetClient.put({
-        endpoint: `/api/v1/dataset/${currentDatasource.id}`,
+        endpoint: `/api/v1/dataset/${currentDatasource.id}?override_columns=${syncColumnsRef.current}`,
         jsonPayload: buildPayload(currentDatasource),
       });
-      if (datasource.sql !== currentDatasource.sql) {
-        // if sql has changed, save a second time with synced columns
-        dispatch(startMetaDataLoading());
-        try {
-          const columnJson = await fetchSyncedColumns(currentDatasource);
-          const columnChanges = updateColumns(
-            currentDatasource.columns,
-            columnJson,
-            addSuccessToast,
-          );
-          currentDatasource.columns = columnChanges.finalColumns;
-          dispatch(syncDatasourceMetadata(currentDatasource));
-          dispatch(stopMetaDataLoading());
-          addSuccessToast(t('Metadata has been synced'));
-        } catch (error) {
-          dispatch(stopMetaDataLoading());
-          addDangerToast(
-            t('An error has occurred while syncing virtual dataset columns'),
-          );
-        }
-        await SupersetClient.put({
-          endpoint: `/api/v1/dataset/${currentDatasource.id}`,
-          jsonPayload: buildPayload(currentDatasource),
-        });
-      }
+
       const { json } = await SupersetClient.get({
         endpoint: `/api/v1/dataset/${currentDatasource?.id}`,
       });
@@ -262,34 +236,82 @@ const DatasourceModal: FunctionComponent<DatasourceModalProps> = ({
     setErrors(err);
   };
 
-  const renderSaveDialog = () => (
-    <div>
-      <Alert
-        css={theme => ({
-          marginTop: theme.gridUnit * 4,
-          marginBottom: theme.gridUnit * 4,
-        })}
-        type="warning"
-        showIcon
-        message={t(`The dataset configuration exposed here
+  const getSaveDialog = useCallback(
+    () => (
+      <div>
+        <Alert
+          css={theme => ({
+            marginTop: theme.gridUnit * 4,
+            marginBottom: theme.gridUnit * 4,
+          })}
+          type="warning"
+          showIcon={false}
+          message={t(`The dataset configuration exposed here
                 affects all the charts using this dataset.
                 Be mindful that changing settings
                 here may affect other charts
                 in undesirable ways.`)}
-      />
-      {t('Are you sure you want to save and apply changes?')}
-    </div>
+        />
+        {datasource.sql !== currentDatasource.sql && (
+          <>
+            <Alert
+              css={theme => ({
+                marginTop: theme.gridUnit * 4,
+                marginBottom: theme.gridUnit * 4,
+              })}
+              type="info"
+              showIcon={false}
+              message={t(`The dataset columns will be automatically synced
+              based on the changes in your SQL query. If your changes don't
+              impact the column definitions, you might want to skip this step.`)}
+            />
+            <Checkbox
+              checked={syncColumnsRef.current}
+              onChange={() => {
+                syncColumnsRef.current = !syncColumnsRef.current;
+                if (confirmModal) {
+                  confirmModal.update({
+                    content: getSaveDialog(),
+                  });
+                }
+              }}
+            />
+            <span className="m-l-5">{t('Automatically sync columns')}</span>
+            <br />
+            <br />
+          </>
+        )}
+        {t('Are you sure you want to save and apply changes?')}
+      </div>
+    ),
+    [currentDatasource.sql, datasource.sql, confirmModal],
   );
 
+  useEffect(() => {
+    if (confirmModal) {
+      confirmModal.update({
+        content: getSaveDialog(),
+      });
+    }
+  }, [confirmModal, getSaveDialog]);
+
+  useEffect(() => {
+    if (datasource.sql !== currentDatasource.sql) {
+      syncColumnsRef.current = true;
+    }
+  }, [datasource.sql, currentDatasource.sql]);
+
   const onClickSave = () => {
-    dialog.current = modal.confirm({
+    const modalInstance = modal.confirm({
       title: t('Confirm save'),
-      content: renderSaveDialog(),
+      content: getSaveDialog(),
       onOk: onConfirmSave,
       icon: null,
       okText: t('OK'),
       cancelText: t('Cancel'),
     });
+    setConfirmModal(modalInstance);
+    dialog.current = modalInstance;
   };
 
   return (
