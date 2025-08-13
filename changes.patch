@@ -1,0 +1,341 @@
+From 0828fa4bbd65773ca2e0462000deb1c837922ede Mon Sep 17 00:00:00 2001
+From: parthmanhas <parthmanhas@gmail.com>
+Date: Tue, 12 Aug 2025 17:37:55 +0530
+Subject: [PATCH 2/2] add default value for single select
+
+---
+ .../src/SupersetPluginDashboardFilters.tsx    | 68 +++++--------------
+ .../src/plugin/controlPanel.ts                | 44 +++++++++++-
+ .../src/plugin/transformProps.ts              |  8 ++-
+ .../src/types.ts                              |  4 ++
+ .../controls/SelectAsyncControl/index.tsx     | 36 ++++++++--
+ 5 files changed, 99 insertions(+), 61 deletions(-)
+
+diff --git a/superset-frontend/plugins/superset-plugin-dashboard-filters/src/SupersetPluginDashboardFilters.tsx b/superset-frontend/plugins/superset-plugin-dashboard-filters/src/SupersetPluginDashboardFilters.tsx
+index 5daf04dce..55bea7618 100644
+--- a/superset-frontend/plugins/superset-plugin-dashboard-filters/src/SupersetPluginDashboardFilters.tsx
++++ b/superset-frontend/plugins/superset-plugin-dashboard-filters/src/SupersetPluginDashboardFilters.tsx
+@@ -16,7 +16,7 @@
+  * specific language governing permissions and limitations
+  * under the License.
+  */
+-import React, { useEffect, createRef, useState, useRef } from 'react';
++import React, { createRef, useState, useRef } from 'react';
+ import { Select, Button, Space } from 'antd';
+ import { styled } from '@superset-ui/core';
+ import type { TimeseriesDataRecord } from '@superset-ui/core';
+@@ -60,21 +60,12 @@ const Styles = styled.div<SupersetPluginDashboardFiltersStylesProps>`
+ export default function SupersetPluginDashboardFilters(
+   props: SupersetPluginDashboardFiltersProps,
+ ) {
+-  const {
+-    data,
+-    height,
+-    width,
+-    col,
+-    setDataMask,
+-    filterState,
+-    selectState,
+-    allowMultiple,
+-  } = props;
++  const { data, height, width, col, setDataMask, allowMultiple, defaultValue } =
++    props;
+   const { headerFontSize = 'l', boldText = false } = (props as any) ?? {};
+ 
+   const originalDataRef = useRef<TimeseriesDataRecord[] | null>(null);
+ 
+-  // Set original data only once
+   // Set original data only once
+   if (!originalDataRef.current && data) {
+     originalDataRef.current = data;
+@@ -86,38 +77,9 @@ export default function SupersetPluginDashboardFilters(
+   // State to track selected values
+   const [selectedValues, setSelectedValues] = useState<string[]>([]);
+   // State to track pending changes (before apply)
+-  const [pendingValues, setPendingValues] = useState<string[]>([]);
+-
+-  useEffect(() => {
+-    if (!setDataMask || !key) return;
+-    const alreadySet = selectState && Array.isArray(selectState.options);
+-    const source = originalDataRef.current ?? data;
+-    if (!alreadySet && source) {
+-      const uniq = [
+-        ...new Set(
+-          source
+-            .map((item: Record<string, any>) => item[key as string])
+-            .filter(v => v !== null && v !== undefined),
+-        ),
+-      ].map(v => ({ label: String(v), value: String(v) }));
+-      setDataMask({
+-        filterState: {
+-          selectState: {
+-            options: uniq,
+-          },
+-        },
+-      });
+-    }
+-    // do not depend on filterState; only initialize once per data/key
+-  }, [setDataMask, key, data]);
+-
+-  // Initialize selected values from filterState if available
+-  useEffect(() => {
+-    if (filterState?.selectedValues) {
+-      setSelectedValues(filterState.selectedValues);
+-      setPendingValues(filterState.selectedValues);
+-    }
+-  }, [filterState]);
++  const [pendingValues, setPendingValues] = useState<string[]>(
++    defaultValue ? [defaultValue] : [],
++  );
+ 
+   // Handle selection change (doesn't emit immediately)
+   const handleSelectionChange = (values: string[]) => {
+@@ -157,10 +119,11 @@ export default function SupersetPluginDashboardFilters(
+ 
+   // Reset filters
+   const handleReset = () => {
+-    setPendingValues([]);
++    const resetValues = defaultValue ? [defaultValue] : [];
++    setPendingValues(resetValues);
+     setSelectedValues([]);
+ 
+-    // Clear the filter state
++    // Clear the filter state or set to default
+     if (setDataMask) {
+       setDataMask({
+         extraFormData: {
+@@ -178,8 +141,8 @@ export default function SupersetPluginDashboardFilters(
+     JSON.stringify(selectedValues) !== JSON.stringify(pendingValues);
+ 
+   const options = React.useMemo(() => {
+-    if (selectState && Array.isArray(selectState.options))
+-      return selectState.options;
++    // if (selectState && Array.isArray(selectState.options))
++    //   return selectState.options;
+     const source = originalDataRef.current ?? data;
+     if (!source || !key) return [];
+     const uniq = [
+@@ -191,7 +154,7 @@ export default function SupersetPluginDashboardFilters(
+     ];
+     return uniq.map(v => ({ label: String(v), value: String(v) }));
+     // rely on selectState/options rather than current data to keep options stable
+-  }, [selectState, key]);
++  }, [key]);
+   return (
+     <Styles
+       ref={rootElem}
+@@ -206,6 +169,7 @@ export default function SupersetPluginDashboardFilters(
+         style={{ width: '100%', marginBottom: '12px' }}
+         placeholder="Select options"
+         value={allowMultiple ? pendingValues : (pendingValues[0] ?? undefined)}
++        defaultValue={defaultValue}
+         onChange={(val: any) =>
+           allowMultiple
+             ? handleSelectionChange(val as string[])
+@@ -227,7 +191,11 @@ export default function SupersetPluginDashboardFilters(
+ 
+         <Button
+           onClick={handleReset}
+-          disabled={selectedValues.length === 0 && pendingValues.length === 0}
++          disabled={
++            selectedValues.length === 0 &&
++            pendingValues.length === 0 &&
++            !defaultValue
++          }
+         >
+           Reset
+         </Button>
+diff --git a/superset-frontend/plugins/superset-plugin-dashboard-filters/src/plugin/controlPanel.ts b/superset-frontend/plugins/superset-plugin-dashboard-filters/src/plugin/controlPanel.ts
+index 949fbfad0..49c5ec317 100644
+--- a/superset-frontend/plugins/superset-plugin-dashboard-filters/src/plugin/controlPanel.ts
++++ b/superset-frontend/plugins/superset-plugin-dashboard-filters/src/plugin/controlPanel.ts
+@@ -108,8 +108,8 @@ const config: ControlPanelConfig = {
+             name: 'col',
+             config: {
+               ...sharedControls.groupby,
+-              label: t('Columns'),
+-              description: t('Columns to group by'),
++              label: t('Column'),
++              description: t('Column to fetch distinct values from'),
+               multi: false,
+             },
+           },
+@@ -120,11 +120,49 @@ const config: ControlPanelConfig = {
+             config: {
+               type: 'CheckboxControl',
+               label: t('Allow multiple values'),
+-              description: t('Enable selecting more than one column'),
+               default: false,
+             },
+           },
+         ],
++        [
++          {
++            name: 'has_default_value',
++            config: {
++              type: 'CheckboxControl',
++              label: t('Has default value'),
++              default: false,
++            },
++          },
++        ],
++        [
++          {
++            name: 'default_value',
++            config: {
++              type: 'SelectAsyncControl',
++              label: t('Default value'),
++              description: t('Default value for the filter'),
++              mutator: (data: any) => {
++                const { result } = data;
++                if (!result) {
++                  return [];
++                }
++                const options = result[0].data;
++                const key = Object.keys(options[0])[0];
++                return options.map((o: any) => ({
++                  value: o[key],
++                  label: o[key],
++                }));
++              },
++              multi: false,
++              freeForm: true,
++              method: 'POST',
++              dataEndpoint: '/api/v1/chart/data',
++              visibility: ({ controls }: { controls: any }) =>
++                Boolean(controls?.has_default_value?.value),
++              postPayload: {"datasource":{"id":26,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["channel_1"],"metrics":[],"orderby":[["channel_1",true]],"annotation_layers":[],"row_limit":1000,"series_limit":0,"order_desc":true,"url_params":{"native_filters_key":"oB-BqY_0C-Q"},"custom_params":{},"custom_form_data":{}}],"form_data":{"enableEmptyFilter":false,"defaultToFirstItem":false,"multiSelect":true,"searchAllOptions":false,"inverseSelection":false,"datasource":"26__table","groupby":["channel_1"],"adhoc_filters":[],"extra_filters":[],"extra_form_data":{},"metrics":["count"],"row_limit":1000,"showSearch":true,"defaultValue":["cypress-tests"],"url_params":{"native_filters_key":"oB-BqY_0C-Q"},"inView":true,"viz_type":"filter_select","type":"NATIVE_FILTER","dashboardId":6,"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}
++            },
++          },
++        ],
+       ],
+     },
+   ],
+diff --git a/superset-frontend/plugins/superset-plugin-dashboard-filters/src/plugin/transformProps.ts b/superset-frontend/plugins/superset-plugin-dashboard-filters/src/plugin/transformProps.ts
+index c5a2f90d0..163cdbd56 100644
+--- a/superset-frontend/plugins/superset-plugin-dashboard-filters/src/plugin/transformProps.ts
++++ b/superset-frontend/plugins/superset-plugin-dashboard-filters/src/plugin/transformProps.ts
+@@ -25,9 +25,9 @@ export default function transformProps(chartProps: ChartProps) {
+     formData,
+     queriesData,
+     hooks: { setDataMask } = {},
+-    filterState,
+   } = chartProps;
+-  const { col, allowMultiple } = formData;
++  const { col, allowMultiple, defaultValue, datasource, dashboardId } =
++    formData;
+   const data = queriesData[0].data as TimeseriesDataRecord[];
+ 
+   return {
+@@ -36,7 +36,9 @@ export default function transformProps(chartProps: ChartProps) {
+     data,
+     col,
+     setDataMask,
+-    filterState,
+     allowMultiple,
++    defaultValue,
++    datasource,
++    dashboardId,
+   };
+ }
+diff --git a/superset-frontend/plugins/superset-plugin-dashboard-filters/src/types.ts b/superset-frontend/plugins/superset-plugin-dashboard-filters/src/types.ts
+index 465cb816a..d8c3cf557 100644
+--- a/superset-frontend/plugins/superset-plugin-dashboard-filters/src/types.ts
++++ b/superset-frontend/plugins/superset-plugin-dashboard-filters/src/types.ts
+@@ -17,6 +17,7 @@
+  * under the License.
+  */
+ import {
++  ChartProps,
+   QueryFormData,
+   supersetTheme,
+   TimeseriesDataRecord,
+@@ -48,5 +49,8 @@ export type SupersetPluginDashboardFiltersProps =
+       setDataMask: any;
+       selectState: any;
+       allowMultiple: boolean;
++      defaultValue: string | undefined;
++      datasource: string;
++      dashboardId: ChartProps;
+       // add typing here for the props you pass in from transformProps.ts!
+     };
+diff --git a/superset-frontend/src/explore/components/controls/SelectAsyncControl/index.tsx b/superset-frontend/src/explore/components/controls/SelectAsyncControl/index.tsx
+index baa8070ea..87ee2ea24 100644
+--- a/superset-frontend/src/explore/components/controls/SelectAsyncControl/index.tsx
++++ b/superset-frontend/src/explore/components/controls/SelectAsyncControl/index.tsx
+@@ -16,6 +16,7 @@
+  * specific language governing permissions and limitations
+  * under the License.
+  */
++import React from 'react';
+ import { useEffect, useState } from 'react';
+ import { t, SupersetClient, getClientErrorObject } from '@superset-ui/core';
+ import ControlHeader from 'src/explore/components/ControlHeader';
+@@ -30,6 +31,8 @@ interface SelectAsyncControlProps extends SelectAsyncProps {
+   addDangerToast: (error: string) => void;
+   ariaLabel?: string;
+   dataEndpoint: string;
++  postPayload?: Record<string, any>; // Optional POST data
++  method?: 'GET' | 'POST'; // HTTP method
+   default?: SelectValue;
+   mutator?: (
+     response: Record<string, any>,
+@@ -52,6 +55,8 @@ const SelectAsyncControl = ({
+   allowClear = true,
+   ariaLabel,
+   dataEndpoint,
++  method = 'GET',
++  postPayload,
+   multi = true,
+   mutator,
+   onChange,
+@@ -91,10 +96,23 @@ const SelectAsyncControl = ({
+         const { error } = e;
+         addDangerToast(t('Error while fetching data: %s', error));
+       });
+-    const loadOptions = () =>
+-      SupersetClient.get({
++
++    const loadOptions = () => {
++      if (method === 'POST') {
++        return SupersetClient.post({
++          headers: {
++            'Content-Type': 'application/json',
++          },
++          endpoint: dataEndpoint,
++          body: JSON.stringify(postPayload),
++        });
++      }
++      return SupersetClient.get({
+         endpoint: dataEndpoint,
+-      })
++      });
++    };
++    const executeRequest = () =>
++      loadOptions()
+         .then(response => {
+           const data = mutator
+             ? mutator(response.json, value)
+@@ -107,9 +125,17 @@ const SelectAsyncControl = ({
+         });
+ 
+     if (!loaded) {
+-      loadOptions();
++      executeRequest();
+     }
+-  }, [addDangerToast, dataEndpoint, mutator, value, loaded]);
++  }, [
++    addDangerToast,
++    dataEndpoint,
++    method,
++    postPayload,
++    mutator,
++    value,
++    loaded,
++  ]);
+ 
+   return (
+     <Select
+-- 
+2.39.5 (Apple Git-154)
+

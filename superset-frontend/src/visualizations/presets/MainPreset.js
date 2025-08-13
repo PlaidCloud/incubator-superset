@@ -84,8 +84,11 @@ import { PluginChartMarimekko } from '@superset-ui/plugin-chart-marimekko';
 import { BigTextChart } from '@superset-ui/plugin-chart-big-text';
 import { SupersetPluginChartWhale } from '@superset-ui/plugin-chart-whale';
 import { TableChartTransposePlugin } from '@superset-ui/plugin-chart-table-transpose';
+<<<<<<< HEAD
 import { SupersetPluginDashboardFilters } from '@superset-ui/superset-plugin-dashboard-filters';
 
+=======
+>>>>>>> f1737480e1a41971a0b45bf2125cdf87ad774313
 
 export default class MainPreset extends Preset {
   constructor() {
