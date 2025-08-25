@@ -473,10 +473,10 @@ DEFAULT_FEATURE_FLAGS: dict[str, bool] = {
     # and doesn't work with all nested types.
     "PRESTO_EXPAND_DATA": False,
     # Exposes API endpoint to compute thumbnails
-    "THUMBNAILS": False,
+    "THUMBNAILS": True,
     # Enables the endpoints to cache and retrieve dashboard screenshots via webdriver.
     # Requires configuring Celery and a cache using THUMBNAIL_CACHE_CONFIG.
-    "ENABLE_DASHBOARD_SCREENSHOT_ENDPOINTS": False,
+    "ENABLE_DASHBOARD_SCREENSHOT_ENDPOINTS": True,
     # Generate screenshots (PDF or JPG) of dashboards using the web driver.
     # When disabled, screenshots are generated on the fly by the browser.
     # This feature flag is used by the download feature in the dashboard view.
@@ -548,7 +548,7 @@ DEFAULT_FEATURE_FLAGS: dict[str, bool] = {
     # Set to True to replace Selenium with Playwright to execute reports and thumbnails.
     # Unlike Selenium, Playwright reports support deck.gl visualizations
     # Enabling this feature flag requires installing "playwright" pip package
-    "PLAYWRIGHT_REPORTS_AND_THUMBNAILS": False,
+    "PLAYWRIGHT_REPORTS_AND_THUMBNAILS": True,
     # Set to True to enable experimental chart plugins
     "CHART_PLUGINS_EXPERIMENTAL": False,
     # Regardless of database configuration settings, force SQLLAB to run async using Celery  # noqa: E501
@@ -728,15 +728,18 @@ THUMBNAIL_CHART_DIGEST_FUNC: Callable[[Slice, ExecutorType, str], str | None] | 
 )
 
 THUMBNAIL_CACHE_CONFIG: CacheConfig = {
-    "CACHE_TYPE": "NullCache",
-    "CACHE_DEFAULT_TIMEOUT": int(timedelta(days=7).total_seconds()),
+    "CACHE_TYPE": "RedisCache",
+    "CACHE_DEFAULT_TIMEOUT": 0,
     "CACHE_NO_NULL_WARNING": True,
+    "CACHE_REDIS_HOST": "redis",
+    "CACHE_REDIS_PORT": 6379,
+    "CACHE_REDIS_DB": 2,
 }
-THUMBNAIL_ERROR_CACHE_TTL = int(timedelta(days=1).total_seconds())
+THUMBNAIL_ERROR_CACHE_TTL = 0
 
 # Time before selenium times out after trying to locate an element on the page and wait
 # for that element to load for a screenshot.
-SCREENSHOT_LOCATE_WAIT = int(timedelta(seconds=10).total_seconds())
+SCREENSHOT_LOCATE_WAIT = int(timedelta(seconds=30).total_seconds())
 # Time before selenium times out after waiting for all DOM class elements named
 # "loading" are gone.
 SCREENSHOT_LOAD_WAIT = int(timedelta(minutes=1).total_seconds())
@@ -758,7 +761,7 @@ SCREENSHOT_WAIT_FOR_ERROR_MODAL_INVISIBLE = 5
 SCREENSHOT_PLAYWRIGHT_WAIT_EVENT = "load"
 # Default timeout for Playwright browser context for all operations
 SCREENSHOT_PLAYWRIGHT_DEFAULT_TIMEOUT = int(
-    timedelta(seconds=30).total_seconds() * 1000
+    timedelta(seconds=60).total_seconds() * 1000
 )
 
 # ---------------------------------------------------
@@ -1492,7 +1495,7 @@ SLACK_PROXY = None
 # chrome:
 #   Requires: headless chrome
 #   Limitations: unable to generate screenshots of elements
-WEBDRIVER_TYPE = "firefox"
+WEBDRIVER_TYPE = "chrome"
 
 # Window size - this will impact the rendering of the data
 WEBDRIVER_WINDOW = {
