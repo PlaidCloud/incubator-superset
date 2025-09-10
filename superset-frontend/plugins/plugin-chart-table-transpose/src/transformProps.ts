@@ -460,10 +460,14 @@ function createFormatter(config: {
 
 
   if (config.smallNumberFormat && config.numberFormat) {
-    return createSmartNumberFormatter({
-      id: config.numberFormat,
-      description: config.smallNumberFormat,
-    });
+    const regularFormatter = getNumberFormatter(config.numberFormat);
+    const smallFormatter = getNumberFormatter(config.smallNumberFormat);
+    return (value: number) => {
+      if (Math.abs(value) < 1 && value !== 0) {
+        return smallFormatter(value);
+      }
+      return regularFormatter(value);
+    };
   }
 
   if (config.numberFormat) {
