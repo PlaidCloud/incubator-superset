@@ -35,7 +35,6 @@ import {
   SMART_DATE_ID,
   TimeFormats,
   TimeFormatter,
-  createSmartNumberFormatter,
 } from '@superset-ui/core';
 import {
   ColorFormatters,
