@@ -49,7 +49,6 @@ const config: ControlPanelConfig = {
               description: t('Numeric column used to calculate the histogram.'),
               validators: [validateNonEmpty],
               freeForm: false,
-              disabledTabs: new Set(['saved', 'sqlExpression']),
               mapStateToProps: ({ datasource }) => ({
                 options: columnsByType(datasource, GenericDataType.Numeric),
               }),
