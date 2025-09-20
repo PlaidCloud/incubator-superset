@@ -33,6 +33,10 @@ export default function buildQuery(formData: QueryFormData) {
     columns.push(formData.seriesOrderByColumn);
   }
 
+  if (formData.tooltip_column) {
+    columns.push(formData.tooltip_column);
+  }
+
   if (formData.seriesOrderByColumn && formData.seriesOrderDirection) {
     return buildQueryContext(formData, baseQueryObject => [
       {

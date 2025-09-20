@@ -51,11 +51,15 @@ function formatTooltip({
   breakdownName,
   defaultFormatter,
   xAxisFormatter,
+  data,
+  xAxisName,
 }: {
   params: ICallbackDataParams[];
   breakdownName?: string;
   defaultFormatter: NumberFormatter | CurrencyFormatter;
   xAxisFormatter: (value: number | string, index: number) => string;
+  data: DataRecord[];
+  xAxisName: string;
 }) {
   const series = params.find(
     param => param.seriesName !== ASSIST_MARK && param.data.value !== TOKEN,
@@ -83,6 +87,35 @@ function formatTooltip({
     ]);
   }
   rows.push([TOTAL_MARK, defaultFormatter(series.data.totalSum)]);
+
+  let dataPoint;
+
+  if (isTotal) {
+    // For total rows, try to find tooltip data or use a default message
+    if (breakdownName) {
+      // For breakdown totals, find the first non-total row with same x-axis value
+      dataPoint = data.find(
+        row =>
+          row[xAxisName] === series.name && row[breakdownName] !== TOTAL_MARK,
+      );
+    }
+  } else {
+    // Non-total case
+    dataPoint = data.find(row => {
+      const categoryValue =
+        breakdownName && row[breakdownName] !== TOTAL_MARK
+          ? row[breakdownName]
+          : row[xAxisName];
+      return categoryValue === series.name;
+    });
+  }
+
+  if (dataPoint?.Tooltip) {
+    rows.push(['Info', String(dataPoint.Tooltip)]);
+  } else if (dataPoint?.tooltip) {
+    rows.push(['Info', String(dataPoint.tooltip)]);
+  }
+
   return tooltipHtml(rows, title);
 }
 
@@ -449,6 +482,8 @@ export default function transformProps(
           breakdownName,
           defaultFormatter,
           xAxisFormatter,
+          data,
+          xAxisName,
         }),
     },
     series: barSeries,

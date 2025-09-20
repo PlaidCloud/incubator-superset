@@ -82,6 +82,25 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'tooltip_column',
+            config: {
+              type: 'SelectControl',
+              label: t('Tooltip Column'),
+              description: t('Column to use for tooltip content'),
+              mapStateToProps: state => ({
+                choices: [
+                  ...(state.datasource?.columns || []).map(col => [
+                    col.column_name,
+                    col.column_name,
+                  ]),
+                ],
+              }),
+              clearable: true,
+            },
+          },
+        ],
       ],
     },
     {
