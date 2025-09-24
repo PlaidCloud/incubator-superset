@@ -272,7 +272,7 @@ export default function SupersetPluginDashboardFilters(
       headerFontSize={headerFontSize}
       boldText={boldText}
       style={{
-        width: '99.5%',
+        width: '98.5%',
         paddingTop: 0,
         paddingBottom: 0,
         height: '100%',
@@ -282,10 +282,15 @@ export default function SupersetPluginDashboardFilters(
         justifyContent: 'space-between',
       }}
     >
-      <h4>{key}</h4>
+      <h4 style={{ textWrap: 'nowrap' }}>{key}</h4>
       <Select
         mode={allowMultiple ? 'multiple' : undefined}
-        style={{ width: '100%' }}
+        style={{
+          width: '100%',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
         placeholder="Select options"
         value={allowMultiple ? pendingValues : (pendingValues[0] ?? undefined)}
         onChange={(val: any) =>
@@ -314,18 +319,6 @@ export default function SupersetPluginDashboardFilters(
           Reset
         </Button>
       </div>
-
-      {/* Debug info */}
-      {/* <div style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
-        <div>Applied: {selectedValues.length} items</div>
-        <div>Pending: {pendingValues.length} items</div>
-        {hasChanges && (
-          <div style={{ color: 'orange' }}>Changes pending...</div>
-        )}
-        {selectedValues.length > 0 && (
-          <div>Applied values: {selectedValues.join(', ')}</div>
-        )}
-      </div> */}
     </Styles>
   );
 }
