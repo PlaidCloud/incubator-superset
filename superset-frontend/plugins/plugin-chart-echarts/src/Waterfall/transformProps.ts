@@ -88,32 +88,62 @@ function formatTooltip({
   }
   rows.push([TOTAL_MARK, defaultFormatter(series.data.totalSum)]);
 
-  let dataPoint;
+  if (isTotal && breakdownName) {
+    const dataPoints = data.filter(
+      row =>
+        row[xAxisName] === series.name && row[breakdownName] !== TOTAL_MARK,
+    );
+    const tooltipKey = Object.keys(dataPoints[0] || {}).find(
+      key =>
+        key === 'Tooltip' ||
+        key === 'tooltip' ||
+        key.match(/^(MAX|MIN|AVG|SUM|COUNT)\(tooltip\)$/i) ||
+        key.match(/^(MAX|MIN|AVG|SUM|COUNT)\(Tooltip\)$/i),
+    );
+    const aggregrate = tooltipKey
+      ? (() => {
+          const values = dataPoints
+            .map(point => point[tooltipKey])
+            .map(val =>
+              typeof val === 'number' ? val : parseFloat(String(val)) || 0,
+            );
 
-  if (isTotal) {
-    // For total rows, try to find tooltip data or use a default message
-    if (breakdownName) {
-      // For breakdown totals, find the first non-total row with same x-axis value
-      dataPoint = data.find(
-        row =>
-          row[xAxisName] === series.name && row[breakdownName] !== TOTAL_MARK,
-      );
+          if (tooltipKey.match(/^MAX\(/i)) {
+            return Math.max(...values);
+          }
+          if (tooltipKey.match(/^MIN\(/i)) {
+            return Math.min(...values);
+          }
+          if (tooltipKey.match(/^AVG\(/i)) {
+            return values.reduce((sum, val) => sum + val, 0) / values.length;
+          }
+          // Default to SUM , COUNT is same as SUM
+          return values.reduce((sum, val) => sum + val, 0);
+        })()
+      : 0;
+    if (tooltipKey && aggregrate) {
+      rows.push(['Info', String(aggregrate)]);
     }
   } else {
-    // Non-total case
-    dataPoint = data.find(row => {
+    const dataPoint = data.find(row => {
       const categoryValue =
         breakdownName && row[breakdownName] !== TOTAL_MARK
           ? row[breakdownName]
           : row[xAxisName];
       return categoryValue === series.name;
     });
-  }
+    // Handle tooltip with different aggregate functions
+    const tooltipKey = Object.keys(dataPoint || {}).find(
+      key =>
+        key === 'Tooltip' ||
+        key === 'tooltip' ||
+        key.match(/^(MAX|MIN|AVG|SUM|COUNT)\(tooltip\)$/i) ||
+        key.match(/^(MAX|MIN|AVG|SUM|COUNT)\(Tooltip\)$/i),
+    );
 
-  if (dataPoint?.Tooltip) {
-    rows.push(['Info', String(dataPoint.Tooltip)]);
-  } else if (dataPoint?.tooltip) {
-    rows.push(['Info', String(dataPoint.tooltip)]);
+    if (tooltipKey && dataPoint?.[tooltipKey]) {
+      rows.push(['Info', String(dataPoint[tooltipKey])]);
+    }
   }
 
   return tooltipHtml(rows, title);
