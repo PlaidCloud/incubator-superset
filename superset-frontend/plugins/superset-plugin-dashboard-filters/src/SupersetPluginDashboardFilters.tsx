@@ -17,7 +17,7 @@
  * under the License.
  */
 import React, { useEffect, createRef, useState, useRef } from 'react';
-import { Select, Button, Space } from 'antd';
+import { Select, Button } from 'antd';
 import { styled } from '@superset-ui/core';
 import type { TimeseriesDataRecord } from '@superset-ui/core';
 import {
@@ -119,6 +119,78 @@ export default function SupersetPluginDashboardFilters(
     }
   }, [filterState]);
 
+  useEffect(() => {
+    // Remove the header title from the dashboard
+    const removeHeaderTitle = () => {
+      const currentElement = rootElem.current;
+      if (!currentElement) return;
+
+      // Traverse up to find the chart container and remove title
+      let parent = currentElement.parentElement;
+      while (parent) {
+        // Look for dashboard chart header elements
+        const headerTitle = parent.querySelector('.header-title');
+        if (headerTitle) {
+          headerTitle.remove();
+          break;
+        }
+
+        parent = parent.parentElement;
+        // Stop if we've gone too far up
+        if (parent?.classList.contains('dashboard-grid')) break;
+      }
+    };
+
+    // Run immediately and also after a short delay to catch dynamically rendered titles
+    removeHeaderTitle();
+    const timeoutId = setTimeout(removeHeaderTitle, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, []);
+
+  useEffect(() => {
+    // Remove the header title and position header controls absolutely
+    const modifyHeader = () => {
+      const currentElement = rootElem.current;
+      if (!currentElement) return;
+
+      // Traverse up to find the chart container
+      let parent = currentElement.parentElement;
+      while (parent) {
+        // Look for header title and remove it
+        const headerTitle = parent.querySelector('.header-title');
+        if (headerTitle) {
+          headerTitle.remove();
+        }
+
+        // Look for header controls and position them absolutely
+        const headerControls = parent.querySelector('.header-controls');
+        if (headerControls) {
+          (headerControls as HTMLElement).style.position = 'absolute';
+          (headerControls as HTMLElement).style.top = '5px';
+          (headerControls as HTMLElement).style.right = '8px';
+          (headerControls as HTMLElement).style.zIndex = '10';
+          (headerControls as HTMLElement).style.background = 'white';
+          break;
+        }
+
+        parent = parent.parentElement;
+        // Stop if we've gone too far up
+        if (parent?.classList.contains('dashboard-grid')) break;
+      }
+    };
+
+    // Run immediately and also after delays to catch dynamically rendered elements
+    modifyHeader();
+    const timeoutId1 = setTimeout(modifyHeader, 100);
+    const timeoutId2 = setTimeout(modifyHeader, 500);
+
+    return () => {
+      clearTimeout(timeoutId1);
+      clearTimeout(timeoutId2);
+    };
+  }, []);
+
   // Handle selection change (doesn't emit immediately)
   const handleSelectionChange = (values: string[]) => {
     setPendingValues(values);
@@ -199,11 +271,26 @@ export default function SupersetPluginDashboardFilters(
       width={width}
       headerFontSize={headerFontSize}
       boldText={boldText}
+      style={{
+        width: '98.5%',
+        paddingTop: 0,
+        paddingBottom: 0,
+        height: '100%',
+        display: 'flex',
+        gap: '20px',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}
     >
-      <h4>{key}</h4>
+      <h4 style={{ textWrap: 'nowrap' }}>{key}</h4>
       <Select
         mode={allowMultiple ? 'multiple' : undefined}
-        style={{ width: '100%', marginBottom: '12px' }}
+        style={{
+          width: '100%',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
         placeholder="Select options"
         value={allowMultiple ? pendingValues : (pendingValues[0] ?? undefined)}
         onChange={(val: any) =>
@@ -220,7 +307,7 @@ export default function SupersetPluginDashboardFilters(
         }
       />
 
-      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', gap: '5px' }}>
         <Button type="primary" onClick={handleApply} disabled={!hasChanges}>
           Apply ({pendingValues.length})
         </Button>
@@ -231,19 +318,7 @@ export default function SupersetPluginDashboardFilters(
         >
           Reset
         </Button>
-      </Space>
-
-      {/* Debug info */}
-      {/* <div style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
-        <div>Applied: {selectedValues.length} items</div>
-        <div>Pending: {pendingValues.length} items</div>
-        {hasChanges && (
-          <div style={{ color: 'orange' }}>Changes pending...</div>
-        )}
-        {selectedValues.length > 0 && (
-          <div>Applied values: {selectedValues.join(', ')}</div>
-        )}
-      </div> */}
+      </div>
     </Styles>
   );
 }
