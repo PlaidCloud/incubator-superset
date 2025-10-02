@@ -33,15 +33,26 @@ export default function buildQuery(formData: QueryFormData) {
     columns.push(formData.seriesOrderByColumn);
   }
 
-  if (formData.tooltip_column) {
-    columns.push(formData.tooltip_column);
-  }
+  const tooltipMetric =
+    formData.tooltip_column && formData.tooltip_aggregate
+      ? {
+          label: `${formData.tooltip_aggregate}(${formData.tooltip_column})`,
+          aggregate: formData.tooltip_aggregate,
+          column: {
+            column_name: formData.tooltip_column,
+          },
+          expressionType: 'SIMPLE' as const,
+        }
+      : null;
 
   if (formData.seriesOrderByColumn && formData.seriesOrderDirection) {
     return buildQueryContext(formData, baseQueryObject => [
       {
         ...baseQueryObject,
         columns,
+        metrics: tooltipMetric
+          ? [...(baseQueryObject.metrics || []), tooltipMetric]
+          : baseQueryObject.metrics,
         orderby: [
           [
             formData.seriesOrderByColumn,
@@ -55,6 +66,9 @@ export default function buildQuery(formData: QueryFormData) {
     {
       ...baseQueryObject,
       columns,
+      metrics: tooltipMetric
+        ? [...(baseQueryObject.metrics || []), tooltipMetric]
+        : baseQueryObject.metrics,
       orderby: columns?.map(column => [column, true]),
     },
   ]);
