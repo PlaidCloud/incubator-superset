@@ -102,26 +102,6 @@ const config: ControlPanelConfig = {
             },
           },
         ],
-        [
-          {
-            name: 'tooltip_aggregate',
-            config: {
-              type: 'SelectControl',
-              label: t('Tooltip Aggregate Function'),
-              description: t('Aggregate function to apply to tooltip metric'),
-              choices: [
-                ['SUM', t('Sum')],
-                ['AVG', t('Average')],
-                ['MIN', t('Minimum')],
-                ['MAX', t('Maximum')],
-                ['COUNT', t('Count')],
-              ],
-              default: 'SUM',
-              clearable: false,
-              visibility: ({ form_data }) => !!form_data?.tooltip_column,
-            },
-          },
-        ],
       ],
     },
     {

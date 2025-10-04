@@ -1742,6 +1742,11 @@ class ExploreMixin:  # pylint: disable=too-many-public-methods
         tbl, cte = self.get_from_clause(template_processor)
 
         if groupby_all_columns:
+            # Filter out columns containing 'Tooltip' from the groupby clause
+            groupby_all_columns = {
+                key: col for key, col in groupby_all_columns.items()
+                if 'tooltip' not in key.lower()
+            }
             qry = qry.group_by(*groupby_all_columns.values())
 
         where_clause_and = []
