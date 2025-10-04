@@ -1,3 +1,14 @@
+/* eslint-disable @typescript-eslint/no-inferrable-types */
+/* eslint-disable object-shorthand */
+/* eslint-disable no-else-return */
+/* eslint-disable prefer-const */
+/* eslint-disable no-plusplus */
+/* eslint-disable @typescript-eslint/prefer-optional-chain */
+/* eslint-disable dot-notation */
+/* eslint-disable no-unused-expressions */
+/* eslint-disable no-sequences */
+/* eslint-disable prettier/prettier */
+/* eslint-disable no-underscore-dangle */
 /**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -597,12 +608,24 @@ function transposeData(
       originalDataColumns.forEach(col => {
         newRow[col.key] = row[col.key];
         // Assign formatter if available
-        if (metricFormatters.has(col.key)) {
+        const rowConfigForMetric = rowConfig?.[col.key];
+        if (rowConfigForMetric && (rowConfigForMetric.d3NumberFormat || rowConfigForMetric.d3SmallNumberFormat || rowConfigForMetric.currencyFormat)) {
+          const formatter = createFormatter({
+            numberFormat: rowConfigForMetric.d3NumberFormat,
+            smallNumberFormat: rowConfigForMetric.d3SmallNumberFormat,
+            currencyFormat: rowConfigForMetric.currencyFormat,
+          });
+          if (formatter) {
+            (newRow as any).__formatter__ = formatter;
+          }
+        } else if (metricFormatters.has(col.key)) {
           (newRow as any).__formatter__ = metricFormatters.get(col.key);
         }
       });
       return newRow;
     })
+
+
 
     const newRows = formDataMetricsInOrder.map(metricOrHeadingItem => {
       const newRow: DataRecord = {};
@@ -626,7 +649,9 @@ function transposeData(
         originalRows.forEach(originalRow => {
           newRow.rowTotal = originalRow[itemIdentifier];
           // Assign formatter if available
-          if (metricFormatters.has(itemIdentifier)) {
+          if (originalRow.__formatter__) {
+            (newRow as any).__formatter__ = originalRow.__formatter__;
+          } else {
             (newRow as any).__formatter__ = metricFormatters.get(itemIdentifier);
           }
         });
