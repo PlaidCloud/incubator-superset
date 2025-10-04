@@ -648,13 +648,16 @@ function transposeData(
         newRow.__isHeading = false;
         originalRows.forEach(originalRow => {
           newRow.rowTotal = originalRow[itemIdentifier];
-          // Assign formatter if available
-          if (originalRow.__formatter__) {
-            (newRow as any).__formatter__ = originalRow.__formatter__;
-          } else {
-            (newRow as any).__formatter__ = metricFormatters.get(itemIdentifier);
-          }
         });
+        const rowConfigForMetric = rowConfig?.[itemIdentifier];
+        if (rowConfigForMetric && (rowConfigForMetric.d3NumberFormat || rowConfigForMetric.d3SmallNumberFormat || rowConfigForMetric.currencyFormat)) {
+          const formatter = createFormatter({
+            numberFormat: rowConfigForMetric.d3NumberFormat,
+            smallNumberFormat: rowConfigForMetric.d3SmallNumberFormat,
+            currencyFormat: rowConfigForMetric.currencyFormat,
+          });
+          (newRow as any).__formatter__ = formatter;
+        }
       }
       return newRow;
     });
