@@ -113,7 +113,10 @@ function formatTooltip({
     });
   }
 
-  if (dataPoint?.[formData.tooltipColumn as string]) {
+  if (
+    dataPoint?.[formData.tooltipColumn as string] !== undefined &&
+    dataPoint?.[formData.tooltipColumn as string] !== null
+  ) {
     rows.push(['Info', String(dataPoint[formData.tooltipColumn as string])]);
   }
 
