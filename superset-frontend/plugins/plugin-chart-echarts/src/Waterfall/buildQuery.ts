@@ -37,11 +37,17 @@ export default function buildQuery(formData: QueryFormData) {
     columns.push(formData.tooltip_column);
   }
 
+  // nonGroupByExprs Columns are removed from groupby_all_columns in the query but kept in select
+  const nonGroupByExprs = formData.tooltip_column
+    ? [`${formData.tooltip_column}`]
+    : [];
+
   if (formData.seriesOrderByColumn && formData.seriesOrderDirection) {
     return buildQueryContext(formData, baseQueryObject => [
       {
         ...baseQueryObject,
         columns,
+        non_groupby_exprs: nonGroupByExprs,
         orderby: [
           [
             formData.seriesOrderByColumn,
@@ -55,6 +61,7 @@ export default function buildQuery(formData: QueryFormData) {
     {
       ...baseQueryObject,
       columns,
+      non_groupby_exprs: nonGroupByExprs,
       orderby: columns?.map(column => [column, true]),
     },
   ]);

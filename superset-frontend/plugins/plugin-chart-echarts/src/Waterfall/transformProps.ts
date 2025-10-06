@@ -36,6 +36,7 @@ import {
   ISeriesData,
   WaterfallChartTransformedProps,
   ICallbackDataParams,
+  EchartsWaterfallFormData,
 } from './types';
 import { getDefaultTooltip } from '../utils/tooltip';
 import { defaultGrid, defaultYAxis } from '../defaults';
@@ -53,6 +54,7 @@ function formatTooltip({
   xAxisFormatter,
   data,
   xAxisName,
+  formData,
 }: {
   params: ICallbackDataParams[];
   breakdownName?: string;
@@ -60,6 +62,7 @@ function formatTooltip({
   xAxisFormatter: (value: number | string, index: number) => string;
   data: DataRecord[];
   xAxisName: string;
+  formData: EchartsWaterfallFormData;
 }) {
   const series = params.find(
     param => param.seriesName !== ASSIST_MARK && param.data.value !== TOKEN,
@@ -110,10 +113,8 @@ function formatTooltip({
     });
   }
 
-  if (dataPoint?.Tooltip) {
-    rows.push(['Info', String(dataPoint.Tooltip)]);
-  } else if (dataPoint?.tooltip) {
-    rows.push(['Info', String(dataPoint.tooltip)]);
+  if (dataPoint?.[formData.tooltipColumn as string]) {
+    rows.push(['Info', String(dataPoint[formData.tooltipColumn as string])]);
   }
 
   return tooltipHtml(rows, title);
@@ -197,7 +198,7 @@ export default function transformProps(
   const refs: Refs = {};
   const { data = [] } = queriesData[0];
   const coltypeMapping = getColtypesMapping(queriesData[0]);
-  const { setDataMask = () => {}, onContextMenu, onLegendStateChanged } = hooks;
+  const { setDataMask = () => { }, onContextMenu, onLegendStateChanged } = hooks;
   const {
     currencyFormat,
     granularitySqla = '',
@@ -484,6 +485,7 @@ export default function transformProps(
           xAxisFormatter,
           data,
           xAxisName,
+          formData,
         }),
     },
     series: barSeries,
