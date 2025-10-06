@@ -51,7 +51,7 @@ function formatValue(
     return [false, 'N/A'];
   }
   if (formatter) {
-    return [false, formatter(value as number)];
+    return [false, formatter(value as number).replace(/G\b/g, 'B')];
   }
   if (typeof value === 'string') {
     return isProbablyHTML(value) ? [true, sanitizeHtml(value)] : [false, value];
