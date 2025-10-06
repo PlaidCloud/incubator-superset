@@ -77,12 +77,12 @@ function formatTooltip({
   if (!series) {
     return NULL_STRING;
   }
+  const rows: string[][] = [];
 
   const title =
     !isTotal || breakdownName
       ? xAxisFormatter(series.name, series.dataIndex)
       : undefined;
-  const rows: string[][] = [];
   if (!isTotal) {
     rows.push([
       series.seriesName!,
@@ -117,7 +117,7 @@ function formatTooltip({
     dataPoint?.[formData.tooltipColumn as string] !== undefined &&
     dataPoint?.[formData.tooltipColumn as string] !== null
   ) {
-    rows.push(['Info', String(dataPoint[formData.tooltipColumn as string])]);
+    rows.push([String(dataPoint[formData.tooltipColumn as string]), '']);
   }
 
   return tooltipHtml(rows, title);
