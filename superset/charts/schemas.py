@@ -1359,6 +1359,11 @@ class ChartDataQueryObjectSchema(Schema):
         fields.String(),
         allow_none=True,
     )
+    non_groupby_exprs = fields.List(
+        fields.String(),
+        metadata={"description": "SQL columns to include in SELECT but not GROUP BY"},
+        allow_none=True,
+    )
 
 
 class ChartDataQueryContextSchema(Schema):

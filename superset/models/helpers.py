@@ -1448,6 +1448,7 @@ class ExploreMixin:  # pylint: disable=too-many-public-methods
         is_rowcount: bool = False,
         is_timeseries: bool = True,
         metrics: Optional[list[Metric]] = None,
+        non_groupby_exprs: Optional[list[str]] = None,
         orderby: Optional[list[OrderBy]] = None,
         order_desc: bool = True,
         to_dttm: Optional[datetime] = None,
@@ -1743,10 +1744,14 @@ class ExploreMixin:  # pylint: disable=too-many-public-methods
 
         if groupby_all_columns:
             # Filter out columns containing 'Tooltip' from the groupby clause
-            groupby_all_columns = {
-                key: col for key, col in groupby_all_columns.items()
-                if 'tooltip' not in key.lower()
-            }
+            if non_groupby_exprs:
+                # Convert to lowercase for case-insensitive comparison
+                non_groupby_column_names = {expr.strip().lower() for expr in non_groupby_exprs}
+                # Filter out non-groupby columns from groupby_all_columns
+                groupby_all_columns = {
+                    key: col for key, col in groupby_all_columns.items()
+                    if key.lower() not in non_groupby_column_names
+                }
             qry = qry.group_by(*groupby_all_columns.values())
 
         where_clause_and = []
