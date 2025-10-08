@@ -1119,6 +1119,96 @@ const config: ControlPanelConfig = {
         !Boolean(controls?.enable_pivot?.value)
     },
     {
+      label: t('Collapsible Rows'),
+      expanded: false,
+      controlSetRows: [
+        [
+          {
+            name: 'collapsed_rows',
+            config: {
+              type: 'SelectControl',
+              label: t('Rows collapsed by default'),
+              description: t('Select rows that should be collapsed when the table loads. Only rows with children can be collapsed.'),
+              multi: true,
+              freeForm: true,
+              clearable: true,
+              default: [],
+              renderTrigger: true,
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                Boolean(controls?.enable_pivot?.value),
+              shouldMapStateToProps() {
+                return true;
+              },
+              mapStateToProps(explore, _, chart) {
+                const enablePivot = explore?.form_data?.enable_pivot;
+
+                if (!enablePivot) {
+                  return {
+                    options: [],
+                  };
+                }
+
+                // Get the metrics that will become row headers
+                const metrics = ensureIsArray(explore?.form_data?.metrics);
+                const rowConfig = explore?.form_data?.row_config || {};
+                const rowOptions: Array<{ value: string; label: string }> = [];
+
+                metrics.forEach(metric => {
+                  if (metric) {
+                    let label: string = '';
+
+                    if (typeof metric === 'string') {
+                      label = metric;
+                    } else if (typeof metric === 'object' && (metric as any).emptyRowHeading !== true) {
+                      const adhocMetric = metric as AdhocMetric;
+                      label = adhocMetric.label ||
+                        ('sqlExpression' in adhocMetric ? adhocMetric.sqlExpression : null) ||
+                        ('column' in adhocMetric && (adhocMetric as AdhocMetricSimple).column?.column_name) ||
+                        'Metric';
+                    }
+
+                    // Only add rows that can be collapsed
+                    if (label && rowConfig[label]?.canCollapse !== false) {
+                      rowOptions.push({
+                        value: label,
+                        label: label,
+                      });
+                    }
+                  }
+                });
+
+                // Add row headers from heading metrics
+                const rowHeaders = metrics
+                  .filter((metric): metric is AdhocMetric & { emptyRowHeadingText: string } => {
+                    if (typeof metric === 'object' && metric !== null) {
+                      const colName = (metric as AdhocMetricSimple).column?.column_name;
+                      return typeof colName === 'string' && colName.startsWith('__heading');
+                    }
+                    return false;
+                  })
+                  .map(metric => metric.emptyRowHeadingText);
+
+                rowHeaders.forEach(header => {
+                  if (rowConfig[header]?.canCollapse !== false) {
+                    rowOptions.push({
+                      value: header,
+                      label: header,
+                    });
+                  }
+                });
+
+                return {
+                  options: rowOptions,
+                };
+              },
+            },
+          },
+        ],
+      ],
+      visibility: ({ controls }: ControlPanelsContainerProps) =>
+        Boolean(controls?.enable_pivot?.value)
+    },
+    {
       label: t('Custom Css'),
       expanded: false,
       controlSetRows: [
