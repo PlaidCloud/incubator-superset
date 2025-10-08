@@ -908,8 +908,6 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           const isUnderlineText = (isFirstColumn && rowConfig?.[row.original.metric as string]?.underlineText) || false;
 
           const parent = hierarchy.get(metric)?.parent;
-          const hasCollapsibleParent = parent && hierarchy.get(parent)?.children && hierarchy.get(parent)!.children.length > 0 && rowConfig?.[parent]?.canCollapse !== false;
-
 
           // Column Text Align takes preceddence over Row Text Align
           const columnTextAlign =
@@ -965,8 +963,19 @@ export default function TableChart<D extends DataRecord = DataRecord>(
                 : undefined;
 
             const baseIndent = typeof indent === 'string' ? parseInt(indent, 10) : (indent || 0);
-            const needsExtraPadding = (hasCollapsibleParent) && i === 0;
-            const paddingLeft = baseIndent + (needsExtraPadding ? 25 : 0);
+
+            // Calculate total padding by traversing all ancestors
+            let ancestorPadding = 0;
+            let currentParent = parent;
+            while (currentParent) {
+              const parentNode = hierarchy.get(currentParent);
+              if (parentNode && rowConfig?.[currentParent]?.canCollapse !== false) {
+                ancestorPadding += 25; // Add padding for each collapsible ancestor
+              }
+              currentParent = parentNode?.parent || null;
+            }
+
+            const paddingLeft = baseIndent + (i === 0 ? ancestorPadding : 0);
 
             const StyledCell = styled.td`
             text-align: ${columnTextAlign || rowTextAlign || sharedStyle.textAlign};
