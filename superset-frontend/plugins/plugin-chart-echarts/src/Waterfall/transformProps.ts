@@ -183,6 +183,43 @@ function transformer({
   return transformedData;
 }
 
+function getFirstRowsPerGroup(
+  data1: DataRecord[],
+  data2: DataRecord[],
+  xAxis: string,
+  groupbyColumn: string,
+) {
+  const seen = new Set();
+  const firstRows = [];
+
+  // Step 1: deduplicate data1 based on xAxis + groupby
+  for (const row of data1) {
+    const key = `${row[xAxis]}||${row[groupbyColumn]}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      firstRows.push(row);
+    }
+  }
+
+  // Step 2: combine with data2 based on xAxis + groupby
+  const combined = firstRows.map(row1 => {
+    const match = data2.find(
+      (row2: { [x: string]: any }) =>
+        row1[xAxis] === row2[xAxis] &&
+        row1[groupbyColumn] === row2[groupbyColumn],
+    );
+    return match ? { ...row1, ...match } : { ...row1 };
+  });
+
+  if (combined.length !== data2.length) {
+    console.error(
+      'Warning: Mismatch in combined data length. This may lead to incomplete tooltip information.',
+    );
+  }
+
+  return combined;
+}
+
 export default function transformProps(
   chartProps: EchartsWaterfallChartProps,
 ): WaterfallChartTransformedProps {
@@ -199,9 +236,14 @@ export default function transformProps(
     inContextMenu,
   } = chartProps;
   const refs: Refs = {};
-  const { data = [] } = queriesData[0];
+  const data = getFirstRowsPerGroup(
+    queriesData[1]?.data || [],
+    queriesData[0]?.data || [],
+    formData.xAxis as string,
+    formData.groupby as unknown as string,
+  );
   const coltypeMapping = getColtypesMapping(queriesData[0]);
-  const { setDataMask = () => { }, onContextMenu, onLegendStateChanged } = hooks;
+  const { setDataMask = () => {}, onContextMenu, onLegendStateChanged } = hooks;
   const {
     currencyFormat,
     granularitySqla = '',
