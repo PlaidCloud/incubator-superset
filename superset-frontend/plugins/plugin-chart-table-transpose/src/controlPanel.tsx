@@ -547,6 +547,23 @@ const config: ControlPanelConfig = {
         ],
         [
           {
+            name: 'all_segments_transposed_column_name',
+            config: {
+              type: 'TextControl',
+              label: t('All Segments column name'),
+              default: 'All Segments',
+              description: t('Custom name for the All Segments column'),
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                isAggMode({ controls }) &&
+                Boolean(controls?.enable_pivot?.value) &&
+                Boolean(controls?.show_all_segments?.value),
+              resetOnHide: false,
+              renderTrigger: true,
+            },
+          },
+        ],
+        [
+          {
             name: 'show_totals',
             config: {
               type: 'CheckboxControl',
@@ -921,8 +938,13 @@ const config: ControlPanelConfig = {
                 const coltypes: GenericDataType[] = [];
 
                 // Add All Segments column if enabled
-                if (explore?.form_data?.show_all_segments !== false) {
-                  colnames.push('All Segments');
+                if (
+                  explore?.form_data?.show_all_segments !== false &&
+                  explore?.form_data?.all_segments_transposed_column_name
+                ) {
+                  colnames.push(
+                    explore?.form_data?.all_segments_transposed_column_name,
+                  );
                   coltypes.push(GenericDataType.Numeric);
                 }
 

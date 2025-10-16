@@ -496,6 +496,7 @@ function transposeData(
   showAllSegments: boolean = true,
   allSegmentsPosition: 'start' | 'end' = 'start',
   column_sort_order: 'none' | 'asc' | 'desc' = 'none',
+  allSegmentsTransposedColumnName: string = t('All Segments'),
 ): {
   transposedData: DataRecord[];
   transposedColumns: DataColumnMeta[];
@@ -581,7 +582,7 @@ function transposeData(
     ...(showAllSegments && allSegmentsPosition === 'start' ? [
       {
         key: 'rowTotal',
-        label: t('All Segments'),
+        label: allSegmentsTransposedColumnName,
         dataType: GenericDataType.Numeric,
         isMetric: false,
         isPercentMetric: false,
@@ -592,7 +593,7 @@ function transposeData(
     ...(showAllSegments && allSegmentsPosition === 'end' ? [
       {
         key: 'rowTotal',
-        label: t('All Segments'),
+        label: allSegmentsTransposedColumnName,
         dataType: GenericDataType.Numeric,
         isMetric: false,
         isPercentMetric: false,
@@ -901,6 +902,7 @@ const transformProps = (
     custom_css,
     timeseries_limit_metric,
     summary_position = 'bottom',
+    all_segments_transposed_column_name = t('All Segments'),
     show_all_segments = true,
     all_segments_position = 'start',
     column_sort_order = 'none',
@@ -1122,7 +1124,8 @@ const transformProps = (
       formData.row_config,
       show_all_segments,
       all_segments_position,
-      column_sort_order
+      column_sort_order,
+      all_segments_transposed_column_name
     );
     passedData = transposedData;
     passedColumns = transposedColumns;
@@ -1263,6 +1266,7 @@ const transformProps = (
     rowConfig: chartProps.rawFormData.row_config,
     transposeColumnConfig: chartProps.rawFormData.transpose_column_config,
     custom_css,
+    allSegementsTransposeColumnName: all_segments_transposed_column_name,
   };
 };
 
