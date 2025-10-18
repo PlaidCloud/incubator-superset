@@ -48,5 +48,5 @@ export type SupersetPluginDashboardFiltersProps =
       setDataMask: any;
       selectState: any;
       allowMultiple: boolean;
-      // add typing here for the props you pass in from transformProps.ts!
+      emitCrossFilters?: boolean;
     };

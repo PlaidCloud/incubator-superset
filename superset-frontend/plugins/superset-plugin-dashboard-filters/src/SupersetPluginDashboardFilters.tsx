@@ -69,6 +69,7 @@ export default function SupersetPluginDashboardFilters(
     filterState,
     selectState,
     allowMultiple,
+    emitCrossFilters,
   } = props;
   const { headerFontSize = 'l', boldText = false } = (props as any) ?? {};
 
@@ -198,16 +199,31 @@ export default function SupersetPluginDashboardFilters(
 
   // Apply filters
   const handleApply = () => {
+    if (!emitCrossFilters) {
+      return;
+    }
     setSelectedValues(pendingValues);
 
-    // Emit the filter state for cross-filtering
     if (setDataMask && key) {
-      setDataMask({
+      const filterPayload = {
+        filterState: {
+          value: pendingValues.length > 0 ? pendingValues : null,
+          selectedValues: pendingValues,
+        },
         extraFormData: {
+          filters:
+            pendingValues.length > 0
+              ? [
+                  {
+                    col: key,
+                    op: 'in',
+                    val: pendingValues,
+                  },
+                ]
+              : [],
           adhoc_filters:
-            pendingValues.length === 0
-              ? []
-              : [
+            pendingValues.length > 0
+              ? [
                   {
                     clause: 'WHERE',
                     subject: key,
@@ -218,12 +234,11 @@ export default function SupersetPluginDashboardFilters(
                         : pendingValues[0],
                     expressionType: 'SIMPLE',
                   },
-                ],
+                ]
+              : [],
         },
-        filterState: {
-          selectedValues: pendingValues,
-        },
-      });
+      };
+      setDataMask(filterPayload);
     }
   };
 
@@ -235,11 +250,13 @@ export default function SupersetPluginDashboardFilters(
     // Clear the filter state
     if (setDataMask) {
       setDataMask({
-        extraFormData: {
-          adhoc_filters: [],
-        },
         filterState: {
+          value: null,
           selectedValues: [],
+        },
+        extraFormData: {
+          filters: [],
+          adhoc_filters: [],
         },
       });
     }

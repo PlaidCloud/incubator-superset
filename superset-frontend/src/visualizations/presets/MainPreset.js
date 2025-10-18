@@ -194,7 +194,7 @@ export default class MainPreset extends Preset {
         new PluginChartMarimekko().configure({ key: 'ext-marimekko' }),
         new SupersetPluginChartWhale().configure({ key: 'ext-whale' }),
         new TableChartTransposePlugin().configure({ key: 'ext-table-transpose' }),
-        new SupersetPluginDashboardFilters().configure({ key: 'ext-dashbord-filters' }),
+        new SupersetPluginDashboardFilters().configure({ key: 'ext-dashboard-filters' }),
         ...experimentalPlugins,
       ],
     });

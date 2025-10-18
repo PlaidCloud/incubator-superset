@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { t, ChartMetadata, ChartPlugin } from '@superset-ui/core';
+import { Behavior, t, ChartMetadata, ChartPlugin } from '@superset-ui/core';
 import buildQuery from './buildQuery';
 import controlPanel from './controlPanel';
 import transformProps from './transformProps';
@@ -35,9 +35,12 @@ export default class SupersetPluginDashboardFilters extends ChartPlugin {
    */
   constructor() {
     const metadata = new ChartMetadata({
-      description: 'Superset Plugin Dashboard Filters',
-      name: t('Superset Plugin Dashboard Filters'),
+      name: t('Dashboard Filters'),
+      description: t('A custom dashboard filter plugin'),
+      category: t('Filter Widgets'),
       thumbnail,
+      tags: [t('Dashboard'), t('Filters'), t('Cross-filter')],
+      behaviors: [Behavior.InteractiveChart, Behavior.NativeFilter],
     });
 
     super({

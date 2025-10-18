@@ -108,8 +108,8 @@ const config: ControlPanelConfig = {
             name: 'col',
             config: {
               ...sharedControls.groupby,
-              label: t('Columns'),
-              description: t('Columns to group by'),
+              label: t('Filter Columns'),
+              description: t('Column to filter on'),
               multi: false,
             },
           },
