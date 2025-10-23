@@ -273,6 +273,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     transposeColumnConfig,
     custom_css,
     collapsed_rows,
+    allSegementsTransposeColumnName,
   } = props;
   const comparisonColumns = [
     { key: 'all', label: t('Display all') },
@@ -896,7 +897,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           const isCollapsed = collapsedRows.has(metric);
           const canCollapse = rowConfig?.[metric]?.canCollapse !== false;
           const showCollapseIcon = isFirstColumn && hasChildren > 0 && canCollapse;
-          const isAllSegmentsColumn = column.label === 'All Segments';
+          const isAllSegmentsColumn = column.key === 'rowTotal'; // All Segments column;
           const isRowTotal = isAllSegmentsColumn && value === row.original.rowTotal;
           const isBoldText = (isFirstColumn && rowConfig?.[row.original.metric as string]?.boldText) || false;
           const isItalicText = (isFirstColumn && rowConfig?.[row.original.metric as string]?.italicText) || false;
@@ -1350,6 +1351,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           isUsingTimeComparison ? renderTimeComparisonDropdown : undefined
         }
         custom_css={custom_css}
+        allSegementsTransposeColumnName={allSegementsTransposeColumnName}
       />
     </Styles>
   );

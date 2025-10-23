@@ -157,6 +157,7 @@ export interface TableChartTransformedProps<D extends DataRecord = DataRecord> {
   custom_css?: string;
   transposeColumnConfig?: Record<string, TableColumnConfig>;
   collapsed_rows?: string[];
+  allSegementsTransposeColumnName?: string;
 }
 
 export enum ColorSchemeEnum {
