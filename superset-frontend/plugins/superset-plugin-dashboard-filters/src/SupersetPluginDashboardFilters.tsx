@@ -268,7 +268,9 @@ export default function SupersetPluginDashboardFilters(
 
   const options = React.useMemo(() => {
     if (selectState && Array.isArray(selectState.options))
-      return selectState.options;
+      return selectState.options.sort((a: { label: any }, b: { label: any }) =>
+        String(a.label).localeCompare(String(b.label)),
+      );
     const source = originalDataRef.current ?? data;
     if (!source || !key) return [];
     const uniq = [
@@ -278,7 +280,9 @@ export default function SupersetPluginDashboardFilters(
           .filter(v => v !== null && v !== undefined),
       ),
     ];
-    return uniq.map(v => ({ label: String(v), value: String(v) }));
+    return uniq
+      .map(v => ({ label: String(v), value: String(v) }))
+      .sort((a, b) => a.label.localeCompare(b.label));
     // rely on selectState/options rather than current data to keep options stable
   }, [selectState, key]);
   return (
