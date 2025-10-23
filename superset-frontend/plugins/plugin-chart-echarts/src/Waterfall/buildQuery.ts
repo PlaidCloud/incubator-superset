@@ -28,26 +28,32 @@ export default function buildQuery(formData: QueryFormData) {
     ...ensureIsArray(x_axis || granularity_sqla),
     ...ensureIsArray(groupby),
   ];
+  const tooltipColumns: string[] = [];
 
   if (columns.indexOf(formData.seriesOrderByColumn) === -1) {
     columns.push(formData.seriesOrderByColumn);
   }
 
   if (formData.tooltip_column) {
-    columns.push(formData.tooltip_column);
+    tooltipColumns.push(formData.tooltip_column);
+    tooltipColumns.push(formData.x_axis);
+    tooltipColumns.push(formData.groupby as unknown as string);
   }
-
-  // nonGroupByExprs Columns are removed from groupby_all_columns in the query but kept in select
-  const nonGroupByExprs = formData.tooltip_column
-    ? [`${formData.tooltip_column}`]
-    : [];
 
   if (formData.seriesOrderByColumn && formData.seriesOrderDirection) {
     return buildQueryContext(formData, baseQueryObject => [
       {
         ...baseQueryObject,
         columns,
-        non_groupby_exprs: nonGroupByExprs,
+        orderby: [
+          [
+            formData.seriesOrderByColumn,
+            formData.seriesOrderDirection === 'ASC',
+          ],
+        ],
+      },
+      {
+        columns: tooltipColumns,
         orderby: [
           [
             formData.seriesOrderByColumn,
@@ -57,11 +63,11 @@ export default function buildQuery(formData: QueryFormData) {
       },
     ]);
   }
+
   return buildQueryContext(formData, baseQueryObject => [
     {
       ...baseQueryObject,
       columns,
-      non_groupby_exprs: nonGroupByExprs,
       orderby: columns?.map(column => [column, true]),
     },
   ]);

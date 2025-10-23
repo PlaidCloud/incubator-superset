@@ -904,6 +904,7 @@ const transformProps = (
     show_all_segments = true,
     all_segments_position = 'start',
     column_sort_order = 'none',
+    collapsed_rows,
   } = formData;
   const isUsingTimeComparison =
     !isEmpty(time_compare) &&
@@ -1263,6 +1264,7 @@ const transformProps = (
     rowConfig: chartProps.rawFormData.row_config,
     transposeColumnConfig: chartProps.rawFormData.transpose_column_config,
     custom_css,
+    collapsed_rows,
   };
 };
 

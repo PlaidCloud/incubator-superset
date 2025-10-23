@@ -60,6 +60,8 @@ import {
   MinusCircleOutlined,
   PlusCircleOutlined,
   TableOutlined,
+  PlusSquareOutlined,
+  MinusSquareOutlined,
 } from '@ant-design/icons';
 import { isEmpty } from 'lodash';
 import {
@@ -270,6 +272,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     rowConfig,
     transposeColumnConfig,
     custom_css,
+    collapsed_rows,
   } = props;
   const comparisonColumns = [
     { key: 'all', label: t('Display all') },
@@ -292,7 +295,91 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     comparisonColumns[0].key,
   ]);
   const [hideComparisonKeys, setHideComparisonKeys] = useState<string[]>([]);
+  const [collapsedRows, setCollapsedRows] = useState<Set<string>>(
+    new Set(ensureIsArray(collapsed_rows))
+  );
+
+  const buildHierarchy = useCallback(() => {
+    const hierarchy: Map<
+      string,
+      { children: string[]; indent: number; parent: string | null }
+    > = new Map();
+    const stack: { metric: string; indent: number }[] = [];
+
+    data.forEach((row, index) => {
+      const metric = row.metric as string;
+      const indent = rowConfig?.[metric]?.indent || 0;
+      const canCollapse = rowConfig?.[metric]?.canCollapse !== false; // Allow specifying where collapse can happen
+
+      // Find parent by looking for last row with smaller indent
+      let parent: string | null = null;
+      while (stack.length > 0 && stack[stack.length - 1].indent >= indent) {
+        stack.pop();
+      }
+      if (stack.length > 0) {
+        parent = stack[stack.length - 1].metric;
+      }
+
+      hierarchy.set(metric, {
+        children: [],
+        indent,
+        parent,
+      });
+
+      // Add this row as child to parent
+      if (parent && hierarchy.has(parent)) {
+        hierarchy.get(parent)!.children.push(metric);
+      }
+
+      if (canCollapse) {
+        stack.push({ metric, indent });
+      }
+    });
+
+    return hierarchy;
+  }, [data, rowConfig]);
+
   const theme = useTheme();
+
+  const hierarchy = useMemo(() => buildHierarchy(), [buildHierarchy]);
+
+  const toggleCollapse = useCallback((metric: string) => {
+    setCollapsedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(metric)) {
+        newSet.delete(metric);
+      } else {
+        newSet.add(metric);
+      }
+      return newSet;
+    });
+  }, []);
+
+  const isRowVisible = useCallback(
+    (metric: string): boolean => {
+      const node = hierarchy.get(metric);
+      if (!node?.parent) return true;
+
+      // Check if any ancestor is collapsed
+      let current: string | null = node.parent;
+      while (current) {
+        if (collapsedRows.has(current)) {
+          return false;
+        }
+        const currentNode = hierarchy.get(current);
+        current = currentNode?.parent || null;
+      }
+
+      return true;
+    },
+    [hierarchy, collapsedRows],
+  );
+
+  // Filter visible data
+  const visibleData = useMemo(
+    () => data.filter(row => isRowVisible(row.metric as string)),
+    [data, isRowVisible],
+  );
 
   // only take relevant page size options
   const pageSizeOptions = useMemo(() => {
@@ -680,7 +767,10 @@ export default function TableChart<D extends DataRecord = DataRecord>(
   );
 
   const getColumnConfigs = useCallback(
-    (column: DataColumnMeta, i: number): ColumnWithLooseAccessor<D> & { label: string } => {
+    (
+      column: DataColumnMeta,
+      i: number,
+    ): ColumnWithLooseAccessor<D> & { label: string } => {
       const {
         key,
         label,
@@ -758,23 +848,39 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           const rowFormatter = row.original.__formatter__;
 
           // Check if we're in transpose mode (presence of __formatter__ or __is_summary__ indicates transpose)
-          const isTransposed = rowFormatter !== undefined || row.original.__is_summary__ !== undefined;
+          const isTransposed =
+            rowFormatter !== undefined ||
+            row.original.__is_summary__ !== undefined;
 
           // Skip formatter for the first column (metric names column)
           const shouldApplyFormatter = i !== 0;
 
           // Only use rowFormatter if it's a valid formatter type and not the first column
-          const effectiveFormatter = shouldApplyFormatter && (typeof rowFormatter === 'function' ||
-            (typeof rowFormatter === 'object' && rowFormatter !== null && !Array.isArray(rowFormatter) && !(rowFormatter instanceof Date)))
-            ? rowFormatter
-            : (shouldApplyFormatter ? column.formatter : undefined);
+          const effectiveFormatter =
+            shouldApplyFormatter &&
+              (typeof rowFormatter === 'function' ||
+                (typeof rowFormatter === 'object' &&
+                  rowFormatter !== null &&
+                  !Array.isArray(rowFormatter) &&
+                  !(rowFormatter instanceof Date)))
+              ? rowFormatter
+              : shouldApplyFormatter
+                ? column.formatter
+                : undefined;
 
           // Check if value should be displayed as "-" in transpose mode
           let displayValue = value;
           if (isEmptyRow) {
             // For empty rows, use invisible character for all columns except first
-            displayValue = i === 0 ? (row.original.metric || '\u200B') : '\u200B';
-          } else if (isTransposed && i !== 0 && (value === null || value === undefined || value === 0 || value === '')) {
+            displayValue = i === 0 ? row.original.metric || '\u200B' : '\u200B';
+          } else if (
+            isTransposed &&
+            i !== 0 &&
+            (value === null ||
+              value === undefined ||
+              value === 0 ||
+              value === '')
+          ) {
             displayValue = '-';
           }
 
@@ -785,19 +891,27 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           const html = isHtml && allowRenderHtml ? { __html: text } : undefined;
 
           const isFirstColumn = i === 0;
-          const isAllSegmentsColumn = column.label === 'All Segments'
+          const metric = row.original.metric as string;
+          const hasChildren = hierarchy.get(metric)?.children.length || 0;
+          const isCollapsed = collapsedRows.has(metric);
+          const canCollapse = rowConfig?.[metric]?.canCollapse !== false;
+          const showCollapseIcon = isFirstColumn && hasChildren > 0 && canCollapse;
+          const isAllSegmentsColumn = column.label === 'All Segments';
           const isRowTotal = isAllSegmentsColumn && value === row.original.rowTotal;
-          const isBoldText = isFirstColumn && rowConfig?.[row.original.metric as string]?.boldText || false;
-          const isItalicText = isFirstColumn && rowConfig?.[row.original.metric as string]?.italicText || false;
-          const indent = isFirstColumn && rowConfig?.[row.original.metric as string]?.indent || 0;
-          const fontSize = isFirstColumn && rowConfig?.[row.original.metric as string]?.fontSize || null;
+          const isBoldText = (isFirstColumn && rowConfig?.[row.original.metric as string]?.boldText) || false;
+          const isItalicText = (isFirstColumn && rowConfig?.[row.original.metric as string]?.italicText) || false;
+          const indent = (isFirstColumn && rowConfig?.[row.original.metric as string]?.indent) || 0;
+          const fontSize = (isFirstColumn && rowConfig?.[row.original.metric as string]?.fontSize) || null;
           const isSummaryRowFirstColumn = (row.original.__is_summary__ || false) && i === 0;
-          const rowTextAlign = isFirstColumn && rowConfig?.[row.original.metric as string]?.horizontalAlign || null;
-          const textColor = isFirstColumn && rowConfig?.[row.original.metric as string]?.textColor || null; // Add this line
-          const isUnderlineText = isFirstColumn && rowConfig?.[row.original.metric as string]?.underlineText || false; // Add this line
+          const rowTextAlign = (isFirstColumn && rowConfig?.[row.original.metric as string]?.horizontalAlign) || null;
+          const textColor = (isFirstColumn && rowConfig?.[row.original.metric as string]?.textColor) || null;
+          const isUnderlineText = (isFirstColumn && rowConfig?.[row.original.metric as string]?.underlineText) || false;
+
+          const parent = hierarchy.get(metric)?.parent;
 
           // Column Text Align takes preceddence over Row Text Align
-          const columnTextAlign = transposeColumnConfig?.[column.key]?.horizontalAlign ||
+          const columnTextAlign =
+            transposeColumnConfig?.[column.key]?.horizontalAlign ||
             transposeColumnConfig?.[column.label]?.horizontalAlign;
 
           className = className.replace('right-border-only', '');
@@ -841,20 +955,38 @@ export default function TableChart<D extends DataRecord = DataRecord>(
                 : '';
           }
 
-          const cellBackgroundColor = typeof rowColor === 'string' ? rowColor :
-            typeof backgroundColor === 'string' ? backgroundColor :
-              undefined;
+          const cellBackgroundColor =
+            typeof rowColor === 'string'
+              ? rowColor
+              : typeof backgroundColor === 'string'
+                ? backgroundColor
+                : undefined;
 
-          const StyledCell = styled.td`
+            const baseIndent = typeof indent === 'string' ? parseInt(indent, 10) : (indent || 0);
+
+            // Calculate total padding by traversing all ancestors
+            let ancestorPadding = 0;
+            let currentParent = parent;
+            while (currentParent) {
+              const parentNode = hierarchy.get(currentParent);
+              if (parentNode && rowConfig?.[currentParent]?.canCollapse !== false) {
+                ancestorPadding += 25; // Add padding for each collapsible ancestor
+              }
+              currentParent = parentNode?.parent || null;
+            }
+
+            const paddingLeft = baseIndent + (i === 0 ? ancestorPadding : 0);
+
+            const StyledCell = styled.td`
             text-align: ${columnTextAlign || rowTextAlign || sharedStyle.textAlign};
             white-space: ${value instanceof Date ? 'nowrap' : undefined};
             position: relative;
             background: ${cellBackgroundColor};
             color: ${textColor || 'inherit'};
-            ${(isBoldText || isRowTotal || isSummaryRowFirstColumn) ? 'font-weight: bold;' : ''}
+            ${isBoldText || isRowTotal || isSummaryRowFirstColumn ? 'font-weight: bold;' : ''}
             ${isItalicText ? 'font-style: italic;' : ''}
             ${isUnderlineText ? 'text-decoration: underline;' : ''} 
-            ${indent !== null && indent !== undefined && indent > 0 && i === 0 ? `padding-left: ${indent}px !important;` : ''}
+            ${paddingLeft > 0 && i === 0 ? `padding-left: ${paddingLeft}px !important;` : ''}
             ${fontSize ? `font-size: ${fontSize}px !important;` : ''}
             `;
 
@@ -960,13 +1092,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
             <StyledCell {...cellProps}>
               {valueRange && !isEmptyRow && (
                 <div
-                  /* The following classes are added to support custom CSS styling */
-                  className={cx(
-                    'cell-bar',
-                    typeof value === 'number' && value < 0
-                      ? 'negative'
-                      : 'positive',
-                  )}
+                  className={cx('cell-bar', typeof value === 'number' && value < 0 ? 'negative' : 'positive')}
                   css={cellBarStyles}
                   role="presentation"
                 />
@@ -976,11 +1102,47 @@ export default function TableChart<D extends DataRecord = DataRecord>(
                   className="dt-truncate-cell"
                   style={columnWidth ? { width: columnWidth } : undefined}
                 >
+                  {showCollapseIcon && (
+                    <span
+                      css={css`
+                        cursor: pointer;
+                        margin-right: 8px;
+                        display: inline-block;
+                        & svg {
+                          color: ${theme.colors.primary.base};
+                        }
+                      `}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleCollapse(metric);
+                      }}
+                    >
+                      {isCollapsed ? <PlusSquareOutlined /> : <MinusSquareOutlined />}
+                    </span>
+                  )}
                   {!isEmptyRow && arrow && <span css={arrowStyles}>{arrow}</span>}
                   {text}
                 </div>
               ) : (
                 <>
+                  {showCollapseIcon && (
+                    <span
+                      css={css`
+                        cursor: pointer;
+                        margin-right: 8px;
+                        display: inline-block;
+                        & svg {
+                          color: ${theme.colors.primary.base};
+                        }
+                      `}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleCollapse(metric);
+                      }}
+                    >
+                      {isCollapsed ? <PlusSquareOutlined /> : <MinusSquareOutlined />}
+                    </span>
+                  )}
                   {!isEmptyRow && arrow && <span css={arrowStyles}>{arrow}</span>}
                   {text}
                 </>
@@ -990,14 +1152,21 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         },
         Header: ({ column: col, onClick, style, onDragStart, onDrop }) => {
           // Get column-specific configuration from transposeColumnConfig
-          const columnConfig = transposeColumnConfig?.[column.key] || transposeColumnConfig?.[column.label] || {};
-          const headerTextAlign = columnConfig.horizontalAlign || sharedStyle.textAlign;
+          const columnConfig =
+            transposeColumnConfig?.[column.key] ||
+            transposeColumnConfig?.[column.label] ||
+            {};
+          const headerTextAlign =
+            columnConfig.horizontalAlign || sharedStyle.textAlign;
 
           return (
             <th
               id={`header-${column.key}`}
               title={t('Shift + Click to sort by multiple columns')}
-              className={[className.replace('right-border-only', ''), col.isSorted ? 'is-sorted' : ''].join(' ')}
+              className={[
+                className.replace('right-border-only', ''),
+                col.isSorted ? 'is-sorted' : '',
+              ].join(' ')}
               style={{
                 ...sharedStyle,
                 ...style,
@@ -1036,8 +1205,12 @@ export default function TableChart<D extends DataRecord = DataRecord>(
                 css={{
                   display: 'inline-flex',
                   alignItems: 'flex-end',
-                  justifyContent: headerTextAlign === 'center' ? 'center' :
-                    headerTextAlign === 'right' ? 'flex-end' : 'flex-start',
+                  justifyContent:
+                    headerTextAlign === 'center'
+                      ? 'center'
+                      : headerTextAlign === 'right'
+                        ? 'flex-end'
+                        : 'flex-start',
                   width: '100%',
                 }}
               >
@@ -1079,7 +1252,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         sortDescFirst: sortDesc,
         sortType: getSortTypeByDataType(dataType),
         disableSortBy: config.disableSortBy || false,
-        label
+        label,
       };
     },
     [
@@ -1095,6 +1268,9 @@ export default function TableChart<D extends DataRecord = DataRecord>(
       totals,
       columnColorFormatters,
       columnOrderToggle,
+      hierarchy,
+      collapsedRows,
+      toggleCollapse,
     ],
   );
 
@@ -1149,7 +1325,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     <Styles>
       <DataTable<D>
         columns={columns}
-        data={data}
+        data={visibleData}
         rowCount={rowCount}
         tableClassName="table table-striped table-condensed"
         pageSize={pageSize}
