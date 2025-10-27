@@ -236,12 +236,18 @@ export default function transformProps(
     inContextMenu,
   } = chartProps;
   const refs: Refs = {};
-  const data = getFirstRowsPerGroup(
-    queriesData[1]?.data || [],
-    queriesData[0]?.data || [],
-    formData.xAxis as string,
-    formData.groupby as unknown as string,
-  );
+  let data: DataRecord[];
+  if (formData.tooltipColumn === undefined) {
+    ({ data } = queriesData[0]);
+  } else {
+    data = getFirstRowsPerGroup(
+      queriesData[1]?.data || [],
+      queriesData[0]?.data || [],
+      formData.xAxis as string,
+      formData.groupby as unknown as string,
+    );
+  }
+
   const coltypeMapping = getColtypesMapping(queriesData[0]);
   const { setDataMask = () => {}, onContextMenu, onLegendStateChanged } = hooks;
   const {

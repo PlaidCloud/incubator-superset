@@ -40,7 +40,7 @@ export default function buildQuery(formData: QueryFormData) {
     tooltipColumns.push(formData.groupby as unknown as string);
   }
 
-  if (formData.seriesOrderByColumn && formData.seriesOrderDirection) {
+  if (formData.seriesOrderByColumn && formData.seriesOrderDirection && tooltipColumns.length > 0) {
     return buildQueryContext(formData, baseQueryObject => [
       {
         ...baseQueryObject,
@@ -54,6 +54,21 @@ export default function buildQuery(formData: QueryFormData) {
       },
       {
         columns: tooltipColumns,
+        orderby: [
+          [
+            formData.seriesOrderByColumn,
+            formData.seriesOrderDirection === 'ASC',
+          ],
+        ],
+      },
+    ]);
+  }
+
+  if (formData.seriesOrderByColumn && formData.seriesOrderDirection) {
+    return buildQueryContext(formData, baseQueryObject => [
+      {
+        ...baseQueryObject,
+        columns,
         orderby: [
           [
             formData.seriesOrderByColumn,
