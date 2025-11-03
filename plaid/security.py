@@ -277,12 +277,13 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
     def can_access_datasource(self, datasource: "BaseDatasource") -> bool:
         log.info(f"Checking access to datasource: {datasource}")
+        log.info(f"Checking access to datasource db id: {datasource.database.uuid}")
         if datasource.schema is None:
             log.info(f"No Schema: {datasource}")
             # Call the base method if there is no schema since there isn't a plaid schema.
             return super().can_access_datasource(datasource)
 
-        project_id = datasource.schema.replace("report", "")
+        project_id = str(datasource.database.uuid)
         return (
             self._can_access_project(project_id)
             or super().can_access_datasource(datasource)
