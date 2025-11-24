@@ -1,0 +1,52 @@
+{
+  "name": "@superset-ui/plugin-table-kpi",
+  "version": "0.1.0",
+  "description": "Superset Chart - KPI Table",
+  "sideEffects": false,
+  "main": "lib/index.js",
+  "module": "esm/index.js",
+  "files": [
+    "esm",
+    "lib"
+  ],
+  "scripts": {
+    "build": "npm run build-cjs && npm run build-esm && npm run ts-types",
+    "build-cjs": "babel src --extensions \".ts,.tsx,.js,.jsx\" --copy-files --out-dir lib",
+    "build-clean": "npm run clean && npm run build",
+    "build-esm": "cross-env BABEL_OUTPUT=esm babel src --extensions \".ts,.tsx,.js,.jsx\" --copy-files --out-dir esm",
+    "dev": "cross-env BABEL_OUTPUT=esm babel src --extensions \".ts,.tsx,.js,.jsx\" --watch --copy-files --out-dir esm",
+    "prebuild": "rimraf {lib,esm,tsconfig.tsbuildinfo}",
+    "postbuild": "npm run test",
+    "ts-types": "tsc --build",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@react-icons/all-files": "^4.1.0",
+    "@types/d3-array": "^2.9.0",
+    "@tanstack/react-table": "^8.0.0",
+    "classnames": "^2.5.1",
+    "d3-array": "^2.4.0",
+    "lodash": "^4.17.21",
+    "memoize-one": "^5.2.1",
+    "regenerator-runtime": "^0.14.1",
+    "xss": "^1.0.15"
+  },
+  "peerDependencies": {
+    "@ant-design/icons": "^5.2.6",
+    "@superset-ui/chart-controls": "*",
+    "@superset-ui/core": "*",
+    "@testing-library/dom": "^8.20.1",
+    "@testing-library/jest-dom": "*",
+    "@testing-library/react": "^12.1.5",
+    "@testing-library/react-hooks": "*",
+    "@testing-library/user-event": "*",
+    "@types/classnames": "*",
+    "@types/react": "*",
+    "match-sorter": "^6.3.3",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
