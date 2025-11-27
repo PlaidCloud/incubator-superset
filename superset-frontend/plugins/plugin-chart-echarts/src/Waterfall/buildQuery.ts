@@ -28,47 +28,18 @@ export default function buildQuery(formData: QueryFormData) {
     ...ensureIsArray(x_axis || granularity_sqla),
     ...ensureIsArray(groupby),
   ];
-  const tooltipColumns: string[] = [];
 
   if (columns.indexOf(formData.seriesOrderByColumn) === -1) {
     columns.push(formData.seriesOrderByColumn);
-  }
-
-  if (formData.tooltip_column) {
-    tooltipColumns.push(formData.tooltip_column);
-    tooltipColumns.push(formData.x_axis);
-    tooltipColumns.push(formData.groupby as unknown as string);
-  }
-
-  if (formData.seriesOrderByColumn && formData.seriesOrderDirection && tooltipColumns.length > 0) {
-    return buildQueryContext(formData, baseQueryObject => [
-      {
-        ...baseQueryObject,
-        columns,
-        orderby: [
-          [
-            formData.seriesOrderByColumn,
-            formData.seriesOrderDirection === 'ASC',
-          ],
-        ],
-      },
-      {
-        columns: tooltipColumns,
-        orderby: [
-          [
-            formData.seriesOrderByColumn,
-            formData.seriesOrderDirection === 'ASC',
-          ],
-        ],
-      },
-    ]);
   }
 
   if (formData.seriesOrderByColumn && formData.seriesOrderDirection) {
     return buildQueryContext(formData, baseQueryObject => [
       {
         ...baseQueryObject,
-        columns,
+        columns: formData.tooltip_column
+          ? [...columns, formData.tooltip_column]
+          : columns,
         orderby: [
           [
             formData.seriesOrderByColumn,
