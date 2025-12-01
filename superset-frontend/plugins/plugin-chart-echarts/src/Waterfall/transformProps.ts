@@ -201,6 +201,32 @@ export default function transformProps(
   const refs: Refs = {};
   let data: DataRecord[];
   ({ data } = queriesData[0]);
+  const dataWithTooltip = queriesData[1]?.data ?? [];
+
+  if (dataWithTooltip.length > 0) {
+    const detailIndex: Record<string, DataRecord> = {};
+    const xAxis = formData.xAxis.toString();
+    const groupby = formData.groupby?.toString();
+    if (groupby) {
+      for (const row of dataWithTooltip) {
+        const key = `${row[xAxis]}||${row[groupby]}`;
+        if (!detailIndex[key]) {
+          detailIndex[key] = row; // keep first occurrence
+        }
+      }
+
+      const combined = data.map(row => {
+        const key = `${row[xAxis]}||${row[groupby]}`;
+        const d = detailIndex[key] || {};
+        return {
+          ...row,
+          [formData.tooltipColumn]: d[formData.tooltipColumn] ?? null,
+        };
+      });
+
+      data = combined;
+    }
+  }
 
   const coltypeMapping = getColtypesMapping(queriesData[0]);
   const { setDataMask = () => {}, onContextMenu, onLegendStateChanged } = hooks;
