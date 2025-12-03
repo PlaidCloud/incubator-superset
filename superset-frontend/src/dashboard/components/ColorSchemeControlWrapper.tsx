@@ -17,8 +17,11 @@
  * under the License.
  */
 /* eslint-env browser */
-import { getCategoricalSchemeRegistry, t } from '@superset-ui/core';
-import { useEffect, useState } from 'react';
+import {
+  CategoricalScheme,
+  getCategoricalSchemeRegistry,
+  t,
+} from '@superset-ui/core';
 import ColorSchemeControl from 'src/explore/components/controls/ColorSchemeControl';
 
 interface ColorSchemeControlWrapperProps {
@@ -34,15 +37,7 @@ const ColorSchemeControlWrapper = ({
   hovered = false,
   onChange = () => {},
 }: ColorSchemeControlWrapperProps) => {
-  const [choices, setChoices] = useState<string[][]>([]);
-  const [schemes, setSchemes] = useState({});
-
-  useEffect(() => {
-    // Registry initialization
-    const categoricalSchemeRegistry = getCategoricalSchemeRegistry();
-    setChoices(categoricalSchemeRegistry.keys().map(s => [s, s]));
-    setSchemes(categoricalSchemeRegistry.getMap());
-  }, []); // Empty dependency array ensures this runs only once
+  const categoricalSchemeRegistry = getCategoricalSchemeRegistry();
 
   return (
     <ColorSchemeControl
@@ -52,10 +47,15 @@ const ColorSchemeControlWrapper = ({
       name="color_scheme"
       onChange={onChange}
       value={colorScheme ?? ''}
-      choices={choices}
+      choices={() => categoricalSchemeRegistry.keys().map(s => [s, s])}
       clearable
       hovered={hovered}
-      schemes={schemes}
+      schemes={() => {
+        const schemeMap = categoricalSchemeRegistry.getMap();
+        return Object.fromEntries(
+          Object.entries(schemeMap).filter(([, value]) => value !== undefined),
+        ) as Record<string, CategoricalScheme>;
+      }}
       hasCustomLabelsColor={hasCustomLabelsColor}
     />
   );
