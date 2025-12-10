@@ -120,7 +120,7 @@ function formatTooltip({
     rows.push([String(dataPoint[formData.tooltipColumn as string]), '']);
   }
 
-  return tooltipHtml(rows, title);
+  return tooltipHtml(rows, title, undefined, true);
 }
 
 function transformer({
@@ -508,6 +508,9 @@ export default function transformProps(
       appendToBody: true,
       trigger: 'axis',
       show: !inContextMenu,
+      textStyle: {
+        overflow: 'break',
+      },
       formatter: (params: any) =>
         formatTooltip({
           params,
