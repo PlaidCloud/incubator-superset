@@ -121,35 +121,6 @@ export default function SupersetPluginDashboardFilters(
   }, [filterState]);
 
   useEffect(() => {
-    // Remove the header title from the dashboard
-    const removeHeaderTitle = () => {
-      const currentElement = rootElem.current;
-      if (!currentElement) return;
-
-      // Traverse up to find the chart container and remove title
-      let parent = currentElement.parentElement;
-      while (parent) {
-        // Look for dashboard chart header elements
-        const headerTitle = parent.querySelector('.header-title');
-        if (headerTitle) {
-          headerTitle.remove();
-          break;
-        }
-
-        parent = parent.parentElement;
-        // Stop if we've gone too far up
-        if (parent?.classList.contains('dashboard-grid')) break;
-      }
-    };
-
-    // Run immediately and also after a short delay to catch dynamically rendered titles
-    removeHeaderTitle();
-    const timeoutId = setTimeout(removeHeaderTitle, 100);
-
-    return () => clearTimeout(timeoutId);
-  }, []);
-
-  useEffect(() => {
     // Remove the header title and position header controls absolutely
     const modifyHeader = () => {
       const currentElement = rootElem.current;
@@ -181,15 +152,7 @@ export default function SupersetPluginDashboardFilters(
       }
     };
 
-    // Run immediately and also after delays to catch dynamically rendered elements
     modifyHeader();
-    const timeoutId1 = setTimeout(modifyHeader, 100);
-    const timeoutId2 = setTimeout(modifyHeader, 500);
-
-    return () => {
-      clearTimeout(timeoutId1);
-      clearTimeout(timeoutId2);
-    };
   }, []);
 
   // Handle selection change (doesn't emit immediately)
