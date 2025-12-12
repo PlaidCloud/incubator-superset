@@ -76,7 +76,6 @@ export default function SupersetPluginDashboardFilters(
   const originalDataRef = useRef<TimeseriesDataRecord[] | null>(null);
 
   // Set original data only once
-  // Set original data only once
   if (!originalDataRef.current && data) {
     originalDataRef.current = data;
   }
@@ -103,6 +102,7 @@ export default function SupersetPluginDashboardFilters(
       ].map(v => ({ label: String(v), value: String(v) }));
       setDataMask({
         filterState: {
+          ...(filterState ?? {}),
           selectState: {
             options: uniq,
           },
@@ -114,10 +114,9 @@ export default function SupersetPluginDashboardFilters(
 
   // Initialize selected values from filterState if available
   useEffect(() => {
-    if (filterState?.selectedValues) {
-      setSelectedValues(filterState.selectedValues);
-      setPendingValues(filterState.selectedValues);
-    }
+    const sv = filterState?.selectedValues ?? [];
+    setSelectedValues(sv);
+    setPendingValues(sv);
   }, [filterState]);
 
   useEffect(() => {
@@ -275,6 +274,7 @@ export default function SupersetPluginDashboardFilters(
           overflow: 'hidden',
           textOverflow: 'ellipsis',
         }}
+        showArrow
         placeholder="Select options"
         value={allowMultiple ? pendingValues : (pendingValues[0] ?? undefined)}
         onChange={(val: any) =>
