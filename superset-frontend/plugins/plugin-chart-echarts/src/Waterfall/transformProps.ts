@@ -36,6 +36,7 @@ import {
   ISeriesData,
   WaterfallChartTransformedProps,
   ICallbackDataParams,
+  EchartsWaterfallFormData,
 } from './types';
 import { getDefaultTooltip } from '../utils/tooltip';
 import { defaultGrid, defaultYAxis } from '../defaults';
@@ -51,11 +52,17 @@ function formatTooltip({
   breakdownName,
   defaultFormatter,
   xAxisFormatter,
+  data,
+  xAxisName,
+  formData,
 }: {
   params: ICallbackDataParams[];
   breakdownName?: string;
   defaultFormatter: NumberFormatter | CurrencyFormatter;
   xAxisFormatter: (value: number | string, index: number) => string;
+  data: DataRecord[];
+  xAxisName: string;
+  formData: EchartsWaterfallFormData;
 }) {
   const series = params.find(
     param => param.seriesName !== ASSIST_MARK && param.data.value !== TOKEN,
@@ -70,12 +77,12 @@ function formatTooltip({
   if (!series) {
     return NULL_STRING;
   }
+  const rows: string[][] = [];
 
   const title =
     !isTotal || breakdownName
       ? xAxisFormatter(series.name, series.dataIndex)
       : undefined;
-  const rows: string[][] = [];
   if (!isTotal) {
     rows.push([
       series.seriesName!,
@@ -83,7 +90,37 @@ function formatTooltip({
     ]);
   }
   rows.push([TOTAL_MARK, defaultFormatter(series.data.totalSum)]);
-  return tooltipHtml(rows, title);
+
+  let dataPoint;
+
+  if (isTotal) {
+    // For total rows, try to find tooltip data or use a default message
+    if (breakdownName) {
+      // For breakdown totals, find the first non-total row with same x-axis value
+      dataPoint = data.find(
+        row =>
+          row[xAxisName] === series.name && row[breakdownName] !== TOTAL_MARK,
+      );
+    }
+  } else {
+    // Non-total case
+    dataPoint = data.find(row => {
+      const categoryValue =
+        breakdownName && row[breakdownName] !== TOTAL_MARK
+          ? row[breakdownName]
+          : row[xAxisName];
+      return categoryValue === series.name;
+    });
+  }
+
+  if (
+    dataPoint?.[formData.tooltipColumn as string] !== undefined &&
+    dataPoint?.[formData.tooltipColumn as string] !== null
+  ) {
+    rows.push([String(dataPoint[formData.tooltipColumn as string]), '']);
+  }
+
+  return tooltipHtml(rows, title, undefined, true);
 }
 
 function transformer({
@@ -162,7 +199,35 @@ export default function transformProps(
     inContextMenu,
   } = chartProps;
   const refs: Refs = {};
-  const { data = [] } = queriesData[0];
+  let data: DataRecord[];
+  ({ data } = queriesData[0]);
+  const dataWithTooltip = queriesData[1]?.data ?? [];
+
+  if (dataWithTooltip.length > 0) {
+    const detailIndex: Record<string, DataRecord> = {};
+    const xAxis = formData.xAxis.toString();
+    const groupby = formData.groupby?.toString();
+    if (groupby) {
+      for (const row of dataWithTooltip) {
+        const key = `${row[xAxis]}||${row[groupby]}`;
+        if (!detailIndex[key]) {
+          detailIndex[key] = row; // keep first occurrence
+        }
+      }
+
+      const combined = data.map(row => {
+        const key = `${row[xAxis]}||${row[groupby]}`;
+        const d = detailIndex[key] || {};
+        return {
+          ...row,
+          [formData.tooltipColumn]: d[formData.tooltipColumn] ?? null,
+        };
+      });
+
+      data = combined;
+    }
+  }
+
   const coltypeMapping = getColtypesMapping(queriesData[0]);
   const { setDataMask = () => {}, onContextMenu, onLegendStateChanged } = hooks;
   const {
@@ -443,12 +508,18 @@ export default function transformProps(
       appendToBody: true,
       trigger: 'axis',
       show: !inContextMenu,
+      textStyle: {
+        overflow: 'break',
+      },
       formatter: (params: any) =>
         formatTooltip({
           params,
           breakdownName,
           defaultFormatter,
           xAxisFormatter,
+          data,
+          xAxisName,
+          formData,
         }),
     },
     series: barSeries,
