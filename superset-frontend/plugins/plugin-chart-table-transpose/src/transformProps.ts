@@ -1,3 +1,14 @@
+/* eslint-disable @typescript-eslint/no-inferrable-types */
+/* eslint-disable object-shorthand */
+/* eslint-disable no-else-return */
+/* eslint-disable prefer-const */
+/* eslint-disable no-plusplus */
+/* eslint-disable @typescript-eslint/prefer-optional-chain */
+/* eslint-disable dot-notation */
+/* eslint-disable no-unused-expressions */
+/* eslint-disable no-sequences */
+/* eslint-disable prettier/prettier */
+/* eslint-disable no-underscore-dangle */
 /**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -35,7 +46,6 @@ import {
   SMART_DATE_ID,
   TimeFormats,
   TimeFormatter,
-  createSmartNumberFormatter,
 } from '@superset-ui/core';
 import {
   ColorFormatters,
@@ -460,10 +470,14 @@ function createFormatter(config: {
 
 
   if (config.smallNumberFormat && config.numberFormat) {
-    return createSmartNumberFormatter({
-      id: config.numberFormat,
-      description: config.smallNumberFormat,
-    });
+    const regularFormatter = getNumberFormatter(config.numberFormat);
+    const smallFormatter = getNumberFormatter(config.smallNumberFormat);
+    return (value: number) => {
+      if (Math.abs(value) < 1 && value !== 0) {
+        return smallFormatter(value);
+      }
+      return regularFormatter(value);
+    };
   }
 
   if (config.numberFormat) {
@@ -482,6 +496,7 @@ function transposeData(
   showAllSegments: boolean = true,
   allSegmentsPosition: 'start' | 'end' = 'start',
   column_sort_order: 'none' | 'asc' | 'desc' = 'none',
+  allSegmentsTransposedColumnName: string = t('All Segments'),
 ): {
   transposedData: DataRecord[];
   transposedColumns: DataColumnMeta[];
@@ -567,7 +582,7 @@ function transposeData(
     ...(showAllSegments && allSegmentsPosition === 'start' ? [
       {
         key: 'rowTotal',
-        label: t('All Segments'),
+        label: allSegmentsTransposedColumnName,
         dataType: GenericDataType.Numeric,
         isMetric: false,
         isPercentMetric: false,
@@ -578,7 +593,7 @@ function transposeData(
     ...(showAllSegments && allSegmentsPosition === 'end' ? [
       {
         key: 'rowTotal',
-        label: t('All Segments'),
+        label: allSegmentsTransposedColumnName,
         dataType: GenericDataType.Numeric,
         isMetric: false,
         isPercentMetric: false,
@@ -594,12 +609,24 @@ function transposeData(
       originalDataColumns.forEach(col => {
         newRow[col.key] = row[col.key];
         // Assign formatter if available
-        if (metricFormatters.has(col.key)) {
+        const rowConfigForMetric = rowConfig?.[col.key];
+        if (rowConfigForMetric && (rowConfigForMetric.d3NumberFormat || rowConfigForMetric.d3SmallNumberFormat || rowConfigForMetric.currencyFormat)) {
+          const formatter = createFormatter({
+            numberFormat: rowConfigForMetric.d3NumberFormat,
+            smallNumberFormat: rowConfigForMetric.d3SmallNumberFormat,
+            currencyFormat: rowConfigForMetric.currencyFormat,
+          });
+          if (formatter) {
+            (newRow as any).__formatter__ = formatter;
+          }
+        } else if (metricFormatters.has(col.key)) {
           (newRow as any).__formatter__ = metricFormatters.get(col.key);
         }
       });
       return newRow;
     })
+
+
 
     const newRows = formDataMetricsInOrder.map(metricOrHeadingItem => {
       const newRow: DataRecord = {};
@@ -622,11 +649,16 @@ function transposeData(
         newRow.__isHeading = false;
         originalRows.forEach(originalRow => {
           newRow.rowTotal = originalRow[itemIdentifier];
-          // Assign formatter if available
-          if (metricFormatters.has(itemIdentifier)) {
-            (newRow as any).__formatter__ = metricFormatters.get(itemIdentifier);
-          }
         });
+        const rowConfigForMetric = rowConfig?.[itemIdentifier];
+        if (rowConfigForMetric && (rowConfigForMetric.d3NumberFormat || rowConfigForMetric.d3SmallNumberFormat || rowConfigForMetric.currencyFormat)) {
+          const formatter = createFormatter({
+            numberFormat: rowConfigForMetric.d3NumberFormat,
+            smallNumberFormat: rowConfigForMetric.d3SmallNumberFormat,
+            currencyFormat: rowConfigForMetric.currencyFormat,
+          });
+          (newRow as any).__formatter__ = formatter;
+        }
       }
       return newRow;
     });
@@ -870,9 +902,11 @@ const transformProps = (
     custom_css,
     timeseries_limit_metric,
     summary_position = 'bottom',
+    all_segments_transposed_column_name = t('All Segments'),
     show_all_segments = true,
     all_segments_position = 'start',
     column_sort_order = 'none',
+    collapsed_rows,
   } = formData;
   const isUsingTimeComparison =
     !isEmpty(time_compare) &&
@@ -1091,7 +1125,8 @@ const transformProps = (
       formData.row_config,
       show_all_segments,
       all_segments_position,
-      column_sort_order
+      column_sort_order,
+      all_segments_transposed_column_name
     );
     passedData = transposedData;
     passedColumns = transposedColumns;
@@ -1232,6 +1267,8 @@ const transformProps = (
     rowConfig: chartProps.rawFormData.row_config,
     transposeColumnConfig: chartProps.rawFormData.transpose_column_config,
     custom_css,
+    collapsed_rows,
+    allSegementsTransposeColumnName: all_segments_transposed_column_name,
   };
 };
 

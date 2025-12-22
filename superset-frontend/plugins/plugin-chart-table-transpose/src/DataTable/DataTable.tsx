@@ -76,6 +76,7 @@ export interface DataTableProps<D extends object> extends TableOptions<D> {
   renderGroupingHeaders?: () => JSX.Element;
   renderTimeComparisonDropdown?: () => JSX.Element;
   custom_css?: string; // custom CSS class to apply to the table
+  allSegementsTransposeColumnName?: string; // Name of the "All Segments" column
 }
 
 export interface RenderHTMLCellProps extends HTMLProps<HTMLTableCellElement> {
@@ -111,6 +112,7 @@ export default typedMemo(function DataTable<D extends object>({
   renderGroupingHeaders,
   renderTimeComparisonDropdown,
   custom_css,
+  allSegementsTransposeColumnName,
   ...moreUseTableOptions
 }: DataTableProps<D>): JSX.Element {
   const tableHooks: PluginHook<D>[] = [
@@ -221,9 +223,9 @@ export default typedMemo(function DataTable<D extends object>({
           // Find the column definition to get its sortType
           const column = columns.find(
             col => col.id === id || col.accessor === id,
-          ) as Column<D> & { label: string };
+          ) as Column<D> & { label: string, key: string };
           const sortType = column?.sortType;
-          const columnLabel = column.label === "All Segments" ? "rowTotal" : column.label;
+          const columnLabel = column.key === "rowTotal" ? allSegementsTransposeColumnName : column.label;
 
           const aVal = a.row[columnLabel as keyof D];
           const bVal = b.row[columnLabel as keyof D];
