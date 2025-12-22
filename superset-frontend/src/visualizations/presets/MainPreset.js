@@ -85,6 +85,7 @@ import { BigTextChart } from '@superset-ui/plugin-chart-big-text';
 import { SupersetPluginChartWhale } from '@superset-ui/plugin-chart-whale';
 import { TableChartTransposePlugin } from '@superset-ui/plugin-chart-table-transpose';
 import { SupersetPluginDashboardFilters } from '@superset-ui/superset-plugin-dashboard-filters';
+import { PluginTableKpi } from "@superset-ui/plugin-table-kpi";
 
 export default class MainPreset extends Preset {
   constructor() {
@@ -194,6 +195,7 @@ export default class MainPreset extends Preset {
         new SupersetPluginChartWhale().configure({ key: 'ext-whale' }),
         new TableChartTransposePlugin().configure({ key: 'ext-table-transpose' }),
         new SupersetPluginDashboardFilters().configure({ key: 'ext-dashboard-filters' }),
+        new PluginTableKpi().configure({ key: 'table-kpi' }),
         ...experimentalPlugins,
       ],
     });
