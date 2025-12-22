@@ -116,6 +116,7 @@
     "@superset-ui/plugin-chart-word-cloud": "file:./plugins/plugin-chart-word-cloud",
     "@superset-ui/plugin-chart-whale": "file:./plugins/plugin-chart-whale",
     "@superset-ui/plugin-chart-table-transpose": "file:./plugins/plugin-chart-table-transpose",
+    "@superset-ui/superset-plugin-dashboard-filters": "file:./plugins/superset-plugin-dashboard-filters",
     "@superset-ui/switchboard": "file:./packages/superset-ui-switchboard",
     "@types/d3-format": "^3.0.1",
     "@types/d3-time-format": "^4.0.3",
