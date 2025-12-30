@@ -108,28 +108,36 @@ export const TRANSPOSE_ROW_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {
     [
       { name: 'horizontalAlign', override: { defaultValue: 'left' } },
       {
-        name: 'textColor', override: {
-          description: t('Text color for the metric header (e.g., #ffffff, rgba(255,255,255,0.5), beige, black, or transparent)'),
-        }
-      }
+        name: 'textColor',
+        override: {
+          description: t(
+            'Text color for the metric header (e.g., #ffffff, rgba(255,255,255,0.5), beige, black, or transparent)',
+          ),
+        },
+      },
     ],
     ['boldText', 'italicText', 'underlineText'],
     ['indent', 'fontSize', 'rowColor'],
+    ['showAllSegmentsCell'],
   ],
   [GenericDataType.Numeric]: [
     {
       tab: t('Display'),
       children: [
         [
-          { name: 'horizontalAlign', override: { defaultValue: 'right' }, },
+          { name: 'horizontalAlign', override: { defaultValue: 'right' } },
           {
-            name: 'textColor', override: {
-              description: t('Text color for the metric header (e.g., #ffffff, rgba(255,255,255,0.5), beige, black, or transparent)'),
-            }
-          }
+            name: 'textColor',
+            override: {
+              description: t(
+                'Text color for the metric header (e.g., #ffffff, rgba(255,255,255,0.5), beige, black, or transparent)',
+              ),
+            },
+          },
         ],
         ['boldText', 'italicText', 'underlineText'],
         ['indent', 'fontSize', 'rowColor'],
+        ['showAllSegmentsCell'],
       ],
     },
     {
@@ -145,9 +153,7 @@ export const TRANSPOSE_ROW_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {
 
 export const TRANSPOSE_COLUMN_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {
   [GenericDataType.Numeric]: [
-    [
-      { name: 'horizontalAlign', override: { defaultValue: 'right' } },
-    ],
+    [{ name: 'horizontalAlign', override: { defaultValue: 'right' } }],
   ],
 };
 
@@ -224,8 +230,8 @@ const percentMetricsControl: typeof sharedControls.metrics = {
   label: t('Percentage metrics'),
   description: t(
     'Select one or many metrics to display, that will be displayed in the percentages of total. ' +
-    'Percentage metrics will be calculated only from data within the row limit. ' +
-    'You can use an aggregation function on a column or write custom SQL to create a percentage metric.',
+      'Percentage metrics will be calculated only from data within the row limit. ' +
+      'You can use an aggregation function on a column or write custom SQL to create a percentage metric.',
   ),
   visibility: isAggMode,
   resetOnHide: false,
@@ -394,8 +400,8 @@ const config: ControlPanelConfig = {
               ) => ({
                 columns: datasource?.columns[0]?.hasOwnProperty('filterable')
                   ? (datasource as Dataset)?.columns?.filter(
-                    (c: ColumnMeta) => c.filterable,
-                  )
+                      (c: ColumnMeta) => c.filterable,
+                    )
                   : datasource?.columns,
                 savedMetrics: defineSavedMetrics(datasource),
                 // current active adhoc metrics
@@ -423,7 +429,8 @@ const config: ControlPanelConfig = {
             config: {
               ...percentMetricsControl,
               visibility: ({ controls }: ControlPanelsContainerProps) =>
-                isAggMode({ controls }) && !Boolean(controls?.enable_pivot?.value)
+                isAggMode({ controls }) &&
+                !Boolean(controls?.enable_pivot?.value),
             },
           },
         ],
@@ -433,7 +440,8 @@ const config: ControlPanelConfig = {
             name: 'timeseries_limit_metric',
             override: {
               visibility: ({ controls }: ControlPanelsContainerProps) =>
-                isAggMode({ controls }) && !Boolean(controls?.enable_pivot?.value),
+                isAggMode({ controls }) &&
+                !Boolean(controls?.enable_pivot?.value),
               resetOnHide: false,
             },
           },
@@ -497,17 +505,18 @@ const config: ControlPanelConfig = {
             config: {
               type: 'RadioButtonControl',
               label: t('Sort Row order'),
-              default: "none",
+              default: 'none',
               options: [
-                ["none", t('None')],
-                ["asc", t('Ascending')],
-                ["desc", t('Descending')],
+                ['none', t('None')],
+                ['asc', t('Ascending')],
+                ['desc', t('Descending')],
               ],
               description: t(
                 'Choose the sort order for the rows. None means no sorting will be applied.',
               ),
               visibility: ({ controls }: ControlPanelsContainerProps) =>
-                isAggMode({ controls }) && Boolean(controls?.enable_pivot?.value),
+                isAggMode({ controls }) &&
+                Boolean(controls?.enable_pivot?.value),
               resetOnHide: false,
             },
           },
@@ -519,9 +528,12 @@ const config: ControlPanelConfig = {
               type: 'CheckboxControl',
               label: t('Show All Segments column'),
               default: true,
-              description: t('Show or hide the All Segments total column in transposed table'),
+              description: t(
+                'Show or hide the All Segments total column in transposed table',
+              ),
               visibility: ({ controls }: ControlPanelsContainerProps) =>
-                isAggMode({ controls }) && Boolean(controls?.enable_pivot?.value),
+                isAggMode({ controls }) &&
+                Boolean(controls?.enable_pivot?.value),
               resetOnHide: false,
             },
           },
@@ -535,7 +547,9 @@ const config: ControlPanelConfig = {
                 ['start', t('Start')],
                 ['end', t('End')],
               ],
-              description: t('Choose whether to display the All Segments column at the start or end of the table'),
+              description: t(
+                'Choose whether to display the All Segments column at the start or end of the table',
+              ),
               visibility: ({ controls }: ControlPanelsContainerProps) =>
                 isAggMode({ controls }) &&
                 Boolean(controls?.enable_pivot?.value) &&
@@ -586,32 +600,38 @@ const config: ControlPanelConfig = {
                 ['top', t('Top')],
                 ['bottom', t('Bottom')],
               ],
-              description: t('Choose whether to display the summary at the top or bottom of the table.'),
-              visibility: ({ controls }) => Boolean(controls?.show_totals?.value),
+              description: t(
+                'Choose whether to display the summary at the top or bottom of the table.',
+              ),
+              visibility: ({ controls }) =>
+                Boolean(controls?.show_totals?.value),
               renderTrigger: true,
             },
           },
         ],
-        [{
-          name: 'column_sort_order',
-          config: {
-            type: 'RadioButtonControl',
-            label: t('Column sort order'),
-            default: 'none',
-            options: [
-              ['none', t('None')],
-              ['asc', t('Ascending (A-Z)')],
-              ['desc', t('Descending (Z-A)')],
-            ],
-            description: t('Sort columns, except "metrics" and "All Segments"'),
-            visibility: ({ controls }: ControlPanelsContainerProps) =>
-              isAggMode({ controls }) &&
-              Boolean(controls?.enable_pivot?.value),
-            resetOnHide: false,
-            renderTrigger: true,
+        [
+          {
+            name: 'column_sort_order',
+            config: {
+              type: 'RadioButtonControl',
+              label: t('Column sort order'),
+              default: 'none',
+              options: [
+                ['none', t('None')],
+                ['asc', t('Ascending (A-Z)')],
+                ['desc', t('Descending (Z-A)')],
+              ],
+              description: t(
+                'Sort columns, except "metrics" and "All Segments"',
+              ),
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                isAggMode({ controls }) &&
+                Boolean(controls?.enable_pivot?.value),
+              resetOnHide: false,
+              renderTrigger: true,
+            },
           },
-        },
-        ]
+        ],
       ],
     },
     {
@@ -708,8 +728,8 @@ const config: ControlPanelConfig = {
                 return true;
               },
               mapStateToProps(explore, _, chart) {
-
-                const timeComparisonStatus = !!explore?.controls?.time_compare?.value;
+                const timeComparisonStatus =
+                  !!explore?.controls?.time_compare?.value;
 
                 const { colnames: _colnames, coltypes: _coltypes } =
                   chart?.queriesResponse?.[0] ?? {};
@@ -723,7 +743,9 @@ const config: ControlPanelConfig = {
                   // The metrics become the new columns
 
                   // Get the groupby columns (usually the first column(s) that are strings)
-                  const groupbyColumns = ensureIsArray(explore?.form_data?.groupby);
+                  const groupbyColumns = ensureIsArray(
+                    explore?.form_data?.groupby,
+                  );
                   const groupbyColumnNames = groupbyColumns.map(col => {
                     if (typeof col === 'string') {
                       return col;
@@ -748,11 +770,18 @@ const config: ControlPanelConfig = {
                   const firstGroupbyColumn = groupbyColumnNames[0];
 
                   // Extract unique values from the first groupby column
-                  const uniqueColumnValues = firstGroupbyColumn && dataValues.length > 0
-                    ? [...new Set(dataValues.map((row: any) => row[firstGroupbyColumn]))]
-                      .filter(val => val !== null && val !== undefined)
-                      .map(val => String(val))
-                    : [];
+                  const uniqueColumnValues =
+                    firstGroupbyColumn && dataValues.length > 0
+                      ? [
+                          ...new Set(
+                            dataValues.map(
+                              (row: any) => row[firstGroupbyColumn],
+                            ),
+                          ),
+                        ]
+                          .filter(val => val !== null && val !== undefined)
+                          .map(val => String(val))
+                      : [];
 
                   // Build the transposed column structure
                   colnames = ['metric']; // First column is always 'metric'
@@ -807,7 +836,9 @@ const config: ControlPanelConfig = {
             config: {
               type: 'ColumnConfigControl',
               label: t('Customize row headers in Metrics'),
-              description: t('Customize how to display metric row headers when table is transposed'),
+              description: t(
+                'Customize how to display metric row headers when table is transposed',
+              ),
               width: 400,
               height: 320,
               renderTrigger: true,
@@ -837,34 +868,58 @@ const config: ControlPanelConfig = {
                       // Simple metric (column name)
                       rowNames.push(metric);
                       rowTypes.push(GenericDataType.Numeric); // Assume numeric for simple metrics
-                    } else if (typeof metric === 'object' && (metric as any).emptyRowHeading !== true) {
+                    } else if (
+                      typeof metric === 'object' &&
+                      (metric as any).emptyRowHeading !== true
+                    ) {
                       const adhocMetric = metric as AdhocMetric;
-                      const label = adhocMetric.label ||
-                        ('sqlExpression' in adhocMetric ? adhocMetric.sqlExpression : null) ||
-                        ('column' in adhocMetric && (adhocMetric as AdhocMetricSimple).column?.column_name) ||
+                      const label =
+                        adhocMetric.label ||
+                        ('sqlExpression' in adhocMetric
+                          ? adhocMetric.sqlExpression
+                          : null) ||
+                        ('column' in adhocMetric &&
+                          (adhocMetric as AdhocMetricSimple).column
+                            ?.column_name) ||
                         'Metric';
                       rowNames.push(label);
 
                       // Check if it's an aggregate metric
                       const isAggregateMetric =
-                        (adhocMetric.expressionType === 'SQL' && adhocMetric.sqlExpression) ||
-                        (adhocMetric.expressionType === 'SIMPLE' && adhocMetric.aggregate);
+                        (adhocMetric.expressionType === 'SQL' &&
+                          adhocMetric.sqlExpression) ||
+                        (adhocMetric.expressionType === 'SIMPLE' &&
+                          adhocMetric.aggregate);
 
                       // Set data type based on whether it's an aggregate
-                      rowTypes.push(isAggregateMetric ? GenericDataType.Numeric : GenericDataType.String);
+                      rowTypes.push(
+                        isAggregateMetric
+                          ? GenericDataType.Numeric
+                          : GenericDataType.String,
+                      );
                     }
                   }
                 });
 
                 // Add row headers from heading metrics
                 const rowHeaders = metrics
-                  .filter((metric): metric is AdhocMetric & { emptyRowHeadingText: string } => {
-                    if (typeof metric === 'object' && metric !== null) {
-                      const colName = (metric as AdhocMetricSimple).column?.column_name;
-                      return typeof colName === 'string' && colName.startsWith('__heading');
-                    }
-                    return false;
-                  })
+                  .filter(
+                    (
+                      metric,
+                    ): metric is AdhocMetric & {
+                      emptyRowHeadingText: string;
+                    } => {
+                      if (typeof metric === 'object' && metric !== null) {
+                        const colName = (metric as AdhocMetricSimple).column
+                          ?.column_name;
+                        return (
+                          typeof colName === 'string' &&
+                          colName.startsWith('__heading')
+                        );
+                      }
+                      return false;
+                    },
+                  )
                   .map(metric => metric.emptyRowHeadingText);
 
                 rowHeaders.forEach(header => {
@@ -873,7 +928,10 @@ const config: ControlPanelConfig = {
                 });
 
                 return {
-                  columnsPropsObject: { colnames: rowNames, coltypes: rowTypes },
+                  columnsPropsObject: {
+                    colnames: rowNames,
+                    coltypes: rowTypes,
+                  },
                   configFormLayout: TRANSPOSE_ROW_CONFIG_FORM_LAYOUT,
                 };
               },
@@ -886,7 +944,9 @@ const config: ControlPanelConfig = {
             config: {
               type: 'ColumnConfigControl',
               label: t('Customize transposed columns'),
-              description: t('Customize alignment and formatting for each transposed column'),
+              description: t(
+                'Customize alignment and formatting for each transposed column',
+              ),
               width: 400,
               height: 320,
               renderTrigger: true,
@@ -906,7 +966,9 @@ const config: ControlPanelConfig = {
                 }
 
                 // Get the groupby columns to determine what will become column headers
-                const groupbyColumns = ensureIsArray(explore?.form_data?.groupby);
+                const groupbyColumns = ensureIsArray(
+                  explore?.form_data?.groupby,
+                );
                 const groupbyColumnNames = groupbyColumns.map(col => {
                   if (typeof col === 'string') {
                     return col;
@@ -926,12 +988,17 @@ const config: ControlPanelConfig = {
                 const firstGroupbyColumn = groupbyColumnNames[0];
 
                 // Extract unique values from the first groupby column
-                const uniqueColumnValues = firstGroupbyColumn && dataValues.length > 0
-                  ? [...new Set(dataValues.map((row: any) => row[firstGroupbyColumn]))]
-                    .filter(val => val !== null && val !== undefined)
-                    .map(val => String(val))
-                    .sort() // Sort alphabetically for consistent ordering
-                  : [];
+                const uniqueColumnValues =
+                  firstGroupbyColumn && dataValues.length > 0
+                    ? [
+                        ...new Set(
+                          dataValues.map((row: any) => row[firstGroupbyColumn]),
+                        ),
+                      ]
+                        .filter(val => val !== null && val !== undefined)
+                        .map(val => String(val))
+                        .sort() // Sort alphabetically for consistent ordering
+                    : [];
 
                 // Build the transposed column structure
                 const colnames: string[] = []; // First column is always 'metric'
@@ -955,14 +1022,20 @@ const config: ControlPanelConfig = {
                 });
 
                 // Handle time comparison if enabled
-                const timeComparisonStatus = !!explore?.controls?.time_compare?.value;
+                const timeComparisonStatus =
+                  !!explore?.controls?.time_compare?.value;
                 if (timeComparisonStatus) {
                   const updatedColnames: string[] = [];
                   const updatedColtypes: GenericDataType[] = [];
 
                   colnames.forEach((colname, index) => {
-                    if (coltypes[index] === GenericDataType.Numeric && colname !== 'metric') {
-                      updatedColnames.push(...generateComparisonColumns(colname));
+                    if (
+                      coltypes[index] === GenericDataType.Numeric &&
+                      colname !== 'metric'
+                    ) {
+                      updatedColnames.push(
+                        ...generateComparisonColumns(colname),
+                      );
                       updatedColtypes.push(...generateComparisonColumnTypes(4));
                     } else {
                       updatedColnames.push(colname);
@@ -971,7 +1044,10 @@ const config: ControlPanelConfig = {
                   });
 
                   return {
-                    columnsPropsObject: { colnames: updatedColnames, coltypes: updatedColtypes },
+                    columnsPropsObject: {
+                      colnames: updatedColnames,
+                      coltypes: updatedColtypes,
+                    },
                     configFormLayout: TRANSPOSE_COLUMN_CONFIG_FORM_LAYOUT,
                   };
                 }
@@ -1044,8 +1120,8 @@ const config: ControlPanelConfig = {
               default: false,
               description: t(
                 'This will be applied to the whole table. Arrows (↑ and ↓) will be added to ' +
-                'main columns for increase and decrease. Basic conditional formatting can be ' +
-                'overwritten by conditional formatting below.',
+                  'main columns for increase and decrease. Basic conditional formatting can be ' +
+                  'overwritten by conditional formatting below.',
               ),
             },
           },
@@ -1067,7 +1143,7 @@ const config: ControlPanelConfig = {
                 Boolean(controls?.comparison_color_enabled?.value),
               description: t(
                 'Adds color to the chart symbols based on the positive or ' +
-                'negative change from the comparison value.',
+                  'negative change from the comparison value.',
               ),
             },
           },
@@ -1107,24 +1183,24 @@ const config: ControlPanelConfig = {
                 const numericColumns =
                   Array.isArray(colnames) && Array.isArray(coltypes)
                     ? colnames
-                      .filter(
-                        (colname: string, index: number) =>
-                          coltypes[index] === GenericDataType.Numeric,
-                      )
-                      .map((colname: string) => ({
-                        value: colname,
-                        label: Array.isArray(verboseMap)
-                          ? colname
-                          : (verboseMap[colname] ?? colname),
-                      }))
+                        .filter(
+                          (colname: string, index: number) =>
+                            coltypes[index] === GenericDataType.Numeric,
+                        )
+                        .map((colname: string) => ({
+                          value: colname,
+                          label: Array.isArray(verboseMap)
+                            ? colname
+                            : (verboseMap[colname] ?? colname),
+                        }))
                     : [];
                 const columnOptions = explore?.controls?.time_compare?.value
                   ? processComparisonColumns(
-                    numericColumns || [],
-                    ensureIsArray(
-                      explore?.controls?.time_compare?.value,
-                    )[0]?.toString() || '',
-                  )
+                      numericColumns || [],
+                      ensureIsArray(
+                        explore?.controls?.time_compare?.value,
+                      )[0]?.toString() || '',
+                    )
                   : numericColumns;
 
                 return {
@@ -1138,7 +1214,7 @@ const config: ControlPanelConfig = {
         ],
       ],
       visibility: ({ controls }: ControlPanelsContainerProps) =>
-        !Boolean(controls?.enable_pivot?.value)
+        !Boolean(controls?.enable_pivot?.value),
     },
     {
       label: t('Collapsible Rows'),
@@ -1150,7 +1226,9 @@ const config: ControlPanelConfig = {
             config: {
               type: 'SelectControl',
               label: t('Rows collapsed by default'),
-              description: t('Select rows that should be collapsed when the table loads. Only rows with children can be collapsed.'),
+              description: t(
+                'Select rows that should be collapsed when the table loads. Only rows with children can be collapsed.',
+              ),
               multi: true,
               freeForm: true,
               clearable: true,
@@ -1181,11 +1259,19 @@ const config: ControlPanelConfig = {
 
                     if (typeof metric === 'string') {
                       label = metric;
-                    } else if (typeof metric === 'object' && (metric as any).emptyRowHeading !== true) {
+                    } else if (
+                      typeof metric === 'object' &&
+                      (metric as any).emptyRowHeading !== true
+                    ) {
                       const adhocMetric = metric as AdhocMetric;
-                      label = adhocMetric.label ||
-                        ('sqlExpression' in adhocMetric ? adhocMetric.sqlExpression : null) ||
-                        ('column' in adhocMetric && (adhocMetric as AdhocMetricSimple).column?.column_name) ||
+                      label =
+                        adhocMetric.label ||
+                        ('sqlExpression' in adhocMetric
+                          ? adhocMetric.sqlExpression
+                          : null) ||
+                        ('column' in adhocMetric &&
+                          (adhocMetric as AdhocMetricSimple).column
+                            ?.column_name) ||
                         'Metric';
                     }
 
@@ -1201,13 +1287,23 @@ const config: ControlPanelConfig = {
 
                 // Add row headers from heading metrics
                 const rowHeaders = metrics
-                  .filter((metric): metric is AdhocMetric & { emptyRowHeadingText: string } => {
-                    if (typeof metric === 'object' && metric !== null) {
-                      const colName = (metric as AdhocMetricSimple).column?.column_name;
-                      return typeof colName === 'string' && colName.startsWith('__heading');
-                    }
-                    return false;
-                  })
+                  .filter(
+                    (
+                      metric,
+                    ): metric is AdhocMetric & {
+                      emptyRowHeadingText: string;
+                    } => {
+                      if (typeof metric === 'object' && metric !== null) {
+                        const colName = (metric as AdhocMetricSimple).column
+                          ?.column_name;
+                        return (
+                          typeof colName === 'string' &&
+                          colName.startsWith('__heading')
+                        );
+                      }
+                      return false;
+                    },
+                  )
                   .map(metric => metric.emptyRowHeadingText);
 
                 rowHeaders.forEach(header => {
@@ -1228,7 +1324,7 @@ const config: ControlPanelConfig = {
         ],
       ],
       visibility: ({ controls }: ControlPanelsContainerProps) =>
-        Boolean(controls?.enable_pivot?.value)
+        Boolean(controls?.enable_pivot?.value),
     },
     {
       label: t('Custom Css'),
@@ -1242,7 +1338,9 @@ const config: ControlPanelConfig = {
               label: t('Custom CSS'),
               renderTrigger: true,
               default: '',
-              description: t('Apply custom CSS to the table. Use .superset-data-ui-table to target the table element.'),
+              description: t(
+                'Apply custom CSS to the table. Use .superset-data-ui-table to target the table element.',
+              ),
               language: 'css',
               minLines: 10,
               maxLines: 30,
@@ -1251,7 +1349,7 @@ const config: ControlPanelConfig = {
         ],
       ],
       visibility: ({ controls }: ControlPanelsContainerProps) =>
-        Boolean(controls?.enable_pivot?.value)
+        Boolean(controls?.enable_pivot?.value),
     },
     {
       ...sections.timeComparisonControls({
@@ -1260,7 +1358,7 @@ const config: ControlPanelConfig = {
         showFullChoices: false,
       }),
       visibility: ({ controls }: ControlPanelsContainerProps) =>
-        isAggMode({ controls }) && !Boolean(controls?.enable_pivot?.value)
+        isAggMode({ controls }) && !Boolean(controls?.enable_pivot?.value),
     },
     PIVOT_CONTROLS,
   ],
