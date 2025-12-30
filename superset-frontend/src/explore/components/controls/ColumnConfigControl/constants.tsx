@@ -45,7 +45,8 @@ export type SharedColumnConfigProp =
   | 'fontSize'
   | 'rowColor'
   | 'textColor'
-  | 'underlineText';
+  | 'underlineText'
+  | 'showAllSegmentsCell';
 
 const underlineText: ControlFormItemSpec = {
   controlType: 'Checkbox',
@@ -267,6 +268,14 @@ const italicText: ControlFormItemSpec = {
   defaultValue: false,
 };
 
+/* Transpose Table */
+const showAllSegmentsCell: ControlFormItemSpec = {
+  controlType: 'Checkbox',
+  label: t('Show All Segments'),
+  description: t('Show or hide the All Segments cell for this metric row'),
+  defaultValue: true,
+};
+
 /**
  * All configurable column formatting properties.
  */
@@ -295,7 +304,8 @@ export const SHARED_COLUMN_CONFIG_PROPS = {
   fontSize,
   rowColor,
   textColor,
-  underlineText
+  underlineText,
+  showAllSegmentsCell,
 };
 
 export const DEFAULT_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {
