@@ -36,6 +36,7 @@ import {
   ISeriesData,
   WaterfallChartTransformedProps,
   ICallbackDataParams,
+  EchartsWaterfallFormData,
 } from './types';
 import { getDefaultTooltip } from '../utils/tooltip';
 import { defaultGrid, defaultYAxis } from '../defaults';
@@ -51,11 +52,17 @@ function formatTooltip({
   breakdownName,
   defaultFormatter,
   xAxisFormatter,
+  data,
+  xAxisName,
+  formData,
 }: {
   params: ICallbackDataParams[];
   breakdownName?: string;
   defaultFormatter: NumberFormatter | CurrencyFormatter;
   xAxisFormatter: (value: number | string, index: number) => string;
+  data: DataRecord[];
+  xAxisName: string;
+  formData: EchartsWaterfallFormData;
 }) {
   const series = params.find(
     param => param.seriesName !== ASSIST_MARK && param.data.value !== TOKEN,
@@ -70,12 +77,12 @@ function formatTooltip({
   if (!series) {
     return NULL_STRING;
   }
+  const rows: string[][] = [];
 
   const title =
     !isTotal || breakdownName
       ? xAxisFormatter(series.name, series.dataIndex)
       : undefined;
-  const rows: string[][] = [];
   if (!isTotal) {
     rows.push([
       series.seriesName!,
@@ -83,7 +90,37 @@ function formatTooltip({
     ]);
   }
   rows.push([TOTAL_MARK, defaultFormatter(series.data.totalSum)]);
-  return tooltipHtml(rows, title);
+
+  let dataPoint;
+
+  if (isTotal) {
+    // For total rows, try to find tooltip data or use a default message
+    if (breakdownName) {
+      // For breakdown totals, find the first non-total row with same x-axis value
+      dataPoint = data.find(
+        row =>
+          row[xAxisName] === series.name && row[breakdownName] !== TOTAL_MARK,
+      );
+    }
+  } else {
+    // Non-total case
+    dataPoint = data.find(row => {
+      const categoryValue =
+        breakdownName && row[breakdownName] !== TOTAL_MARK
+          ? row[breakdownName]
+          : row[xAxisName];
+      return categoryValue === series.name;
+    });
+  }
+
+  if (
+    dataPoint?.[formData.tooltipColumn as string] !== undefined &&
+    dataPoint?.[formData.tooltipColumn as string] !== null
+  ) {
+    rows.push([String(dataPoint[formData.tooltipColumn as string]), '']);
+  }
+
+  return tooltipHtml(rows, title, undefined, true);
 }
 
 function transformer({
@@ -156,11 +193,41 @@ export default function transformProps(
     legendState,
     queriesData,
     hooks,
+    filterState,
     theme,
+    emitCrossFilters,
     inContextMenu,
   } = chartProps;
   const refs: Refs = {};
-  const { data = [] } = queriesData[0];
+  let data: DataRecord[];
+  ({ data } = queriesData[0]);
+  const dataWithTooltip = queriesData[1]?.data ?? [];
+
+  if (dataWithTooltip.length > 0) {
+    const detailIndex: Record<string, DataRecord> = {};
+    const xAxis = formData.xAxis.toString();
+    const groupby = formData.groupby?.toString();
+    if (groupby) {
+      for (const row of dataWithTooltip) {
+        const key = `${row[xAxis]}||${row[groupby]}`;
+        if (!detailIndex[key]) {
+          detailIndex[key] = row; // keep first occurrence
+        }
+      }
+
+      const combined = data.map(row => {
+        const key = `${row[xAxis]}||${row[groupby]}`;
+        const d = detailIndex[key] || {};
+        return {
+          ...row,
+          [formData.tooltipColumn]: d[formData.tooltipColumn] ?? null,
+        };
+      });
+
+      data = combined;
+    }
+  }
+
   const coltypeMapping = getColtypesMapping(queriesData[0]);
   const { setDataMask = () => {}, onContextMenu, onLegendStateChanged } = hooks;
   const {
@@ -355,13 +422,7 @@ export default function transformProps(
       disabled: true,
     },
   };
-  const labelProps = {
-    show: showValue,
-    formatter: seriesformatter,
-    color: theme.colorText,
-    borderColor: theme.colorBgBase,
-    borderWidth: 1,
-  };
+
   const barSeries: BarSeriesOption[] = [
     {
       ...seriesProps,
@@ -372,8 +433,9 @@ export default function transformProps(
       ...seriesProps,
       name: LEGEND.INCREASE,
       label: {
-        ...labelProps,
+        show: showValue,
         position: 'top',
+        formatter: seriesformatter,
       },
       itemStyle: {
         color: rgbToHex(increaseColor.r, increaseColor.g, increaseColor.b),
@@ -384,8 +446,9 @@ export default function transformProps(
       ...seriesProps,
       name: LEGEND.DECREASE,
       label: {
-        ...labelProps,
+        show: showValue,
         position: 'bottom',
+        formatter: seriesformatter,
       },
       itemStyle: {
         color: rgbToHex(decreaseColor.r, decreaseColor.g, decreaseColor.b),
@@ -396,8 +459,9 @@ export default function transformProps(
       ...seriesProps,
       name: LEGEND.TOTAL,
       label: {
-        ...labelProps,
+        show: showValue,
         position: 'top',
+        formatter: seriesformatter,
       },
       itemStyle: {
         color: rgbToHex(totalColor.r, totalColor.g, totalColor.b),
@@ -409,10 +473,10 @@ export default function transformProps(
   const echartOptions: EChartsOption = {
     grid: {
       ...defaultGrid,
-      top: theme.sizeUnit * 7,
-      bottom: theme.sizeUnit * 7,
-      left: theme.sizeUnit * 5,
-      right: theme.sizeUnit * 7,
+      top: theme.gridUnit * 7,
+      bottom: theme.gridUnit * 7,
+      left: theme.gridUnit * 5,
+      right: theme.gridUnit * 7,
     },
     legend: {
       show: showLegend,
@@ -424,7 +488,7 @@ export default function transformProps(
       type: 'category',
       name: xAxisLabel,
       nameTextStyle: {
-        padding: [theme.sizeUnit * 4, 0, 0, 0],
+        padding: [theme.gridUnit * 4, 0, 0, 0],
       },
       nameLocation: 'middle',
       axisLabel,
@@ -433,7 +497,7 @@ export default function transformProps(
       ...defaultYAxis,
       type: 'value',
       nameTextStyle: {
-        padding: [0, 0, theme.sizeUnit * 5, 0],
+        padding: [0, 0, theme.gridUnit * 5, 0],
       },
       nameLocation: 'middle',
       name: yAxisLabel,
@@ -444,12 +508,18 @@ export default function transformProps(
       appendToBody: true,
       trigger: 'axis',
       show: !inContextMenu,
+      textStyle: {
+        overflow: 'break',
+      },
       formatter: (params: any) =>
         formatTooltip({
           params,
           breakdownName,
           defaultFormatter,
           xAxisFormatter,
+          data,
+          xAxisName,
+          formData,
         }),
     },
     series: barSeries,
@@ -464,5 +534,7 @@ export default function transformProps(
     setDataMask,
     onContextMenu,
     onLegendStateChanged,
+    filterState,
+    emitCrossFilters,
   };
 }

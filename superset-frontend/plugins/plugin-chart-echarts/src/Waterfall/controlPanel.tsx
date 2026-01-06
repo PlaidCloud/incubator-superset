@@ -25,6 +25,7 @@ import {
   formatSelectOptions,
   sharedControls,
 } from '@superset-ui/chart-controls';
+import React from 'react';
 import { showValueControl } from '../controls';
 
 const config: ControlPanelConfig = {
@@ -39,6 +40,68 @@ const config: ControlPanelConfig = {
         ['metric'],
         ['adhoc_filters'],
         ['row_limit'],
+        [
+          {
+            name: 'seriesOrderByColumn',
+            config: {
+              type: 'SelectControl',
+              label: t('Order Series By Column'),
+              description: t(
+                'Column to use for ordering the waterfall series with columns not in the chart',
+              ),
+              mapStateToProps: state => ({
+                choices: [
+                  ...(state.datasource?.columns || []).map(col => [
+                    col.column_name,
+                    col.column_name,
+                  ]),
+                ],
+                default: state.form_data?.x_axis || '',
+              }),
+              clearable: false,
+              renderTrigger: true,
+            },
+          },
+        ],
+        [
+          {
+            name: 'seriesOrderDirection',
+            config: {
+              type: 'SelectControl',
+              label: t('Order Direction'),
+              choices: [
+                ['ASC', t('Ascending')],
+                ['DESC', t('Descending')],
+              ],
+              default: 'ASC',
+              clearable: false,
+              renderTrigger: true,
+              description: t(
+                'Ordering direction for the series, to be used with "Order Series By Column"',
+              ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'tooltip_column',
+            config: {
+              type: 'SelectControl',
+              label: t('Tooltip Column'),
+              description: t('Column to use for tooltip content'),
+              mapStateToProps: state => ({
+                choices: [
+                  ...(state.datasource?.columns || []).map(col => [
+                    col.column_name,
+                    col.column_name,
+                  ]),
+                ],
+              }),
+              clearable: true,
+              resetOnHide: false,
+            },
+          },
+        ],
       ],
     },
     {
@@ -55,6 +118,50 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
               default: false,
               description: t('Whether to display a legend for the chart'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'show_total',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show Total'),
+              default: true,
+              renderTrigger: true,
+              description: t('Show the total value in the waterfall chart'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'useFirstValueAsSubtotal',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Use first value as subtotal'),
+              default: false,
+              renderTrigger: true,
+              description: t('Render the first bar in the chart as a subtotal'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'bold_labels',
+            config: {
+              type: 'SelectControl',
+              label: t('Bold Labels'),
+              default: 'both',
+              choices: [
+                ['none', t('None')],
+                ['total', t('Total Only')],
+                ['subtotal', t('Subtotal Only')],
+                ['both', t('Both Total and Subtotal')],
+              ],
+              renderTrigger: true,
+              description: t(
+                'Choose which labels to display in bold in the waterfall chart',
+              ),
             },
           },
         ],
@@ -131,6 +238,53 @@ const config: ControlPanelConfig = {
               clearable: false,
               renderTrigger: true,
               description: t('The way the ticks are laid out on the X-axis'),
+            },
+          },
+          {
+            name: 'x_ticks_wrap_length',
+            config: {
+              type: 'TextControl',
+              label: t('X Tick Wrap Length'),
+              description: t(
+                'Maximum line length for wrapped text (when Flat layout is selected)',
+              ),
+              default: '20',
+              renderTrigger: true,
+              visibility: ({ controls }) =>
+                controls.x_ticks_layout.value === 'flat',
+            },
+          },
+        ],
+        [
+          {
+            name: 'sort_x_axis',
+            config: {
+              type: 'SelectControl',
+              label: t('Sort X Axis'),
+              default: 'none',
+              choices: [
+                ['none', t('None')],
+                ['asc', t('Ascending')],
+                ['desc', t('Descending')],
+              ],
+              renderTrigger: true,
+              description: t('Sort X axis in ascending or descending order'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'orientation',
+            config: {
+              type: 'SelectControl',
+              label: t('Orientation'),
+              default: 'vertical',
+              choices: [
+                ['vertical', t('Vertical')],
+                ['horizontal', t('Horizontal')],
+              ],
+              renderTrigger: true,
+              description: t('Orientation of the chart'),
             },
           },
         ],
