@@ -83,6 +83,7 @@ import { FilterPlugins } from 'src/constants';
 import AgGridTableChartPlugin from '@superset-ui/plugin-chart-ag-grid-table';
 import TimeTableChartPlugin from '../TimeTable';
 import { TableChartTransposePlugin } from '@superset-ui/plugin-chart-table-transpose';
+import { PluginTableKpi } from "@superset-ui/plugin-table-kpi";
 
 export default class MainPreset extends Preset {
   constructor() {
@@ -195,6 +196,7 @@ export default class MainPreset extends Preset {
         ...experimentalPlugins,
         ...agGridTablePlugin,
         new TableChartTransposePlugin().configure({ key: 'ext-table-transpose' }),
+        new PluginTableKpi().configure({ key: 'table-kpi' }),
       ],
     });
   }
