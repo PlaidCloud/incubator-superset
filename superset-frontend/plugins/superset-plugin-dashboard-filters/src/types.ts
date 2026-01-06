@@ -18,14 +18,13 @@
  */
 import {
   QueryFormData,
-  supersetTheme,
   TimeseriesDataRecord,
 } from '@superset-ui/core';
 
 export interface SupersetPluginDashboardFiltersStylesProps {
   height: number;
   width: number;
-  headerFontSize: keyof typeof supersetTheme.typography.sizes;
+  headerFontSize: 'xs' | 's' | 'm' | 'l' | 'xl' | 'xxl';
   boldText: boolean;
 }
 
