@@ -886,11 +886,11 @@ export default function TableChart<D extends DataRecord = DataRecord>(
             displayValue = '-';
           }
 
-          const [isHtml, text] = formatColumnValue(
+          const [isHtml, textValue] = formatColumnValue(
             { ...column, formatter: effectiveFormatter },
             displayValue,
           );
-          const html = isHtml && allowRenderHtml ? { __html: text } : undefined;
+          const html = isHtml && allowRenderHtml ? { __html: textValue } : undefined;
 
           const isFirstColumn = i === 0;
           const metric = row.original.metric as string;
@@ -908,6 +908,9 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           const rowTextAlign = (isFirstColumn && rowConfig?.[row.original.metric as string]?.horizontalAlign) || null;
           const textColor = (isFirstColumn && rowConfig?.[row.original.metric as string]?.textColor) || null;
           const isUnderlineText = (isFirstColumn && rowConfig?.[row.original.metric as string]?.underlineText) || false;
+          const showAllSegmentsCell = (isAllSegmentsColumn && rowConfig?.[row.original.metric as string]?.showAllSegmentsCell);
+
+          const text = isAllSegmentsColumn && !showAllSegmentsCell ? '' : textValue;
 
           const parent = hierarchy.get(metric)?.parent;
 
