@@ -25,7 +25,6 @@ import {
   formatSelectOptions,
   sharedControls,
 } from '@superset-ui/chart-controls';
-import React from 'react';
 import { showValueControl } from '../controls';
 
 const config: ControlPanelConfig = {

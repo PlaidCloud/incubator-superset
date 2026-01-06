@@ -18,7 +18,7 @@
  */
 import { EChartsCoreOption } from 'echarts/core';
 import { useTheme } from '@superset-ui/core';
-import React, { useRef } from 'react';
+import { useRef } from 'react';
 import Echart from '../components/Echart';
 import { WaterfallChartTransformedProps } from './types';
 import { EventHandlers } from '../types';
@@ -45,7 +45,7 @@ export default function EchartsWaterfall(
     emitCrossFilters,
   } = props;
 
-  const { token } = useTheme();
+  const theme = useTheme();
   const chartRef = useRef<any>(null);
 
   const eventHandlers: EventHandlers = {
@@ -286,14 +286,14 @@ export default function EchartsWaterfall(
         axisLine: {
           show: true,
           lineStyle: {
-            color: token?.colorBorder,
+            color: theme?.colorBorder,
             width: 1,
           },
         },
         splitLine: {
           show: true,
           lineStyle: {
-            color: token?.colorBorderSecondary,
+            color: theme?.colorBorderSecondary,
             width: 1,
             type: 'solid',
           },
