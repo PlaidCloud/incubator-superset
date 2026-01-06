@@ -84,6 +84,7 @@ import AgGridTableChartPlugin from '@superset-ui/plugin-chart-ag-grid-table';
 import TimeTableChartPlugin from '../TimeTable';
 import { TableChartTransposePlugin } from '@superset-ui/plugin-chart-table-transpose';
 import { PluginTableKpi } from "@superset-ui/plugin-table-kpi";
+import { SupersetPluginDashboardFilters } from '@superset-ui/superset-plugin-dashboard-filters';
 
 export default class MainPreset extends Preset {
   constructor() {
@@ -197,6 +198,7 @@ export default class MainPreset extends Preset {
         ...agGridTablePlugin,
         new TableChartTransposePlugin().configure({ key: 'ext-table-transpose' }),
         new PluginTableKpi().configure({ key: 'table-kpi' }),
+        new SupersetPluginDashboardFilters().configure({ key: 'ext-dashboard-filters' }),
       ],
     });
   }

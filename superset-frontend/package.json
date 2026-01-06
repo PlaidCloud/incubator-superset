@@ -114,6 +114,7 @@
     "@superset-ui/switchboard": "file:./packages/superset-ui-switchboard",
     "@superset-ui/plugin-chart-table-transpose": "file:./plugins/plugin-chart-table-transpose",
     "@superset-ui/plugin-table-kpi": "file:./plugins/plugin-table-kpi",
+    "@superset-ui/superset-plugin-dashboard-filters": "file:./plugins/superset-plugin-dashboard-filters",
     "@types/d3-format": "^3.0.1",
     "@types/d3-time-format": "^4.0.3",
     "@types/react-google-recaptcha": "^2.1.9",
