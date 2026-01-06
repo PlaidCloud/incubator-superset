@@ -82,6 +82,7 @@ import { HandlebarsChartPlugin } from '@superset-ui/plugin-chart-handlebars';
 import { FilterPlugins } from 'src/constants';
 import AgGridTableChartPlugin from '@superset-ui/plugin-chart-ag-grid-table';
 import TimeTableChartPlugin from '../TimeTable';
+import { TableChartTransposePlugin } from '@superset-ui/plugin-chart-table-transpose';
 
 export default class MainPreset extends Preset {
   constructor() {
@@ -193,6 +194,7 @@ export default class MainPreset extends Preset {
         }).configure({ key: VizType.Cartodiagram }),
         ...experimentalPlugins,
         ...agGridTablePlugin,
+        new TableChartTransposePlugin().configure({ key: 'ext-table-transpose' }),
       ],
     });
   }

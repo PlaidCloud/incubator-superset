@@ -178,6 +178,122 @@ const visible: ControlFormItemSpec<'Checkbox'> = {
   defaultValue: true,
   debounceDelay: 200,
 };
+
+const fontSize: ControlFormItemSpec = {
+  controlType: 'Input',
+  label: t('Font Size (px)'),
+  description: t('Keep Empty for default size'),
+  width: 120,
+  debounceDelay: 400,
+  validators: [
+    (value: any) => {
+      if (value && (Number.isNaN(Number(value)) || Number(value) < 0)) {
+        return t('Font Size must be a positive number');
+      }
+      return false;
+    },
+  ],
+};
+
+const indent: ControlFormItemSpec = {
+  controlType: 'Input',
+  label: t('Indent (px)'),
+  description: t('Text indentation in pixels'),
+  placeholder: '0',
+  width: 120,
+  defaultValue: 0,
+  debounceDelay: 400,
+  validators: [
+    (value: any) => {
+      if (value && (Number.isNaN(Number(value)) || Number(value) < 0)) {
+        return t('Indent must be a positive number');
+      }
+      return false;
+    },
+  ],
+};
+
+const boldText: ControlFormItemSpec = {
+  controlType: 'Checkbox',
+  label: t('Bold'),
+  description: t('Display text in bold'),
+  defaultValue: false,
+};
+
+const italicText: ControlFormItemSpec = {
+  controlType: 'Checkbox',
+  label: t('Italic'),
+  description: t('Display text in italic'),
+  defaultValue: false,
+};
+
+const underlineText: ControlFormItemSpec = {
+  controlType: 'Checkbox',
+  label: t('Underline'),
+  description: t('Display text with underline'),
+  defaultValue: false,
+};
+
+export const textColor: ControlFormItemSpec = {
+  controlType: 'Input',
+  label: t('Text color'),
+  description: t('Text color for the table cell (e.g., #000000, rgba(0,0,0,0.5), red, or transparent)'),
+  placeholder: 'transparent',
+  width: 150,
+  debounceDelay: 200,
+  validators: [
+    (value: any) => {
+      if (value) {
+        // Create a temporary element to test if the color is valid
+        const tempElement = document.createElement('div');
+        tempElement.style.color = value;
+
+        // If the browser accepts the color, it will be set, otherwise it remains empty
+        const isValidColor = tempElement.style.color !== '' || value.toLowerCase() === 'transparent';
+
+        if (!isValidColor) {
+          return t('Must be a valid color value (hex, rgb, hsl, or CSS color name)');
+        }
+      }
+      return false;
+    }
+  ],
+};
+
+export const rowColor: ControlFormItemSpec = {
+  controlType: 'Input',
+  label: t('Row color'),
+  description: t('Background color for the table row (e.g., #ffffff, rgba(255,255,255,0.5), beige, black, or transparent)'),
+  placeholder: 'transparent',
+  width: 150,
+  debounceDelay: 200,
+  validators: [
+    (value: any) => {
+      if (value) {
+        // Create a temporary element to test if the color is valid
+        const tempElement = document.createElement('div');
+        tempElement.style.color = value;
+
+        // If the browser accepts the color, it will be set, otherwise it remains empty
+        const isValidColor = tempElement.style.color !== '' || value.toLowerCase() === 'transparent';
+
+        if (!isValidColor) {
+          return t('Must be a valid color value (hex, rgb, hsl, or CSS color name)');
+        }
+      }
+      return false;
+    },
+  ],
+};
+
+/* Transpose Table */
+const showAllSegmentsCell: ControlFormItemSpec = {
+  controlType: 'Checkbox',
+  label: t('Show All Segments'),
+  description: t('Show or hide the All Segments cell for this metric row'),
+  defaultValue: true,
+};
+
 /**
  * All configurable column formatting properties.
  */
@@ -203,6 +319,14 @@ export const SHARED_COLUMN_CONFIG_PROPS = {
   colorPositiveNegative,
   currencyFormat,
   visible,
+  indent,
+  boldText,
+  italicText,
+  fontSize,
+  rowColor,
+  textColor,
+  underlineText,
+  showAllSegmentsCell,
 };
 
 export const DEFAULT_CONFIG_FORM_LAYOUT: ColumnConfigFormLayout = {
