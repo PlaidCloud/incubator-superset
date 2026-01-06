@@ -116,6 +116,7 @@
     "@superset-ui/plugin-table-kpi": "file:./plugins/plugin-table-kpi",
     "@superset-ui/superset-plugin-dashboard-filters": "file:./plugins/superset-plugin-dashboard-filters",
     "@superset-ui/plugin-chart-whale": "file:./plugins/plugin-chart-whale",
+    "@superset-ui/plugin-chart-big-text": "file:./plugins/plugin-chart-big-text",
     "@types/d3-format": "^3.0.1",
     "@types/d3-time-format": "^4.0.3",
     "@types/react-google-recaptcha": "^2.1.9",

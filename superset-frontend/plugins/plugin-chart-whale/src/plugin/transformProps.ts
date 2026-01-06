@@ -20,7 +20,6 @@ import {
   getNumberFormatter,
   QueryFormMetric,
   CategoricalColorNamespace,
-  SupersetTheme,
   getMetricLabel,
   getColumnLabel,
   tooltipHtml,
@@ -204,7 +203,7 @@ function createXAxisOptions(chartType: WhaleChartType): AxisOptions {
 function createYAxisOptions(
   metrics: QueryFormMetric[],
   chartType: WhaleChartType,
-  themeColors?: SupersetTheme['colors'],
+  themeColors?: any,
   yAxisFormat?: string,
   processedData?: ProcessedDataRecord[],
 ) {
@@ -659,7 +658,7 @@ function buildEChartOptions(
   showPareto?: boolean,
   showValueOnHover?: boolean,
   colorScale?: any,
-  themeColors?: SupersetTheme['colors'],
+  themeColors?: any,
   zoomable?: boolean,
   tooltipOnlyMetrics?: QueryFormMetric[],
   yAxisFormat?: string,
@@ -813,10 +812,10 @@ export default function transformProps(
     showPareto,
     showValueOnHover,
     colorScale,
-    theme?.colors,
+    theme,
     zoomable,
     tooltipOnlyMetrics,
-    yAxisFormat
+    yAxisFormat,
   );
 
   // Cross-filtering support
