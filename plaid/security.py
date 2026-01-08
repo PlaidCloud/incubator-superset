@@ -12,13 +12,14 @@ from urllib.parse import urljoin
 from flask import session
 from flask_login import logout_user
 from flask_appbuilder import Model
-from flask_appbuilder.security.manager import AUTH_OID, AUTH_OAUTH
+from flask_appbuilder.security.manager import AUTH_OAUTH
 from authlib.integrations.flask_client import OAuth
 from authlib.integrations.flask_client import token_update
 from requests.exceptions import HTTPError
 
 from plaidcloud.rpc.connection.jsonrpc import SimpleRPC
-from plaid.auth_oidc import AuthOIDCView, PlaidAuthOAuthView
+from plaid.auth_oidc import PlaidAuthOAuthView
+# from plaid.auth_oidc import AuthOIDCView
 
 from superset.security import SupersetSecurityManager
 
@@ -46,26 +47,27 @@ class PlaidSecurityManager(SupersetSecurityManager):
     """
 
     def __init__(self, appbuilder):
-        app = appbuilder.get_app
         # These allowed me to turn this on without adjusting the superset_config.py
+        # app = appbuilder.get_app
         # app.config['AUTH_TYPE'] = AUTH_OAUTH
         # app.config['AUTH_USER_REGISTRATION'] = True
         # app.config['AUTH_ROLES_SYNC_AT_LOGIN'] = True
         super().__init__(appbuilder)
-        if self.auth_type == AUTH_OID:
-            self.oidc_params = app.config.get("OIDC_PARAMS")
-            self.oauth = OAuth(app=appbuilder.get_app)
-            self.oauth.register(
-                'plaid',
-                client_id=self.oidc_params['client_id'],
-                client_secret=self.oidc_params['client_secret'],
-                access_token_url=self.oidc_params['token_url'],
-                authorize_url=self.oidc_params['auth_url'],
-                authorize_params=self.oidc_params['auth_params'],
-                jwks_uri=self.oidc_params['jwks_uri'],
-                client_kwargs=self.oidc_params['client_kwargs'],
-            )
-            self.authoidview = AuthOIDCView
+        # AUTH_OID is deprecated
+        # if self.auth_type == AUTH_OID:
+        #     self.oidc_params = app.config.get("OIDC_PARAMS")
+        #     self.oauth = OAuth(app=appbuilder.get_app)
+        #     self.oauth.register(
+        #         'plaid',
+        #         client_id=self.oidc_params['client_id'],
+        #         client_secret=self.oidc_params['client_secret'],
+        #         access_token_url=self.oidc_params['token_url'],
+        #         authorize_url=self.oidc_params['auth_url'],
+        #         authorize_params=self.oidc_params['auth_params'],
+        #         jwks_uri=self.oidc_params['jwks_uri'],
+        #         client_kwargs=self.oidc_params['client_kwargs'],
+        #     )
+        #     self.authoidview = AuthOIDCView
 
         if self.auth_type == AUTH_OAUTH:
             self.authoauthview = PlaidAuthOAuthView
@@ -413,8 +415,8 @@ class PlaidSecurityManager(SupersetSecurityManager):
     def has_oauth_token(self):
         if self.auth_type == AUTH_OAUTH:
             return 'oauth' in session
-        if self.auth_type == AUTH_OID:
-            return 'token' in session
+        # if self.auth_type == AUTH_OID:
+        #     return 'token' in session
         return False
 
 
@@ -456,11 +458,11 @@ class PlaidSecurityManager(SupersetSecurityManager):
                             # if token_info['active']:
                             #     return True
 
-                elif self.auth_type == AUTH_OID:
-                    if 'token' in session:
-                        token = session['token']
-                        if token_is_valid(token):
-                            return True
+                # elif self.auth_type == AUTH_OID:
+                #     if 'token' in session:
+                #         token = session['token']
+                #         if token_is_valid(token):
+                #             return True
 
                 return False
 

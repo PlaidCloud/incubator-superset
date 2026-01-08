@@ -190,6 +190,7 @@ COPY --chmod=755 ./docker/entrypoints/run-server.sh /usr/bin/
 # Some debian libs
 RUN /app/docker/apt-install.sh \
       curl \
+#       git \
       libsasl2-dev \
       libsasl2-modules-gssapi-mit \
       libpq-dev \
