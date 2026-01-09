@@ -19,16 +19,18 @@ from requests.exceptions import HTTPError
 
 from plaidcloud.rpc.connection.jsonrpc import SimpleRPC
 from plaid.auth_oidc import PlaidAuthOAuthView
+# from plaid.blacklist_api import is_token_blacklisted
 # from plaid.auth_oidc import AuthOIDCView
+# from plaid.blacklist_api import TokenBlacklistApi
 
 from superset.security import SupersetSecurityManager
 
 __author__ = "Garrett Bates"
-__copyright__ = "© Copyright 2018, Tartan Solutions, Inc"
+__copyright__ = "© Copyright 2018=2026, PlaidCloud, Inc"
 __credits__ = ["Garrett Bates"]
 __license__ = "Proprietary"
-__maintainer__ = "Garrett Bates"
-__email__ = "garrett.bates@tartansolutions.com"
+__maintainer__ = ["Garrett Bates", "Patrick Buxton"]
+__email__ = "garrett.bates@plaidcloud.com"
 
 
 log = logging.getLogger(__name__)
@@ -36,10 +38,11 @@ USE_REFRESH_TOKENS = False
 PROJECT_ACCESS = 'project_access'
 
 
-def get_project_role_name(project_id: str) -> str:
-    """Fetch the datasource role name by project ID.
-    """
-    return 'project_' + project_id
+# def get_project_role_name(project_id: str) -> str:
+#     """Fetch the datasource role name by project ID.
+#     """
+#     return 'project_' + project_id
+
 
 
 class PlaidSecurityManager(SupersetSecurityManager):
@@ -88,6 +91,11 @@ class PlaidSecurityManager(SupersetSecurityManager):
             # item.save()
             log.info(f'Updated token for {name} - {repr(token)}')
             self.appbuilder.sm.set_oauth_session(name, token)
+
+    # def register_views(self) -> None:
+    #     super().register_views()
+    #     from plaid.blacklist_api import TokenBlacklistApi
+    #     self.appbuilder.add_api(TokenBlacklistApi)
 
     def oauth_user_info(self, provider, response=None):
         # logging.debug("Oauth2 provider: {0}.".format(provider))
@@ -270,7 +278,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         log.info(dict(session))
         return str(uuid.UUID(project_id)) in session[PROJECT_ACCESS]
 
-    def can_access_database(self, database: Union["Database", "DruidCluster"]) -> bool:
+    def can_access_database(self, database: Union["Database"]) -> bool:
         log.info(f"Can access database: {database}")
         return (
             self._can_access_project(str(database.uuid))
@@ -429,6 +437,8 @@ class PlaidSecurityManager(SupersetSecurityManager):
                     if 'oauth' in session:
                         # Basic validation of token expiry
                         token, secret = session['oauth']
+                        # if is_token_blacklisted(token):
+                        #     return False
                         if token_is_valid(token):
                             return True
 

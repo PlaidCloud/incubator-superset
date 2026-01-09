@@ -27,7 +27,11 @@ import {
   Typography,
   Icons,
 } from '@superset-ui/core/components';
-import { useState, useMemo } from 'react';
+import {
+  useState,
+  useMemo,
+//  useEffect,
+} from 'react';
 import { capitalize } from 'lodash/fp';
 import getBootstrapData from 'src/utils/getBootstrapData';
 
@@ -111,6 +115,18 @@ export default function Login() {
       setLoading(false);
     });
   };
+
+  // if (true && authType === AuthType.AuthOauth && providers.length === 1) {
+  //   // allow immediate login by only provider
+  //   useEffect(() => {
+  //     const provider = providers[0] as OAuthProvider;
+  //     // Hard redirect to backend OAuth endpoint
+  //     window.location.href = buildProviderLoginUrl(provider.name);
+  //   }, [authType, providers, nextUrl]);
+  //
+  //   // prevent flicker
+  //   return null;
+  // }
 
   const getAuthIconElement = (
     providerName: string,
