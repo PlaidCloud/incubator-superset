@@ -17,7 +17,7 @@
 """resize_dashboard_components_to_24_columns
 
 Revision ID: 86beb9dd14eb
-Revises: 32bf93dfe2a4
+Revises: cd1fb11291f2
 Create Date: 2025-07-22 14:15:22.828851
 
 """
@@ -26,7 +26,7 @@ from superset import db
 
 # revision identifiers, used by Alembic.
 revision = '86beb9dd14eb'  # This will be auto-generated
-down_revision = '32bf93dfe2a4'
+down_revision = 'cd1fb11291f2'
 
 import json
 import logging
