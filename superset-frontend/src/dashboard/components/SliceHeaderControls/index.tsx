@@ -533,7 +533,7 @@ const SliceHeaderControls = (
       ...(isTransposeTable
         ? [
             {
-              type: 'divider',
+              type: 'divider' as const,
             },
             {
               key: MenuKeys.ExportDisplayedTableCsv,
