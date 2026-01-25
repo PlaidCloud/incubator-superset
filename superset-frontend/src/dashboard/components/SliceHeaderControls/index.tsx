@@ -129,6 +129,8 @@ export interface SliceHeaderControlsProps {
   exportFullCSV?: (sliceId: number) => void;
   exportXLSX?: (sliceId: number) => void;
   exportFullXLSX?: (sliceId: number) => void;
+  exportDisplayedTableCSV?: (sliceId: number) => void;
+  exportDisplayedTableXLSX?: (sliceId: number) => void;
   handleToggleFullSize: () => void;
   exportPivotExcel?: (tableSelector: string, sliceName: string) => void;
 
@@ -299,6 +301,16 @@ const SliceHeaderControls = (
         }
         break;
       }
+      case MenuKeys.ExportDisplayedTableCsv: {
+        // eslint-disable-next-line no-unused-expressions
+        props.exportDisplayedTableCSV?.(props.slice.slice_id);
+        break;
+      }
+      case MenuKeys.ExportDisplayedTableXlsx: {
+        // eslint-disable-next-line no-unused-expressions
+        props.exportDisplayedTableXLSX?.(props.slice.slice_id);
+        break;
+      }
       default:
         break;
     }
@@ -319,6 +331,7 @@ const SliceHeaderControls = (
   } = props;
   const isTable = slice.viz_type === VizType.Table;
   const isPivotTable = slice.viz_type === VizType.PivotTable;
+  const isTransposeTable = slice.viz_type === VizType.TransposeTable;
   const cachedWhen = (cachedDttm || []).map(itemCachedDttm =>
     extendedDayjs.utc(itemCachedDttm).fromNow(),
   );
@@ -517,6 +530,23 @@ const SliceHeaderControls = (
           label: t('Export to Excel'),
           icon: <Icons.FileOutlined css={dropdownIconsStyles} />,
         },
+      ...(isTransposeTable
+        ? [
+            {
+              type: 'divider' as const,
+            },
+            {
+              key: MenuKeys.ExportDisplayedTableCsv,
+              label: t('Export displayed as .CSV'),
+              icon: <Icons.FileOutlined css={dropdownIconsStyles} />,
+            },
+            {
+              key: MenuKeys.ExportDisplayedTableXlsx,
+              label: t('Export displayed as Excel'),
+              icon: <Icons.FileOutlined css={dropdownIconsStyles} />,
+            },
+          ]
+        : []),
         ...(isFeatureEnabled(FeatureFlag.AllowFullCsvExport) &&
         props.supersetCanCSV &&
         isTable

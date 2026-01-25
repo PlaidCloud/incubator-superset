@@ -202,7 +202,7 @@ export default class MainPreset extends Preset {
         }).configure({ key: VizType.Cartodiagram }),
         ...experimentalPlugins,
         ...agGridTablePlugin,
-        new TableChartTransposePlugin().configure({ key: 'ext-table-transpose' }),
+        new TableChartTransposePlugin().configure({ key: VizType.TransposeTable }),
         new PluginTableKpi().configure({ key: 'table-kpi' }),
         new SupersetPluginDashboardFilters().configure({ key: 'ext-dashboard-filters' }),
         new SupersetPluginChartWhale().configure({ key: 'ext-whale' }),
