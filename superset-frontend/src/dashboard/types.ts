@@ -297,4 +297,6 @@ export enum MenuKeys {
   ManageEmbedded = 'manage_embedded',
   ManageEmailReports = 'manage_email_reports',
   ExportPivotXlsx = 'export_pivot_xlsx',
+  ExportDisplayedTableCsv = 'export_displayed_table_csv',
+  ExportDisplayedTableXlsx = 'export_displayed_table_xlsx',
 }
