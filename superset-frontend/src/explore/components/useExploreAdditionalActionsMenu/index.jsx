@@ -34,6 +34,10 @@ import Button from 'src/components/Button';
 import { useToasts } from 'src/components/MessageToasts/withToasts';
 import { exportChart, getChartKey } from 'src/explore/exploreUtils';
 import downloadAsImage from 'src/utils/downloadAsImage';
+import {
+  exportTableAsCSV,
+  exportTableAsExcel,
+} from 'src/utils/downloadDisplayedTable';
 import { getChartPermalink } from 'src/utils/urlUtils';
 import copyTextToClipboard from 'src/utils/copy';
 import HeaderReportDropDown from 'src/features/reports/ReportModal/HeaderReportDropdown';
@@ -57,6 +61,8 @@ const MENU_KEYS = {
   EXPORT_TO_CSV_PIVOTED: 'export_to_csv_pivoted',
   EXPORT_TO_JSON: 'export_to_json',
   EXPORT_TO_XLSX: 'export_to_xlsx',
+  EXPORT_DISPLAYED_TABLE_CSV: 'export_displayed_table_csv',
+  EXPORT_DISPLAYED_TABLE_XLSX: 'export_displayed_table_xlsx',
   DOWNLOAD_AS_IMAGE: 'download_as_image',
   SHARE_SUBMENU: 'share_submenu',
   COPY_PERMALINK: 'copy_permalink',
@@ -288,6 +294,20 @@ export const useExploreAdditionalActionsMenu = (
           onOpenInEditor(latestQueryFormData, domEvent.metaKey);
           setIsDropdownVisible(false);
           break;
+        case MENU_KEYS.EXPORT_DISPLAYED_TABLE_CSV:
+          const csvExportTableSelector = slice?.slice_id
+            ? `#chart-id-${slice.slice_id}`
+            : '.chart-container';
+          exportTableAsCSV(csvExportTableSelector, slice?.slice_name ?? t('chart'));
+          setIsDropdownVisible(false);
+          break;
+        case MENU_KEYS.EXPORT_DISPLAYED_TABLE_XLSX:
+          const xlsxExportTableSelector = slice?.slice_id
+            ? `#chart-id-${slice.slice_id}`
+            : '.chart-container';
+          exportTableAsExcel(xlsxExportTableSelector, slice?.slice_name ?? t('chart'));
+          setIsDropdownVisible(false);
+          break;
         default:
           break;
       }
@@ -371,6 +391,20 @@ export const useExploreAdditionalActionsMenu = (
             disabled={!canDownloadCSV}
           >
             {t('Export to Excel')}
+          </Menu.Item>
+          <Menu.Item
+            key={MENU_KEYS.EXPORT_DISPLAYED_TABLE_CSV}
+            icon={<Icons.FileOutlined css={iconReset} />}
+            disabled={!canDownloadCSV}
+          >
+            {t('Export displayed table to .CSV')}
+          </Menu.Item>
+          <Menu.Item
+            key={MENU_KEYS.EXPORT_DISPLAYED_TABLE_XLSX}
+            icon={<Icons.FileOutlined css={iconReset} />}
+            disabled={!canDownloadCSV}
+          >
+            {t('Export displayed table to Excel')}
           </Menu.Item>
         </Menu.SubMenu>
         <Menu.SubMenu title={t('Share')} key={MENU_KEYS.SHARE_SUBMENU}>

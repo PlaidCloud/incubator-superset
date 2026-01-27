@@ -400,6 +400,32 @@ const Chart = props => {
     exportTable('xlsx', true);
   }, [exportTable]);
 
+  const exportDisplayedTableCSV = useCallback(() => {
+    const { exportTableAsCSV } = require('src/utils/downloadDisplayedTable');
+    exportTableAsCSV(
+      `#chart-id-${slice.slice_id}`,
+      slice.slice_name,
+    );
+    boundActionCreators.logEvent(LOG_ACTIONS_EXPORT_CSV_DASHBOARD_CHART, {
+      slice_id: slice.slice_id,
+      is_cached: props.isCached,
+      exported_as: 'displayed_table',
+    });
+  }, [slice.slice_id, slice.slice_name, props.isCached, boundActionCreators.logEvent]);
+
+  const exportDisplayedTableXLSX = useCallback(() => {
+    const { exportTableAsExcel } = require('src/utils/downloadDisplayedTable');
+    exportTableAsExcel(
+      `#chart-id-${slice.slice_id}`,
+      slice.slice_name,
+    );
+    boundActionCreators.logEvent(LOG_ACTIONS_EXPORT_XLSX_DASHBOARD_CHART, {
+      slice_id: slice.slice_id,
+      is_cached: props.isCached,
+      exported_as: 'displayed_table',
+    });
+  }, [slice.slice_id, slice.slice_name, props.isCached, boundActionCreators.logEvent]);
+
   const forceRefresh = useCallback(() => {
     boundActionCreators.logEvent(LOG_ACTIONS_FORCE_REFRESH_CHART, {
       slice_id: slice.slice_id,
@@ -455,6 +481,8 @@ const Chart = props => {
         exportXLSX={exportXLSX}
         exportFullCSV={exportFullCSV}
         exportFullXLSX={exportFullXLSX}
+        exportDisplayedTableCSV={exportDisplayedTableCSV}
+        exportDisplayedTableXLSX={exportDisplayedTableXLSX}
         updateSliceName={props.updateSliceName}
         sliceName={props.sliceName}
         supersetCanExplore={supersetCanExplore}
