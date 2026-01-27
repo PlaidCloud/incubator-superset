@@ -68,10 +68,27 @@ export function exportTableAsCSV(
         cells.forEach((cell, cellIndex) => {
           // For the first column (metric), preserve indentation
           if (cellIndex === 0) {
-            // Detect indent level: rows WITH expand/collapse icons are parent rows (level 0)
-            // Rows WITHOUT icons are child rows (level 1+)
-            const hasExpandIcon = cell.querySelector('.anticon-minus-square, .anticon-plus-square');
-            const indentLevel = hasExpandIcon ? 0 : 1;
+            // Check if cell has expand/collapse icon - if so, skip padding
+            const hasExpandCollapseIcon = cell.querySelector('span[aria-label="minus-square"], span[aria-label="plus-square"]');
+            
+            let numSpaces = 0;
+            if (!hasExpandCollapseIcon) {
+              // Get padding-left from computed style (applied via CSS class)
+              const cellElement = cell as HTMLElement;
+              const computedStyle = window.getComputedStyle(cellElement);
+              const paddingLeft = parseInt(computedStyle.paddingLeft || '0', 10);
+              
+              // Get default padding from a non-first column cell (no !important override)
+              const secondCell = cells[1] as HTMLElement | undefined;
+              const defaultPadding = secondCell 
+                ? parseInt(window.getComputedStyle(secondCell).paddingLeft || '0', 10)
+                : 0;
+              
+              // Only use the additional padding (the !important override)
+              const additionalPadding = paddingLeft - defaultPadding;
+              // Convert pixels to spaces (roughly 10px per space for readability)
+              numSpaces = additionalPadding > 0 ? Math.round(additionalPadding / 10) : 0;
+            }
 
             // Get text content, excluding SVG icon content
             let cellText = '';
@@ -98,8 +115,8 @@ export function exportTableAsCSV(
             }
             cellText = cellText.trim();
 
-            // Add indentation prefix
-            const indent = '  '.repeat(indentLevel);
+            // Add spaces prefix based on padding
+            const indent = ' '.repeat(numSpaces);
             rowData.push(indent + cellText);
           } else {
             // For data cells, use displayed text content
@@ -185,9 +202,27 @@ export function exportTableAsExcel(
         const cells = row.querySelectorAll('td');
         cells.forEach((cell, cellIndex) => {
           if (cellIndex === 0) {
-            // Detect indent level for first column
-            const hasExpandIcon = cell.querySelector('.anticon-minus-square, .anticon-plus-square');
-            const indentLevel = hasExpandIcon ? 0 : 1;
+            // Check if cell has expand/collapse icon - if so, skip padding
+            const hasExpandCollapseIcon = cell.querySelector('span[aria-label="minus-square"], span[aria-label="plus-square"]');
+            
+            let numSpaces = 0;
+            if (!hasExpandCollapseIcon) {
+              // Get padding-left from computed style (applied via CSS class)
+              const cellElement = cell as HTMLElement;
+              const computedStyle = window.getComputedStyle(cellElement);
+              const paddingLeft = parseInt(computedStyle.paddingLeft || '0', 10);
+              
+              // Get default padding from a non-first column cell (no !important override)
+              const secondCell = cells[1] as HTMLElement | undefined;
+              const defaultPadding = secondCell 
+                ? parseInt(window.getComputedStyle(secondCell).paddingLeft || '0', 10)
+                : 0;
+              
+              // Only use the additional padding (the !important override)
+              const additionalPadding = paddingLeft - defaultPadding;
+              // Convert pixels to spaces (roughly 10px per space for readability)
+              numSpaces = additionalPadding > 0 ? Math.round(additionalPadding / 10) : 0;
+            }
 
             // Get text content, excluding SVG icon content
             let cellText = '';
@@ -213,7 +248,8 @@ export function exportTableAsExcel(
             }
             cellText = cellText.trim();
 
-            const indent = '  '.repeat(indentLevel);
+            // Add spaces prefix based on padding
+            const indent = ' '.repeat(numSpaces);
             rowData.push(indent + cellText);
           } else {
             const cellText = cell.textContent?.trim() || '';
