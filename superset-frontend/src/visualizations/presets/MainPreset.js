@@ -193,7 +193,7 @@ export default class MainPreset extends Preset {
         new BigTextChart().configure({ key: 'superset-big-text' }),
         new PluginChartMarimekko().configure({ key: 'ext-marimekko' }),
         new SupersetPluginChartWhale().configure({ key: 'ext-whale' }),
-        new TableChartTransposePlugin().configure({ key: 'ext-table-transpose' }),
+        new TableChartTransposePlugin().configure({ key: VizType.TransposeTable }),
         new SupersetPluginDashboardFilters().configure({ key: 'ext-dashboard-filters' }),
         new PluginTableKpi().configure({ key: 'table-kpi' }),
         ...experimentalPlugins,
