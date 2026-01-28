@@ -176,6 +176,13 @@ class BaseScreenshot:
         self.screenshot = driver.get_screenshot(self.url, self.element, user)
         return self.screenshot
 
+    def get_pdf(
+        self, user: User, window_size: WindowSize | None = None
+    ) -> bytes | None:
+        driver = self.driver(window_size)
+        self.screenshot = driver.get_pdf(self.url, self.element, user)
+        return self.screenshot
+
     def get_cache_key(
         self,
         window_size: bool | WindowSize | None = None,

@@ -157,6 +157,7 @@ MODEL_API_RW_METHOD_PERMISSION_MAP = {
     "available": "read",
     "validate_sql": "read",
     "get_data": "read",
+    "get_pdf": "read",
     "samples": "read",
     "delete_ssh_tunnel": "write",
     "get_updated_since": "read",
