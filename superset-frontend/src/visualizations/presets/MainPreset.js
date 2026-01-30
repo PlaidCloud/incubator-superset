@@ -88,6 +88,7 @@ import { SupersetPluginDashboardFilters } from '@superset-ui/superset-plugin-das
 import { SupersetPluginChartWhale } from '@superset-ui/plugin-chart-whale';
 import { BigTextChart } from '@superset-ui/plugin-chart-big-text';
 import { PluginChartMarimekko } from '@superset-ui/plugin-chart-marimekko';
+import { PluginChartGantt } from '@superset-ui/plugin-chart-gantt';
 
 
 
@@ -208,7 +209,7 @@ export default class MainPreset extends Preset {
         new SupersetPluginChartWhale().configure({ key: 'ext-whale' }),
         new BigTextChart().configure({ key: 'superset-big-text' }),
         new PluginChartMarimekko().configure({ key: 'ext-marimekko' }),
-
+        new PluginChartGantt().configure({ key: 'ext-gantt' }),
       ],
     });
   }
