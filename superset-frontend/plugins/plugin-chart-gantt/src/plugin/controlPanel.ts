@@ -151,7 +151,6 @@ const config: ControlPanelConfig = {
             },
           },
         ],
-        ['color_scheme'],
       ],
     },
     {
