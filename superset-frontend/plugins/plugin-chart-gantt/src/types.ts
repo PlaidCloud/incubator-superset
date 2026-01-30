@@ -86,6 +86,8 @@ export interface PluginChartGanttCustomizeProps {
   showYAxisLabels?: boolean;
   /** Whether to show labels on bars */
   showBarLabels?: boolean;
+  showGroupSummary?: boolean;
+  indentSize?: number;
 }
 
 /**

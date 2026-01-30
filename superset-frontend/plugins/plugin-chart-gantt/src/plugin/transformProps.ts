@@ -401,6 +401,7 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
     barHeightRatio = 0.6,
     zoomable = true,
     defaultExpandLevel = 2,
+    showGroupSummary = true
   } = formData;
 
   // Get expanded state from hooks or initialize based on defaultExpandLevel
@@ -570,5 +571,7 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
     expandedState: initialExpandedState,
     showYAxisLabels: formData.showYAxisLabels,
     showBarLabels: formData.showBarLabels,
+    showGroupSummary,
+    indentSize: formData.indentSize,
   };
 }

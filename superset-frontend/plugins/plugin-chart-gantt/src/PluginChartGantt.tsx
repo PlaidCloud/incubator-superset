@@ -70,7 +70,6 @@ const ControlButton = styled.button`
   }
 `;
 
-const HEIGHT_RATIO = 0.6;
 const DIM_DISPLAY_INDEX = 0;
 const DIM_TIME_START = 1;
 const DIM_TIME_END = 2;
@@ -81,6 +80,8 @@ const DIM_IS_GROUP = 6;
 const DIM_EXPANDED = 7;
 const DIM_TASK_ID = 8;
 const DIM_SHOW_BAR_LABELS = 9;
+const DIM_BAR_HEIGHT_RATIO = 10;
+const DIM_INDENT_SIZE = 11;
 
 interface RectShape {
   x: number;
@@ -188,7 +189,8 @@ function renderGanttItem(
   const startTime = api.coord([api.value(DIM_TIME_START), displayIndex]);
   const endTime = api.coord([api.value(DIM_TIME_END), displayIndex]);
   const barLength = endTime[0] - startTime[0];
-  const barHeight = api.size([0, 1])[1] * HEIGHT_RATIO;
+  const heightRatio = api.value(DIM_BAR_HEIGHT_RATIO) as number;
+  const barHeight = api.size([0, 1])[1] * heightRatio;
   const x = startTime[0];
   const y = startTime[1] - barHeight / 2;
 
@@ -198,6 +200,7 @@ function renderGanttItem(
   const isGroup = api.value(DIM_IS_GROUP) as number;
   const expanded = api.value(DIM_EXPANDED) as number;
   const showBarLabels = api.value(DIM_SHOW_BAR_LABELS) as number;
+  const indentSize = api.value(DIM_INDENT_SIZE) as number;
 
   const rectShape = clipRectByRect(params, {
     x,
@@ -205,7 +208,7 @@ function renderGanttItem(
     width: barLength,
     height: barHeight,
   });
-  const indent = level * 15;
+  const indent = level * indentSize;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const expandIcon: any = isGroup
@@ -275,8 +278,13 @@ function buildEchartsOptions(
   themeConfig: ThemeConfig,
   showYAxisLabels: boolean,
   showBarLabels: boolean,
+  barHeightRatio: number,
+  showGroupSummary: boolean,
+  indentSize: number,
 ): EChartsOption {
-  const visibleTasks = flattenedTasks.filter(t => t.visible);
+  const visibleTasks = flattenedTasks.filter(
+    t => t.visible && (showGroupSummary || !t.isGroup),
+  );
 
   const seriesData = visibleTasks.map(task => [
     task.displayIndex,
@@ -289,6 +297,8 @@ function buildEchartsOptions(
     task.expanded ? 1 : 0,
     task.id,
     showBarLabels ? 1 : 0,
+    barHeightRatio,
+    indentSize,
   ]);
 
   return {
@@ -422,13 +432,12 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
     expandedState: initialExpandedState,
     title = 'Gantt Chart',
     zoomable = true,
-    showYAxisLabels: showYAxisLabelsProp = true,
-    showBarLabels: showBarLabelsProp = true,
-    barHeightRatio,
+    showYAxisLabels = true,
+    showBarLabels = true,
+    barHeightRatio = 0.6,
+    showGroupSummary = true,
+    indentSize = 10,
   } = props;
-  // Ensure boolean values
-  const showYAxisLabels = Boolean(showYAxisLabelsProp);
-  const showBarLabels = Boolean(showBarLabelsProp);
 
   const theme = useTheme();
   const chartRef = useRef<HTMLDivElement>(null);
@@ -455,6 +464,9 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
     themeConfig,
     showYAxisLabels,
     showBarLabels,
+    barHeightRatio,
+    showGroupSummary,
+    indentSize,
   );
 
   // Toggle expand/collapse for a single task
