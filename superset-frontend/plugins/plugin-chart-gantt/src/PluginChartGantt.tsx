@@ -29,6 +29,7 @@ import {
 } from 'echarts/components';
 import type { EChartsOption } from 'echarts';
 import { PluginChartGanttProps, GanttTask, FlattenedGanttTask } from './types';
+import React from 'react';
 
 // Register ECharts components
 use([
@@ -170,8 +171,7 @@ function generateCategoryLabels(
     .filter(t => t.visible)
     .map(task => {
       const indent = '  '.repeat(task.level);
-      const prefix = task.isGroup ? (task.expanded ? '▼ ' : '▶ ') : '• ';
-      return `${indent}${prefix}${task.taskName}`;
+      return `${indent}${task.taskName}`;
     });
 }
 
@@ -418,7 +418,10 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
     expandedState: initialExpandedState,
     title = 'Gantt Chart',
     zoomable = true,
+    flattenedTasks: mockTasks,
   } = props;
+  console.log(mockTasks);
+  console.log('Gantt chart rendered');
   const theme = useTheme();
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<EChartsType | null>(null);
