@@ -82,6 +82,10 @@ export interface PluginChartGanttCustomizeProps {
   zoomable?: boolean;
   /** Default expand level (-1 = all collapsed, 0 = root expanded, etc.) */
   defaultExpandLevel?: number;
+  /** Whether to show y-axis labels */
+  showYAxisLabels?: boolean;
+  /** Whether to show labels on bars */
+  showBarLabels?: boolean;
 }
 
 /**

@@ -568,5 +568,7 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
     barHeightRatio: barHeightRatio as number,
     zoomable: zoomable as boolean,
     expandedState: initialExpandedState,
+    showYAxisLabels: formData.showYAxisLabels,
+    showBarLabels: formData.showBarLabels,
   };
 }

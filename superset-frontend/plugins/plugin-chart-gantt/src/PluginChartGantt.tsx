@@ -30,7 +30,6 @@ import {
 import type { EChartsOption } from 'echarts';
 import { PluginChartGanttProps, GanttTask, FlattenedGanttTask } from './types';
 import React from 'react';
-
 // Register ECharts components
 use([
   CanvasRenderer,
@@ -81,6 +80,7 @@ const DIM_LEVEL = 5;
 const DIM_IS_GROUP = 6;
 const DIM_EXPANDED = 7;
 const DIM_TASK_ID = 8;
+const DIM_SHOW_BAR_LABELS = 9;
 
 interface RectShape {
   x: number;
@@ -197,6 +197,7 @@ function renderGanttItem(
   const level = api.value(DIM_LEVEL) as number;
   const isGroup = api.value(DIM_IS_GROUP) as number;
   const expanded = api.value(DIM_EXPANDED) as number;
+  const showBarLabels = api.value(DIM_SHOW_BAR_LABELS) as number;
 
   const rectShape = clipRectByRect(params, {
     x,
@@ -239,7 +240,7 @@ function renderGanttItem(
       expandIcon,
       {
         type: 'text',
-        ignore: !rectShape || barLength < 30,
+        ignore: !rectShape || barLength < 30 || !showBarLabels,
         style: {
           text: barLength > (isGroup ? 60 : 50) ? taskName : '',
           x: x + (isGroup ? 20 : 5) + indent,
@@ -272,6 +273,8 @@ function buildEchartsOptions(
   title: string,
   zoomable: boolean,
   themeConfig: ThemeConfig,
+  showYAxisLabels: boolean,
+  showBarLabels: boolean,
 ): EChartsOption {
   const visibleTasks = flattenedTasks.filter(t => t.visible);
 
@@ -285,6 +288,7 @@ function buildEchartsOptions(
     task.isGroup ? 1 : 0,
     task.expanded ? 1 : 0,
     task.id,
+    showBarLabels ? 1 : 0,
   ]);
 
   return {
@@ -354,7 +358,7 @@ function buildEchartsOptions(
       show: true,
       top: 70,
       bottom: zoomable ? 30 : 20,
-      left: 180,
+      left: showYAxisLabels ? 180 : 30,
       right: zoomable ? 30 : 20,
       backgroundColor: themeConfig.colorBgContainer,
       borderWidth: 0,
@@ -388,7 +392,7 @@ function buildEchartsOptions(
       splitLine: { show: false },
       axisLine: { show: false },
       axisLabel: {
-        show: true,
+        show: showYAxisLabels,
         color: themeConfig.colorText,
         fontSize: 11,
         formatter: (value: string) => value,
@@ -418,10 +422,14 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
     expandedState: initialExpandedState,
     title = 'Gantt Chart',
     zoomable = true,
-    flattenedTasks: mockTasks,
+    showYAxisLabels: showYAxisLabelsProp = true,
+    showBarLabels: showBarLabelsProp = true,
+    barHeightRatio,
   } = props;
-  console.log(mockTasks);
-  console.log('Gantt chart rendered');
+  // Ensure boolean values
+  const showYAxisLabels = Boolean(showYAxisLabelsProp);
+  const showBarLabels = Boolean(showBarLabelsProp);
+
   const theme = useTheme();
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<EChartsType | null>(null);
@@ -445,6 +453,8 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
     title,
     zoomable,
     themeConfig,
+    showYAxisLabels,
+    showBarLabels,
   );
 
   // Toggle expand/collapse for a single task

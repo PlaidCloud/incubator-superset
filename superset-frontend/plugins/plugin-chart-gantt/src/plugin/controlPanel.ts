@@ -127,6 +127,30 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'show_y_axis_labels',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show Y-Axis Labels'),
+              renderTrigger: true,
+              default: true,
+              description: t('Show task names on the y-axis'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'show_bar_labels',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show Bar Labels'),
+              renderTrigger: true,
+              default: true,
+              description: t('Show task names on the bars'),
+            },
+          },
+        ],
         ['color_scheme'],
       ],
     },
