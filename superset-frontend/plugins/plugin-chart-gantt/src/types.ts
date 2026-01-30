@@ -17,13 +17,23 @@
  * under the License.
  */
 import { QueryFormData } from '@superset-ui/core';
-import { EChartsOption } from 'echarts';
+import type { EChartsOption } from 'echarts';
 
 /**
- * Represents a single task/bar in the Gantt chart
+ * Represents a single task/bar in the Gantt chart with hierarchy support
  */
 export interface GanttTask {
-  /** Category/row index for y-axis positioning */
+  /** Unique identifier for the task */
+  id: string;
+  /** Parent task ID for nested hierarchy (null for root level) */
+  parentId: string | null;
+  /** Nesting level (0 = root, 1 = first level child, etc.) */
+  level: number;
+  /** Whether this task is a group (has children) */
+  isGroup: boolean;
+  /** Whether the group is expanded (only applicable if isGroup is true) */
+  expanded?: boolean;
+  /** Category/row index for y-axis positioning (computed dynamically) */
   categoryIndex: number;
   /** Task name displayed in the bar */
   taskName: string;
@@ -35,6 +45,18 @@ export interface GanttTask {
   progress?: number;
   /** Optional custom color for the task bar */
   color?: string;
+  /** Children task IDs */
+  children?: string[];
+}
+
+/**
+ * Flattened task for rendering (includes visibility state)
+ */
+export interface FlattenedGanttTask extends GanttTask {
+  /** Whether this task is visible based on parent expanded state */
+  visible: boolean;
+  /** Display index in the visible list */
+  displayIndex: number;
 }
 
 /**
@@ -58,6 +80,8 @@ export interface PluginChartGanttCustomizeProps {
   barHeightRatio?: number;
   /** Whether the chart is zoomable */
   zoomable?: boolean;
+  /** Default expand level (-1 = all collapsed, 0 = root expanded, etc.) */
+  defaultExpandLevel?: number;
 }
 
 /**
@@ -71,6 +95,7 @@ export type PluginChartGanttQueryFormData = QueryFormData &
     endTimeColumn?: string;
     progressColumn?: string;
     categoryColumn?: string;
+    parentColumn?: string;
   };
 
 /**
@@ -82,6 +107,12 @@ export type PluginChartGanttProps = PluginChartGanttStylesProps &
     echartOptions: EChartsOption;
     /** Raw task data for the Gantt chart */
     tasks: GanttTask[];
+    /** Flattened visible tasks for rendering */
+    flattenedTasks: FlattenedGanttTask[];
     /** Category labels for the y-axis */
     categories: string[];
+    /** Callback to toggle task expansion */
+    onToggleExpand?: (taskId: string) => void;
+    /** Map of expanded state by task ID */
+    expandedState: Record<string, boolean>;
   };

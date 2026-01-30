@@ -18,40 +18,277 @@
  */
 import { ChartProps } from '@superset-ui/core';
 import { EChartsOption } from 'echarts';
-import { GanttTask, PluginChartGanttProps } from '../types';
+import { GanttTask, FlattenedGanttTask, PluginChartGanttProps } from '../types';
 
-// Mock data for demonstration
-const MOCK_CATEGORIES = [
-  'Project Alpha',
-  'Project Beta',
-  'Project Gamma',
-  'Project Delta',
-  'Project Epsilon',
-];
-
+// Mock data for demonstration with nested hierarchy
 const MOCK_DATA: GanttTask[] = [
-  { categoryIndex: 0, taskName: 'Planning', startTime: '2024-01-01', endTime: '2024-01-15', color: '#5470c6' },
-  { categoryIndex: 0, taskName: 'Design', startTime: '2024-01-15', endTime: '2024-02-01', color: '#91cc75' },
-  { categoryIndex: 0, taskName: 'Development', startTime: '2024-02-01', endTime: '2024-03-15', color: '#fac858' },
-  { categoryIndex: 1, taskName: 'Research', startTime: '2024-01-10', endTime: '2024-02-05', color: '#ee6666' },
-  { categoryIndex: 1, taskName: 'Implementation', startTime: '2024-02-05', endTime: '2024-03-20', color: '#73c0de' },
-  { categoryIndex: 2, taskName: 'Analysis', startTime: '2024-01-20', endTime: '2024-02-10', color: '#3ba272' },
-  { categoryIndex: 2, taskName: 'Testing', startTime: '2024-02-10', endTime: '2024-03-01', color: '#fc8452' },
-  { categoryIndex: 2, taskName: 'Deployment', startTime: '2024-03-01', endTime: '2024-03-10', color: '#9a60b4' },
-  { categoryIndex: 3, taskName: 'Sprint 1', startTime: '2024-01-05', endTime: '2024-01-25', color: '#ea7ccc' },
-  { categoryIndex: 3, taskName: 'Sprint 2', startTime: '2024-01-25', endTime: '2024-02-15', color: '#5470c6' },
-  { categoryIndex: 3, taskName: 'Sprint 3', startTime: '2024-02-15', endTime: '2024-03-05', color: '#91cc75' },
-  { categoryIndex: 4, taskName: 'Phase 1', startTime: '2024-01-01', endTime: '2024-02-01', color: '#fac858' },
-  { categoryIndex: 4, taskName: 'Phase 2', startTime: '2024-02-01', endTime: '2024-03-01', color: '#ee6666' },
-  { categoryIndex: 4, taskName: 'Phase 3', startTime: '2024-03-01', endTime: '2024-03-25', color: '#73c0de' },
+  // Project Alpha (root group)
+  {
+    id: 'alpha',
+    parentId: null,
+    level: 0,
+    isGroup: true,
+    expanded: true,
+    categoryIndex: 0,
+    taskName: 'Project Alpha',
+    startTime: '2024-01-01',
+    endTime: '2024-03-15',
+    color: '#5470c6',
+    children: ['alpha-planning', 'alpha-dev'],
+  },
+  {
+    id: 'alpha-planning',
+    parentId: 'alpha',
+    level: 1,
+    isGroup: true,
+    expanded: true,
+    categoryIndex: 0,
+    taskName: 'Planning Phase',
+    startTime: '2024-01-01',
+    endTime: '2024-01-31',
+    color: '#91cc75',
+    children: ['alpha-planning-research', 'alpha-planning-design'],
+  },
+  {
+    id: 'alpha-planning-research',
+    parentId: 'alpha-planning',
+    level: 2,
+    isGroup: false,
+    categoryIndex: 0,
+    taskName: 'Research',
+    startTime: '2024-01-01',
+    endTime: '2024-01-15',
+    color: '#fac858',
+  },
+  {
+    id: 'alpha-planning-design',
+    parentId: 'alpha-planning',
+    level: 2,
+    isGroup: false,
+    categoryIndex: 0,
+    taskName: 'Design',
+    startTime: '2024-01-15',
+    endTime: '2024-01-31',
+    color: '#ee6666',
+  },
+  {
+    id: 'alpha-dev',
+    parentId: 'alpha',
+    level: 1,
+    isGroup: true,
+    expanded: true,
+    categoryIndex: 0,
+    taskName: 'Development Phase',
+    startTime: '2024-02-01',
+    endTime: '2024-03-15',
+    color: '#73c0de',
+    children: ['alpha-dev-frontend', 'alpha-dev-backend', 'alpha-dev-testing'],
+  },
+  {
+    id: 'alpha-dev-frontend',
+    parentId: 'alpha-dev',
+    level: 2,
+    isGroup: false,
+    categoryIndex: 0,
+    taskName: 'Frontend',
+    startTime: '2024-02-01',
+    endTime: '2024-02-28',
+    color: '#3ba272',
+  },
+  {
+    id: 'alpha-dev-backend',
+    parentId: 'alpha-dev',
+    level: 2,
+    isGroup: false,
+    categoryIndex: 0,
+    taskName: 'Backend',
+    startTime: '2024-02-01',
+    endTime: '2024-03-01',
+    color: '#fc8452',
+  },
+  {
+    id: 'alpha-dev-testing',
+    parentId: 'alpha-dev',
+    level: 2,
+    isGroup: false,
+    categoryIndex: 0,
+    taskName: 'Testing',
+    startTime: '2024-03-01',
+    endTime: '2024-03-15',
+    color: '#9a60b4',
+  },
+  // Project Beta (root group)
+  {
+    id: 'beta',
+    parentId: null,
+    level: 0,
+    isGroup: true,
+    expanded: true,
+    categoryIndex: 0,
+    taskName: 'Project Beta',
+    startTime: '2024-01-10',
+    endTime: '2024-03-20',
+    color: '#ea7ccc',
+    children: ['beta-sprint1', 'beta-sprint2', 'beta-sprint3'],
+  },
+  {
+    id: 'beta-sprint1',
+    parentId: 'beta',
+    level: 1,
+    isGroup: false,
+    categoryIndex: 0,
+    taskName: 'Sprint 1',
+    startTime: '2024-01-10',
+    endTime: '2024-02-01',
+    color: '#5470c6',
+  },
+  {
+    id: 'beta-sprint2',
+    parentId: 'beta',
+    level: 1,
+    isGroup: false,
+    categoryIndex: 0,
+    taskName: 'Sprint 2',
+    startTime: '2024-02-01',
+    endTime: '2024-02-25',
+    color: '#91cc75',
+  },
+  {
+    id: 'beta-sprint3',
+    parentId: 'beta',
+    level: 1,
+    isGroup: false,
+    categoryIndex: 0,
+    taskName: 'Sprint 3',
+    startTime: '2024-02-25',
+    endTime: '2024-03-20',
+    color: '#fac858',
+  },
+  // Project Gamma (root group with deep nesting)
+  {
+    id: 'gamma',
+    parentId: null,
+    level: 0,
+    isGroup: true,
+    expanded: true,
+    categoryIndex: 0,
+    taskName: 'Project Gamma',
+    startTime: '2024-01-15',
+    endTime: '2024-03-30',
+    color: '#ee6666',
+    children: ['gamma-phase1'],
+  },
+  {
+    id: 'gamma-phase1',
+    parentId: 'gamma',
+    level: 1,
+    isGroup: true,
+    expanded: true,
+    categoryIndex: 0,
+    taskName: 'Phase 1',
+    startTime: '2024-01-15',
+    endTime: '2024-02-28',
+    color: '#73c0de',
+    children: ['gamma-phase1-analysis'],
+  },
+  {
+    id: 'gamma-phase1-analysis',
+    parentId: 'gamma-phase1',
+    level: 2,
+    isGroup: true,
+    expanded: true,
+    categoryIndex: 0,
+    taskName: 'Analysis',
+    startTime: '2024-01-15',
+    endTime: '2024-02-15',
+    color: '#3ba272',
+    children: ['gamma-phase1-analysis-data', 'gamma-phase1-analysis-report'],
+  },
+  {
+    id: 'gamma-phase1-analysis-data',
+    parentId: 'gamma-phase1-analysis',
+    level: 3,
+    isGroup: false,
+    categoryIndex: 0,
+    taskName: 'Data Collection',
+    startTime: '2024-01-15',
+    endTime: '2024-02-01',
+    color: '#fc8452',
+  },
+  {
+    id: 'gamma-phase1-analysis-report',
+    parentId: 'gamma-phase1-analysis',
+    level: 3,
+    isGroup: false,
+    categoryIndex: 0,
+    taskName: 'Report Generation',
+    startTime: '2024-02-01',
+    endTime: '2024-02-15',
+    color: '#9a60b4',
+  },
 ];
 
 const HEIGHT_RATIO = 0.6;
-const DIM_CATEGORY_INDEX = 0;
+const DIM_DISPLAY_INDEX = 0;
 const DIM_TIME_START = 1;
 const DIM_TIME_END = 2;
 const DIM_TASK_NAME = 3;
 const DIM_COLOR = 4;
+const DIM_LEVEL = 5;
+const DIM_IS_GROUP = 6;
+const DIM_EXPANDED = 7;
+const DIM_TASK_ID = 8;
+
+/**
+ * Flatten hierarchical tasks into a visible list based on expanded state
+ */
+function flattenTasks(
+  tasks: GanttTask[],
+  expandedState: Record<string, boolean>,
+): FlattenedGanttTask[] {
+  const taskMap = new Map<string, GanttTask>();
+  tasks.forEach(task => taskMap.set(task.id, task));
+
+  const result: FlattenedGanttTask[] = [];
+  let displayIndex = 0;
+
+  function isAncestorExpanded(task: GanttTask): boolean {
+    if (!task.parentId) return true;
+    const parent = taskMap.get(task.parentId);
+    if (!parent) return true;
+    const parentExpanded = expandedState[parent.id] ?? parent.expanded ?? true;
+    if (!parentExpanded) return false;
+    return isAncestorExpanded(parent);
+  }
+
+  // Get root tasks first, then process in order
+  const rootTasks = tasks.filter(t => t.parentId === null);
+
+  function processTask(task: GanttTask) {
+    const visible = isAncestorExpanded(task);
+    const expanded = expandedState[task.id] ?? task.expanded ?? true;
+
+    result.push({
+      ...task,
+      visible,
+      displayIndex: visible ? displayIndex++ : -1,
+      expanded,
+    });
+
+    // Process children
+    if (task.children) {
+      task.children.forEach(childId => {
+        const child = taskMap.get(childId);
+        if (child) {
+          processTask(child);
+        }
+      });
+    }
+  }
+
+  rootTasks.forEach(task => processTask(task));
+  return result;
+}
 
 function renderGanttItem(
   params: { coordSys: { x: number; y: number; width: number; height: number } },
@@ -59,12 +296,12 @@ function renderGanttItem(
     value: (dim: number) => number | string;
     coord: (data: [number | string, number]) => [number, number];
     size: (data: [number, number]) => [number, number];
-    style: (opts?: { fill?: string; stroke?: string; text?: string; textFill?: string }) => Record<string, unknown>;
+    style: (opts?: Record<string, unknown>) => Record<string, unknown>;
   },
 ) {
-  const categoryIndex = api.value(DIM_CATEGORY_INDEX) as number;
-  const startTime = api.coord([api.value(DIM_TIME_START), categoryIndex]);
-  const endTime = api.coord([api.value(DIM_TIME_END), categoryIndex]);
+  const displayIndex = api.value(DIM_DISPLAY_INDEX) as number;
+  const startTime = api.coord([api.value(DIM_TIME_START), displayIndex]);
+  const endTime = api.coord([api.value(DIM_TIME_END), displayIndex]);
   const barLength = endTime[0] - startTime[0];
   const barHeight = api.size([0, 1])[1] * HEIGHT_RATIO;
   const x = startTime[0];
@@ -72,8 +309,30 @@ function renderGanttItem(
 
   const taskName = api.value(DIM_TASK_NAME) as string;
   const color = api.value(DIM_COLOR) as string;
+  const level = api.value(DIM_LEVEL) as number;
+  const isGroup = api.value(DIM_IS_GROUP) as number;
+  const expanded = api.value(DIM_EXPANDED) as number;
 
   const rectShape = clipRectByRect(params, { x, y, width: barLength, height: barHeight });
+
+  // Indent text based on level
+  const indent = level * 15;
+
+  // Create expand/collapse icon for groups
+  const expandIcon = isGroup
+    ? {
+        type: 'text',
+        style: {
+          text: expanded ? '▼' : '▶',
+          x: x + 5,
+          y: y + barHeight / 2,
+          textVerticalAlign: 'middle',
+          textAlign: 'left',
+          fill: '#fff',
+          fontSize: 10,
+        },
+      }
+    : null;
 
   return {
     type: 'group',
@@ -84,22 +343,26 @@ function renderGanttItem(
         shape: rectShape,
         style: {
           fill: color,
-          stroke: '#fff',
-          lineWidth: 1,
+          stroke: isGroup ? '#333' : '#fff',
+          lineWidth: isGroup ? 2 : 1,
         },
       },
+      expandIcon,
       {
-        type: 'rect',
-        ignore: !rectShape || barLength < 50,
-        shape: rectShape,
+        type: 'text',
+        ignore: !rectShape || barLength < 30,
         style: {
-          fill: 'transparent',
-          text: barLength > 80 ? taskName : '',
-          textFill: '#fff',
+          text: barLength > (isGroup ? 60 : 50) ? taskName : '',
+          x: x + (isGroup ? 20 : 5) + indent,
+          y: y + barHeight / 2,
+          textVerticalAlign: 'middle',
+          textAlign: 'left',
+          fill: '#fff',
           fontSize: 11,
+          fontWeight: isGroup ? 'bold' : 'normal',
         },
       },
-    ],
+    ].filter(Boolean),
   };
 }
 
@@ -118,34 +381,72 @@ function clipRectByRect(
   return null;
 }
 
+/**
+ * Generate category labels with indentation for hierarchy
+ */
+function generateCategoryLabels(flattenedTasks: FlattenedGanttTask[]): string[] {
+  return flattenedTasks
+    .filter(t => t.visible)
+    .map(task => {
+      const indent = '  '.repeat(task.level);
+      const prefix = task.isGroup ? (task.expanded ? '▼ ' : '▶ ') : '• ';
+      return `${indent}${prefix}${task.taskName}`;
+    });
+}
+
 export default function transformProps(chartProps: ChartProps): PluginChartGanttProps {
-  const { width, height, formData } = chartProps;
+  const { width, height, formData, hooks } = chartProps;
   const {
     title = 'Gantt Chart',
     barHeightRatio = 0.6,
     zoomable = true,
+    defaultExpandLevel = 2,
   } = formData;
 
-  // Use mock data for now
-  const categories = MOCK_CATEGORIES;
-  const tasks = MOCK_DATA;
+  // Get expanded state from hooks or initialize based on defaultExpandLevel
+  const expandedState: Record<string, boolean> = (hooks?.setControlValue as Record<string, boolean>) || {};
 
-  // Transform tasks to ECharts data format: [categoryIndex, startTime, endTime, taskName, color]
-  const seriesData = tasks.map(task => [
-    task.categoryIndex,
+  // Initialize expanded state based on defaultExpandLevel if not set
+  const initialExpandedState: Record<string, boolean> = {};
+  MOCK_DATA.forEach(task => {
+    if (task.isGroup) {
+      if (expandedState[task.id] === undefined) {
+        initialExpandedState[task.id] = task.level < (defaultExpandLevel as number);
+      } else {
+        initialExpandedState[task.id] = expandedState[task.id];
+      }
+    }
+  });
+
+  // Flatten tasks based on expanded state
+  const flattenedTasks = flattenTasks(MOCK_DATA, initialExpandedState);
+  const visibleTasks = flattenedTasks.filter(t => t.visible);
+
+  // Generate category labels
+  const categories = generateCategoryLabels(flattenedTasks);
+
+  // Transform visible tasks to ECharts data format
+  const seriesData = visibleTasks.map(task => [
+    task.displayIndex,
     new Date(task.startTime).getTime(),
     new Date(task.endTime).getTime(),
     task.taskName,
     task.color,
+    task.level,
+    task.isGroup ? 1 : 0,
+    task.expanded ? 1 : 0,
+    task.id,
   ]);
 
   const echartOptions: EChartsOption = {
     tooltip: {
-      formatter: (params: { value: [number, number, number, string, string] }) => {
-        const [, start, end, name] = params.value;
-        const startDate = new Date(start).toLocaleDateString();
-        const endDate = new Date(end).toLocaleDateString();
-        return `<strong>${name}</strong><br/>Start: ${startDate}<br/>End: ${endDate}`;
+      formatter: (params: { value: (number | string)[] }) => {
+        const [, start, end, name, , level, isGroup] = params.value;
+        const startDate = new Date(start as number).toLocaleDateString();
+        const endDate = new Date(end as number).toLocaleDateString();
+        const type = isGroup ? 'Group' : 'Task';
+        const levelLabel = `Level ${level}`;
+        return `<strong>${name}</strong><br/>Type: ${type}<br/>Level: ${levelLabel}<br/>Start: ${startDate}<br/>End: ${endDate}`;
       },
     },
     title: {
@@ -202,7 +503,7 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
       show: true,
       top: 70,
       bottom: zoomable ? 30 : 20,
-      left: 120,
+      left: 180,
       right: zoomable ? 30 : 20,
       backgroundColor: '#fff',
       borderWidth: 0,
@@ -238,8 +539,10 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
       axisLabel: {
         show: true,
         color: '#333',
-        fontSize: 12,
+        fontSize: 11,
+        formatter: (value: string) => value,
       },
+      inverse: true,
     },
     series: [
       {
@@ -247,7 +550,7 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
         renderItem: renderGanttItem as unknown as (params: unknown, api: unknown) => unknown,
         encode: {
           x: [DIM_TIME_START, DIM_TIME_END],
-          y: DIM_CATEGORY_INDEX,
+          y: DIM_DISPLAY_INDEX,
         },
         data: seriesData,
       },
@@ -258,10 +561,12 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
     width,
     height,
     echartOptions,
-    tasks,
+    tasks: MOCK_DATA,
+    flattenedTasks,
     categories,
     title: title as string,
     barHeightRatio: barHeightRatio as number,
     zoomable: zoomable as boolean,
+    expandedState: initialExpandedState,
   };
 }

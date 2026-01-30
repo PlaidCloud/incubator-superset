@@ -47,6 +47,16 @@ const config: ControlPanelConfig = {
         ],
         [
           {
+            name: 'parent_column',
+            config: {
+              ...sharedControls.entity,
+              label: t('Parent Task'),
+              description: t('Column containing parent task ID for nested hierarchy (optional)'),
+            },
+          },
+        ],
+        [
+          {
             name: 'start_time_column',
             config: {
               ...sharedControls.entity,
@@ -118,6 +128,64 @@ const config: ControlPanelConfig = {
           },
         ],
         ['color_scheme'],
+      ],
+    },
+    {
+      label: t('Grouping & Nesting'),
+      expanded: true,
+      controlSetRows: [
+        [
+          {
+            name: 'default_expand_level',
+            config: {
+              type: 'SelectControl',
+              label: t('Default Expand Level'),
+              renderTrigger: true,
+              default: 2,
+              choices: [
+                [-1, t('All Collapsed')],
+                [0, t('Root Level Only')],
+                [1, t('Level 1')],
+                [2, t('Level 2')],
+                [3, t('Level 3')],
+                [10, t('All Expanded')],
+              ],
+              description: t(
+                'Default nesting level to expand on initial load. ' +
+                  'Tasks at or below this level will be expanded.',
+              ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'show_group_summary',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show Group Summary Bars'),
+              renderTrigger: true,
+              default: true,
+              description: t(
+                'Display summary bars for groups showing the span from earliest start to latest end of children',
+              ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'indent_size',
+            config: {
+              type: 'SliderControl',
+              label: t('Indent Size'),
+              renderTrigger: true,
+              min: 5,
+              max: 30,
+              step: 5,
+              default: 15,
+              description: t('Indentation size in pixels for each nesting level'),
+            },
+          },
+        ],
       ],
     },
   ],
