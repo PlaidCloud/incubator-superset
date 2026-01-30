@@ -401,7 +401,13 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
     barHeightRatio = 0.6,
     zoomable = true,
     defaultExpandLevel = 2,
-    showGroupSummary = true
+    showGroupSummary = true,
+    timeRangePreset = 'all',
+    customStartDate = '',
+    customEndDate = '',
+    timeGranularity = 'day',
+    taskFilter = '',
+    showOnlyGroups = false,
   } = formData;
 
   // Get expanded state from hooks or initialize based on defaultExpandLevel
@@ -573,5 +579,11 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
     showBarLabels: formData.showBarLabels,
     showGroupSummary,
     indentSize: formData.indentSize,
+    timeRangePreset: timeRangePreset as PluginChartGanttProps['timeRangePreset'],
+    customStartDate: customStartDate as string,
+    customEndDate: customEndDate as string,
+    timeGranularity: timeGranularity as PluginChartGanttProps['timeGranularity'],
+    taskFilter: taskFilter as string,
+    showOnlyGroups: showOnlyGroups as boolean,
   };
 }

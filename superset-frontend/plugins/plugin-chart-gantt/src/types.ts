@@ -71,6 +71,19 @@ export interface PluginChartGanttStylesProps {
 /**
  * Customization properties for the Gantt chart
  */
+/** Time range preset options */
+export type TimeRangePreset =
+  | 'all'
+  | 'today'
+  | 'this_week'
+  | 'this_month'
+  | 'next_month'
+  | 'this_year'
+  | 'custom';
+
+/** Time granularity options */
+export type TimeGranularity = 'day' | 'week' | 'month';
+
 export interface PluginChartGanttCustomizeProps {
   /** Chart title */
   title?: string;
@@ -88,6 +101,18 @@ export interface PluginChartGanttCustomizeProps {
   showBarLabels?: boolean;
   showGroupSummary?: boolean;
   indentSize?: number;
+  /** Time range preset for filtering */
+  timeRangePreset?: TimeRangePreset;
+  /** Custom start date (YYYY-MM-DD) */
+  customStartDate?: string;
+  /** Custom end date (YYYY-MM-DD) */
+  customEndDate?: string;
+  /** Time granularity for x-axis */
+  timeGranularity?: TimeGranularity;
+  /** Task name filter string */
+  taskFilter?: string;
+  /** Show only group tasks */
+  showOnlyGroups?: boolean;
 }
 
 /**

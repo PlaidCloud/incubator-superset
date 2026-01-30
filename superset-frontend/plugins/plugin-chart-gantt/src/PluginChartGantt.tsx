@@ -28,8 +28,172 @@ import {
   DataZoomComponent,
 } from 'echarts/components';
 import type { EChartsOption } from 'echarts';
-import { PluginChartGanttProps, GanttTask, FlattenedGanttTask } from './types';
 import React from 'react';
+import {
+  PluginChartGanttProps,
+  GanttTask,
+  FlattenedGanttTask,
+  TimeRangePreset,
+  TimeGranularity,
+} from './types';
+
+/**
+ * Calculate time range bounds based on preset
+ */
+function getTimeRangeBounds(
+  preset: TimeRangePreset,
+  customStart?: string,
+  customEnd?: string,
+): { start: Date | null; end: Date | null } {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  switch (preset) {
+    case 'today':
+      return {
+        start: today,
+        end: new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1),
+      };
+    case 'this_week': {
+      const dayOfWeek = today.getDay();
+      const startOfWeek = new Date(today);
+      startOfWeek.setDate(today.getDate() - dayOfWeek);
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+      return { start: startOfWeek, end: endOfWeek };
+    }
+    case 'this_month': {
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      const endOfMonth = new Date(
+        today.getFullYear(),
+        today.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999,
+      );
+      return { start: startOfMonth, end: endOfMonth };
+    }
+    case 'next_month': {
+      const startOfNextMonth = new Date(
+        today.getFullYear(),
+        today.getMonth() + 1,
+        1,
+      );
+      const endOfNextMonth = new Date(
+        today.getFullYear(),
+        today.getMonth() + 2,
+        0,
+        23,
+        59,
+        59,
+        999,
+      );
+      return { start: startOfNextMonth, end: endOfNextMonth };
+    }
+    case 'this_year': {
+      const startOfYear = new Date(today.getFullYear(), 0, 1);
+      const endOfYear = new Date(today.getFullYear(), 11, 31, 23, 59, 59, 999);
+      return { start: startOfYear, end: endOfYear };
+    }
+    case 'custom': {
+      return {
+        start: customStart ? new Date(customStart) : null,
+        end: customEnd ? new Date(customEnd) : null,
+      };
+    }
+    case 'all':
+    default:
+      return { start: null, end: null };
+  }
+}
+
+/**
+ * Check if a task overlaps with the given time range
+ */
+function taskOverlapsTimeRange(
+  task: GanttTask,
+  rangeStart: Date | null,
+  rangeEnd: Date | null,
+): boolean {
+  if (!rangeStart && !rangeEnd) return true;
+
+  const taskStart = new Date(task.startTime).getTime();
+  const taskEnd = new Date(task.endTime).getTime();
+  const rangeStartTime = rangeStart ? rangeStart.getTime() : -Infinity;
+  const rangeEndTime = rangeEnd ? rangeEnd.getTime() : Infinity;
+
+  // Task overlaps if it starts before range ends AND ends after range starts
+  return taskStart <= rangeEndTime && taskEnd >= rangeStartTime;
+}
+
+/**
+ * Filter tasks based on all filter criteria
+ */
+function filterTasks(
+  tasks: GanttTask[],
+  timeRangePreset: TimeRangePreset,
+  customStartDate: string,
+  customEndDate: string,
+  taskFilter: string,
+  showOnlyGroups: boolean,
+): GanttTask[] {
+  const { start: rangeStart, end: rangeEnd } = getTimeRangeBounds(
+    timeRangePreset,
+    customStartDate,
+    customEndDate,
+  );
+
+  const searchTerm = taskFilter.toLowerCase().trim();
+
+  return tasks.filter(task => {
+    // Time range filter
+    if (!taskOverlapsTimeRange(task, rangeStart, rangeEnd)) {
+      return false;
+    }
+
+    // Task name filter
+    if (searchTerm && !task.taskName.toLowerCase().includes(searchTerm)) {
+      return false;
+    }
+
+    // Group/Leaf filter
+    if (showOnlyGroups && !task.isGroup) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+/**
+ * Get time axis formatting based on granularity
+ */
+function getTimeAxisConfig(granularity: TimeGranularity): {
+  minInterval: number;
+  axisLabelFormatter: string;
+} {
+  switch (granularity) {
+    case 'week':
+      return {
+        minInterval: 7 * 24 * 60 * 60 * 1000, // 1 week in ms
+        axisLabelFormatter: '{MMM} {dd}',
+      };
+    case 'month':
+      return {
+        minInterval: 30 * 24 * 60 * 60 * 1000, // ~1 month in ms
+        axisLabelFormatter: '{MMM} {yyyy}',
+      };
+    case 'day':
+    default:
+      return {
+        minInterval: 24 * 60 * 60 * 1000, // 1 day in ms
+        axisLabelFormatter: '{MMM} {dd}',
+      };
+  }
+}
 // Register ECharts components
 use([
   CanvasRenderer,
@@ -70,6 +234,117 @@ const ControlButton = styled.button`
   }
 `;
 
+const FilterBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 10px;
+  background: ${({ theme }) => theme.colorInfoBg};
+  color: ${({ theme }) => theme.colorInfo};
+`;
+
+const FilterToolbar = styled.div`
+  position: absolute;
+  top: 40px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 12px;
+  background: ${({ theme }) => theme.colorBgContainer};
+  border: 1px solid ${({ theme }) => theme.colorBorder};
+  border-radius: 6px;
+  z-index: 10;
+`;
+
+const FilterGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+`;
+
+const FilterLabel = styled.label`
+  font-size: 11px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colorTextSecondary};
+  white-space: nowrap;
+`;
+
+const FilterInput = styled.input`
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid ${({ theme }) => theme.colorBorder};
+  border-radius: 4px;
+  background: ${({ theme }) => theme.colorBgContainer};
+  color: ${({ theme }) => theme.colorText};
+  width: 150px;
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.colorPrimary};
+  }
+
+  &::placeholder {
+    color: ${({ theme }) => theme.colorTextSecondary};
+  }
+`;
+
+const FilterSelect = styled.select`
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid ${({ theme }) => theme.colorBorder};
+  border-radius: 4px;
+  background: ${({ theme }) => theme.colorBgContainer};
+  color: ${({ theme }) => theme.colorText};
+  cursor: pointer;
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.colorPrimary};
+  }
+`;
+
+const FilterCheckbox = styled.input`
+  margin: 0;
+  cursor: pointer;
+`;
+
+const FilterSeparator = styled.div`
+  width: 1px;
+  height: 20px;
+  background: ${({ theme }) => theme.colorBorder};
+`;
+
+const ClearFiltersButton = styled.button`
+  padding: 4px 8px;
+  font-size: 11px;
+  border: none;
+  border-radius: 4px;
+  background: ${({ theme }) => theme.colorErrorBg};
+  color: ${({ theme }) => theme.colorError};
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: ${({ theme }) => theme.colorError};
+    color: ${({ theme }) => theme.colorBgContainer};
+  }
+`;
+
+const TIME_RANGE_OPTIONS: { value: TimeRangePreset; label: string }[] = [
+  { value: 'all', label: 'All Time' },
+  { value: 'today', label: 'Today' },
+  { value: 'this_week', label: 'This Week' },
+  { value: 'this_month', label: 'This Month' },
+  { value: 'next_month', label: 'Next Month' },
+  { value: 'this_year', label: 'This Year' },
+];
+
 const DIM_DISPLAY_INDEX = 0;
 const DIM_TIME_START = 1;
 const DIM_TIME_END = 2;
@@ -82,6 +357,7 @@ const DIM_TASK_ID = 8;
 const DIM_SHOW_BAR_LABELS = 9;
 const DIM_BAR_HEIGHT_RATIO = 10;
 const DIM_INDENT_SIZE = 11;
+const DIM_IS_HIGHLIGHTED = 12;
 
 interface RectShape {
   x: number;
@@ -201,6 +477,7 @@ function renderGanttItem(
   const expanded = api.value(DIM_EXPANDED) as number;
   const showBarLabels = api.value(DIM_SHOW_BAR_LABELS) as number;
   const indentSize = api.value(DIM_INDENT_SIZE) as number;
+  const isHighlighted = api.value(DIM_IS_HIGHLIGHTED) as number;
 
   const rectShape = clipRectByRect(params, {
     x,
@@ -236,8 +513,13 @@ function renderGanttItem(
         shape: rectShape,
         style: {
           fill: color,
-          stroke: isGroup ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.5)',
-          lineWidth: isGroup ? 2 : 1,
+          // eslint-disable-next-line theme-colors/no-literal-colors
+          stroke: isHighlighted
+            ? '#FFD700'
+            : isGroup
+              ? 'rgba(0, 0, 0, 0.3)'
+              : 'rgba(255, 255, 255, 0.5)',
+          lineWidth: isHighlighted ? 3 : isGroup ? 2 : 1,
         },
       },
       expandIcon,
@@ -281,6 +563,8 @@ function buildEchartsOptions(
   barHeightRatio: number,
   showGroupSummary: boolean,
   indentSize: number,
+  timeGranularity: TimeGranularity,
+  highlightedTaskIds: Set<string>,
 ): EChartsOption {
   const visibleTasks = flattenedTasks.filter(
     t => t.visible && (showGroupSummary || !t.isGroup),
@@ -299,7 +583,10 @@ function buildEchartsOptions(
     showBarLabels ? 1 : 0,
     barHeightRatio,
     indentSize,
+    highlightedTaskIds.has(task.id) ? 1 : 0,
   ]);
+
+  const timeAxisConfig = getTimeAxisConfig(timeGranularity);
 
   return {
     tooltip: {
@@ -346,7 +633,7 @@ function buildEchartsOptions(
             zoomLock: true,
             width: 10,
             right: 10,
-            top: 70,
+            top: 110,
             bottom: 30,
             start: 0,
             end: 100,
@@ -366,7 +653,7 @@ function buildEchartsOptions(
       : [],
     grid: {
       show: true,
-      top: 70,
+      top: 110,
       bottom: zoomable ? 30 : 20,
       left: showYAxisLabels ? 180 : 30,
       right: zoomable ? 30 : 20,
@@ -376,6 +663,7 @@ function buildEchartsOptions(
     xAxis: {
       type: 'time',
       position: 'top',
+      minInterval: timeAxisConfig.minInterval,
       splitLine: {
         lineStyle: {
           color: [themeConfig.colorSplit],
@@ -393,6 +681,7 @@ function buildEchartsOptions(
         color: themeConfig.colorTextSecondary,
         inside: false,
         align: 'center',
+        formatter: timeAxisConfig.axisLabelFormatter,
       },
     },
     yAxis: {
@@ -437,6 +726,12 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
     barHeightRatio = 0.6,
     showGroupSummary = true,
     indentSize = 10,
+    timeRangePreset = 'all',
+    customStartDate = '',
+    customEndDate = '',
+    timeGranularity = 'day',
+    taskFilter = '',
+    showOnlyGroups = false,
   } = props;
 
   const theme = useTheme();
@@ -445,8 +740,63 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
   const [expandedState, setExpandedState] =
     useState<Record<string, boolean>>(initialExpandedState);
 
+  // Local filter state for in-chart controls
+  const [localTimeRangePreset, setLocalTimeRangePreset] =
+    useState<TimeRangePreset>(timeRangePreset);
+  const [localTaskFilter, setLocalTaskFilter] = useState<string>(taskFilter);
+  const [localShowOnlyGroups, setLocalShowOnlyGroups] =
+    useState<boolean>(showOnlyGroups);
+
+  // Sync local state with props when they change
+  useEffect(() => {
+    setLocalTimeRangePreset(timeRangePreset);
+  }, [timeRangePreset]);
+
+  useEffect(() => {
+    setLocalTaskFilter(taskFilter);
+  }, [taskFilter]);
+
+  useEffect(() => {
+    setLocalShowOnlyGroups(showOnlyGroups);
+  }, [showOnlyGroups]);
+
+  // Apply filters to tasks
+  const filteredTasks = filterTasks(
+    tasks,
+    localTimeRangePreset,
+    customStartDate,
+    customEndDate,
+    localTaskFilter,
+    localShowOnlyGroups,
+  );
+
+  // Count active filters for badge
+  const activeFilterCount = [
+    localTimeRangePreset !== 'all',
+    localTaskFilter.trim().length > 0,
+    localShowOnlyGroups,
+  ].filter(Boolean).length;
+
+  // Determine which tasks should be highlighted (when search filter is active)
+  const highlightedTaskIds = new Set<string>();
+  if (localTaskFilter.trim().length > 0) {
+    const searchTerm = localTaskFilter.toLowerCase().trim();
+    filteredTasks.forEach(task => {
+      if (task.taskName.toLowerCase().includes(searchTerm)) {
+        highlightedTaskIds.add(task.id);
+      }
+    });
+  }
+
+  // Clear all filters
+  const handleClearFilters = useCallback(() => {
+    setLocalTimeRangePreset('all');
+    setLocalTaskFilter('');
+    setLocalShowOnlyGroups(false);
+  }, []);
+
   // Compute flattened tasks and categories based on current expanded state
-  const flattenedTasks = flattenTasks(tasks, expandedState);
+  const flattenedTasks = flattenTasks(filteredTasks, expandedState);
   const categories = generateCategoryLabels(flattenedTasks);
 
   const themeConfig: ThemeConfig = {
@@ -467,6 +817,8 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
     barHeightRatio,
     showGroupSummary,
     indentSize,
+    timeGranularity,
+    highlightedTaskIds,
   );
 
   // Toggle expand/collapse for a single task
@@ -544,7 +896,68 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
       <ExpandCollapseControls>
         <ControlButton onClick={handleExpandAll}>Expand All</ControlButton>
         <ControlButton onClick={handleCollapseAll}>Collapse All</ControlButton>
+        {activeFilterCount > 0 && (
+          <FilterBadge>
+            {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''} active
+          </FilterBadge>
+        )}
       </ExpandCollapseControls>
+
+      <FilterToolbar>
+        <FilterGroup>
+          <FilterLabel htmlFor="time-range">Time Range:</FilterLabel>
+          <FilterSelect
+            id="time-range"
+            value={localTimeRangePreset}
+            onChange={e =>
+              setLocalTimeRangePreset(e.target.value as TimeRangePreset)
+            }
+          >
+            {TIME_RANGE_OPTIONS.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </FilterSelect>
+        </FilterGroup>
+
+        <FilterSeparator />
+
+        <FilterGroup>
+          <FilterLabel htmlFor="task-filter">Search:</FilterLabel>
+          <FilterInput
+            id="task-filter"
+            type="text"
+            placeholder="Filter tasks..."
+            value={localTaskFilter}
+            onChange={e => setLocalTaskFilter(e.target.value)}
+          />
+        </FilterGroup>
+
+        <FilterSeparator />
+
+        <FilterGroup>
+          <FilterCheckbox
+            id="groups-only"
+            type="checkbox"
+            checked={localShowOnlyGroups}
+            onChange={e => {
+              setLocalShowOnlyGroups(e.target.checked);
+            }}
+          />
+          <FilterLabel htmlFor="groups-only">Groups Only</FilterLabel>
+        </FilterGroup>
+
+        {activeFilterCount > 0 && (
+          <>
+            <FilterSeparator />
+            <ClearFiltersButton onClick={handleClearFilters}>
+              Clear Filters
+            </ClearFiltersButton>
+          </>
+        )}
+      </FilterToolbar>
+
       <div ref={chartRef} style={{ width: '100%', height: '100%' }} />
     </StyledContainer>
   );
