@@ -26,6 +26,7 @@ import {
   TitleComponent,
   GridComponent,
   DataZoomComponent,
+  MarkLineComponent,
 } from 'echarts/components';
 import type { EChartsOption } from 'echarts';
 import React from 'react';
@@ -202,6 +203,7 @@ use([
   TitleComponent,
   GridComponent,
   DataZoomComponent,
+  MarkLineComponent,
 ]);
 
 const StyledContainer = styled.div<{ height: number; width: number }>`
@@ -490,18 +492,18 @@ function renderGanttItem(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const expandIcon: any = isGroup
     ? {
-        type: 'text',
-        style: {
-          text: expanded ? '▼' : '▶',
-          x: x + 5,
-          y: y + barHeight / 2,
-          textVerticalAlign: 'middle',
-          textAlign: 'left',
-          // eslint-disable-next-line theme-colors/no-literal-colors
-          fill: 'rgba(255, 255, 255, 0.9)',
-          fontSize: 10,
-        },
-      }
+      type: 'text',
+      style: {
+        text: expanded ? '▼' : '▶',
+        x: x + 5,
+        y: y + barHeight / 2,
+        textVerticalAlign: 'middle',
+        textAlign: 'left',
+        // eslint-disable-next-line theme-colors/no-literal-colors
+        fill: 'rgba(255, 255, 255, 0.9)',
+        fontSize: 10,
+      },
+    }
     : null;
 
   return {
@@ -565,6 +567,7 @@ function buildEchartsOptions(
   indentSize: number,
   timeGranularity: TimeGranularity,
   highlightedTaskIds: Set<string>,
+  showTodayMarker: boolean,
 ): EChartsOption {
   const visibleTasks = flattenedTasks.filter(
     t => t.visible && (showGroupSummary || !t.isGroup),
@@ -607,49 +610,49 @@ function buildEchartsOptions(
     },
     dataZoom: zoomable
       ? [
-          {
-            type: 'slider',
-            xAxisIndex: 0,
-            filterMode: 'weakFilter',
-            height: 20,
-            bottom: 0,
-            start: 0,
-            end: 100,
-            handleSize: '80%',
-            showDetail: false,
-          },
-          {
-            type: 'inside',
-            xAxisIndex: 0,
-            filterMode: 'weakFilter',
-            start: 0,
-            end: 100,
-            zoomOnMouseWheel: false,
-            moveOnMouseMove: true,
-          },
-          {
-            type: 'slider',
-            yAxisIndex: 0,
-            zoomLock: true,
-            width: 10,
-            right: 10,
-            top: 110,
-            bottom: 30,
-            start: 0,
-            end: 100,
-            handleSize: 0,
-            showDetail: false,
-          },
-          {
-            type: 'inside',
-            yAxisIndex: 0,
-            start: 0,
-            end: 100,
-            zoomOnMouseWheel: false,
-            moveOnMouseMove: true,
-            moveOnMouseWheel: true,
-          },
-        ]
+        {
+          type: 'slider',
+          xAxisIndex: 0,
+          filterMode: 'weakFilter',
+          height: 20,
+          bottom: 0,
+          start: 0,
+          end: 100,
+          handleSize: '80%',
+          showDetail: false,
+        },
+        {
+          type: 'inside',
+          xAxisIndex: 0,
+          filterMode: 'weakFilter',
+          start: 0,
+          end: 100,
+          zoomOnMouseWheel: false,
+          moveOnMouseMove: true,
+        },
+        {
+          type: 'slider',
+          yAxisIndex: 0,
+          zoomLock: true,
+          width: 10,
+          right: 10,
+          top: 110,
+          bottom: 30,
+          start: 0,
+          end: 100,
+          handleSize: 0,
+          showDetail: false,
+        },
+        {
+          type: 'inside',
+          yAxisIndex: 0,
+          start: 0,
+          end: 100,
+          zoomOnMouseWheel: false,
+          moveOnMouseMove: true,
+          moveOnMouseWheel: true,
+        },
+      ]
       : [],
     grid: {
       show: true,
@@ -665,8 +668,11 @@ function buildEchartsOptions(
       position: 'top',
       minInterval: timeAxisConfig.minInterval,
       splitLine: {
+        show: true,
         lineStyle: {
-          color: [themeConfig.colorSplit],
+          color: themeConfig.colorSplit,
+          width: 1,
+          type: 'dashed',
         },
       },
       axisLine: {
@@ -708,6 +714,37 @@ function buildEchartsOptions(
           y: DIM_DISPLAY_INDEX,
         },
         data: seriesData,
+        markLine: showTodayMarker
+          ? {
+            silent: true,
+            symbol: 'none',
+            animation: false,
+            lineStyle: {
+              // eslint-disable-next-line theme-colors/no-literal-colors
+              color: '#ff6b6b',
+              width: 2,
+              type: 'solid',
+            },
+            label: {
+              show: true,
+              position: 'end',
+              formatter: 'Today',
+              // eslint-disable-next-line theme-colors/no-literal-colors
+              color: '#ff6b6b',
+              fontWeight: 'bold',
+              fontSize: 11,
+              padding: [2, 6],
+              // eslint-disable-next-line theme-colors/no-literal-colors
+              backgroundColor: 'rgba(255, 107, 107, 0.1)',
+              borderRadius: 3,
+            },
+            data: [
+              {
+                xAxis: Date.now(),
+              },
+            ],
+          }
+          : undefined,
       },
     ],
   };
@@ -732,6 +769,7 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
     timeGranularity = 'day',
     taskFilter = '',
     showOnlyGroups = false,
+    showTodayMarker = true,
   } = props;
 
   const theme = useTheme();
@@ -819,6 +857,7 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
     indentSize,
     timeGranularity,
     highlightedTaskIds,
+    showTodayMarker,
   );
 
   // Toggle expand/collapse for a single task

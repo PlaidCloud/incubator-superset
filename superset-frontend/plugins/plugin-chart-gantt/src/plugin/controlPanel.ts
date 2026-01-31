@@ -27,6 +27,16 @@ const config: ControlPanelConfig = {
       controlSetRows: [
         [
           {
+            name: 'task_id_column',
+            config: {
+              ...sharedControls.entity,
+              label: t('Task ID'),
+              description: t('Column containing unique task IDs (used for parent-child matching)'),
+            },
+          },
+        ],
+        [
+          {
             name: 'task_column',
             config: {
               ...sharedControls.entity,
@@ -50,7 +60,7 @@ const config: ControlPanelConfig = {
             name: 'parent_column',
             config: {
               ...sharedControls.entity,
-              label: t('Parent Task'),
+              label: t('Parent Task ID'),
               description: t('Column containing parent task ID for nested hierarchy (optional)'),
             },
           },
@@ -100,6 +110,7 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        ['color_scheme'],
         [
           {
             name: 'bar_height_ratio',
@@ -151,6 +162,18 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'showTodayMarker',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show Today Marker'),
+              renderTrigger: true,
+              default: true,
+              description: t('Display a vertical line highlighting the current date'),
+            },
+          },
+        ],
       ],
     },
     {
@@ -175,7 +198,7 @@ const config: ControlPanelConfig = {
               ],
               description: t(
                 'Default nesting level to expand on initial load. ' +
-                  'Tasks at or below this level will be expanded.',
+                'Tasks at or below this level will be expanded.',
               ),
             },
           },

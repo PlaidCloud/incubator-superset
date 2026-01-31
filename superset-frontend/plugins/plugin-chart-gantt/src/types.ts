@@ -113,6 +113,8 @@ export interface PluginChartGanttCustomizeProps {
   taskFilter?: string;
   /** Show only group tasks */
   showOnlyGroups?: boolean;
+  /** Show today marker line */
+  showTodayMarker?: boolean;
 }
 
 /**

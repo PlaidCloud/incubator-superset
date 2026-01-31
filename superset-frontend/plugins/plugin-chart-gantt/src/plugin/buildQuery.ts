@@ -30,16 +30,20 @@ import { buildQueryContext, QueryFormData } from '@superset-ui/core';
  */
 export default function buildQuery(formData: QueryFormData) {
   const {
+    task_id_column: taskIdColumn,
     task_column: taskColumn,
     category_column: categoryColumn,
+    parent_column: parentColumn,
     start_time_column: startTimeColumn,
     end_time_column: endTimeColumn,
   } = formData;
 
   // Collect all columns needed for the query
   const columns: string[] = [];
+  if (taskIdColumn) columns.push(taskIdColumn);
   if (taskColumn) columns.push(taskColumn);
   if (categoryColumn) columns.push(categoryColumn);
+  if (parentColumn) columns.push(parentColumn);
   if (startTimeColumn) columns.push(startTimeColumn);
   if (endTimeColumn) columns.push(endTimeColumn);
 

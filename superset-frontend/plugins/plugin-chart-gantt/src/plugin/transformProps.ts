@@ -16,217 +16,9 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { ChartProps } from '@superset-ui/core';
+import { ChartProps, getCategoricalSchemeRegistry } from '@superset-ui/core';
 import { EChartsOption } from 'echarts';
 import { GanttTask, FlattenedGanttTask, PluginChartGanttProps } from '../types';
-
-// Mock data for demonstration with nested hierarchy
-const MOCK_DATA: GanttTask[] = [
-  // Project Alpha (root group)
-  {
-    id: 'alpha',
-    parentId: null,
-    level: 0,
-    isGroup: true,
-    expanded: true,
-    categoryIndex: 0,
-    taskName: 'Project Alpha',
-    startTime: '2024-01-01',
-    endTime: '2024-03-15',
-    color: '#5470c6',
-    children: ['alpha-planning', 'alpha-dev'],
-  },
-  {
-    id: 'alpha-planning',
-    parentId: 'alpha',
-    level: 1,
-    isGroup: true,
-    expanded: true,
-    categoryIndex: 0,
-    taskName: 'Planning Phase',
-    startTime: '2024-01-01',
-    endTime: '2024-01-31',
-    color: '#91cc75',
-    children: ['alpha-planning-research', 'alpha-planning-design'],
-  },
-  {
-    id: 'alpha-planning-research',
-    parentId: 'alpha-planning',
-    level: 2,
-    isGroup: false,
-    categoryIndex: 0,
-    taskName: 'Research',
-    startTime: '2024-01-01',
-    endTime: '2024-01-15',
-    color: '#fac858',
-  },
-  {
-    id: 'alpha-planning-design',
-    parentId: 'alpha-planning',
-    level: 2,
-    isGroup: false,
-    categoryIndex: 0,
-    taskName: 'Design',
-    startTime: '2024-01-15',
-    endTime: '2024-01-31',
-    color: '#ee6666',
-  },
-  {
-    id: 'alpha-dev',
-    parentId: 'alpha',
-    level: 1,
-    isGroup: true,
-    expanded: true,
-    categoryIndex: 0,
-    taskName: 'Development Phase',
-    startTime: '2024-02-01',
-    endTime: '2024-03-15',
-    color: '#73c0de',
-    children: ['alpha-dev-frontend', 'alpha-dev-backend', 'alpha-dev-testing'],
-  },
-  {
-    id: 'alpha-dev-frontend',
-    parentId: 'alpha-dev',
-    level: 2,
-    isGroup: false,
-    categoryIndex: 0,
-    taskName: 'Frontend',
-    startTime: '2024-02-01',
-    endTime: '2024-02-28',
-    color: '#3ba272',
-  },
-  {
-    id: 'alpha-dev-backend',
-    parentId: 'alpha-dev',
-    level: 2,
-    isGroup: false,
-    categoryIndex: 0,
-    taskName: 'Backend',
-    startTime: '2024-02-01',
-    endTime: '2024-03-01',
-    color: '#fc8452',
-  },
-  {
-    id: 'alpha-dev-testing',
-    parentId: 'alpha-dev',
-    level: 2,
-    isGroup: false,
-    categoryIndex: 0,
-    taskName: 'Testing',
-    startTime: '2024-03-01',
-    endTime: '2024-03-15',
-    color: '#9a60b4',
-  },
-  // Project Beta (root group)
-  {
-    id: 'beta',
-    parentId: null,
-    level: 0,
-    isGroup: true,
-    expanded: true,
-    categoryIndex: 0,
-    taskName: 'Project Beta',
-    startTime: '2024-01-10',
-    endTime: '2024-03-20',
-    color: '#ea7ccc',
-    children: ['beta-sprint1', 'beta-sprint2', 'beta-sprint3'],
-  },
-  {
-    id: 'beta-sprint1',
-    parentId: 'beta',
-    level: 1,
-    isGroup: false,
-    categoryIndex: 0,
-    taskName: 'Sprint 1',
-    startTime: '2024-01-10',
-    endTime: '2024-02-01',
-    color: '#5470c6',
-  },
-  {
-    id: 'beta-sprint2',
-    parentId: 'beta',
-    level: 1,
-    isGroup: false,
-    categoryIndex: 0,
-    taskName: 'Sprint 2',
-    startTime: '2024-02-01',
-    endTime: '2024-02-25',
-    color: '#91cc75',
-  },
-  {
-    id: 'beta-sprint3',
-    parentId: 'beta',
-    level: 1,
-    isGroup: false,
-    categoryIndex: 0,
-    taskName: 'Sprint 3',
-    startTime: '2024-02-25',
-    endTime: '2024-03-20',
-    color: '#fac858',
-  },
-  // Project Gamma (root group with deep nesting)
-  {
-    id: 'gamma',
-    parentId: null,
-    level: 0,
-    isGroup: true,
-    expanded: true,
-    categoryIndex: 0,
-    taskName: 'Project Gamma',
-    startTime: '2024-01-15',
-    endTime: '2024-03-30',
-    color: '#ee6666',
-    children: ['gamma-phase1'],
-  },
-  {
-    id: 'gamma-phase1',
-    parentId: 'gamma',
-    level: 1,
-    isGroup: true,
-    expanded: true,
-    categoryIndex: 0,
-    taskName: 'Phase 1',
-    startTime: '2024-01-15',
-    endTime: '2024-02-28',
-    color: '#73c0de',
-    children: ['gamma-phase1-analysis'],
-  },
-  {
-    id: 'gamma-phase1-analysis',
-    parentId: 'gamma-phase1',
-    level: 2,
-    isGroup: true,
-    expanded: true,
-    categoryIndex: 0,
-    taskName: 'Analysis',
-    startTime: '2024-01-15',
-    endTime: '2024-02-15',
-    color: '#3ba272',
-    children: ['gamma-phase1-analysis-data', 'gamma-phase1-analysis-report'],
-  },
-  {
-    id: 'gamma-phase1-analysis-data',
-    parentId: 'gamma-phase1-analysis',
-    level: 3,
-    isGroup: false,
-    categoryIndex: 0,
-    taskName: 'Data Collection',
-    startTime: '2024-01-15',
-    endTime: '2024-02-01',
-    color: '#fc8452',
-  },
-  {
-    id: 'gamma-phase1-analysis-report',
-    parentId: 'gamma-phase1-analysis',
-    level: 3,
-    isGroup: false,
-    categoryIndex: 0,
-    taskName: 'Report Generation',
-    startTime: '2024-02-01',
-    endTime: '2024-02-15',
-    color: '#9a60b4',
-  },
-];
 
 const HEIGHT_RATIO = 0.6;
 const DIM_DISPLAY_INDEX = 0;
@@ -321,17 +113,17 @@ function renderGanttItem(
   // Create expand/collapse icon for groups
   const expandIcon = isGroup
     ? {
-        type: 'text',
-        style: {
-          text: expanded ? '▼' : '▶',
-          x: x + 5,
-          y: y + barHeight / 2,
-          textVerticalAlign: 'middle',
-          textAlign: 'left',
-          fill: '#fff',
-          fontSize: 10,
-        },
-      }
+      type: 'text',
+      style: {
+        text: expanded ? '▼' : '▶',
+        x: x + 5,
+        y: y + barHeight / 2,
+        textVerticalAlign: 'middle',
+        textAlign: 'left',
+        fill: '#fff',
+        fontSize: 10,
+      },
+    }
     : null;
 
   return {
@@ -395,7 +187,7 @@ function generateCategoryLabels(flattenedTasks: FlattenedGanttTask[]): string[] 
 }
 
 export default function transformProps(chartProps: ChartProps): PluginChartGanttProps {
-  const { width, height, formData, hooks } = chartProps;
+  const { width, height, formData, hooks, queriesData } = chartProps;
   const {
     title = 'Gantt Chart',
     barHeightRatio = 0.6,
@@ -408,14 +200,128 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
     timeGranularity = 'day',
     taskFilter = '',
     showOnlyGroups = false,
+    // Column mappings from control panel (Superset converts snake_case to camelCase)
+    taskIdColumn,
+    taskColumn,
+    parentColumn,
+    startTimeColumn,
+    endTimeColumn,
   } = formData;
+
+  // Get raw data from query - comes as array of row objects
+  const rawData = (queriesData?.[0]?.data || []) as Record<string, unknown>[];
+
+  // Get color scheme from formData
+  const colorScheme = formData.colorScheme || formData.color_scheme || 'supersetColors';
+  const schemeRegistry = getCategoricalSchemeRegistry();
+  const colorSchemeObj = schemeRegistry.get(colorScheme);
+  const colorPalette = colorSchemeObj?.colors || [
+    '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de',
+    '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc', '#6e7079',
+  ];
+
+  // Transform raw query data into GanttTask[] format
+  const tasks: GanttTask[] = [];
+  const taskIdToTaskMap = new Map<string, GanttTask>(); // Map original task_id to task object
+  const childrenMap = new Map<string, string[]>(); // Map internal task id to children ids
+
+  // First pass: create all tasks (without colors - will be assigned after level computation)
+  rawData.forEach((row, index) => {
+    // Get the original task_id from data (e.g., 1, 2, 3...)
+    const originalTaskId = taskIdColumn && row[taskIdColumn] !== undefined && row[taskIdColumn] !== null && row[taskIdColumn] !== ''
+      ? String(row[taskIdColumn])
+      : null;
+
+    const taskName = taskColumn ? String(row[taskColumn] ?? `Task ${index + 1}`) : `Task ${index + 1}`;
+
+    // Get parent_task_id - this references the original task_id of the parent
+    const parentTaskId = parentColumn && row[parentColumn] !== undefined && row[parentColumn] !== null && row[parentColumn] !== ''
+      ? String(row[parentColumn])
+      : null;
+
+    const startTime = startTimeColumn ? row[startTimeColumn] : null;
+    const endTime = endTimeColumn ? row[endTimeColumn] : null;
+
+    // Generate an internal unique ID for this task
+    const internalId = `task-${index}`;
+
+    const task: GanttTask = {
+      id: internalId,
+      parentId: parentTaskId, // Store original parent_task_id temporarily, will be resolved
+      level: 0, // Will be computed later
+      isGroup: false, // Will be updated based on children
+      expanded: true,
+      categoryIndex: index,
+      taskName,
+      startTime: startTime ? new Date(startTime as string | number | Date).getTime() : Date.now(),
+      endTime: endTime ? new Date(endTime as string | number | Date).getTime() : Date.now() + 86400000,
+      color: '', // Will be assigned after level computation
+      children: [],
+    };
+
+    tasks.push(task);
+
+    // Map original task_id (from CSV) to the task object
+    if (originalTaskId) {
+      taskIdToTaskMap.set(originalTaskId, task);
+    }
+  });
+
+  // Second pass: resolve parent references using original task_id values
+  tasks.forEach(task => {
+    const parentTaskId = task.parentId; // This is the original parent_task_id from CSV
+    if (parentTaskId) {
+      // Look up parent by original task_id
+      const parent = taskIdToTaskMap.get(parentTaskId);
+      if (parent) {
+        // Update parentId to point to parent's internal ID
+        task.parentId = parent.id;
+
+        // Track children
+        if (!childrenMap.has(parent.id)) {
+          childrenMap.set(parent.id, []);
+        }
+        childrenMap.get(parent.id)!.push(task.id);
+        parent.isGroup = true;
+      } else {
+        // Parent not found, make this a root task
+        task.parentId = null;
+      }
+    }
+  });
+
+  // Create an internal ID map for level computation
+  const internalIdToTaskMap = new Map<string, GanttTask>();
+  tasks.forEach(task => internalIdToTaskMap.set(task.id, task));
+
+  // Third pass: assign children arrays and compute levels
+  function computeLevel(task: GanttTask, visited = new Set<string>()): number {
+    if (visited.has(task.id)) return 0; // Prevent infinite loops
+    visited.add(task.id);
+
+    if (!task.parentId) return 0;
+    const parent = internalIdToTaskMap.get(task.parentId);
+    if (!parent) return 0;
+    return computeLevel(parent, visited) + 1;
+  }
+
+  tasks.forEach(task => {
+    task.children = childrenMap.get(task.id) || [];
+    task.level = computeLevel(task);
+  });
+
+  // Fourth pass: assign colors based on level (tasks at same level get same color)
+  tasks.forEach(task => {
+    const colorIndex = task.level % colorPalette.length;
+    task.color = colorPalette[colorIndex];
+  });
 
   // Get expanded state from hooks or initialize based on defaultExpandLevel
   const expandedState: Record<string, boolean> = (hooks?.setControlValue as Record<string, boolean>) || {};
 
   // Initialize expanded state based on defaultExpandLevel if not set
   const initialExpandedState: Record<string, boolean> = {};
-  MOCK_DATA.forEach(task => {
+  tasks.forEach(task => {
     if (task.isGroup) {
       if (expandedState[task.id] === undefined) {
         initialExpandedState[task.id] = task.level < (defaultExpandLevel as number);
@@ -426,7 +332,7 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
   });
 
   // Flatten tasks based on expanded state
-  const flattenedTasks = flattenTasks(MOCK_DATA, initialExpandedState);
+  const flattenedTasks = flattenTasks(tasks, initialExpandedState);
   const visibleTasks = flattenedTasks.filter(t => t.visible);
 
   // Generate category labels
@@ -462,49 +368,49 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
     },
     dataZoom: zoomable
       ? [
-          {
-            type: 'slider',
-            xAxisIndex: 0,
-            filterMode: 'weakFilter',
-            height: 20,
-            bottom: 0,
-            start: 0,
-            end: 100,
-            handleSize: '80%',
-            showDetail: false,
-          },
-          {
-            type: 'inside',
-            xAxisIndex: 0,
-            filterMode: 'weakFilter',
-            start: 0,
-            end: 100,
-            zoomOnMouseWheel: false,
-            moveOnMouseMove: true,
-          },
-          {
-            type: 'slider',
-            yAxisIndex: 0,
-            zoomLock: true,
-            width: 10,
-            right: 10,
-            top: 70,
-            bottom: 30,
-            start: 0,
-            end: 100,
-            handleSize: 0,
-            showDetail: false,
-          },
-          {
-            type: 'inside',
-            yAxisIndex: 0,
-            start: 0,
-            end: 100,
-            zoomOnMouseWheel: false,
-            moveOnMouseMove: true,
-            moveOnMouseWheel: true,
-          },
-        ]
+        {
+          type: 'slider',
+          xAxisIndex: 0,
+          filterMode: 'weakFilter',
+          height: 20,
+          bottom: 0,
+          start: 0,
+          end: 100,
+          handleSize: '80%',
+          showDetail: false,
+        },
+        {
+          type: 'inside',
+          xAxisIndex: 0,
+          filterMode: 'weakFilter',
+          start: 0,
+          end: 100,
+          zoomOnMouseWheel: false,
+          moveOnMouseMove: true,
+        },
+        {
+          type: 'slider',
+          yAxisIndex: 0,
+          zoomLock: true,
+          width: 10,
+          right: 10,
+          top: 70,
+          bottom: 30,
+          start: 0,
+          end: 100,
+          handleSize: 0,
+          showDetail: false,
+        },
+        {
+          type: 'inside',
+          yAxisIndex: 0,
+          start: 0,
+          end: 100,
+          zoomOnMouseWheel: false,
+          moveOnMouseMove: true,
+          moveOnMouseWheel: true,
+        },
+      ]
       : [],
     grid: {
       show: true,
@@ -568,7 +474,7 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
     width,
     height,
     echartOptions,
-    tasks: MOCK_DATA,
+    tasks,
     flattenedTasks,
     categories,
     title: title as string,
@@ -585,5 +491,6 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
     timeGranularity: timeGranularity as PluginChartGanttProps['timeGranularity'],
     taskFilter: taskFilter as string,
     showOnlyGroups: showOnlyGroups as boolean,
+    showTodayMarker: formData.showTodayMarker ?? true,
   };
 }
