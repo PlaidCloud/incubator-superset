@@ -131,6 +131,7 @@ function taskOverlapsTimeRange(
 
 /**
  * Filter tasks based on all filter criteria
+ * Preserves hierarchy - if a child matches, parent is also included
  */
 function filterTasks(
   tasks: GanttTask[],
@@ -147,19 +148,45 @@ function filterTasks(
 
   const searchTerm = taskFilter.toLowerCase().trim();
 
-  return tasks.filter(task => {
+  // Build a map of task IDs for quick lookup
+  const taskMap = new Map<string, GanttTask>();
+  tasks.forEach(task => taskMap.set(task.id, task));
+
+  // First pass: find all tasks that directly match the filter criteria
+  const matchingIds = new Set<string>();
+  tasks.forEach(task => {
     // Time range filter
     if (!taskOverlapsTimeRange(task, rangeStart, rangeEnd)) {
-      return false;
+      return;
     }
 
-    // Task name filter
-    if (searchTerm && !task.taskName.toLowerCase().includes(searchTerm)) {
-      return false;
+    // Task name filter - if no search term, include all
+    if (!searchTerm || task.taskName.toLowerCase().includes(searchTerm)) {
+      matchingIds.add(task.id);
     }
-
-    return true;
   });
+
+  // Second pass: include all ancestors of matching tasks
+  const includedIds = new Set<string>(matchingIds);
+  const addAncestors = (task: GanttTask) => {
+    if (task.parentId) {
+      const parent = taskMap.get(task.parentId);
+      if (parent && !includedIds.has(parent.id)) {
+        includedIds.add(parent.id);
+        addAncestors(parent);
+      }
+    }
+  };
+
+  matchingIds.forEach(id => {
+    const task = taskMap.get(id);
+    if (task) {
+      addAncestors(task);
+    }
+  });
+
+  // Return filtered tasks preserving original order
+  return tasks.filter(task => includedIds.has(task.id));
 }
 
 /**
@@ -333,6 +360,7 @@ const TIME_RANGE_OPTIONS: { value: TimeRangePreset; label: string }[] = [
   { value: 'this_month', label: 'This Month' },
   { value: 'next_month', label: 'Next Month' },
   { value: 'this_year', label: 'This Year' },
+  { value: 'custom', label: 'Custom...' },
 ];
 
 // Data dimension indices for series data array
@@ -804,6 +832,10 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
   const [localTimeRangePreset, setLocalTimeRangePreset] =
     useState<TimeRangePreset>(timeRangePreset);
   const [localTaskFilter, setLocalTaskFilter] = useState<string>(taskFilter);
+  const [localCustomStartDate, setLocalCustomStartDate] =
+    useState<string>(customStartDate);
+  const [localCustomEndDate, setLocalCustomEndDate] =
+    useState<string>(customEndDate);
 
   // Sync local state with props when they change
   useEffect(() => {
@@ -814,12 +846,20 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
     setLocalTaskFilter(taskFilter);
   }, [taskFilter]);
 
+  useEffect(() => {
+    setLocalCustomStartDate(customStartDate);
+  }, [customStartDate]);
+
+  useEffect(() => {
+    setLocalCustomEndDate(customEndDate);
+  }, [customEndDate]);
+
   // Apply filters to tasks
   const filteredTasks = filterTasks(
     tasks,
     localTimeRangePreset,
-    customStartDate,
-    customEndDate,
+    localCustomStartDate,
+    localCustomEndDate,
     localTaskFilter,
   );
 
@@ -844,6 +884,8 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
   const handleClearFilters = useCallback(() => {
     setLocalTimeRangePreset('all');
     setLocalTaskFilter('');
+    setLocalCustomStartDate('');
+    setLocalCustomEndDate('');
   }, []);
 
   // Compute flattened tasks and categories based on current expanded state
@@ -972,6 +1014,29 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
             ))}
           </FilterSelect>
         </FilterGroup>
+
+        {localTimeRangePreset === 'custom' && (
+          <>
+            <FilterGroup>
+              <FilterLabel htmlFor="custom-start">From:</FilterLabel>
+              <FilterInput
+                id="custom-start"
+                type="date"
+                value={localCustomStartDate}
+                onChange={e => setLocalCustomStartDate(e.target.value)}
+              />
+            </FilterGroup>
+            <FilterGroup>
+              <FilterLabel htmlFor="custom-end">To:</FilterLabel>
+              <FilterInput
+                id="custom-end"
+                type="date"
+                value={localCustomEndDate}
+                onChange={e => setLocalCustomEndDate(e.target.value)}
+              />
+            </FilterGroup>
+          </>
+        )}
 
         <FilterSeparator />
 
