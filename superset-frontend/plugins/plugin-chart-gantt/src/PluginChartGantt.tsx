@@ -655,6 +655,7 @@ function buildEchartsOptions(
   showTodayMarker: boolean,
   showProgress: boolean,
   containerHeight: number,
+  totalSpanDays: number,
   zoomStart?: number,
   zoomEnd?: number,
 ): EChartsOption {
@@ -726,16 +727,18 @@ function buildEchartsOptions(
           bottom: 0,
           start: zoomStart ?? 0,
           end: zoomEnd ?? (
-            timeGranularity === 'day'
-              ? 10
-              : timeGranularity === 'week'
-                ? 35
-                : 100
+            totalSpanDays > 0
+              ? (timeGranularity === 'day'
+                ? Math.min((7 / totalSpanDays) * 100, 100)
+                : timeGranularity === 'week'
+                  ? Math.min((35 / totalSpanDays) * 100, 100)
+                  : 100)
+              : 10
           ),
           handleSize: '80%',
           showDetail: false,
-          // Prevent zooming closer than 3 units of granularity for visibility
-          minValueSpan: timeAxisConfig.minInterval * 3,
+          // Allow zooming down to 1 unit of granularity
+          minValueSpan: timeAxisConfig.minInterval,
         },
         {
           type: 'inside',
@@ -743,17 +746,19 @@ function buildEchartsOptions(
           filterMode: 'weakFilter',
           start: zoomStart ?? 0,
           end: zoomEnd ?? (
-            timeGranularity === 'day'
-              ? 10
-              : timeGranularity === 'week'
-                ? 35
-                : 100
+            totalSpanDays > 0
+              ? (timeGranularity === 'day'
+                ? Math.min((7 / totalSpanDays) * 100, 100)
+                : timeGranularity === 'week'
+                  ? Math.min((35 / totalSpanDays) * 100, 100)
+                  : 100)
+              : 10
           ),
           zoomOnMouseWheel: true,
           moveOnMouseMove: true,
           moveOnMouseWheel: true,
-          // Prevent zooming closer than 3 units of granularity for visibility
-          minValueSpan: timeAxisConfig.minInterval * 3,
+          // Allow zooming down to 1 unit of granularity
+          minValueSpan: timeAxisConfig.minInterval,
         },
         {
           type: 'slider',
@@ -1040,6 +1045,7 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
     showTodayMarker,
     showProgress,
     height,
+    totalSpanDays,
     shouldResetZoom ? undefined : lastZoomRef.current?.start,
     shouldResetZoom ? undefined : lastZoomRef.current?.end,
   );
