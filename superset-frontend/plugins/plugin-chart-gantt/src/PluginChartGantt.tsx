@@ -759,6 +759,7 @@ function buildEchartsOptions(
         inside: false,
         align: 'center',
         formatter: timeAxisConfig.axisLabelFormatter,
+        hideOverlap: true,
       },
     },
     yAxis: {
