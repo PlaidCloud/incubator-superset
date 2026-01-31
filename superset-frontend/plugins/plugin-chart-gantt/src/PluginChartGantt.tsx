@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { styled, useTheme } from '@superset-ui/core';
 import { init, EChartsType, use } from 'echarts/core';
 import { CustomChart } from 'echarts/charts';
@@ -655,6 +655,8 @@ function buildEchartsOptions(
   showTodayMarker: boolean,
   showProgress: boolean,
   containerHeight: number,
+  zoomStart?: number,
+  zoomEnd?: number,
 ): EChartsOption {
   // Fixed row height for consistent bar sizing
   const ROW_HEIGHT = 32;
@@ -716,13 +718,14 @@ function buildEchartsOptions(
           filterMode: 'weakFilter',
           height: 20,
           bottom: 0,
-          start: 0,
-          end:
+          start: zoomStart ?? 0,
+          end: zoomEnd ?? (
             timeGranularity === 'day'
               ? 10
               : timeGranularity === 'week'
                 ? 35
-                : 100,
+                : 100
+          ),
           handleSize: '80%',
           showDetail: false,
           // Prevent zooming closer than 3 units of granularity for visibility
@@ -732,13 +735,14 @@ function buildEchartsOptions(
           type: 'inside',
           xAxisIndex: 0,
           filterMode: 'weakFilter',
-          start: 0,
-          end:
+          start: zoomStart ?? 0,
+          end: zoomEnd ?? (
             timeGranularity === 'day'
               ? 10
               : timeGranularity === 'week'
                 ? 35
-                : 100,
+                : 100
+          ),
           zoomOnMouseWheel: true,
           moveOnMouseMove: true,
           moveOnMouseWheel: true,
@@ -908,6 +912,47 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
   const [localTimeGranularity, setLocalTimeGranularity] =
     useState<TimeGranularity>(timeGranularity);
 
+  // Ref to track last zoom levels to maintain perspective during granularity changes
+  const lastZoomRef = useRef<{ start: number; end: number } | null>(null);
+  // Flag to know if we should reset zoom to presets (manually changed via dropdown)
+  // or keep current zoom (auto-changed via zoom interaction)
+  const [shouldResetZoom, setShouldResetZoom] = useState(false);
+
+  // Calculate total time span of data for zoom thresholds
+  const totalSpanDays = useMemo(() => {
+    if (tasks.length === 0) return 0;
+    const times = tasks.flatMap(t => [
+      new Date(t.startTime).getTime(),
+      new Date(t.endTime).getTime(),
+    ]);
+    return (Math.max(...times) - Math.min(...times)) / (24 * 60 * 60 * 1000);
+  }, [tasks]);
+
+  // Handle zoom interaction to update the "View" option
+  const handleDataZoom = useCallback(
+    (params: any) => {
+      const zoom = params.batch ? params.batch[0] : params;
+      const { start, end } = zoom;
+
+      // Update our ref so we can maintain this zoom if granularity changes
+      lastZoomRef.current = { start, end };
+
+      // Calculate visible duration to determine best-fit granularity
+      const spanPercent = end - start;
+      const visibleDays = totalSpanDays * (spanPercent / 100);
+
+      let newGranularity: TimeGranularity = 'month';
+      if (visibleDays < 15) newGranularity = 'day';
+      else if (visibleDays < 60) newGranularity = 'week';
+
+      if (newGranularity !== localTimeGranularity) {
+        setShouldResetZoom(false); // It's an auto-change, don't reset to defaults
+        setLocalTimeGranularity(newGranularity);
+      }
+    },
+    [localTimeGranularity, totalSpanDays],
+  );
+
   // Sync local state with props when they change
   useEffect(() => {
     setLocalTimeRangePreset(timeRangePreset);
@@ -989,6 +1034,8 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
     showTodayMarker,
     showProgress,
     height,
+    shouldResetZoom ? undefined : lastZoomRef.current?.start,
+    shouldResetZoom ? undefined : lastZoomRef.current?.end,
   );
 
   // Toggle expand/collapse for a single task
@@ -1046,6 +1093,14 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
       }
     };
   }, [handleToggleExpand]);
+
+  // Separate effect for datazoom listener to avoid full chart re-initialization
+  useEffect(() => {
+    if (chartInstance.current) {
+      chartInstance.current.off('datazoom');
+      chartInstance.current.on('datazoom', handleDataZoom);
+    }
+  }, [handleDataZoom]);
 
   // Update chart options when they change
   useEffect(() => {
@@ -1134,9 +1189,10 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
           <FilterSelect
             id="granularity"
             value={localTimeGranularity}
-            onChange={e =>
-              setLocalTimeGranularity(e.target.value as TimeGranularity)
-            }
+            onChange={e => {
+              setShouldResetZoom(true);
+              setLocalTimeGranularity(e.target.value as TimeGranularity);
+            }}
           >
             {GRANULARITY_OPTIONS.map(option => (
               <option key={option.value} value={option.value}>
@@ -1146,15 +1202,10 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
           </FilterSelect>
         </FilterGroup>
 
-        {(activeFilterCount > 0 || localTimeGranularity !== timeGranularity) && (
+        {activeFilterCount > 0 && (
           <>
             <FilterSeparator />
-            <ClearFiltersButton
-              onClick={() => {
-                handleClearFilters();
-                setLocalTimeGranularity(timeGranularity);
-              }}
-            >
+            <ClearFiltersButton onClick={handleClearFilters}>
               Clear Filters
             </ClearFiltersButton>
           </>

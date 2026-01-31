@@ -244,21 +244,6 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
     const startTime = startTimeColumn ? row[startTimeColumn] : null;
     const endTime = endTimeColumn ? row[endTimeColumn] : null;
 
-    // Get progress value and handle possible formats (0-1 or 0-100)
-    let progress = 0;
-    if (progressColumn && row[progressColumn] !== undefined && row[progressColumn] !== null) {
-      const val = Number(row[progressColumn]);
-      if (!isNaN(val)) {
-        // If all values are <= 1, it might be fractional. 
-        // But some tasks might just be at 1%. 
-        // We'll trust the value as-is, BUT if it's <= 1 and the user didn't explicitly
-        // say it's a percentage, we'll keep it. 
-        // Actually, most Gantt charts use 0-100 for "percent".
-        // Let's just pass the raw number and handle scaling if needed.
-        progress = val;
-      }
-    }
-
     // Generate an internal unique ID for this task
     const internalId = `task-${index}`;
 
@@ -272,7 +257,7 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
       taskName,
       startTime: startTime ? new Date(startTime as string | number | Date).getTime() : Date.now(),
       endTime: endTime ? new Date(endTime as string | number | Date).getTime() : Date.now() + 86400000,
-      progress,
+      progress: progressColumn && row[progressColumn] !== undefined ? Number(row[progressColumn]) : 0,
       color: '', // Will be assigned after level computation
       children: [],
     };
@@ -332,20 +317,6 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
   tasks.forEach(task => {
     const colorIndex = task.level % colorPalette.length;
     task.color = colorPalette[colorIndex];
-  });
-
-  // Fifth pass: compute group progress if not specified (average of children)
-  tasks.forEach(task => {
-    if (task.isGroup && (task.progress === 0 || task.progress === undefined)) {
-      if (task.children && task.children.length > 0) {
-        const childProgress = task.children
-          .map(childId => internalIdToTaskMap.get(childId)?.progress || 0)
-          .filter(p => !isNaN(p));
-        if (childProgress.length > 0) {
-          task.progress = childProgress.reduce((a, b) => a + b, 0) / childProgress.length;
-        }
-      }
-    }
   });
 
   // Get expanded state from hooks or initialize based on defaultExpandLevel

@@ -36,7 +36,6 @@ export default function buildQuery(formData: QueryFormData) {
     parent_column: parentColumn,
     start_time_column: startTimeColumn,
     end_time_column: endTimeColumn,
-    progress_column: progressColumn,
   } = formData;
 
   // Collect all columns needed for the query
@@ -47,7 +46,6 @@ export default function buildQuery(formData: QueryFormData) {
   if (parentColumn) columns.push(parentColumn);
   if (startTimeColumn) columns.push(startTimeColumn);
   if (endTimeColumn) columns.push(endTimeColumn);
-  if (progressColumn) columns.push(progressColumn);
 
   return buildQueryContext(formData, baseQueryObject => [
     {
