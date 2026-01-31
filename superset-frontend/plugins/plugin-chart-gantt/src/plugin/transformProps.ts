@@ -18,6 +18,7 @@
  */
 import { ChartProps, getCategoricalSchemeRegistry } from '@superset-ui/core';
 import { EChartsOption } from 'echarts';
+import type { CallbackDataParams } from 'echarts/types/src/util/types';
 import { GanttTask, FlattenedGanttTask, PluginChartGanttProps } from '../types';
 
 const HEIGHT_RATIO = 0.6;
@@ -29,7 +30,6 @@ const DIM_COLOR = 4;
 const DIM_LEVEL = 5;
 const DIM_IS_GROUP = 6;
 const DIM_EXPANDED = 7;
-const DIM_TASK_ID = 8;
 const DIM_PROGRESS = 9;
 
 /**
@@ -83,15 +83,7 @@ function flattenTasks(
   return result;
 }
 
-function renderGanttItem(
-  params: { coordSys: { x: number; y: number; width: number; height: number } },
-  api: {
-    value: (dim: number) => number | string;
-    coord: (data: [number | string, number]) => [number, number];
-    size: (data: [number, number]) => [number, number];
-    style: (opts?: Record<string, unknown>) => Record<string, unknown>;
-  },
-) {
+function renderGanttItem(params: any, api: any) {
   const displayIndex = api.value(DIM_DISPLAY_INDEX) as number;
   const startTime = api.coord([api.value(DIM_TIME_START), displayIndex]);
   const endTime = api.coord([api.value(DIM_TIME_END), displayIndex]);
@@ -342,7 +334,7 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
   });
 
   // Get expanded state from hooks or initialize based on defaultExpandLevel
-  const expandedState: Record<string, boolean> = (hooks?.setControlValue as Record<string, boolean>) || {};
+  const expandedState: Record<string, boolean> = (hooks?.setControlValue as unknown as Record<string, boolean>) || {};
 
   // Initialize expanded state based on defaultExpandLevel if not set
   const initialExpandedState: Record<string, boolean> = {};
@@ -379,19 +371,24 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
 
   const echartOptions: EChartsOption = {
     tooltip: {
-      formatter: (params: { value: (number | string)[] }) => {
-        const name = params.value[DIM_TASK_NAME];
-        const start = params.value[DIM_TIME_START];
-        const end = params.value[DIM_TIME_END];
-        const level = params.value[DIM_LEVEL];
-        const isGroup = params.value[DIM_IS_GROUP];
-        const progress = params.value[DIM_PROGRESS];
+      formatter: (params: CallbackDataParams | CallbackDataParams[]) => {
+        const item = Array.isArray(params) ? params[0] : params;
+        const value = item.value as (number | string)[];
+        if (!value) return '';
+
+        const name = value[DIM_TASK_NAME];
+        const start = value[DIM_TIME_START];
+        const end = value[DIM_TIME_END];
+        const level = value[DIM_LEVEL];
+        const isGroup = value[DIM_IS_GROUP];
+        const progress = value[DIM_PROGRESS];
 
         const startDate = new Date(start as number).toLocaleDateString();
         const endDate = new Date(end as number).toLocaleDateString();
         const type = isGroup ? 'Group' : 'Task';
         const levelLabel = `Level ${level}`;
-        const progressLabel = progress !== undefined ? `<br/>Progress: ${progress}%` : '';
+        const progressLabel =
+          progress !== undefined ? `<br/>Progress: ${progress}%` : '';
         return `<strong>${name}</strong><br/>Type: ${type}<br/>Level: ${levelLabel}<br/>Start: ${startDate}<br/>End: ${endDate}${progressLabel}`;
       },
     },
