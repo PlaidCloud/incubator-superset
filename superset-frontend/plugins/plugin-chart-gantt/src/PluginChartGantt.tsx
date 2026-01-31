@@ -363,6 +363,12 @@ const TIME_RANGE_OPTIONS: { value: TimeRangePreset; label: string }[] = [
   { value: 'custom', label: 'Custom...' },
 ];
 
+const GRANULARITY_OPTIONS: { value: TimeGranularity; label: string }[] = [
+  { value: 'day', label: 'Day' },
+  { value: 'week', label: 'Week' },
+  { value: 'month', label: 'Month' },
+];
+
 // Data dimension indices for series data array
 const DIM_DISPLAY_INDEX = 0;
 const DIM_TIME_START = 1;
@@ -667,18 +673,33 @@ function buildEchartsOptions(
           height: 20,
           bottom: 0,
           start: 0,
-          end: 100,
+          end:
+            timeGranularity === 'day'
+              ? 10
+              : timeGranularity === 'week'
+                ? 35
+                : 100,
           handleSize: '80%',
           showDetail: false,
+          // Prevent zooming closer than 3 units of granularity for visibility
+          minValueSpan: timeAxisConfig.minInterval * 3,
         },
         {
           type: 'inside',
           xAxisIndex: 0,
           filterMode: 'weakFilter',
           start: 0,
-          end: 100,
-          zoomOnMouseWheel: false,
+          end:
+            timeGranularity === 'day'
+              ? 10
+              : timeGranularity === 'week'
+                ? 35
+                : 100,
+          zoomOnMouseWheel: true,
           moveOnMouseMove: true,
+          moveOnMouseWheel: true,
+          // Prevent zooming closer than 3 units of granularity for visibility
+          minValueSpan: timeAxisConfig.minInterval * 3,
         },
         {
           type: 'slider',
@@ -837,6 +858,9 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
   const [localCustomEndDate, setLocalCustomEndDate] =
     useState<string>(customEndDate);
 
+  const [localTimeGranularity, setLocalTimeGranularity] =
+    useState<TimeGranularity>(timeGranularity);
+
   // Sync local state with props when they change
   useEffect(() => {
     setLocalTimeRangePreset(timeRangePreset);
@@ -853,6 +877,10 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
   useEffect(() => {
     setLocalCustomEndDate(customEndDate);
   }, [customEndDate]);
+
+  useEffect(() => {
+    setLocalTimeGranularity(timeGranularity);
+  }, [timeGranularity]);
 
   // Apply filters to tasks
   const filteredTasks = filterTasks(
@@ -909,7 +937,7 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
     showBarLabels,
     barHeightRatio,
     showGroupSummary,
-    timeGranularity,
+    localTimeGranularity,
     highlightedTaskIds,
     showTodayMarker,
     height,
@@ -1051,10 +1079,34 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
           />
         </FilterGroup>
 
-        {activeFilterCount > 0 && (
+        <FilterSeparator />
+
+        <FilterGroup>
+          <FilterLabel htmlFor="granularity">View:</FilterLabel>
+          <FilterSelect
+            id="granularity"
+            value={localTimeGranularity}
+            onChange={e =>
+              setLocalTimeGranularity(e.target.value as TimeGranularity)
+            }
+          >
+            {GRANULARITY_OPTIONS.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </FilterSelect>
+        </FilterGroup>
+
+        {(activeFilterCount > 0 || localTimeGranularity !== timeGranularity) && (
           <>
             <FilterSeparator />
-            <ClearFiltersButton onClick={handleClearFilters}>
+            <ClearFiltersButton
+              onClick={() => {
+                handleClearFilters();
+                setLocalTimeGranularity(timeGranularity);
+              }}
+            >
               Clear Filters
             </ClearFiltersButton>
           </>
