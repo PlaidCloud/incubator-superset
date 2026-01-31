@@ -383,6 +383,8 @@ const DIM_TASK_ID = 8;
 const DIM_SHOW_BAR_LABELS = 9;
 const DIM_BAR_HEIGHT_RATIO = 10;
 const DIM_IS_HIGHLIGHTED = 11;
+const DIM_PROGRESS = 12;
+const DIM_SHOW_PROGRESS = 13;
 
 interface RectShape {
   x: number;
@@ -501,6 +503,7 @@ function renderGanttItem(
   const expanded = api.value(DIM_EXPANDED) as number;
   const showBarLabels = api.value(DIM_SHOW_BAR_LABELS) as number;
   const isHighlighted = api.value(DIM_IS_HIGHLIGHTED) as number;
+  const showProgress = api.value(DIM_SHOW_PROGRESS) as number;
 
   const coordSys = (params as any).coordSys;
   const gridLeft = coordSys.x;
@@ -527,7 +530,13 @@ function renderGanttItem(
   const isStartedOffScreen = x < gridLeft;
   const iconX = isStartedOffScreen ? gridLeft + 10 : x + 15;
   const textStartX = isStartedOffScreen ? gridLeft + 25 : x + 25;
-  const textMaxWidth = barVisibleRight - textStartX - 5;
+
+  // Calculate percentage text - we'll reserve space for it if showProgress is on
+  const progress = api.value(DIM_PROGRESS) as number;
+  const progressPercentText = `${Math.round(progress)}%`;
+  const progressTextWidth = showProgress ? 35 : 0; // Reserve ~35px for percentage text
+
+  const textMaxWidth = barVisibleRight - textStartX - 5 - progressTextWidth;
 
   // Modern flat expand icon for groups
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -585,7 +594,7 @@ function renderGanttItem(
       expandIcon,
       {
         type: 'text',
-        ignore: textMaxWidth < 20 || !showBarLabels,
+        ignore: textMaxWidth < 15 || !showBarLabels,
         style: {
           text: taskName,
           x: textStartX,
@@ -596,9 +605,25 @@ function renderGanttItem(
           fontSize: 12,
           fontWeight: isGroup ? '600' : '400',
           fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
-          width: textMaxWidth,
+          width: Math.max(textMaxWidth, 0),
           overflow: 'truncate',
           ellipsis: '...',
+        },
+      },
+      {
+        type: 'text',
+        // Only show percentage if bar is visible enough and enabled
+        ignore: !showProgress || !showBarLabels || barVisibleWidth < 40,
+        style: {
+          text: progressPercentText,
+          x: barVisibleRight - 5,
+          y: y + barHeight / 2,
+          textVerticalAlign: 'middle',
+          textAlign: 'right',
+          fill: textColor,
+          fontSize: 10,
+          fontWeight: '500',
+          fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
         },
       },
     ].filter(Boolean),
@@ -628,6 +653,7 @@ function buildEchartsOptions(
   timeGranularity: TimeGranularity,
   highlightedTaskIds: Set<string>,
   showTodayMarker: boolean,
+  showProgress: boolean,
   containerHeight: number,
 ): EChartsOption {
   // Fixed row height for consistent bar sizing
@@ -658,6 +684,8 @@ function buildEchartsOptions(
     showBarLabels ? 1 : 0,
     barHeightRatio,
     highlightedTaskIds.has(task.id) ? 1 : 0,
+    task.progress || 0,
+    showProgress ? 1 : 0,
   ]);
 
   const timeAxisConfig = getTimeAxisConfig(timeGranularity);
@@ -667,12 +695,13 @@ function buildEchartsOptions(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       formatter: (params: any) => {
         const { value } = params;
-        const [, start, end, name, , level, isGroup] = value;
+        const [, start, end, name, , level, isGroup, , , , , , progress] = value;
         const startDate = new Date(start as number).toLocaleDateString();
         const endDate = new Date(end as number).toLocaleDateString();
         const type = isGroup ? 'Group' : 'Task';
         const levelLabel = `Level ${level}`;
-        return `<strong>${name}</strong><br/>Type: ${type}<br/>Level: ${levelLabel}<br/>Start: ${startDate}<br/>End: ${endDate}`;
+        const progressLabel = progress !== undefined ? `<br/>Progress: ${Math.round(progress)}%` : '';
+        return `<strong>${name}</strong><br/>Type: ${type}<br/>Level: ${levelLabel}<br/>Start: ${startDate}<br/>End: ${endDate}${progressLabel}`;
       },
     },
     title: {
@@ -855,6 +884,7 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
     timeGranularity = 'day',
     taskFilter = '',
     showTodayMarker = true,
+    showProgress = true,
   } = props;
 
   // Removed from UI controls - always show group summaries
@@ -957,6 +987,7 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
     localTimeGranularity,
     highlightedTaskIds,
     showTodayMarker,
+    showProgress,
     height,
   );
 

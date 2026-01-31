@@ -85,6 +85,16 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'progress_column',
+            config: {
+              ...sharedControls.entity,
+              label: t('Progress'),
+              description: t('Column containing progress percentage (0-100)'),
+            },
+          },
+        ],
         ['adhoc_filters'],
         [
           {
@@ -171,6 +181,18 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
               default: true,
               description: t('Display a vertical line highlighting the current date'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'show_progress',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show Progress'),
+              renderTrigger: true,
+              default: true,
+              description: t('Show completion percentage on the bars'),
             },
           },
         ],

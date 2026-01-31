@@ -30,6 +30,8 @@ const DIM_LEVEL = 5;
 const DIM_IS_GROUP = 6;
 const DIM_EXPANDED = 7;
 const DIM_TASK_ID = 8;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const DIM_PROGRESS = 9; // Used in tooltip via array destructuring
 
 /**
  * Flatten hierarchical tasks into a visible list based on expanded state
@@ -198,12 +200,14 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
     customEndDate = '',
     timeGranularity = 'day',
     taskFilter = '',
+    showProgress = true,
     // Column mappings from control panel (Superset converts snake_case to camelCase)
     taskIdColumn,
     taskColumn,
     parentColumn,
     startTimeColumn,
     endTimeColumn,
+    progressColumn,
   } = formData;
 
   // Get raw data from query - comes as array of row objects
@@ -253,6 +257,7 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
       taskName,
       startTime: startTime ? new Date(startTime as string | number | Date).getTime() : Date.now(),
       endTime: endTime ? new Date(endTime as string | number | Date).getTime() : Date.now() + 86400000,
+      progress: progressColumn && row[progressColumn] !== undefined ? Number(row[progressColumn]) : 0,
       color: '', // Will be assigned after level computation
       children: [],
     };
@@ -347,17 +352,19 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
     task.isGroup ? 1 : 0,
     task.expanded ? 1 : 0,
     task.id,
+    task.progress || 0,
   ]);
 
   const echartOptions: EChartsOption = {
     tooltip: {
       formatter: (params: { value: (number | string)[] }) => {
-        const [, start, end, name, , level, isGroup] = params.value;
+        const [, start, end, name, , level, isGroup, , , progress] = params.value;
         const startDate = new Date(start as number).toLocaleDateString();
         const endDate = new Date(end as number).toLocaleDateString();
         const type = isGroup ? 'Group' : 'Task';
         const levelLabel = `Level ${level}`;
-        return `<strong>${name}</strong><br/>Type: ${type}<br/>Level: ${levelLabel}<br/>Start: ${startDate}<br/>End: ${endDate}`;
+        const progressLabel = progress !== undefined ? `<br/>Progress: ${progress}%` : '';
+        return `<strong>${name}</strong><br/>Type: ${type}<br/>Level: ${levelLabel}<br/>Start: ${startDate}<br/>End: ${endDate}${progressLabel}`;
       },
     },
     title: {
@@ -486,6 +493,7 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
     customEndDate: customEndDate as string,
     timeGranularity: timeGranularity as PluginChartGanttProps['timeGranularity'],
     taskFilter: taskFilter as string,
+    showProgress: showProgress as boolean,
     showTodayMarker: formData.showTodayMarker ?? true,
   };
 }

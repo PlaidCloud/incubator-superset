@@ -111,6 +111,8 @@ export interface PluginChartGanttCustomizeProps {
   taskFilter?: string;
   /** Show today marker line */
   showTodayMarker?: boolean;
+  /** Whether to show progress percentage on bars */
+  showProgress?: boolean;
 }
 
 /**
