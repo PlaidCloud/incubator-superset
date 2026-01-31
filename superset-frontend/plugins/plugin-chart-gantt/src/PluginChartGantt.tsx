@@ -29,7 +29,6 @@ import {
   MarkLineComponent,
 } from 'echarts/components';
 import type { EChartsOption } from 'echarts';
-import React from 'react';
 import {
   PluginChartGanttProps,
   GanttTask,
@@ -489,22 +488,42 @@ function renderGanttItem(
   });
   const indent = level * indentSize;
 
+  // Modern flat expand icon for groups
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const expandIcon: any = isGroup
     ? {
       type: 'text',
       style: {
-        text: expanded ? '▼' : '▶',
-        x: x + 5,
+        text: expanded ? '−' : '+',
+        x: x + 15,
         y: y + barHeight / 2,
         textVerticalAlign: 'middle',
-        textAlign: 'left',
+        textAlign: 'center',
         // eslint-disable-next-line theme-colors/no-literal-colors
-        fill: 'rgba(255, 255, 255, 0.9)',
-        fontSize: 10,
+        fill: 'rgba(255, 255, 255, 0.85)',
+        fontSize: 12,
+        fontWeight: 'bold',
       },
     }
     : null;
+
+  // Calculate contrasting text color based on bar color brightness
+  const getTextColor = (bgColor: string): string => {
+    // Simple brightness check - if color is light, use dark text
+    const hex = bgColor.replace('#', '');
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    // eslint-disable-next-line theme-colors/no-literal-colors
+    return brightness > 150 ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.95)';
+  };
+
+  const textColor = getTextColor(color);
+
+  // Calculate available width for text (bar width minus icon and padding)
+  const textStartX = x + 25;
+  const textMaxWidth = barLength - (isGroup ? 24 : 12) - indent;
 
   return {
     type: 'group',
@@ -512,32 +531,38 @@ function renderGanttItem(
       {
         type: 'rect',
         ignore: !rectShape,
-        shape: rectShape,
+        shape: rectShape
+          ? {
+            ...rectShape,
+            r: 4, // Rounded corners for modern look
+          }
+          : undefined,
         style: {
           fill: color,
+          // Flat design - no stroke for regular bars, subtle highlight border only
           // eslint-disable-next-line theme-colors/no-literal-colors
-          stroke: isHighlighted
-            ? '#FFD700'
-            : isGroup
-              ? 'rgba(0, 0, 0, 0.3)'
-              : 'rgba(255, 255, 255, 0.5)',
-          lineWidth: isHighlighted ? 3 : isGroup ? 2 : 1,
+          stroke: isHighlighted ? '#1890ff' : undefined,
+          lineWidth: isHighlighted ? 2 : 0,
+          shadowBlur: 0, // No shadows for flat design
         },
       },
       expandIcon,
       {
         type: 'text',
-        ignore: !rectShape || barLength < 30 || !showBarLabels,
+        ignore: !rectShape || textMaxWidth < 20 || !showBarLabels,
         style: {
-          text: barLength > (isGroup ? 60 : 50) ? taskName : '',
-          x: x + (isGroup ? 20 : 5) + indent,
+          text: taskName,
+          x: textStartX,
           y: y + barHeight / 2,
           textVerticalAlign: 'middle',
           textAlign: 'left',
-          // eslint-disable-next-line theme-colors/no-literal-colors
-          fill: 'rgba(255, 255, 255, 0.9)',
-          fontSize: 11,
-          fontWeight: isGroup ? 'bold' : 'normal',
+          fill: textColor,
+          fontSize: 12,
+          fontWeight: isGroup ? '600' : '400',
+          fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+          width: textMaxWidth,
+          overflow: 'truncate',
+          ellipsis: '...',
         },
       },
     ].filter(Boolean),
@@ -568,10 +593,22 @@ function buildEchartsOptions(
   timeGranularity: TimeGranularity,
   highlightedTaskIds: Set<string>,
   showTodayMarker: boolean,
+  containerHeight: number,
 ): EChartsOption {
+  // Fixed row height for consistent bar sizing
+  const ROW_HEIGHT = 32;
+
   const visibleTasks = flattenedTasks.filter(
     t => t.visible && (showGroupSummary || !t.isGroup),
   );
+
+  // Calculate the ideal grid height based on number of tasks
+  const taskCount = visibleTasks.length;
+  const idealGridHeight = taskCount * ROW_HEIGHT;
+  const availableHeight = containerHeight - 140 - (zoomable ? 30 : 0); // Account for title, margins, and zoom controls
+
+  // Use the smaller of ideal height or available height, with a minimum
+  const gridHeight = Math.min(idealGridHeight, Math.max(availableHeight, 100));
 
   const seriesData = visibleTasks.map(task => [
     task.displayIndex,
@@ -657,7 +694,7 @@ function buildEchartsOptions(
     grid: {
       show: true,
       top: 110,
-      bottom: zoomable ? 30 : 20,
+      height: gridHeight, // Use calculated height for consistent row sizing
       left: showYAxisLabels ? 180 : 30,
       right: zoomable ? 30 : 20,
       backgroundColor: themeConfig.colorBgContainer,
@@ -858,6 +895,7 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
     timeGranularity,
     highlightedTaskIds,
     showTodayMarker,
+    height,
   );
 
   // Toggle expand/collapse for a single task
