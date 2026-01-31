@@ -30,8 +30,7 @@ const DIM_LEVEL = 5;
 const DIM_IS_GROUP = 6;
 const DIM_EXPANDED = 7;
 const DIM_TASK_ID = 8;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const DIM_PROGRESS = 9; // Used in tooltip via array destructuring
+const DIM_PROGRESS = 9;
 
 /**
  * Flatten hierarchical tasks into a visible list based on expanded state
@@ -244,6 +243,15 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
     const startTime = startTimeColumn ? row[startTimeColumn] : null;
     const endTime = endTimeColumn ? row[endTimeColumn] : null;
 
+    // Get progress value and handle possible formats (0-1 or 0-100)
+    let progress = 0;
+    if (progressColumn && row[progressColumn] !== undefined && row[progressColumn] !== null) {
+      const val = Number(row[progressColumn]);
+      if (!isNaN(val)) {
+        progress = val;
+      }
+    }
+
     // Generate an internal unique ID for this task
     const internalId = `task-${index}`;
 
@@ -257,7 +265,7 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
       taskName,
       startTime: startTime ? new Date(startTime as string | number | Date).getTime() : Date.now(),
       endTime: endTime ? new Date(endTime as string | number | Date).getTime() : Date.now() + 86400000,
-      progress: progressColumn && row[progressColumn] !== undefined ? Number(row[progressColumn]) : 0,
+      progress,
       color: '', // Will be assigned after level computation
       children: [],
     };
@@ -319,6 +327,20 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
     task.color = colorPalette[colorIndex];
   });
 
+  // Fifth pass: compute group progress if not specified (average of children)
+  tasks.forEach(task => {
+    if (task.isGroup && (task.progress === 0 || task.progress === undefined)) {
+      if (task.children && task.children.length > 0) {
+        const childProgress = task.children
+          .map(childId => internalIdToTaskMap.get(childId)?.progress || 0)
+          .filter(p => !isNaN(p));
+        if (childProgress.length > 0) {
+          task.progress = childProgress.reduce((a, b) => a + b, 0) / childProgress.length;
+        }
+      }
+    }
+  });
+
   // Get expanded state from hooks or initialize based on defaultExpandLevel
   const expandedState: Record<string, boolean> = (hooks?.setControlValue as Record<string, boolean>) || {};
 
@@ -358,7 +380,13 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
   const echartOptions: EChartsOption = {
     tooltip: {
       formatter: (params: { value: (number | string)[] }) => {
-        const [, start, end, name, , level, isGroup, , , progress] = params.value;
+        const name = params.value[DIM_TASK_NAME];
+        const start = params.value[DIM_TIME_START];
+        const end = params.value[DIM_TIME_END];
+        const level = params.value[DIM_LEVEL];
+        const isGroup = params.value[DIM_IS_GROUP];
+        const progress = params.value[DIM_PROGRESS];
+
         const startDate = new Date(start as number).toLocaleDateString();
         const endDate = new Date(end as number).toLocaleDateString();
         const type = isGroup ? 'Group' : 'Task';
@@ -465,7 +493,7 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
     series: [
       {
         type: 'custom',
-        renderItem: renderGanttItem as unknown as (params: unknown, api: unknown) => unknown,
+        renderItem: renderGanttItem as any,
         encode: {
           x: [DIM_TIME_START, DIM_TIME_END],
           y: DIM_DISPLAY_INDEX,

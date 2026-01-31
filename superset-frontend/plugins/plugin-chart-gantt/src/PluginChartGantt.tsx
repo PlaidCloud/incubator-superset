@@ -697,7 +697,13 @@ function buildEchartsOptions(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       formatter: (params: any) => {
         const { value } = params;
-        const [, start, end, name, , level, isGroup, , , , , , progress] = value;
+        const name = value[DIM_TASK_NAME];
+        const start = value[DIM_TIME_START];
+        const end = value[DIM_TIME_END];
+        const level = value[DIM_LEVEL];
+        const isGroup = value[DIM_IS_GROUP];
+        const progress = value[DIM_PROGRESS];
+
         const startDate = new Date(start as number).toLocaleDateString();
         const endDate = new Date(end as number).toLocaleDateString();
         const type = isGroup ? 'Group' : 'Task';
