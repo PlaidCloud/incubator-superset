@@ -502,12 +502,32 @@ function renderGanttItem(
   const showBarLabels = api.value(DIM_SHOW_BAR_LABELS) as number;
   const isHighlighted = api.value(DIM_IS_HIGHLIGHTED) as number;
 
+  const coordSys = (params as any).coordSys;
+  const gridLeft = coordSys.x;
+  const gridRight = gridLeft + coordSys.width;
+
   const rectShape = clipRectByRect(params, {
     x,
     y,
     width: barLength,
     height: barHeight,
   });
+
+  // If the bar is not visible at all, don't render anything
+  if (!rectShape) {
+    return undefined;
+  }
+
+  // Calculate visible range of the bar to handle sticky labels
+  const barVisibleX = Math.max(x, gridLeft);
+  const barVisibleRight = Math.min(x + barLength, gridRight);
+  const barVisibleWidth = barVisibleRight - barVisibleX;
+
+  // Reposition elements for "sticky" effect when bar starts off-screen
+  const isStartedOffScreen = x < gridLeft;
+  const iconX = isStartedOffScreen ? gridLeft + 10 : x + 15;
+  const textStartX = isStartedOffScreen ? gridLeft + 25 : x + 25;
+  const textMaxWidth = barVisibleRight - textStartX - 5;
 
   // Modern flat expand icon for groups
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -516,7 +536,7 @@ function renderGanttItem(
       type: 'text',
       style: {
         text: expanded ? '−' : '+',
-        x: x + 15,
+        x: iconX,
         y: y + barHeight / 2,
         textVerticalAlign: 'middle',
         textAlign: 'center',
@@ -525,6 +545,8 @@ function renderGanttItem(
         fontSize: 12,
         fontWeight: 'bold',
       },
+      // Hide icon if bar segment is too small
+      ignore: barVisibleWidth < 20,
     }
     : null;
 
@@ -542,22 +564,15 @@ function renderGanttItem(
 
   const textColor = getTextColor(color);
 
-  // Calculate available width for text (bar width minus icon and padding)
-  const textStartX = x + 25;
-  const textMaxWidth = barLength - 30; // 25px for text start + 5px right padding
-
   return {
     type: 'group',
     children: [
       {
         type: 'rect',
-        ignore: !rectShape,
-        shape: rectShape
-          ? {
-            ...rectShape,
-            r: 4, // Rounded corners for modern look
-          }
-          : undefined,
+        shape: {
+          ...rectShape,
+          r: 4, // Rounded corners for modern look
+        },
         style: {
           fill: color,
           // Flat design - no stroke for regular bars, subtle highlight border only
@@ -570,7 +585,7 @@ function renderGanttItem(
       expandIcon,
       {
         type: 'text',
-        ignore: !rectShape || textMaxWidth < 20 || !showBarLabels,
+        ignore: textMaxWidth < 20 || !showBarLabels,
         style: {
           text: taskName,
           x: textStartX,
@@ -779,6 +794,7 @@ function buildEchartsOptions(
     series: [
       {
         type: 'custom',
+        clip: true,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         renderItem: renderGanttItem as any,
         encode: {
