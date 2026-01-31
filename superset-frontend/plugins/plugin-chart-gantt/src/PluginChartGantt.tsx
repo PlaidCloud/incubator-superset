@@ -138,7 +138,6 @@ function filterTasks(
   customStartDate: string,
   customEndDate: string,
   taskFilter: string,
-  showOnlyGroups: boolean,
 ): GanttTask[] {
   const { start: rangeStart, end: rangeEnd } = getTimeRangeBounds(
     timeRangePreset,
@@ -156,11 +155,6 @@ function filterTasks(
 
     // Task name filter
     if (searchTerm && !task.taskName.toLowerCase().includes(searchTerm)) {
-      return false;
-    }
-
-    // Group/Leaf filter
-    if (showOnlyGroups && !task.isGroup) {
       return false;
     }
 
@@ -310,11 +304,6 @@ const FilterSelect = styled.select`
   }
 `;
 
-const FilterCheckbox = styled.input`
-  margin: 0;
-  cursor: pointer;
-`;
-
 const FilterSeparator = styled.div`
   width: 1px;
   height: 20px;
@@ -346,19 +335,20 @@ const TIME_RANGE_OPTIONS: { value: TimeRangePreset; label: string }[] = [
   { value: 'this_year', label: 'This Year' },
 ];
 
+// Data dimension indices for series data array
 const DIM_DISPLAY_INDEX = 0;
 const DIM_TIME_START = 1;
 const DIM_TIME_END = 2;
 const DIM_TASK_NAME = 3;
 const DIM_COLOR = 4;
-const DIM_LEVEL = 5;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const DIM_LEVEL = 5; // Used in tooltip via array destructuring
 const DIM_IS_GROUP = 6;
 const DIM_EXPANDED = 7;
 const DIM_TASK_ID = 8;
 const DIM_SHOW_BAR_LABELS = 9;
 const DIM_BAR_HEIGHT_RATIO = 10;
-const DIM_INDENT_SIZE = 11;
-const DIM_IS_HIGHLIGHTED = 12;
+const DIM_IS_HIGHLIGHTED = 11;
 
 interface RectShape {
   x: number;
@@ -473,11 +463,9 @@ function renderGanttItem(
 
   const taskName = api.value(DIM_TASK_NAME) as string;
   const color = api.value(DIM_COLOR) as string;
-  const level = api.value(DIM_LEVEL) as number;
   const isGroup = api.value(DIM_IS_GROUP) as number;
   const expanded = api.value(DIM_EXPANDED) as number;
   const showBarLabels = api.value(DIM_SHOW_BAR_LABELS) as number;
-  const indentSize = api.value(DIM_INDENT_SIZE) as number;
   const isHighlighted = api.value(DIM_IS_HIGHLIGHTED) as number;
 
   const rectShape = clipRectByRect(params, {
@@ -486,7 +474,6 @@ function renderGanttItem(
     width: barLength,
     height: barHeight,
   });
-  const indent = level * indentSize;
 
   // Modern flat expand icon for groups
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -523,7 +510,7 @@ function renderGanttItem(
 
   // Calculate available width for text (bar width minus icon and padding)
   const textStartX = x + 25;
-  const textMaxWidth = barLength - (isGroup ? 24 : 12) - indent;
+  const textMaxWidth = barLength - 30; // 25px for text start + 5px right padding
 
   return {
     type: 'group',
@@ -589,7 +576,6 @@ function buildEchartsOptions(
   showBarLabels: boolean,
   barHeightRatio: number,
   showGroupSummary: boolean,
-  indentSize: number,
   timeGranularity: TimeGranularity,
   highlightedTaskIds: Set<string>,
   showTodayMarker: boolean,
@@ -622,7 +608,6 @@ function buildEchartsOptions(
     task.id,
     showBarLabels ? 1 : 0,
     barHeightRatio,
-    indentSize,
     highlightedTaskIds.has(task.id) ? 1 : 0,
   ]);
 
@@ -798,16 +783,16 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
     showYAxisLabels = true,
     showBarLabels = true,
     barHeightRatio = 0.6,
-    showGroupSummary = true,
-    indentSize = 10,
     timeRangePreset = 'all',
     customStartDate = '',
     customEndDate = '',
     timeGranularity = 'day',
     taskFilter = '',
-    showOnlyGroups = false,
     showTodayMarker = true,
   } = props;
+
+  // Removed from UI controls - always show group summaries
+  const showGroupSummary = true;
 
   const theme = useTheme();
   const chartRef = useRef<HTMLDivElement>(null);
@@ -819,8 +804,6 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
   const [localTimeRangePreset, setLocalTimeRangePreset] =
     useState<TimeRangePreset>(timeRangePreset);
   const [localTaskFilter, setLocalTaskFilter] = useState<string>(taskFilter);
-  const [localShowOnlyGroups, setLocalShowOnlyGroups] =
-    useState<boolean>(showOnlyGroups);
 
   // Sync local state with props when they change
   useEffect(() => {
@@ -831,10 +814,6 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
     setLocalTaskFilter(taskFilter);
   }, [taskFilter]);
 
-  useEffect(() => {
-    setLocalShowOnlyGroups(showOnlyGroups);
-  }, [showOnlyGroups]);
-
   // Apply filters to tasks
   const filteredTasks = filterTasks(
     tasks,
@@ -842,14 +821,12 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
     customStartDate,
     customEndDate,
     localTaskFilter,
-    localShowOnlyGroups,
   );
 
   // Count active filters for badge
   const activeFilterCount = [
     localTimeRangePreset !== 'all',
     localTaskFilter.trim().length > 0,
-    localShowOnlyGroups,
   ].filter(Boolean).length;
 
   // Determine which tasks should be highlighted (when search filter is active)
@@ -867,7 +844,6 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
   const handleClearFilters = useCallback(() => {
     setLocalTimeRangePreset('all');
     setLocalTaskFilter('');
-    setLocalShowOnlyGroups(false);
   }, []);
 
   // Compute flattened tasks and categories based on current expanded state
@@ -891,7 +867,6 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
     showBarLabels,
     barHeightRatio,
     showGroupSummary,
-    indentSize,
     timeGranularity,
     highlightedTaskIds,
     showTodayMarker,
@@ -1009,20 +984,6 @@ export default function PluginChartGantt(props: PluginChartGanttProps) {
             value={localTaskFilter}
             onChange={e => setLocalTaskFilter(e.target.value)}
           />
-        </FilterGroup>
-
-        <FilterSeparator />
-
-        <FilterGroup>
-          <FilterCheckbox
-            id="groups-only"
-            type="checkbox"
-            checked={localShowOnlyGroups}
-            onChange={e => {
-              setLocalShowOnlyGroups(e.target.checked);
-            }}
-          />
-          <FilterLabel htmlFor="groups-only">Groups Only</FilterLabel>
         </FilterGroup>
 
         {activeFilterCount > 0 && (

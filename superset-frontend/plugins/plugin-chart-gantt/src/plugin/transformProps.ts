@@ -193,13 +193,11 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
     barHeightRatio = 0.6,
     zoomable = true,
     defaultExpandLevel = 2,
-    showGroupSummary = true,
     timeRangePreset = 'all',
     customStartDate = '',
     customEndDate = '',
     timeGranularity = 'day',
     taskFilter = '',
-    showOnlyGroups = false,
     // Column mappings from control panel (Superset converts snake_case to camelCase)
     taskIdColumn,
     taskColumn,
@@ -483,14 +481,11 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
     expandedState: initialExpandedState,
     showYAxisLabels: formData.showYAxisLabels,
     showBarLabels: formData.showBarLabels,
-    showGroupSummary,
-    indentSize: formData.indentSize,
     timeRangePreset: timeRangePreset as PluginChartGanttProps['timeRangePreset'],
     customStartDate: customStartDate as string,
     customEndDate: customEndDate as string,
     timeGranularity: timeGranularity as PluginChartGanttProps['timeGranularity'],
     taskFilter: taskFilter as string,
-    showOnlyGroups: showOnlyGroups as boolean,
     showTodayMarker: formData.showTodayMarker ?? true,
   };
 }

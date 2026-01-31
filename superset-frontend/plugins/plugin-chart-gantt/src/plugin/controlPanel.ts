@@ -203,35 +203,6 @@ const config: ControlPanelConfig = {
             },
           },
         ],
-        [
-          {
-            name: 'show_group_summary',
-            config: {
-              type: 'CheckboxControl',
-              label: t('Show Group Summary Bars'),
-              renderTrigger: true,
-              default: true,
-              description: t(
-                'Display summary bars for groups showing the span from earliest start to latest end of children',
-              ),
-            },
-          },
-        ],
-        [
-          {
-            name: 'indent_size',
-            config: {
-              type: 'SliderControl',
-              label: t('Indent Size'),
-              renderTrigger: true,
-              min: 5,
-              max: 30,
-              step: 5,
-              default: 15,
-              description: t('Indentation size in pixels for each nesting level'),
-            },
-          },
-        ],
       ],
     },
   ],

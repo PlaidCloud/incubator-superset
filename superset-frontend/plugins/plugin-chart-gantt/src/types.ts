@@ -99,8 +99,6 @@ export interface PluginChartGanttCustomizeProps {
   showYAxisLabels?: boolean;
   /** Whether to show labels on bars */
   showBarLabels?: boolean;
-  showGroupSummary?: boolean;
-  indentSize?: number;
   /** Time range preset for filtering */
   timeRangePreset?: TimeRangePreset;
   /** Custom start date (YYYY-MM-DD) */
@@ -111,8 +109,6 @@ export interface PluginChartGanttCustomizeProps {
   timeGranularity?: TimeGranularity;
   /** Task name filter string */
   taskFilter?: string;
-  /** Show only group tasks */
-  showOnlyGroups?: boolean;
   /** Show today marker line */
   showTodayMarker?: boolean;
 }
