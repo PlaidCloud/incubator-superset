@@ -54,4 +54,5 @@ export type PluginChartMarimekkoProps = PluginChartMarimekkoStylesProps &
     tooltipTimeFormat?: string;
     tooltipShowPercentage?: boolean;
     tooltipIncludeColumn?: boolean;
+    showXAxisLabels?: boolean;
   };
