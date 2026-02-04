@@ -67,6 +67,7 @@ export default function transformProps(chartProps: ChartProps) {
     labelColor = { r: 255, g: 255, b: 255, a: 1 },
     sortByColumn,
     sortOrder,
+    showXAxisLabels = true,
   } = formData;
   const data = queriesData[0].data as TimeseriesDataRecord[];
 
@@ -92,5 +93,6 @@ export default function transformProps(chartProps: ChartProps) {
     labelColor,
     sortByColumn,
     sortOrder,
+    showXAxisLabels
   };
 }

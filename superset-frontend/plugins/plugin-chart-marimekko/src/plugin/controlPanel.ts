@@ -212,6 +212,18 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'show_x_axis_labels',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show X Axis Labels'),
+              default: true,
+              renderTrigger: true,
+              description: t('Show or hide the X axis category labels'),
+            },
+          },
+        ],
       ],
     },
     {

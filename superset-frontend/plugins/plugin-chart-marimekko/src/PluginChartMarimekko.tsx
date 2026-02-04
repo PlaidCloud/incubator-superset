@@ -16,10 +16,10 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
 import { getNumberFormatter } from '@superset-ui/core';
 import ReactECharts from 'echarts-for-react';
 import { PluginChartMarimekkoProps } from './types';
+import React from 'react';
 
 // The following Styles component is a <div> element, which has been styled using Emotion
 // For docs, visit https://emotion.sh/docs/styled
@@ -50,6 +50,7 @@ export default function PluginChartMarimekko(props: PluginChartMarimekkoProps) {
     labelColor,
     sortByColumn,
     sortOrder = 'DESC',
+    showXAxisLabels = true,
   } = props;
 
   // check if rawData exists and has data
@@ -69,14 +70,25 @@ export default function PluginChartMarimekko(props: PluginChartMarimekkoProps) {
   // Get the keys dynamically
   const keys = Object.keys(rawData[0]); // Extract keys from the first object
 
+  // Detect if we have 3-column data (1 dimension + 2 metrics)
+  // This happens when the second column matches one of the metric keys
+  const secondColumnIsMetric =
+    keys[1] === heightKeyProp || keys[1] === widthKeyProp;
+
   // Auto-detect grouping key (e.g., Brand)
   const groupKey = flipKeys ? keys[1] : keys[0]; // x axis
 
   // Auto-detect secondary category key (e.g., Region)
-  const categoryKey = flipKeys ? keys[0] : keys[1];
+  // For 3-column data, use the same column as groupKey (each row is its own category)
+  const categoryKey = secondColumnIsMetric
+    ? groupKey
+    : flipKeys
+      ? keys[0]
+      : keys[1];
 
   // Auto-detect numeric fields (e.g., Revenue)
-  const numericKeys = keys.slice(2);
+  // For 3-column data, numeric keys start at index 1
+  const numericKeys = secondColumnIsMetric ? keys.slice(1) : keys.slice(2);
   const heightKey = heightKeyProp || numericKeys[0];
   const widthKey = widthKeyProp || numericKeys[1];
 
@@ -183,24 +195,66 @@ export default function PluginChartMarimekko(props: PluginChartMarimekkoProps) {
   // yOffsetMap to track yStart when showPercentage = false
   const yOffsetMap: { [key: string]: number } = {};
 
+  // Track group index for color assignment in 3-column mode
+  let groupIndex = 0;
+
   Object.values(groups).forEach(({ group, total: groupWidth, values }) => {
-    let currentYStart = 0;
+    let currentYStartPositive = 0;
+    let currentYStartNegative = 0;
 
-    // Calculate total for 100% stacking
-    const totalHeight = values.reduce((sum, item) => sum + item[heightKey], 0);
+    // Calculate totals for 100% stacking (only positive values contribute to total)
+    const totalPositiveHeight = values.reduce(
+      (sum, item) => sum + Math.max(0, item[heightKey]),
+      0,
+    );
+    const totalNegativeHeight = values.reduce(
+      (sum, item) => sum + Math.min(0, item[heightKey]),
+      0,
+    );
+    const totalHeight = totalPositiveHeight - totalNegativeHeight; // Absolute total for percentage
 
-    if (!yOffsetMap[group]) {
-      yOffsetMap[group] = 0;
+    // Track positive and negative offsets separately for absolute mode
+    if (!yOffsetMap[`${group}_positive`]) {
+      yOffsetMap[`${group}_positive`] = 0;
+    }
+    if (!yOffsetMap[`${group}_negative`]) {
+      yOffsetMap[`${group}_negative`] = 0;
     }
 
     values.forEach((item, categoryIndex) => {
       const value = item[heightKey];
-      const percentage = ((value / totalHeight) * 100).toFixed(1); // % height
-      const segmentArea = (value / groupWidth) * 100; // Proportional area
+      const isNegative = value < 0;
+      const absValue = Math.abs(value);
+      const percentage = ((absValue / totalHeight) * 100).toFixed(1); // % height
 
-      // Correct yStart when showPercentage = false using yOffsetMap
-      const yStartAbsolute = yOffsetMap[group];
-      const yEndAbsolute = yStartAbsolute + value;
+      const segmentArea = (absValue / groupWidth) * 100; // Proportional area
+
+      let yStart: number;
+      let yEnd: number;
+
+      if (showPercentage) {
+        // Percentage mode: stack from 0, negatives go down
+        if (isNegative) {
+          yEnd = currentYStartNegative;
+          yStart = currentYStartNegative - parseFloat(percentage);
+          currentYStartNegative = yStart;
+        } else {
+          yStart = currentYStartPositive;
+          yEnd = currentYStartPositive + parseFloat(percentage);
+          currentYStartPositive = yEnd;
+        }
+      } else {
+        // Absolute mode: negatives extend down from 0, positives extend up from 0
+        if (isNegative) {
+          yEnd = yOffsetMap[`${group}_negative`];
+          yStart = yEnd + value; // value is negative, so this goes down
+          yOffsetMap[`${group}_negative`] = yStart;
+        } else {
+          yStart = yOffsetMap[`${group}_positive`];
+          yEnd = yStart + value;
+          yOffsetMap[`${group}_positive`] = yEnd;
+        }
+      }
 
       data.push({
         value: [
@@ -208,30 +262,27 @@ export default function PluginChartMarimekko(props: PluginChartMarimekkoProps) {
           item[categoryKey], // Category name (e.g., Region)
           currentXStart, // xStart
           currentXStart + groupWidth, // xEnd
-          showPercentage ? currentYStart : yStartAbsolute, // yStart (in % or absolute)
-          showPercentage
-            ? currentYStart + parseFloat(percentage)
-            : yEndAbsolute, // yEnd (in % or absolute)
-          value, // Absolute value
-          percentage, // Percentage height
+          yStart, // yStart (starting point)
+          yEnd, // yEnd (ending point)
+          value, // Absolute value (can be negative)
+          percentage, // Percentage height (always positive)
           segmentArea, // Area for proportional visualization
         ],
         name: item[categoryKey],
         itemStyle: {
-          color: colorList[categoryIndex % colorList.length],
+          // For 3-column data (single segment per group), use group index for distinct colors
+          // For multi-segment groups, use category index within the group
+          color:
+            secondColumnIsMetric && values.length === 1
+              ? colorList[groupIndex % colorList.length]
+              : colorList[categoryIndex % colorList.length],
         },
         raw: item,
       });
-
-      // Increment yOffset for absolute stacking
-      if (!showPercentage) {
-        yOffsetMap[group] += value;
-      } else {
-        currentYStart += parseFloat(percentage);
-      }
     });
 
     currentXStart += groupWidth;
+    groupIndex += 1;
   });
 
   const getLabelColor = (color: {
@@ -253,16 +304,25 @@ export default function PluginChartMarimekko(props: PluginChartMarimekkoProps) {
     cumulativeWidth += groupWidth;
   });
 
-  // Determine yAxis max based on mode
-  const yAxisMax = showPercentage
-    ? 100
+  // Determine yAxis min and max based on mode
+  // For percentage mode: 0 to 100
+  // For absolute mode: calculate from data, including negative values
+  const { yAxisMin, yAxisMax } = showPercentage
+    ? { yAxisMin: 0, yAxisMax: 100 }
     : (() => {
-        const allHeights = Object.values(groups).map(group =>
-          group.values.reduce((acc, curr) => acc + curr.height, 0),
-        );
-        const maxHeight = Math.max(...allHeights);
-        return Math.round(maxHeight / 10) * 10;
-      })();
+      // For each group, sum up all heights (which can be negative)
+      const groupTotals = Object.values(groups).map(group =>
+        group.values.reduce((acc, curr) => acc + curr.height, 0),
+      );
+      // Also consider individual segment values for proper min/max
+      const allHeights = rawData.map(item => item.height);
+      const maxHeight = Math.max(...groupTotals, ...allHeights, 0);
+      const minHeight = Math.min(...groupTotals, ...allHeights, 0);
+      return {
+        yAxisMin: minHeight < 0 ? Math.floor(minHeight / 10) * 10 : 0,
+        yAxisMax: Math.ceil(maxHeight / 10) * 10,
+      };
+    })();
 
   // Final ECharts option
   const option: echarts.EChartsOption = {
@@ -324,6 +384,7 @@ export default function PluginChartMarimekko(props: PluginChartMarimekkoProps) {
         customValues: xAxisValues, // Dynamically generated tick values
       },
       axisLabel: {
+        show: showXAxisLabels,
         formatter(value: number): string {
           const epsilon = 1; // Small tolerance for floating-point differences
           for (let i = 0; i < xAxisValues.length; i += 1) {
@@ -342,7 +403,7 @@ export default function PluginChartMarimekko(props: PluginChartMarimekkoProps) {
       nameLocation: 'middle',
       nameGap: 40,
       type: 'value',
-      min: 0,
+      min: yAxisMin,
       max: yAxisMax,
       axisLabel: {
         formatter: showPercentage ? '{value}%' : '{value}',
