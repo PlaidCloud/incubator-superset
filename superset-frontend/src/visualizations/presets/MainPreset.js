@@ -86,6 +86,7 @@ import { SupersetPluginChartWhale } from '@superset-ui/plugin-chart-whale';
 import { TableChartTransposePlugin } from '@superset-ui/plugin-chart-table-transpose';
 import { SupersetPluginDashboardFilters } from '@superset-ui/superset-plugin-dashboard-filters';
 import { PluginTableKpi } from "@superset-ui/plugin-table-kpi";
+import { PluginChartMekkoWhale } from "@superset-ui/plugin-chart-mekko-whale";
 
 export default class MainPreset extends Preset {
   constructor() {
@@ -196,6 +197,7 @@ export default class MainPreset extends Preset {
         new TableChartTransposePlugin().configure({ key: VizType.TransposeTable }),
         new SupersetPluginDashboardFilters().configure({ key: 'ext-dashboard-filters' }),
         new PluginTableKpi().configure({ key: 'table-kpi' }),
+        new PluginChartMekkoWhale().configure({ key: 'mekko-whale' }),
         ...experimentalPlugins,
       ],
     });
