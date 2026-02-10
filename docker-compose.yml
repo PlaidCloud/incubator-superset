@@ -21,6 +21,7 @@
 # create you own docker environment file (docker/.env) with your own
 # unique random secure passwords and SECRET_KEY.
 # -----------------------------------------------------------------------
+name: plaid-3
 x-superset-user: &superset-user root
 x-superset-volumes: &superset-volumes
   # /app/pythonpath_docker will be appended to the PYTHONPATH in the final container
@@ -44,7 +45,7 @@ x-common-build: &common-build
 services:
   nginx:
     image: nginx:latest
-    container_name: superset_nginx
+    # container_name: superset_nginx
     restart: unless-stopped
     ports:
       - "80:80"
@@ -54,7 +55,7 @@ services:
       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
   redis:
     image: redis:7
-    container_name: superset_cache
+    # container_name: superset_cache
     restart: unless-stopped
     ports:
       - "127.0.0.1:6379:6379"
@@ -68,7 +69,7 @@ services:
       - path: docker/.env-local # optional override
         required: false
     image: postgres:15
-    container_name: superset_db
+    # container_name: superset_db
     restart: unless-stopped
     ports:
       - "127.0.0.1:5432:5432"
@@ -84,11 +85,12 @@ services:
         required: false
     build:
       <<: *common-build
-    container_name: superset_app
+    # container_name: superset_app
     command: ["/app/docker/docker-bootstrap.sh", "app"]
     restart: unless-stopped
     ports:
       - 8088:8088
+      - 5678:5678
       # When in cypress-mode ->
       - 8081:8081
     extra_hosts:
@@ -103,7 +105,7 @@ services:
       SUPERSET_LOG_LEVEL: "${SUPERSET_LOG_LEVEL:-info}"
 
   superset-websocket:
-    container_name: superset_websocket
+    # container_name: superset_websocket
     build: ./superset-websocket
     ports:
       - 8080:8080
@@ -138,7 +140,7 @@ services:
   superset-init:
     build:
       <<: *common-build
-    container_name: superset_init
+    # container_name: superset_init
     command: ["/app/docker/docker-init.sh"]
     env_file:
       - path: docker/.env # default
@@ -179,7 +181,7 @@ services:
       superset: "http://host.docker.internal:8088"
     ports:
       - "127.0.0.1:9000:9000"  # exposing the dynamic webpack dev server
-    container_name: superset_node
+    # container_name: superset_node
     command: ["/app/docker/docker-frontend.sh"]
     env_file:
       - path: docker/.env # default
@@ -191,7 +193,7 @@ services:
   superset-worker:
     build:
       <<: *common-build
-    container_name: superset_worker
+    # container_name: superset_worker
     command: ["/app/docker/docker-bootstrap.sh", "worker"]
     env_file:
       - path: docker/.env # default
@@ -219,7 +221,7 @@ services:
   superset-worker-beat:
     build:
       <<: *common-build
-    container_name: superset_worker_beat
+    # container_name: superset_worker_beat
     command: ["/app/docker/docker-bootstrap.sh", "beat"]
     env_file:
       - path: docker/.env # default
@@ -240,7 +242,7 @@ services:
   superset-tests-worker:
     build:
       <<: *common-build
-    container_name: superset_tests_worker
+    # container_name: superset_tests_worker
     command: ["/app/docker/docker-bootstrap.sh", "worker"]
     env_file:
       - path: docker/.env # default

@@ -72,7 +72,8 @@ case "${1}" in
     ;;
   app)
     echo "Starting web app (using development server)..."
-    flask run -p $PORT --with-threads --reload --debugger --host=0.0.0.0
+    python3 -c "import debugpy" 2>/dev/null || pip install debugpy
+    python3 -m debugpy --listen 0.0.0.0:5678 --wait-for-client -m  flask run -p $PORT --with-threads --reload --debugger --host=0.0.0.0
     ;;
   app-gunicorn)
     echo "Starting web app..."

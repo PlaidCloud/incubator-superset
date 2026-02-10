@@ -118,6 +118,7 @@
     "@superset-ui/plugin-chart-word-cloud": "file:./plugins/plugin-chart-word-cloud",
     "@superset-ui/plugin-table-kpi": "file:./plugins/plugin-table-kpi",
     "@superset-ui/superset-plugin-dashboard-filters": "file:./plugins/superset-plugin-dashboard-filters",
+    "@superset-ui/plugin-chart-mekko-whale": "file:./plugins/plugin-chart-mekko-whale",
     "@superset-ui/switchboard": "file:./packages/superset-ui-switchboard",
     "@tanstack/react-table": "^8.0.0",
     "@types/d3-format": "^3.0.1",
