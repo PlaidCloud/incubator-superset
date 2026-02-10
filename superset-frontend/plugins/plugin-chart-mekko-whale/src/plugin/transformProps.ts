@@ -38,8 +38,6 @@ export default function transformProps(chartProps: ChartProps) {
     yAxisFormat,
   } = formData;
 
-  console.log(formData)
-
   const rawData = (queriesData && queriesData[0] && queriesData[0].data) ? queriesData[0].data : [];
 
   // 1. Key Resolution
