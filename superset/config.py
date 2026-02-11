@@ -365,7 +365,7 @@ AUTH_TYPE = AUTH_DB
 # Grant public role the same set of permissions as for a selected builtin role.
 # This is useful if one wants to enable anonymous users to view
 # dashboards. Explicit grant on specific datasets is still required.
-PUBLIC_ROLE_LIKE: str | None = "Gamma"
+PUBLIC_ROLE_LIKE: str | None = None
 
 # ---------------------------------------------------
 # Babel config for translations
@@ -495,7 +495,7 @@ DEFAULT_FEATURE_FLAGS: dict[str, bool] = {
     "ALERT_REPORTS": False,
     "ALERT_REPORT_TABS": False,
     "ALERT_REPORT_SLACK_V2": False,
-    "DASHBOARD_RBAC": True,
+    "DASHBOARD_RBAC": False,
     "ENABLE_ADVANCED_DATA_TYPES": False,
     # Enabling ALERTS_ATTACH_REPORTS, the system sends email and slack message
     # with screenshot and link
@@ -1602,11 +1602,10 @@ DATABASE_OAUTH2_JWT_ALGORITHM = "HS256"
 DATABASE_OAUTH2_TIMEOUT = timedelta(seconds=30)
 
 # Enable/disable CSP warning
-CONTENT_SECURITY_POLICY_WARNING = False
+CONTENT_SECURITY_POLICY_WARNING = True
 
 # Do you want Talisman enabled?
-# TALISMAN_ENABLED = utils.cast_to_boolean(os.environ.get("TALISMAN_ENABLED", True))
-TALISMAN_ENABLED = False
+TALISMAN_ENABLED = utils.cast_to_boolean(os.environ.get("TALISMAN_ENABLED", True))
 
 # If you want Talisman, how do you want it configured??
 # For more information on setting up Talisman, please refer to
@@ -1781,7 +1780,7 @@ GLOBAL_ASYNC_QUERIES_CACHE_BACKEND = {
 }
 
 # Embedded config options
-GUEST_ROLE_NAME = "Gamma"
+GUEST_ROLE_NAME = "Public"
 GUEST_TOKEN_JWT_SECRET = "test-guest-secret-change-me"  # noqa: S105
 GUEST_TOKEN_JWT_ALGO = "HS256"  # noqa: S105
 GUEST_TOKEN_HEADER_NAME = "X-GuestToken"  # noqa: S105
