@@ -266,6 +266,9 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
     def _can_access_project(self, project_id):
         log.info(dict(session))
+        if PROJECT_ACCESS not in session:
+            return self.is_admin()
+
         return str(uuid.UUID(project_id)) in session[PROJECT_ACCESS]
 
     def can_access_database(self, database: Union["Database", "DruidCluster"]) -> bool:
@@ -314,6 +317,8 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
     def _get_project_dbs(self):
         from superset.models.core import Database
+        if PROJECT_ACCESS not in session:
+            return []
         project_uuids = set(session[PROJECT_ACCESS])
         return self.get_session.query(Database).filter(Database.uuid.in_(project_uuids))
 
