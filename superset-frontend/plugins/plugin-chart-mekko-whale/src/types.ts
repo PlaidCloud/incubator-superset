@@ -33,8 +33,11 @@ export type PluginChartMekkoWhaleQueryFormData = QueryFormData & {
   secondary_metric: QueryFormMetric;
   sort_by: 'profit' | 'revenue' | 'profit_margin';
   sort_order: 'ASC' | 'DESC';
-  positive_color: { r: number; g: number; b: number; a: number };
-  negative_color: { r: number; g: number; b: number; a: number };
+  use_default_colors: boolean;
+  color1: { r: number; g: number; b: number; a: number };
+  color2: { r: number; g: number; b: number; a: number };
+  color3: { r: number; g: number; b: number; a: number };
+  color4: { r: number; g: number; b: number; a: number };
   y_axis_format: string;
   x_axis_format: string;
 };
