@@ -66,4 +66,7 @@ export type PluginChartMekkoWhaleProps = PluginChartMekkoWhaleStylesProps & {
   yMin: number;
   yMax: number;
   xMax: number;
+  setDataMask: (dataMask: any) => void;
+  groupby: QueryFormColumn[];
+  filterState?: any;
 };

@@ -34,7 +34,48 @@ export default function PluginChartMekkoWhale(props: PluginChartMekkoWhaleProps)
     yMin,
     yMax,
     xMax,
+    setDataMask,
+    groupby,
+    filterState,
   } = props;
+
+  const onChartClick = (params: any) => {
+    const selectedName = params.data.name;
+    if (!selectedName || !groupby || groupby.length === 0) return;
+
+    const col = groupby[0];
+    const currentSelectedValues = filterState?.selectedValues || [];
+    let nextSelectedValues = [selectedName];
+
+    if (params.event?.event?.ctrlKey || params.event?.event?.metaKey) {
+      if (currentSelectedValues.includes(selectedName)) {
+        nextSelectedValues = currentSelectedValues.filter((v: any) => v !== selectedName);
+      } else {
+        nextSelectedValues = [...currentSelectedValues, selectedName];
+      }
+    } else if (
+      currentSelectedValues.length === 1 &&
+      currentSelectedValues[0] === selectedName
+    ) {
+      nextSelectedValues = [];
+    }
+
+    setDataMask({
+      extraFormData: {
+        filters: [
+          {
+            col,
+            op: nextSelectedValues.length ? 'IN' : 'IS NOT NULL',
+            val: nextSelectedValues.length ? nextSelectedValues : null,
+          } as any,
+        ],
+      },
+      filterState: {
+        value: nextSelectedValues.length ? nextSelectedValues : null,
+        selectedValues: nextSelectedValues.length ? nextSelectedValues : null,
+      },
+    });
+  };
 
   const yFormatter = getNumberFormatter(yAxisFormat || 'SMART_NUMBER');
   const xFormatter = getNumberFormatter(xAxisFormat || 'SMART_NUMBER');
@@ -147,6 +188,7 @@ export default function PluginChartMekkoWhale(props: PluginChartMekkoWhaleProps)
       <ReactECharts
         option={option}
         style={{ height: '100%', width: '100%' }}
+        onEvents={{ click: onChartClick }}
       />
     </div>
   );

@@ -21,13 +21,14 @@ import {
   getMetricLabel,
   getColumnLabel,
   rgbToHex,
+  ensureIsArray,
 } from '@superset-ui/core';
 import { MekkoWhaleDataItem, PluginChartMekkoWhaleQueryFormData } from '../types';
 
 export default function transformProps(chartProps: ChartProps) {
-  const { width, height, formData, queriesData } = chartProps as ChartProps<PluginChartMekkoWhaleQueryFormData>;
+  const { width, height, formData, queriesData, filterState, hooks } = chartProps as ChartProps<PluginChartMekkoWhaleQueryFormData>;
   const {
-    groupby,
+    groupby: groupbyRaw,
     metric,
     secondary_metric,
     sortBy,
@@ -40,6 +41,9 @@ export default function transformProps(chartProps: ChartProps) {
     xAxisFormat,
     yAxisFormat,
   } = formData;
+
+  const groupby = ensureIsArray(groupbyRaw);
+  const { setDataMask = () => { } } = hooks;
 
   const rawData = (queriesData && queriesData[0] && queriesData[0].data) ? queriesData[0].data : [];
 
@@ -133,6 +137,7 @@ export default function transformProps(chartProps: ChartProps) {
 
   const chartData: MekkoWhaleDataItem[] = itemsWithValues.map((data, index) => {
     const { item, m1Val, m2Val } = data;
+    const name = String(item[actualDimKey] || 'N/A');
 
     const yStartVal = 0;
     const yEnd = currentY + m1Val;
@@ -158,10 +163,15 @@ export default function transformProps(chartProps: ChartProps) {
       color = interpolateColor(c3, c4, factor);
     }
 
+    const isFiltered = filterState?.selectedValues && !filterState.selectedValues.includes(name);
+
     return {
-      name: String(item[actualDimKey] || 'N/A'),
+      name,
       value: [xStart, xEnd, yStartVal, yEnd, m1Val, m2Val],
-      itemStyle: { color },
+      itemStyle: {
+        color,
+        opacity: isFiltered ? 0.3 : 1,
+      },
     };
   });
 
@@ -176,5 +186,8 @@ export default function transformProps(chartProps: ChartProps) {
     yMin,
     yMax,
     xMax: currentX,
+    setDataMask,
+    groupby,
+    filterState,
   };
 }
