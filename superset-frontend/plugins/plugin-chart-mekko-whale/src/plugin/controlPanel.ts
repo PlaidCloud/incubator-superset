@@ -111,23 +111,61 @@ const config: ControlPanelConfig = {
       controlSetRows: [
         [
           {
-            name: 'positive_color',
+            name: 'use_default_colors',
             config: {
-              label: t('Positive Color'),
-              type: 'ColorPickerControl',
-              default: { r: 90, g: 193, b: 137, a: 1 }, // Green
+              type: 'CheckboxControl',
+              label: t('Use Default Colors'),
+              default: true,
               renderTrigger: true,
+              description: t('Use the default green-to-red gradient colors'),
             },
           },
         ],
         [
           {
-            name: 'negative_color',
+            name: 'color1',
             config: {
-              label: t('Negative Color'),
+              label: t('Start Color (Positive Start)'),
               type: 'ColorPickerControl',
-              default: { r: 224, g: 67, b: 85, a: 1 }, // Red
+              default: { r: 0, g: 100, b: 0, a: 1 },
               renderTrigger: true,
+              visibility: ({ controls }) => !controls?.use_default_colors?.value,
+            },
+          },
+        ],
+        [
+          {
+            name: 'color2',
+            config: {
+              label: t('Mid Color (Positive End)'),
+              type: 'ColorPickerControl',
+              default: { r: 144, g: 238, b: 144, a: 1 },
+              renderTrigger: true,
+              visibility: ({ controls }) => !controls?.use_default_colors?.value,
+            },
+          },
+        ],
+        [
+          {
+            name: 'color3',
+            config: {
+              label: t('Mid Color (Negative Start)'),
+              type: 'ColorPickerControl',
+              default: { r: 255, g: 182, b: 193, a: 1 },
+              renderTrigger: true,
+              visibility: ({ controls }) => !controls?.use_default_colors?.value,
+            },
+          },
+        ],
+        [
+          {
+            name: 'color4',
+            config: {
+              label: t('End Color (Negative End)'),
+              type: 'ColorPickerControl',
+              default: { r: 139, g: 0, b: 0, a: 1 },
+              renderTrigger: true,
+              visibility: ({ controls }) => !controls?.use_default_colors?.value,
             },
           },
         ],

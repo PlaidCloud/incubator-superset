@@ -32,8 +32,11 @@ export default function transformProps(chartProps: ChartProps) {
     secondary_metric,
     sortBy,
     sortOrder,
-    positiveColor,
-    negativeColor,
+    use_default_colors: useDefaultColors,
+    color1,
+    color2,
+    color3,
+    color4,
     xAxisFormat,
     yAxisFormat,
   } = formData;
@@ -85,7 +88,7 @@ export default function transformProps(chartProps: ChartProps) {
     return sortOrder === 'ASC' ? aSort - bSort : bSort - aSort;
   });
 
-  // 3. Accumulate
+  // 3. Accumulate & Color Logic
   const interpolateColor = (color1: string, color2: string, factor: number) => {
     const r1 = parseInt(color1.substring(1, 3), 16) || 0;
     const g1 = parseInt(color1.substring(3, 5), 16) || 0;
@@ -99,22 +102,37 @@ export default function transformProps(chartProps: ChartProps) {
     return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
   };
 
-  const posColor = positiveColor ? rgbToHex(positiveColor.r, positiveColor.g, positiveColor.b) : '#5ac189';
-  const negColor = negativeColor ? rgbToHex(negativeColor.r, negativeColor.g, negativeColor.b) : '#e04355';
+  const c1 = !useDefaultColors && color1 ? rgbToHex(color1.r, color1.g, color1.b) : '#006400';
+  const c2 = !useDefaultColors && color2 ? rgbToHex(color2.r, color2.g, color2.b) : '#90ee90';
+  const c3 = !useDefaultColors && color3 ? rgbToHex(color3.r, color3.g, color3.b) : '#ffb6c1';
+  const c4 = !useDefaultColors && color4 ? rgbToHex(color4.r, color4.g, color4.b) : '#8b0000';
 
   let currentX = 0;
   let currentY = 0;
   let yMin = 0;
   let yMax = 0;
 
-  const chartData: MekkoWhaleDataItem[] = sortedData.map((item, index) => {
-    // Robust parsing for possible string numbers (currency, etc)
+  // Pre-calculate values to correctly handle positive/negative groups
+  const itemsWithValues = sortedData.map(item => {
     const m1Val = typeof item[actualM1Key] === 'number' ?
       item[actualM1Key] as number :
       Number(String(item[actualM1Key] || 0).replace(/[$,]/g, '')) || 0;
     const m2Val = typeof item[actualM2Key] === 'number' ?
       item[actualM2Key] as number :
       Number(String(item[actualM2Key] || 0).replace(/[$,]/g, '')) || 0;
+    return { item, m1Val, m2Val };
+  });
+
+  const posIndices = itemsWithValues.map((d, i) => d.m1Val >= 0 ? i : -1).filter(i => i !== -1);
+  const negIndices = itemsWithValues.map((d, i) => d.m1Val < 0 ? i : -1).filter(i => i !== -1);
+
+  const posRankMap: Record<number, number> = {};
+  posIndices.forEach((idx, i) => { posRankMap[idx] = i; });
+  const negRankMap: Record<number, number> = {};
+  negIndices.forEach((idx, i) => { negRankMap[idx] = i; });
+
+  const chartData: MekkoWhaleDataItem[] = itemsWithValues.map((data, index) => {
+    const { item, m1Val, m2Val } = data;
 
     const yStartVal = 0;
     const yEnd = currentY + m1Val;
@@ -128,8 +146,17 @@ export default function transformProps(chartProps: ChartProps) {
     yMin = Math.min(yMin, yEnd);
     yMax = Math.max(yMax, yEnd);
 
-    const factor = sortedData.length > 1 ? index / (sortedData.length - 1) : 0;
-    const color = interpolateColor(posColor, negColor, factor);
+    // Color logic: Direct transition between positive and negative groups
+    let color = '';
+    if (m1Val >= 0) {
+      const rank = posRankMap[index];
+      const factor = posIndices.length > 1 ? rank / (posIndices.length - 1) : 0;
+      color = interpolateColor(c1, c2, factor);
+    } else {
+      const rank = negRankMap[index];
+      const factor = negIndices.length > 1 ? rank / (negIndices.length - 1) : 0;
+      color = interpolateColor(c3, c4, factor);
+    }
 
     return {
       name: String(item[actualDimKey] || 'N/A'),
