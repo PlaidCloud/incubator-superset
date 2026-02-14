@@ -103,6 +103,18 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'waterfall_mode',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Waterfall Mode'),
+              default: false,
+              renderTrigger: true,
+              description: t('Show only the difference between previous and current bar'),
+            },
+          },
+        ],
       ],
     },
     {

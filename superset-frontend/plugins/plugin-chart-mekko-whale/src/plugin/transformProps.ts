@@ -33,13 +33,14 @@ export default function transformProps(chartProps: ChartProps) {
     secondary_metric,
     sortBy,
     sortOrder,
-    use_default_colors: useDefaultColors,
+    useDefaultColors,
     color1,
     color2,
     color3,
     color4,
     xAxisFormat,
     yAxisFormat,
+    waterfallMode,
   } = formData;
 
   const groupby = ensureIsArray(groupbyRaw);
@@ -139,7 +140,7 @@ export default function transformProps(chartProps: ChartProps) {
     const { item, m1Val, m2Val } = data;
     const name = String(item[actualDimKey] || 'N/A');
 
-    const yStartVal = 0;
+    const yStartVal = waterfallMode ? currentY : 0;
     const yEnd = currentY + m1Val;
 
     const xStart = currentX;
@@ -148,8 +149,8 @@ export default function transformProps(chartProps: ChartProps) {
     currentX = xEnd;
     currentY = yEnd;
 
-    yMin = Math.min(yMin, yEnd);
-    yMax = Math.max(yMax, yEnd);
+    yMin = Math.min(yMin, yStartVal, yEnd);
+    yMax = Math.max(yMax, yStartVal, yEnd);
 
     // Color logic: Direct transition between positive and negative groups
     let color = '';
