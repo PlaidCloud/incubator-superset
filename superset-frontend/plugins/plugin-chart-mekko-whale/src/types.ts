@@ -40,6 +40,7 @@ export type PluginChartMekkoWhaleQueryFormData = QueryFormData & {
   color4: { r: number; g: number; b: number; a: number };
   y_axis_format: string;
   x_axis_format: string;
+  waterfall_mode: boolean;
 };
 
 export interface MekkoWhaleDataItem {
@@ -54,6 +55,7 @@ export interface MekkoWhaleDataItem {
   ];
   itemStyle: {
     color: string;
+    opacity?: number;
   };
 }
 
