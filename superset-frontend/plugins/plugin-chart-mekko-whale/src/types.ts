@@ -72,4 +72,6 @@ export type PluginChartMekkoWhaleProps = PluginChartMekkoWhaleStylesProps & {
   groupby: QueryFormColumn[];
   filterState?: any;
   waterfallMode?: boolean;
+  totalProfit: number;
+  totalRevenue: number;
 };

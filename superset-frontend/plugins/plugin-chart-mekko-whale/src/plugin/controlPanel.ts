@@ -77,7 +77,7 @@ const config: ControlPanelConfig = {
             config: {
               type: 'SelectControl',
               label: t('Sort By'),
-              default: 'profit_margin',
+              default: 'profit',
               choices: [
                 ['profit', t('Profit (Metric 1)')],
                 ['revenue', t('Revenue (Metric 2)')],
