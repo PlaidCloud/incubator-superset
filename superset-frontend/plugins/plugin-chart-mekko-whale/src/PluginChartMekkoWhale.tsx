@@ -37,6 +37,7 @@ export default function PluginChartMekkoWhale(props: PluginChartMekkoWhaleProps)
     setDataMask,
     groupby,
     filterState,
+    waterfallMode,
   } = props;
 
   const onChartClick = (params: any) => {
@@ -165,32 +166,53 @@ export default function PluginChartMekkoWhale(props: PluginChartMekkoWhaleProps)
           const fullHeight = Math.abs(yBottomCoord[1] - yTopCoord[1]);
           const fullY = Math.min(yTopCoord[1], yBottomCoord[1]);
 
-          return {
-            type: 'group',
-            children: [
-              {
-                type: 'rect',
-                shape: {
-                  x: rectX,
-                  y: fullY,
-                  width: rectWidth,
-                  height: fullHeight,
-                },
-                style: {
-                  fill: 'rgba(0,0,0,0)',
-                },
+          const children: any[] = [
+            {
+              type: 'rect',
+              shape: {
+                x: rectX,
+                y: fullY,
+                width: rectWidth,
+                height: fullHeight,
               },
-              {
+              style: {
+                fill: 'rgba(0,0,0,0)',
+              },
+            },
+            {
+              type: 'rect',
+              shape: {
+                x: rectX,
+                y: rectY,
+                width: rectWidth,
+                height: rectHeight,
+              },
+              style: api.style(),
+            },
+          ];
+
+          if (waterfallMode) {
+            const zeroY = api.coord([0, 0])[1];
+            const lineRectY = Math.min(zeroY, end[1]);
+            const lineRectHeight = Math.abs(zeroY - end[1]);
+
+            if (lineRectHeight > 0) {
+              children.push({
                 type: 'rect',
                 shape: {
-                  x: rectX,
-                  y: rectY,
-                  width: rectWidth,
-                  height: rectHeight,
+                  x: rectX + rectWidth - 1, // 2px width line inside the right edge
+                  y: lineRectY,
+                  width: 1,
+                  height: lineRectHeight,
                 },
                 style: api.style(),
-              },
-            ],
+              });
+            }
+          }
+
+          return {
+            type: 'group',
+            children,
           };
         },
         label: {
