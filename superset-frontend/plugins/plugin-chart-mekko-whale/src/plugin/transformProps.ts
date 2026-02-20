@@ -190,5 +190,6 @@ export default function transformProps(chartProps: ChartProps) {
     setDataMask,
     groupby,
     filterState,
+    waterfallMode,
   };
 }

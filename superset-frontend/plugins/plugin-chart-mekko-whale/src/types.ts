@@ -71,4 +71,5 @@ export type PluginChartMekkoWhaleProps = PluginChartMekkoWhaleStylesProps & {
   setDataMask: (dataMask: any) => void;
   groupby: QueryFormColumn[];
   filterState?: any;
+  waterfallMode?: boolean;
 };
