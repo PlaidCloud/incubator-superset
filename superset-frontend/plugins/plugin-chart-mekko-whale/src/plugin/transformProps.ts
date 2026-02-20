@@ -136,9 +136,15 @@ export default function transformProps(chartProps: ChartProps) {
   const negRankMap: Record<number, number> = {};
   negIndices.forEach((idx, i) => { negRankMap[idx] = i; });
 
+  let totalProfit = 0;
+  let totalRevenue = 0;
+
   const chartData: MekkoWhaleDataItem[] = itemsWithValues.map((data, index) => {
     const { item, m1Val, m2Val } = data;
     const name = String(item[actualDimKey] || 'N/A');
+
+    totalProfit += m1Val;
+    totalRevenue += m2Val;
 
     const yStartVal = waterfallMode ? currentY : 0;
     const yEnd = currentY + m1Val;
@@ -191,5 +197,7 @@ export default function transformProps(chartProps: ChartProps) {
     groupby,
     filterState,
     waterfallMode,
+    totalProfit,
+    totalRevenue,
   };
 }

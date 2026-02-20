@@ -38,6 +38,8 @@ export default function PluginChartMekkoWhale(props: PluginChartMekkoWhaleProps)
     groupby,
     filterState,
     waterfallMode,
+    totalProfit,
+    totalRevenue = 1, // Fallback to avoid div by 0 if missing
   } = props;
 
   const onChartClick = (params: any) => {
@@ -100,12 +102,22 @@ export default function PluginChartMekkoWhale(props: PluginChartMekkoWhaleProps)
     tooltip: {
       trigger: 'item',
       formatter: (params: any) => {
-        const { name, value, itemStyle } = params.data;
+        if (params.componentType === 'markLine') {
+          const margin = totalRevenue ? (params.value / totalRevenue) * 100 : 0;
+          const totalColor = params.value > 0 ? '#006400' : (params.value < 0 ? '#8b0000' : 'inherit');
+          return `${params.name}: <b style="color: ${totalColor};">${yFormatter(params.value)} (${margin.toFixed(1)}%)</b>`;
+        }
+
+        const { name, value, itemStyle } = params.data || {};
+        if (!Array.isArray(value)) return name;
+
         const [, xEnd, , yEnd, m1, m2] = value;
+        const profitMargin = m2 ? (m1 / m2) * 100 : 0;
+        const profitColor = m1 > 0 ? '#006400' : (m1 < 0 ? '#8b0000' : 'inherit');
         return `
-          <div style="border-left: 4px solid ${itemStyle.color}; padding-left: 8px;">
+          <div style="border-left: 4px solid ${itemStyle?.color || '#000'}; padding-left: 8px;">
             <div style="font-weight: bold;">${name}</div>
-            <div style="margin-top: 4px;">Profit: <b>${yFormatter(m1)}</b></div>
+            <div style="margin-top: 4px;">Profit: <b style="color: ${profitColor};">${yFormatter(m1)} (${profitMargin.toFixed(1)}%)</b></div>
             <div>Revenue: <b>${xFormatter(m2)}</b></div>
             <hr style="margin: 4px 0; border: 0; border-top: 1px solid #eee;"/>
             <div>Cum. Profit: <b>${yFormatter(yEnd)}</b></div>
@@ -223,6 +235,31 @@ export default function PluginChartMekkoWhale(props: PluginChartMekkoWhaleProps)
           color: '#fff',
         },
         data,
+      },
+      {
+        name: 'Total Profit Line',
+        type: 'line',
+        markLine: {
+          symbol: 'none',
+          data: [
+            {
+              yAxis: totalProfit,
+              label: {
+                formatter: () => {
+                  return '';
+                },
+                position: 'start',
+              },
+              name: 'Total Profit',
+            },
+          ],
+          lineStyle: {
+            color: '#555555ff',
+            type: 'dashed',
+            width: 2,
+          },
+          animation: false,
+        },
       },
     ],
   };
