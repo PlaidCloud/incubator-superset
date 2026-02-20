@@ -160,15 +160,37 @@ export default function PluginChartMekkoWhale(props: PluginChartMekkoWhaleProps)
           const rectWidth = end[0] - start[0];
           const rectHeight = Math.abs(end[1] - start[1]);
 
+          const yTopCoord = api.coord([xStart, forcedYMax]);
+          const yBottomCoord = api.coord([xStart, forcedYMin]);
+          const fullHeight = Math.abs(yBottomCoord[1] - yTopCoord[1]);
+          const fullY = Math.min(yTopCoord[1], yBottomCoord[1]);
+
           return {
-            type: 'rect',
-            shape: {
-              x: rectX,
-              y: rectY,
-              width: rectWidth,
-              height: rectHeight,
-            },
-            style: api.style(),
+            type: 'group',
+            children: [
+              {
+                type: 'rect',
+                shape: {
+                  x: rectX,
+                  y: fullY,
+                  width: rectWidth,
+                  height: fullHeight,
+                },
+                style: {
+                  fill: 'rgba(0,0,0,0)',
+                },
+              },
+              {
+                type: 'rect',
+                shape: {
+                  x: rectX,
+                  y: rectY,
+                  width: rectWidth,
+                  height: rectHeight,
+                },
+                style: api.style(),
+              },
+            ],
           };
         },
         label: {
