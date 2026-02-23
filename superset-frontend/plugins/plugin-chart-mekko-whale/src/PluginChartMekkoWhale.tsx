@@ -91,6 +91,21 @@ export default function PluginChartMekkoWhale(props: PluginChartMekkoWhaleProps)
   const forcedYMin = yMin < -yPadding ? yMin - yPadding : (yMin < 0 ? yMin * 1.1 : 0);
   const forcedYMax = yMax + yPadding;
 
+  const diffLineMargin = 50;
+  // diffLineX corresponds to approx diffLineMargin px margin from the start of the chart
+  const diffLineX = xMax ? (diffLineMargin / Math.max(1, width - 140)) * xMax : 0;
+
+  let xPeak = 0;
+  if (Array.isArray(data)) {
+    data.forEach((item: any) => {
+      if (Array.isArray(item.value)) {
+        const [xStart, xEnd, yStartVal, yEnd] = item.value;
+        if (yEnd === yMax) xPeak = Math.max(xPeak, xEnd);
+        if (yStartVal === yMax) xPeak = Math.max(xPeak, xStart);
+      }
+    });
+  }
+
   const option: any = {
     grid: {
       top: 40,
@@ -103,6 +118,9 @@ export default function PluginChartMekkoWhale(props: PluginChartMekkoWhaleProps)
       trigger: 'item',
       formatter: (params: any) => {
         if (params.componentType === 'markLine') {
+          if (params.name && params.name.startsWith('Diff')) {
+            return `${params.name}: <b>${yFormatter(params.value)}</b>`;
+          }
           const margin = totalRevenue ? (params.value / totalRevenue) * 100 : 0;
           const totalColor = params.value > 0 ? '#006400' : (params.value < 0 ? '#8b0000' : 'inherit');
           return `${params.name}: <b style="color: ${totalColor};">${yFormatter(params.value)} (${margin.toFixed(1)}%)</b>`;
@@ -237,7 +255,7 @@ export default function PluginChartMekkoWhale(props: PluginChartMekkoWhaleProps)
         data,
       },
       {
-        name: 'Total Profit Line',
+        name: 'Reference Lines',
         type: 'line',
         markLine: {
           symbol: 'none',
@@ -252,6 +270,58 @@ export default function PluginChartMekkoWhale(props: PluginChartMekkoWhaleProps)
               },
               name: 'Total Profit',
             },
+            [
+              {
+                coord: [0, yMax],
+                symbol: 'none',
+                label: {
+                  show: true,
+                  position: 'middle',
+                  formatter: (params: any) => `Peak = ${yFormatter(params.value)}`,
+                  color: '#999',
+                  backgroundColor: '#fff',
+                  borderWidth: 1,
+                  borderColor: '#999',
+                  padding: [2, 4],
+                  borderRadius: 2,
+                  rotate: 0,
+                },
+                name: 'Peak Profit',
+                value: yMax,
+              },
+              {
+                coord: [xPeak, yMax],
+                symbol: 'none',
+              }
+            ],
+            [
+              {
+                coord: [diffLineX, totalProfit],
+                symbol: 'arrow',
+                name: 'Diff',
+                value: yMax - totalProfit,
+              },
+              {
+                coord: [diffLineX, yMax],
+                symbol: 'arrow',
+                label: {
+                  show: true,
+                  position: 'middle',
+                  formatter: (params: any) => `${yFormatter(params.value)}`,
+                  color: '#999',
+                  backgroundColor: '#fff',
+                  borderWidth: 1,
+                  borderColor: '#999',
+                  padding: [2, 4],
+                  borderRadius: 2,
+                  rotate: 0,
+                },
+                lineStyle: {
+                  color: '#999',
+                  opacity: yMax - totalProfit > 0 ? 1 : 0, // hide if diff is <= 0
+                }
+              }
+            ]
           ],
           lineStyle: {
             color: '#555555ff',
