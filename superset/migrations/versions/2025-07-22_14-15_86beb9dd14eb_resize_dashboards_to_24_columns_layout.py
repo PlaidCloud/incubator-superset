@@ -50,7 +50,11 @@ def upgrade():
         from superset.models.dashboard import Dashboard
 
         # Get all dashboards with position_json
-        dashboards = session.query(Dashboard).filter(Dashboard.position_json.isnot(None)).all()
+        dashboards = session.query(
+            Dashboard.id,
+            Dashboard.position_json,
+            Dashboard.dashboard_title,
+        ).filter(Dashboard.position_json.isnot(None)).all()
 
         if len(dashboards) == 0:
             print("No dashboards found with position_json")
@@ -117,7 +121,11 @@ def upgrade():
         print(f"Migration completed. Updated {updated_count} out of {total_dashboards} dashboards")
 
         # Fetch and print updated position_json for verification
-        verification_dashboards = session.query(Dashboard).filter(Dashboard.position_json.isnot(None)).all()
+        verification_dashboards = session.query(
+            Dashboard.id,
+            Dashboard.position_json,
+            Dashboard.dashboard_title,
+        ).filter(Dashboard.position_json.isnot(None)).all()
         print("\n=== VERIFICATION: Updated Dashboard Position JSON ===")
         for dashboard in verification_dashboards:
             print(f"\nDashboard {dashboard.id}: {dashboard.dashboard_title}")
@@ -145,7 +153,11 @@ def downgrade():
         from superset.models.dashboard import Dashboard
 
         # Get all dashboards with position_json
-        dashboards = session.query(Dashboard).filter(Dashboard.position_json.isnot(None)).all()
+        dashboards = session.query(
+            Dashboard.id,
+            Dashboard.position_json,
+            Dashboard.dashboard_title,
+        ).filter(Dashboard.position_json.isnot(None)).all()
 
         if len(dashboards) == 0:
             print("No dashboards found with position_json")
