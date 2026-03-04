@@ -17,7 +17,7 @@ jobs:
       - name: Create tag
         id: docker_tag
         run: |
-          echo "tag=${{ github.ref_name }}-${{ github.run_number }}" >> $GITHUB_OUTPUT
+          echo "tag=${{ github.ref_name }}-${{ github.run_number }}-${{ github.run_attempt }}" >> $GITHUB_OUTPUT
       - name: Verify tag
         run: echo ${{ steps.docker_tag.outputs.tag }}
       - name: Login to GCR
