@@ -29,21 +29,14 @@ import { Tag } from 'src/components';
 import { Tooltip } from 'src/components/Tooltip';
 import { FilterBarOrientation } from 'src/dashboard/types';
 import { CustomCloseIcon } from 'src/components/Tags/Tag';
-import { ellipsisCss } from './styles';
 
 const StyledCrossFilterValue = styled.b`
-  ${({ theme }) => `
-    max-width: ${theme.gridUnit * 25}px;
-  `}
-  ${ellipsisCss}
 `;
 
 const StyledCrossFilterColumn = styled('span')`
   ${({ theme }) => `
-    max-width: ${theme.gridUnit * 25}px;
     padding-right: ${theme.gridUnit}px;
   `}
-  ${ellipsisCss}
 `;
 
 const StyledTag = styled(Tag)`
