@@ -426,6 +426,15 @@ class BaseDatasource(AuditMixinNullable, ImportExportMixin):  # pylint: disable=
             # pull out all required metrics from the form_data
             for metric_param in METRIC_FORM_DATA_PARAMS:
                 for metric in utils.as_list(form_data.get(metric_param) or []):
+                    # skip if metric is a heading
+                    if isinstance(metric, dict) and (
+                        metric.get("emptyRowHeading")
+                        and (
+                            metric.get("column")
+                            and str(metric.get("column", {}).get("column_name", "")).startswith("__heading")
+                        )
+                    ):
+                        continue
                     metric_names.add(utils.get_metric_name(metric, self.verbose_map))
                     if utils.is_adhoc_metric(metric):
                         column_ = metric.get("column") or {}
