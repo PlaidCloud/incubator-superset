@@ -20,7 +20,7 @@ import { EChartsCoreOption } from 'echarts/core';
 import { useTheme } from '@superset-ui/core';
 import React, { useRef } from 'react';
 import Echart from '../components/Echart';
-import { WaterfallChartTransformedProps } from './types';
+import { ISeriesData, WaterfallChartTransformedProps } from './types';
 import { EventHandlers } from '../types';
 
 export default function EchartsWaterfall(
@@ -52,19 +52,27 @@ export default function EchartsWaterfall(
     click: params => {
       if (!setDataMask || !emitCrossFilters) return;
 
-      const { name: value } = params;
-      const xAxisColumn = props.formData.xAxis;
+      const { name: axisValue, dataIndex } = params;
+      const clickedData = (params.data ?? {}) as Pick<
+        ISeriesData,
+        'crossFilterColumn' | 'crossFilterValue'
+      >;
+      const filterColumn =
+        clickedData.crossFilterColumn ?? props.formData.xAxis;
+      const filterValue = clickedData.crossFilterValue ?? axisValue;
 
-      // Don't filter on Total column
-      if (value === 'Total') return;
+      if (filterValue === null || filterValue === undefined) return;
 
-      const isCurrentValue = props.filterState?.value === value;
+      const isCurrentValue =
+        props.filterState?.col === filterColumn &&
+        props.filterState?.value === filterValue;
 
       if (isCurrentValue) {
         // Clear the filter and visual state
         setDataMask({
           extraFormData: {},
           filterState: {
+            col: undefined,
             value: null,
           },
         });
@@ -100,22 +108,26 @@ export default function EchartsWaterfall(
         extraFormData: {
           filters: [
             {
-              col: xAxisColumn,
+              col: filterColumn,
               op: '==',
-              val: value,
+              val: filterValue,
             },
           ],
         },
         filterState: {
-          value,
+          col: filterColumn,
+          value: filterValue,
         },
       });
 
       if (chartRef.current) {
         const series = echartOptions.series as any[];
         const xAxisLabel = echartOptions.xAxis as { data: (string | number)[] };
-        // get index of value in xAxisLabel
-        const valueIndex = (xAxisLabel?.data || []).indexOf(value);
+        const axisData = xAxisLabel?.data || [];
+        const valueIndex =
+          orientation === 'vertical'
+            ? dataIndex
+            : Math.max(axisData.length - dataIndex - 1, 0);
 
         const updatedSeries = series.map(s => ({
           ...s,
@@ -351,7 +363,10 @@ export default function EchartsWaterfall(
       if (orientation === 'vertical') {
         if (index === 0 && ['subtotal', 'both'].includes(boldLabels)) {
           formattedValue = `{subtotal|${value}}`;
-        } else if (totalsIndex.includes(index) && ['total', 'both'].includes(boldLabels)) {
+        } else if (
+          totalsIndex.includes(index) &&
+          ['total', 'both'].includes(boldLabels)
+        ) {
           formattedValue = `{total|${value}}`;
         }
       } else {
@@ -359,7 +374,10 @@ export default function EchartsWaterfall(
         const isLast = index === axisData.length - 1;
         if (isLast && ['subtotal', 'both'].includes(boldLabels)) {
           formattedValue = `{subtotal|${value}}`;
-        } else if (totalsIndex.includes(index) && ['total', 'both'].includes(boldLabels)) {
+        } else if (
+          totalsIndex.includes(index) &&
+          ['total', 'both'].includes(boldLabels)
+        ) {
           formattedValue = `{total|${value}}`;
         }
       }
@@ -438,8 +456,12 @@ export default function EchartsWaterfall(
             overflow: 'break',
             rich: {
               ...(options.xAxis as any)?.axisLabel?.rich,
-              subtotal: ['subtotal', 'both'].includes(boldLabels) ? { fontWeight: 'bold' } : undefined,
-              total: ['total', 'both'].includes(boldLabels) ? { fontWeight: 'bold' } : undefined,
+              subtotal: ['subtotal', 'both'].includes(boldLabels)
+                ? { fontWeight: 'bold' }
+                : undefined,
+              total: ['total', 'both'].includes(boldLabels)
+                ? { fontWeight: 'bold' }
+                : undefined,
             },
           },
         },
@@ -456,8 +478,12 @@ export default function EchartsWaterfall(
           overflow: 'break',
           rich: {
             ...(options.yAxis as any)?.axisLabel?.rich,
-            subtotal: ['subtotal', 'both'].includes(boldLabels) ? { fontWeight: 'bold' } : undefined,
-            total: ['total', 'both'].includes(boldLabels) ? { fontWeight: 'bold' } : undefined,
+            subtotal: ['subtotal', 'both'].includes(boldLabels)
+              ? { fontWeight: 'bold' }
+              : undefined,
+            total: ['total', 'both'].includes(boldLabels)
+              ? { fontWeight: 'bold' }
+              : undefined,
           },
         },
       },

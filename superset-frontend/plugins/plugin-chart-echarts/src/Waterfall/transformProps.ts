@@ -282,6 +282,12 @@ export default function transformProps(
   let previousTotal = 0;
 
   transformedData.forEach((datum, index, self) => {
+    const breakdownValue = breakdownName ? datum[breakdownName] : undefined;
+    const isBreakdown =
+      breakdownName !== undefined && breakdownValue !== TOTAL_MARK;
+    const crossFilterValue = isBreakdown ? breakdownValue : datum[xAxisName];
+    const crossFilterColumn = isBreakdown ? breakdownColumn : xAxisColumn;
+
     const totalSum = self.slice(0, index + 1).reduce((prev, cur, i) => {
       if (breakdownName) {
         if (cur[breakdownName] !== TOTAL_MARK || i === 0) {
@@ -311,6 +317,14 @@ export default function transformProps(
         value: totalSum,
         originalValue: totalSum,
         totalSum,
+        crossFilterColumn:
+          !breakdownName && datum[xAxisName] === TOTAL_MARK
+            ? undefined
+            : crossFilterColumn,
+        crossFilterValue:
+          !breakdownName && datum[xAxisName] === TOTAL_MARK
+            ? undefined
+            : crossFilterValue,
       });
     } else if (value < 0) {
       increaseData.push({ value: TOKEN });
@@ -318,6 +332,8 @@ export default function transformProps(
         value: totalSum < 0 ? value : -value,
         originalValue,
         totalSum,
+        crossFilterColumn,
+        crossFilterValue,
       });
       totalData.push({ value: TOKEN });
     } else {
@@ -325,6 +341,8 @@ export default function transformProps(
         value: totalSum > 0 ? value : -value,
         originalValue,
         totalSum,
+        crossFilterColumn,
+        crossFilterValue,
       });
       decreaseData.push({ value: TOKEN });
       totalData.push({ value: TOKEN });
