@@ -47,6 +47,7 @@ export default function EchartsWaterfall(
 
   const theme = useTheme();
   const chartRef = useRef<any>(null);
+  const baseSeriesRef = useRef<any[]>([]);
 
   const eventHandlers: EventHandlers = {
     click: params => {
@@ -78,27 +79,9 @@ export default function EchartsWaterfall(
         });
 
         if (chartRef.current) {
-          const series = echartOptions.series as any[];
-          const updatedSeries = series.map(s => ({
-            ...s,
-            itemStyle: {
-              ...s.itemStyle,
-              opacity: 1,
-            },
-          }));
-
-          if (orientation === 'vertical') {
-            chartRef.current.getEchartInstance().setOption({
-              series: updatedSeries,
-            });
-          } else {
-            chartRef.current.getEchartInstance().setOption({
-              series: updatedSeries.map(s => ({
-                ...s,
-                data: [...s.data].reverse(),
-              })),
-            });
-          }
+          chartRef.current.getEchartInstance().setOption({
+            series: baseSeriesRef.current,
+          });
         }
         return;
       }
@@ -121,13 +104,8 @@ export default function EchartsWaterfall(
       });
 
       if (chartRef.current) {
-        const series = echartOptions.series as any[];
-        const xAxisLabel = echartOptions.xAxis as { data: (string | number)[] };
-        const axisData = xAxisLabel?.data || [];
-        const valueIndex =
-          orientation === 'vertical'
-            ? dataIndex
-            : Math.max(axisData.length - dataIndex - 1, 0);
+        const series = baseSeriesRef.current;
+        const valueIndex = dataIndex;
 
         const updatedSeries = series.map(s => ({
           ...s,
@@ -140,18 +118,9 @@ export default function EchartsWaterfall(
           })),
         }));
 
-        if (orientation === 'vertical') {
-          chartRef.current.getEchartInstance().setOption({
-            series: updatedSeries,
-          });
-        } else {
-          chartRef.current.getEchartInstance().setOption({
-            series: updatedSeries.map(s => ({
-              ...s,
-              data: [...s.data].reverse(),
-            })),
-          });
-        }
+        chartRef.current.getEchartInstance().setOption({
+          series: updatedSeries,
+        });
       }
     },
     contextmenu: params => {
@@ -513,6 +482,10 @@ export default function EchartsWaterfall(
   const sortedEchartOptions = getSortedOptions(showTotalOptions);
   const flippedEchartOptions = getFlippedOptions(sortedEchartOptions);
   const formattedAxisOptions = getFormattedAxisOptions(flippedEchartOptions);
+  const formattedSeries = (formattedAxisOptions as any).series;
+  baseSeriesRef.current = Array.isArray(formattedSeries)
+    ? (formattedSeries as any[])
+    : [];
 
   return (
     <Echart
