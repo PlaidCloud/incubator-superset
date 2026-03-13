@@ -19,6 +19,7 @@
 import {
   ChartDataResponseResult,
   ChartProps,
+  DataRecordValue,
   QueryFormColumn,
   QueryFormData,
   QueryFormMetric,
@@ -38,6 +39,8 @@ export type WaterfallFormXTicksLayout =
 export type ISeriesData = {
   originalValue?: number;
   totalSum?: number;
+  crossFilterColumn?: QueryFormColumn;
+  crossFilterValue?: DataRecordValue | null;
 } & BarDataItemOption;
 
 export type ICallbackDataParams = CallbackDataParams & {
@@ -78,6 +81,7 @@ export interface WaterfallChartTransformedProps
   extends BaseTransformedProps<EchartsWaterfallFormData> {
   emitCrossFilters?: boolean;
   filterState?: {
-    value?: string;
+    col?: QueryFormColumn;
+    value?: DataRecordValue | null;
   };
 }
