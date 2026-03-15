@@ -320,6 +320,7 @@ export default function EchartsWaterfall(
             label: {
               ...(series.label || {}),
               position: series.name === 'Decrease' ? 'left' : 'right',
+              offset: series.name === 'Decrease' ? [0, -0.35] : [0, 0]
             },
           }))
         : [],
