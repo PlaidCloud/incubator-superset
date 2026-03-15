@@ -422,6 +422,32 @@ export default function transformProps(
       disabled: true,
     },
   };
+  const keepLabelInViewport = (params: any) => {
+    const layout: { x?: number; y?: number } = {};
+    const labelRect = params?.labelRect;
+    if (!labelRect) {
+      return layout;
+    }
+
+    const minX = 0;
+    const minY = 0;
+    const maxX = Math.max(width - labelRect.width, minX);
+    const maxY = Math.max(height - labelRect.height, minY);
+
+    if (labelRect.x < minX) {
+      layout.x = minX;
+    } else if (labelRect.x > maxX) {
+      layout.x = maxX;
+    }
+
+    if (labelRect.y < minY) {
+      layout.y = minY;
+    } else if (labelRect.y > maxY) {
+      layout.y = maxY;
+    }
+
+    return layout;
+  };
 
   const barSeries: BarSeriesOption[] = [
     {
@@ -432,6 +458,7 @@ export default function transformProps(
     {
       ...seriesProps,
       name: LEGEND.INCREASE,
+      labelLayout: keepLabelInViewport,
       label: {
         show: showValue,
         position: 'top',
@@ -445,6 +472,7 @@ export default function transformProps(
     {
       ...seriesProps,
       name: LEGEND.DECREASE,
+      labelLayout: keepLabelInViewport,
       label: {
         show: showValue,
         position: 'bottom',
@@ -458,6 +486,7 @@ export default function transformProps(
     {
       ...seriesProps,
       name: LEGEND.TOTAL,
+      labelLayout: keepLabelInViewport,
       label: {
         show: showValue,
         position: 'top',
@@ -470,13 +499,25 @@ export default function transformProps(
     },
   ];
 
+  const maxValueLabelLength = showValue
+    ? transformedData.reduce((max, datum) => {
+        const rawValue = (datum[metricLabel] as number) ?? 0;
+        const formatted = String(defaultFormatter(rawValue));
+        return Math.max(max, formatted.length);
+      }, 0)
+    : 0;
+  // Approximate text width to reserve side space for full value labels.
+  const horizontalLabelPadding = showValue
+    ? Math.min(Math.ceil(maxValueLabelLength), Math.floor(width * 0.2))
+    : 0;
+
   const echartOptions: EChartsOption = {
     grid: {
       ...defaultGrid,
       top: theme.gridUnit * 7,
       bottom: theme.gridUnit * 7,
       left: theme.gridUnit * 5,
-      right: theme.gridUnit * 7,
+      right: theme.gridUnit * 7 + horizontalLabelPadding,
     },
     legend: {
       show: showLegend,
