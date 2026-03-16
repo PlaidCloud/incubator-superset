@@ -22,6 +22,7 @@ import React, { useRef } from 'react';
 import Echart from '../components/Echart';
 import { ISeriesData, WaterfallChartTransformedProps } from './types';
 import { EventHandlers } from '../types';
+import { LEGEND } from './constants';
 
 export default function EchartsWaterfall(
   props: WaterfallChartTransformedProps,
@@ -292,35 +293,42 @@ export default function EchartsWaterfall(
       },
       series: Array.isArray(options.series)
         ? options.series.map((series: any) => ({
-          ...series,
-          encode: {
-            x: series.encode?.y,
-            y: series.encode?.x,
-          },
-          data: [...series.data].reverse(),
-          label: {
-            ...(series.label || {}),
-            position: series.name === 'Decrease' ? 'left' : 'right',
-          },
-          labelLayout: (params: any) => {
-            if (series.name === 'Decrease' && params.rect && params.labelRect) {
-              const minX = theme.gridUnit * 5;
+            ...series,
+            encode: {
+              x: series.encode?.y,
+              y: series.encode?.x,
+            },
+            data: [...series.data].reverse(),
+            label: {
+              ...(series.label || {}),
+              position: series.name === 'Decrease' ? 'left' : 'right',
+              offset: series.name === 'Decrease' ? [0, -0.45] : [0, 0],
+            },
+            labelLayout: (params: any) => {
+              const baseLabelLayout = series.labelLayout;
+              const resolvedBaseLayout =
+                typeof baseLabelLayout === 'function'
+                  ? baseLabelLayout(params)
+                  : baseLabelLayout;
               if (
-                params.rect.width < params.labelRect.width ||
-                params.labelRect.x < minX
+                series.name === LEGEND.DECREASE &&
+                params.labelRect &&
+                params.rect
               ) {
-                return {
-                  x: Math.max(
-                    minX,
-                    params.rect.x + params.rect.width + theme.gridUnit,
-                  ),
-                  align: 'left',
-                };
+                const xAxis0 = chartRef.current.getEchartInstance().convertToPixel({ xAxisIndex: 0 }, 0);
+                const labelRectX = params.labelRect.x;
+                const isOverlap = labelRectX < xAxis0;
+                const labelGap = theme.gridUnit * 2;
+                if (isOverlap) {
+                  return {
+                    y: params.rect.y,
+                    x: params.rect.x + params.rect.width + labelGap,
+                  };
+                }
               }
-            }
-            return undefined;
-          },
-        }))
+              return resolvedBaseLayout;
+            },
+          }))
         : [],
     };
   };
@@ -336,11 +344,11 @@ export default function EchartsWaterfall(
     // Get total indices for bold formatting
     const totalsIndex = ['total', 'both'].includes(boldLabels)
       ? ((options.series as any[]) || [])
-        .find(series => series.name === 'Total')
-        ?.data.map((dataPoint: any, index: number) =>
-          dataPoint.value !== '-' ? index : -1,
-        )
-        .filter((index: number) => index !== -1) || []
+          .find(series => series.name === 'Total')
+          ?.data.map((dataPoint: any, index: number) =>
+            dataPoint.value !== '-' ? index : -1,
+          )
+          .filter((index: number) => index !== -1) || []
       : [];
 
     const formatText = (value: string, index: number) => {
@@ -367,6 +375,7 @@ export default function EchartsWaterfall(
         ) {
           formattedValue = `{total|${value}}`;
         }
+        return formattedValue;
       }
 
       // get the width of xAxis to calculate the maxCharsPerLine
