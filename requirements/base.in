@@ -43,6 +43,6 @@ psycopg2-binary==2.9.9
 plaidcloud-rpc>=1.6.3
 databend-sqlalchemy>=0.5.2
 authlib==1.3.0
-starrocks>=1.3.2
+starrocks>=1.3.3
 # If using starrocks from our own git repo, we need to add git package into Dockerfile
 # starrocks@git+https://github.com/rad-pat/sqlalchemy-starrocks.git@check-pr-action
