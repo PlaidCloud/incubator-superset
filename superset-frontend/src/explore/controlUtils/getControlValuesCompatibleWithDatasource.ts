@@ -30,11 +30,24 @@ import {
 import { isEmpty } from 'lodash';
 import AdhocMetric from 'src/explore/components/controls/MetricControl/AdhocMetric';
 
+const isTransposeTablePlaceholderMetric = (value: any) =>
+  Boolean(
+    value &&
+      typeof value === 'object' &&
+      (value.emptyRowHeading === true ||
+        value.isEmpty === true ||
+        value.column?.column_name?.startsWith('__heading')),
+  );
+
 const isControlValueCompatibleWithDatasource = (
   datasource: Dataset,
   controlState: ControlState,
   value: any,
 ) => {
+  if (isTransposeTablePlaceholderMetric(value)) {
+    return true;
+  }
+
   // A datasource might have been deleted, in which case we can't validate
   // only using the control state since it might have been hydrated with
   // the wrong options or columns (empty arrays).
