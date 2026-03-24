@@ -71,8 +71,14 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
   adjustSliceContainerHeight() {
     if (!this.containerRef.current) return;
     let element: HTMLElement | null = this.containerRef.current;
+    
+    // We want to handle both slice_container and chart-container
+    let foundSliceContainer = false;
+    let foundChartContainer = false;
+    
     while (element && element.tagName !== 'BODY') {
-      if (element.classList.contains('slice_container')) {
+      // 1. Handle auto height on slice_container
+      if (!foundSliceContainer && element.classList.contains('slice_container')) {
         if (this.props.headerFontSize === 0) {
           element.style.height = 'auto';
           element.style.overflow = 'visible';
@@ -80,14 +86,32 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
           element.style.height = '100%';
           element.style.overflow = 'hidden';
         }
+        foundSliceContainer = true;
+      }
+      
+      // 2. Handle vertical centering on data-test="chart-container"
+      if (!foundChartContainer && element.getAttribute('data-test') === 'chart-container') {
+        if (this.props.headerFontSize === 0) {
+          element.style.display = 'flex';
+          element.style.alignItems = 'center';
+        } else {
+          element.style.display = '';
+          element.style.alignItems = '';
+        }
+        foundChartContainer = true;
+      }
+      
+      // Stop traversing if both are processed
+      if (foundSliceContainer && foundChartContainer) {
         break;
       }
+      
       element = element.parentElement;
     }
   }
 
   getClassName() {
-    const { className, showTrendLine, bigNumberFallback, headerFontSize } = this.props;
+    const { className, showTrendLine, bigNumberFallback } = this.props;
     const names = `superset-legacy-chart-big-number ${className} ${
       bigNumberFallback ? 'is-fallback-value' : ''
     }`;
