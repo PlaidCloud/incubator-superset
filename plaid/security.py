@@ -157,7 +157,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
             return None
 
         # Sync the user's roles
-        if user and self.auth_roles_sync_at_login:
+        if user and len(user.roles) == 0: # self.auth_roles_sync_at_login:
             user.roles = self._oauth_calculate_user_roles(userinfo)
             log.debug("Calculated new roles for user='%s' as: %s", email, user.roles)
 
