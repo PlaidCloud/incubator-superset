@@ -61,9 +61,9 @@ class BigNumberVis extends React.PureComponent<BigNumberVizProps> {
   containerRef = React.createRef<HTMLDivElement>();
 
   getClassName() {
-    const { className, showTrendLine, bigNumberFallback } = this.props;
+    const { className, showTrendLine, bigNumberFallback, headerFontSize } = this.props;
     const fallbackClass = bigNumberFallback ? 'is-fallback-value' : '';
-    const names = `superset-legacy-chart-big-number ${className} ${fallbackClass}`;
+    const names = `superset-legacy-chart-big-number ${className} ${fallbackClass} ${headerFontSize === 0 ? 'auto-size-container' : ''}`;
     if (showTrendLine) return names;
     return `${names} no-trendline`;
   }
@@ -106,20 +106,20 @@ class BigNumberVis extends React.PureComponent<BigNumberVizProps> {
       typeof timestamp === 'bigint' ? formatTime(Number(timestamp)) : formatTime(timestamp);
     const container = this.createTemporaryContainer();
     document.body.append(container);
+    const className = this.props.headerFontSize === 0 ? 'kicker-auto-size' : 'kicker';
     const fontSize = computeMaxFontSize({
       text,
       maxWidth: width,
       maxHeight,
-      className: 'kicker',
+      className,
       container,
     });
     container.remove();
     return (
       <div
-        className="kicker"
+        className={className}
         style={{
           fontSize,
-
           height: maxHeight,
         }}
       >
@@ -207,17 +207,23 @@ class BigNumberVis extends React.PureComponent<BigNumberVizProps> {
       }
     };
 
+    const hasSubheader = !!this.props.subheader;
+    const headerRatio = hasSubheader ? 0.7 : 1.0;
+    const maxHeight = headerFontSize === 0 ? this.props.height * 2 : this.props.height * headerRatio;
+
     const fontSize = computeMaxFontSize({
-      text: text.charAt(0),
+      text,
       maxWidth: width - 8, // Decrease 8px for more precise font size
-      idealFontSize: 200 * headerFontSize,
-      className: 'header-line',
+      ...(headerFontSize === 0
+        ? { maxHeight }
+        : { idealFontSize: 200 * headerFontSize }),
+      className: headerFontSize === 0 ? 'header-line-auto-size' : 'header-line',
       container,
     });
 
     return (
       <div
-        className="header-line"
+        className={headerFontSize === 0 ? 'header-line-auto-size' : 'header-line'}
         style={{
           fontSize,
           color: mainColor,
@@ -230,7 +236,7 @@ class BigNumberVis extends React.PureComponent<BigNumberVizProps> {
   }
 
   renderSubheader() {
-    const { bigNumber, subheader, width, bigNumberFallback, subheaderColor } =
+    const { bigNumber, subheader, width, bigNumberFallback, subheaderColor, headerFontSize } =
       this.props;
     let fontSize = 0;
     const NO_DATA_OR_HASNT_LANDED = t(
@@ -247,19 +253,20 @@ class BigNumberVis extends React.PureComponent<BigNumberVizProps> {
     if (text) {
       const container = this.createTemporaryContainer();
       document.body.append(container);
+      const className = headerFontSize === 0 ? 'subheader-line-auto-size' : 'subheader-line';
       fontSize = computeMaxFontSize({
         text,
         maxWidth: width,
         idealFontSize: 200 * this.props.subheaderFontSize,
-        className: 'subheader-line',
+        className,
         container,
       });
       container.remove();
       return (
         <div
-          className="subheader-line"
+          className={className}
           style={{
-            fontSize,
+            fontSize: headerFontSize === 0 ? 12 : fontSize,
             color: subheaderColor,
           }}
         >
@@ -318,7 +325,16 @@ export default styled(BigNumberVis)`
     justify-content: center;
     align-items: flex-start;
 
-    &.no-trendline .subheader-line {
+    &.auto-size-container {
+      justify-content: center;
+      align-items: flex-start;
+      .text-container {
+        justify-content: center;
+        align-items: flex-start;
+      }
+    }
+
+    &.no-trendline .subheader-line, &.no-trendline .subheader-line-auto-size {
       padding-bottom: 0.3em;
     }
 
@@ -341,9 +357,23 @@ export default styled(BigNumberVis)`
       padding-bottom: 2em;
     }
 
+    .kicker-auto-size {
+      line-height: 1em;
+      padding-bottom: 0.2em;
+    }
+
     .header-line {
       position: relative;
       line-height: 1em;
+      span {
+        position: absolute;
+        bottom: 0;
+      }
+    }
+
+    .header-line-auto-size {
+      position: relative;
+      line-height: normal;
       span {
         position: absolute;
         bottom: 0;
@@ -355,10 +385,20 @@ export default styled(BigNumberVis)`
       padding-bottom: 0;
     }
 
+    .subheader-line-auto-size {
+      line-height: 1.2;
+      margin-top: 6px;
+      opacity: 0.85;
+      padding-bottom: 0;
+    }
+
     &.is-fallback-value {
       .kicker,
       .header-line,
-      .subheader-line {
+      .subheader-line,
+      .header-line-auto-size,
+      .subheader-line-auto-size,
+      .kicker-auto-size {
         opacity: ${theme.opacity.mediumHeavy};
       }
     }
