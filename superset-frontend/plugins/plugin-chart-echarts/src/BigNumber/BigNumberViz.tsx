@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { PureComponent, MouseEvent } from 'react';
+import { PureComponent, MouseEvent, createRef } from 'react';
 import {
   t,
   getNumberFormatter,
@@ -43,6 +43,8 @@ const PROPORTION = {
 };
 
 class BigNumberVis extends PureComponent<BigNumberVizProps> {
+  containerRef = createRef<HTMLDivElement>();
+
   static defaultProps = {
     className: '',
     headerFormatter: defaultNumberFormatter,
@@ -58,8 +60,34 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
     timeRangeFixed: false,
   };
 
+  componentDidMount() {
+    this.adjustSliceContainerHeight();
+  }
+
+  componentDidUpdate() {
+    this.adjustSliceContainerHeight();
+  }
+
+  adjustSliceContainerHeight() {
+    if (!this.containerRef.current) return;
+    let element: HTMLElement | null = this.containerRef.current;
+    while (element && element.tagName !== 'BODY') {
+      if (element.classList.contains('slice_container')) {
+        if (this.props.headerFontSize === 0) {
+          element.style.height = 'auto';
+          element.style.overflow = 'visible';
+        } else {
+          element.style.height = '100%';
+          element.style.overflow = 'hidden';
+        }
+        break;
+      }
+      element = element.parentElement;
+    }
+  }
+
   getClassName() {
-    const { className, showTrendLine, bigNumberFallback } = this.props;
+    const { className, showTrendLine, bigNumberFallback, headerFontSize } = this.props;
     const names = `superset-legacy-chart-big-number ${className} ${
       bigNumberFallback ? 'is-fallback-value' : ''
     }`;
@@ -107,18 +135,19 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
 
     const container = this.createTemporaryContainer();
     document.body.append(container);
+    const className = this.props.headerFontSize === 0 ? 'kicker-auto-size' : 'kicker';
     const fontSize = computeMaxFontSize({
       text,
       maxWidth: width,
       maxHeight,
-      className: 'kicker',
+      className,
       container,
     });
     container.remove();
 
     return (
       <div
-        className="kicker"
+        className={className}
         style={{
           fontSize,
           height: 'auto',
@@ -155,11 +184,13 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
 
     const container = this.createTemporaryContainer();
     document.body.append(container);
+    const className = this.props.headerFontSize === 0 ? 'header-line-auto-size' : 'header-line';
+    const maxWidth = this.props.headerFontSize === 0 ? width - 8 : width * 0.9;
     const fontSize = computeMaxFontSize({
       text,
-      maxWidth: width * 0.9, // reduced it's max width
+      maxWidth,
       maxHeight,
-      className: 'header-line',
+      className,
       container,
     });
     container.remove();
@@ -173,7 +204,7 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
 
     return (
       <div
-        className="header-line"
+        className={className}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -189,7 +220,7 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
   }
 
   renderSubheader(maxHeight: number) {
-    const { bigNumber, subheader, width, bigNumberFallback } = this.props;
+    const { bigNumber, subheader, width, bigNumberFallback, headerFontSize } = this.props;
     let fontSize = 0;
 
     const NO_DATA_OR_HASNT_LANDED = t(
@@ -205,21 +236,22 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
     if (text) {
       const container = this.createTemporaryContainer();
       document.body.append(container);
+      const className = headerFontSize === 0 ? 'subheader-line-auto-size' : 'subheader-line';
       fontSize = computeMaxFontSize({
         text,
         maxWidth: width * 0.9, // max width reduced
         maxHeight,
-        className: 'subheader-line',
+        className,
         container,
       });
       container.remove();
 
       return (
         <div
-          className="subheader-line"
+          className={className}
           style={{
-            fontSize,
-            height: maxHeight,
+            fontSize: headerFontSize === 0 ? 12 : fontSize,
+            height: headerFontSize === 0 ? 'auto' : maxHeight,
           }}
         >
           {text}
@@ -290,8 +322,8 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
       const allTextHeight = height - chartHeight;
 
       return (
-        <div className={className}>
-          <div className="text-container" style={{ height: allTextHeight }}>
+        <div className={className} ref={this.containerRef}>
+          <div className="text-container" style={{ height: headerFontSize === 0 ? 'auto' : allTextHeight }}>
             {this.renderFallbackWarning()}
             {this.renderKicker(
               Math.ceil(
@@ -299,7 +331,11 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
               ),
             )}
             {this.renderHeader(
-              Math.ceil(headerFontSize * (1 - PROPORTION.TRENDLINE) * height),
+              headerFontSize === 0
+                ? allTextHeight * 2
+                : Math.ceil(
+                    headerFontSize * (1 - PROPORTION.TRENDLINE) * height,
+                  ),
             )}
             {this.renderSubheader(
               Math.ceil(
@@ -313,10 +349,14 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
     }
 
     return (
-      <div className={className} style={{ height }}>
+      <div className={className} style={{ height: headerFontSize === 0 ? 'auto' : height }} ref={this.containerRef}>
         {this.renderFallbackWarning()}
         {this.renderKicker((kickerFontSize || 0) * height)}
-        {this.renderHeader(Math.ceil(headerFontSize * height))}
+        {this.renderHeader(
+          headerFontSize === 0
+            ? height * 2
+            : Math.ceil(headerFontSize * height),
+        )}
         {this.renderSubheader(Math.ceil(subheaderFontSize * height))}
       </div>
     );
@@ -355,6 +395,11 @@ export default styled(BigNumberVis)`
       padding-bottom: 2em;
     }
 
+    .kicker-auto-size {
+      line-height: 1em;
+      padding-bottom: 0.2em;
+    }
+
     .header-line {
       position: relative;
       line-height: 1em;
@@ -366,15 +411,35 @@ export default styled(BigNumberVis)`
       }
     }
 
+    .header-line-auto-size {
+      position: relative;
+      line-height: normal;
+      white-space: nowrap;
+      span {
+        position: absolute;
+        bottom: 0;
+      }
+    }
+
     .subheader-line {
       line-height: 1em;
+      padding-bottom: 0;
+    }
+
+    .subheader-line-auto-size {
+      line-height: 1.2;
+      margin-top: 6px;
+      opacity: 0.85;
       padding-bottom: 0;
     }
 
     &.is-fallback-value {
       .kicker,
       .header-line,
-      .subheader-line {
+      .subheader-line,
+      .header-line-auto-size,
+      .subheader-line-auto-size,
+      .kicker-auto-size {
         opacity: ${theme.opacity.mediumHeavy};
       }
     }
