@@ -51,10 +51,6 @@ export const headerFontSize: CustomControlItem = {
         label: t('Huge'),
         value: 0.6,
       },
-      {
-        label: t('Auto Size'),
-        value: 0,
-      },
     ],
   },
 };
