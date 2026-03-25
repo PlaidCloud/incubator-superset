@@ -446,7 +446,7 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
         <div
           className={className}
           style={{
-            fontSize: headerFontSize === 0 ? 12 : fontSize,
+            fontSize,
             height: headerFontSize === 0 ? 'auto' : maxHeight,
           }}
         >
