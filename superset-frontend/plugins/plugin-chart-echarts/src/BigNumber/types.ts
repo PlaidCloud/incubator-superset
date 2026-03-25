@@ -38,6 +38,9 @@ export type BigNumberTotalFormData = QueryFormData & {
   metric?: QueryFormMetric;
   yAxisFormat?: string;
   forceTimestampFormatting?: boolean;
+  hideFilter?: boolean;
+  placeFilterBelow?: boolean;
+  headerNowrap?: boolean;
 };
 
 export type BigNumberWithTrendlineFormData = BigNumberTotalFormData & {
@@ -93,7 +96,7 @@ export type BigNumberVizProps = {
     filters?: ContextMenuFilters,
   ) => void;
   xValueFormatter?: TimeFormatter;
-  formData?: BigNumberWithTrendlineFormData;
+  formData?: BigNumberTotalFormData;
   refs: Refs;
   colorThresholdFormatters?: ColorFormatters;
 };

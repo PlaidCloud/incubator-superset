@@ -42,8 +42,19 @@ const PROPORTION = {
   TRENDLINE: 0.3,
 };
 
+const HEADER_CONTROL_GAP = '3px';
+
+type ManagedHeaderStyle = {
+  element: HTMLElement;
+  priority: string;
+  property: string;
+  value: string;
+};
+
 class BigNumberVis extends PureComponent<BigNumberVizProps> {
   containerRef = createRef<HTMLDivElement>();
+
+  managedHeaderStyles: ManagedHeaderStyle[] = [];
 
   static defaultProps = {
     className: '',
@@ -62,23 +73,177 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
 
   componentDidMount() {
     this.adjustSliceContainerHeight();
+    this.adjustSliceHeaderLayout();
   }
 
   componentDidUpdate() {
     this.adjustSliceContainerHeight();
+    this.adjustSliceHeaderLayout();
+  }
+
+  componentWillUnmount() {
+    this.cleanupSliceHeaderLayout();
+  }
+
+  getSliceHeaderLayoutOptions() {
+    const { formData } = this.props;
+    return {
+      headerNowrap: formData?.headerNowrap ?? true,
+      hideFilter: Boolean(formData?.hideFilter),
+      placeFilterBelow: formData?.placeFilterBelow ?? true,
+    };
+  }
+
+  getSliceHeaderElements() {
+    const chartGrid = this.containerRef.current?.closest(
+      '[data-test="chart-grid-component"]',
+    ) as HTMLElement | null;
+    const header = chartGrid?.querySelector(
+      '[data-test="slice-header"]',
+    ) as HTMLElement | null;
+    const title = header?.querySelector('.header-title') as HTMLElement | null;
+    const controls = header?.querySelector(
+      '.header-controls',
+    ) as HTMLElement | null;
+    const controlChildren = controls
+      ? (Array.from(controls.children) as HTMLElement[])
+      : [];
+
+    const filterControl =
+      controlChildren.find(
+        child =>
+          child.classList.contains('filter-counts') ||
+          Boolean(child.querySelector('.filter-counts')),
+      ) ?? null;
+    const menuControl =
+      controlChildren.find(child =>
+        Boolean(child.querySelector('[aria-label="More Options"]')),
+      ) ?? null;
+    const auxiliaryControls = controlChildren.filter(
+      child => child !== filterControl && child !== menuControl,
+    );
+
+    return {
+      auxiliaryControls,
+      controls,
+      filterControl,
+      header,
+      menuControl,
+      title,
+    };
+  }
+
+  trackHeaderStyle(
+    element: HTMLElement | null,
+    property: string,
+    value: string,
+    priority = '',
+  ) {
+    if (!element) {
+      return;
+    }
+
+    this.managedHeaderStyles.push({
+      element,
+      priority: element.style.getPropertyPriority(property),
+      property,
+      value: element.style.getPropertyValue(property),
+    });
+    element.style.setProperty(property, value, priority);
+  }
+
+  cleanupSliceHeaderLayout() {
+    this.managedHeaderStyles
+      .slice()
+      .reverse()
+      .forEach(({ element, priority, property, value }) => {
+        if (value) {
+          element.style.setProperty(property, value, priority);
+        } else {
+          element.style.removeProperty(property);
+        }
+      });
+    this.managedHeaderStyles = [];
+  }
+
+  stackSliceHeaderControls(
+    controls: HTMLElement | null,
+    menuControl: HTMLElement | null,
+    auxiliaryControls: HTMLElement[],
+    filterControl: HTMLElement | null,
+  ) {
+    if (!controls || !filterControl) {
+      return;
+    }
+
+    this.trackHeaderStyle(controls, 'display', 'flex');
+    this.trackHeaderStyle(controls, 'flex-direction', 'column');
+    this.trackHeaderStyle(controls, 'align-items', 'flex-end');
+    this.trackHeaderStyle(controls, 'height', 'auto');
+
+    [menuControl, ...auxiliaryControls, filterControl].forEach(control => {
+      this.trackHeaderStyle(control, 'margin-left', '0px');
+    });
+
+    this.trackHeaderStyle(menuControl, 'order', '0');
+    this.trackHeaderStyle(menuControl, 'margin-top', '0px');
+
+    auxiliaryControls.forEach(control => {
+      this.trackHeaderStyle(control, 'order', '1');
+      this.trackHeaderStyle(control, 'margin-top', HEADER_CONTROL_GAP);
+    });
+
+    this.trackHeaderStyle(filterControl, 'order', '2');
+    this.trackHeaderStyle(filterControl, 'margin-top', HEADER_CONTROL_GAP);
+  }
+
+  // The slice header lives outside the chart body, so the Big Number viz tags
+  // its own header container and adjusts only the surrounding header UI.
+  adjustSliceHeaderLayout() {
+    this.cleanupSliceHeaderLayout();
+
+    const { headerNowrap, hideFilter, placeFilterBelow } =
+      this.getSliceHeaderLayoutOptions();
+    const { auxiliaryControls, controls, filterControl, menuControl, title } =
+      this.getSliceHeaderElements();
+
+    if (headerNowrap) {
+      this.trackHeaderStyle(title, 'display', 'block', 'important');
+      this.trackHeaderStyle(title, 'white-space', 'nowrap');
+      this.trackHeaderStyle(title, 'overflow', 'hidden');
+      this.trackHeaderStyle(title, 'text-overflow', 'ellipsis');
+      this.trackHeaderStyle(title, '-webkit-line-clamp', 'unset');
+      this.trackHeaderStyle(title, '-webkit-box-orient', 'initial');
+    }
+
+    if (placeFilterBelow) {
+      this.stackSliceHeaderControls(
+        controls,
+        menuControl,
+        auxiliaryControls,
+        filterControl,
+      );
+    }
+
+    if (hideFilter) {
+      this.trackHeaderStyle(filterControl, 'display', 'none');
+    }
   }
 
   adjustSliceContainerHeight() {
     if (!this.containerRef.current) return;
     let element: HTMLElement | null = this.containerRef.current;
-    
+
     // We want to handle both slice_container and chart-container
     let foundSliceContainer = false;
     let foundChartContainer = false;
-    
+
     while (element && element.tagName !== 'BODY') {
       // 1. Handle auto height on slice_container
-      if (!foundSliceContainer && element.classList.contains('slice_container')) {
+      if (
+        !foundSliceContainer &&
+        element.classList.contains('slice_container')
+      ) {
         if (this.props.headerFontSize === 0) {
           element.style.height = 'auto';
           element.style.overflow = 'visible';
@@ -88,9 +253,12 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
         }
         foundSliceContainer = true;
       }
-      
+
       // 2. Handle vertical centering on data-test="chart-container"
-      if (!foundChartContainer && element.getAttribute('data-test') === 'chart-container') {
+      if (
+        !foundChartContainer &&
+        element.getAttribute('data-test') === 'chart-container'
+      ) {
         if (this.props.headerFontSize === 0) {
           element.style.display = 'flex';
           element.style.alignItems = 'center';
@@ -100,12 +268,12 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
         }
         foundChartContainer = true;
       }
-      
+
       // Stop traversing if both are processed
       if (foundSliceContainer && foundChartContainer) {
         break;
       }
-      
+
       element = element.parentElement;
     }
   }
@@ -159,7 +327,8 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
 
     const container = this.createTemporaryContainer();
     document.body.append(container);
-    const className = this.props.headerFontSize === 0 ? 'kicker-auto-size' : 'kicker';
+    const className =
+      this.props.headerFontSize === 0 ? 'kicker-auto-size' : 'kicker';
     const fontSize = computeMaxFontSize({
       text,
       maxWidth: width,
@@ -208,7 +377,8 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
 
     const container = this.createTemporaryContainer();
     document.body.append(container);
-    const className = this.props.headerFontSize === 0 ? 'header-line-auto-size' : 'header-line';
+    const className =
+      this.props.headerFontSize === 0 ? 'header-line-auto-size' : 'header-line';
     const maxWidth = this.props.headerFontSize === 0 ? width - 8 : width * 0.9;
     const fontSize = computeMaxFontSize({
       text,
@@ -244,7 +414,8 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
   }
 
   renderSubheader(maxHeight: number) {
-    const { bigNumber, subheader, width, bigNumberFallback, headerFontSize } = this.props;
+    const { bigNumber, subheader, width, bigNumberFallback, headerFontSize } =
+      this.props;
     let fontSize = 0;
 
     const NO_DATA_OR_HASNT_LANDED = t(
@@ -260,7 +431,8 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
     if (text) {
       const container = this.createTemporaryContainer();
       document.body.append(container);
-      const className = headerFontSize === 0 ? 'subheader-line-auto-size' : 'subheader-line';
+      const className =
+        headerFontSize === 0 ? 'subheader-line-auto-size' : 'subheader-line';
       fontSize = computeMaxFontSize({
         text,
         maxWidth: width * 0.9, // max width reduced
@@ -347,7 +519,10 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
 
       return (
         <div className={className} ref={this.containerRef}>
-          <div className="text-container" style={{ height: headerFontSize === 0 ? 'auto' : allTextHeight }}>
+          <div
+            className="text-container"
+            style={{ height: headerFontSize === 0 ? 'auto' : allTextHeight }}
+          >
             {this.renderFallbackWarning()}
             {this.renderKicker(
               Math.ceil(
@@ -373,7 +548,11 @@ class BigNumberVis extends PureComponent<BigNumberVizProps> {
     }
 
     return (
-      <div className={className} style={{ height: headerFontSize === 0 ? 'auto' : height }} ref={this.containerRef}>
+      <div
+        className={className}
+        style={{ height: headerFontSize === 0 ? 'auto' : height }}
+        ref={this.containerRef}
+      >
         {this.renderFallbackWarning()}
         {this.renderKicker((kickerFontSize || 0) * height)}
         {this.renderHeader(
