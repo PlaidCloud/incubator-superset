@@ -104,6 +104,7 @@ export default function transformProps(
     height,
     bigNumber,
     headerFormatter,
+    formData,
     headerFontSize,
     subheaderFontSize,
     subheader: formattedSubheader,

@@ -24,7 +24,7 @@ import {
   Dataset,
   getStandardizedControls,
 } from '@superset-ui/chart-controls';
-import { headerFontSize, subheaderFontSize } from '../sharedControls';
+import { headerFontSize, subheaderFontSize, hideFilter, placeFilterBelow, headerNowrap } from '../sharedControls';
 
 export default {
   controlPanelSections: [
@@ -59,6 +59,9 @@ export default {
       controlSetRows: [
         [headerFontSize],
         [subheaderFontSize],
+        [hideFilter],
+        [placeFilterBelow],
+        [headerNowrap],
         ['y_axis_format'],
         ['currency_format'],
         [
