@@ -38,6 +38,7 @@ export default function PluginChartMekkoWhale(props: PluginChartMekkoWhaleProps)
     groupby,
     filterState,
     waterfallMode,
+    showTotalProfit = true,
     totalProfit,
     totalRevenue = 1, // Fallback to avoid div by 0 if missing
   } = props;
@@ -94,6 +95,15 @@ export default function PluginChartMekkoWhale(props: PluginChartMekkoWhaleProps)
   const diffLineMargin = 50;
   // diffLineX corresponds to approx diffLineMargin px margin from the start of the chart
   const diffLineX = xMax ? (diffLineMargin / Math.max(1, width - 140)) * xMax : 0;
+  const referenceLabelColor = '#999';
+  const boxedReferenceLabelStyle = {
+    show: true,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    padding: [2, 4],
+    borderRadius: 2,
+    rotate: 0,
+  };
 
   let xPeak = 0;
   if (Array.isArray(data)) {
@@ -105,6 +115,17 @@ export default function PluginChartMekkoWhale(props: PluginChartMekkoWhaleProps)
       }
     });
   }
+  const totalProfitAnnotationX = xPeak / 2;
+  const totalProfitAnnotation =
+    showTotalProfit
+      ? [
+        {
+          coord: [totalProfitAnnotationX, totalProfit],
+          value: totalProfit,
+          name: 'Total Profit Annotation',
+        },
+      ]
+      : [];
 
   const option: any = {
     grid: {
@@ -257,16 +278,32 @@ export default function PluginChartMekkoWhale(props: PluginChartMekkoWhaleProps)
       {
         name: 'Reference Lines',
         type: 'line',
+        markPoint: {
+          symbol: 'circle',
+          symbolSize: 1,
+          animation: false,
+          silent: true,
+          itemStyle: {
+            color: 'transparent',
+            borderColor: 'transparent',
+          },
+          label: {
+            ...boxedReferenceLabelStyle,
+            position: 'top',
+            distance: 2,
+            color: referenceLabelColor,
+            borderColor: referenceLabelColor,
+            formatter: (params: any) => `Total Profit = ${yFormatter(params.value)}`,
+          },
+          data: totalProfitAnnotation,
+        },
         markLine: {
           symbol: 'none',
           data: [
             {
               yAxis: totalProfit,
               label: {
-                formatter: () => {
-                  return '';
-                },
-                position: 'start',
+                show: false,
               },
               name: 'Total Profit',
             },
@@ -275,16 +312,11 @@ export default function PluginChartMekkoWhale(props: PluginChartMekkoWhaleProps)
                 coord: [0, yMax],
                 symbol: 'none',
                 label: {
-                  show: true,
+                  ...boxedReferenceLabelStyle,
                   position: 'middle',
                   formatter: (params: any) => `Peak = ${yFormatter(params.value)}`,
-                  color: '#999',
-                  backgroundColor: '#fff',
-                  borderWidth: 1,
-                  borderColor: '#999',
-                  padding: [2, 4],
-                  borderRadius: 2,
-                  rotate: 0,
+                  color: referenceLabelColor,
+                  borderColor: referenceLabelColor,
                 },
                 name: 'Peak Profit',
                 value: yMax,
@@ -305,19 +337,14 @@ export default function PluginChartMekkoWhale(props: PluginChartMekkoWhaleProps)
                 coord: [diffLineX, yMax],
                 symbol: 'arrow',
                 label: {
-                  show: true,
+                  ...boxedReferenceLabelStyle,
                   position: 'middle',
                   formatter: (params: any) => `${yFormatter(params.value)}`,
-                  color: '#999',
-                  backgroundColor: '#fff',
-                  borderWidth: 1,
-                  borderColor: '#999',
-                  padding: [2, 4],
-                  borderRadius: 2,
-                  rotate: 0,
+                  color: referenceLabelColor,
+                  borderColor: referenceLabelColor,
                 },
                 lineStyle: {
-                  color: '#999',
+                  color: referenceLabelColor,
                   opacity: yMax - totalProfit > 0 ? 1 : 0, // hide if diff is <= 0
                 }
               }

@@ -41,6 +41,7 @@ export default function transformProps(chartProps: ChartProps) {
     xAxisFormat,
     yAxisFormat,
     waterfallMode,
+    showTotalProfit = true,
   } = formData;
 
   const groupby = ensureIsArray(groupbyRaw);
@@ -197,6 +198,7 @@ export default function transformProps(chartProps: ChartProps) {
     groupby,
     filterState,
     waterfallMode,
+    showTotalProfit,
     totalProfit,
     totalRevenue,
   };

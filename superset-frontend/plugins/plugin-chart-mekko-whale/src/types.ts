@@ -41,6 +41,7 @@ export type PluginChartMekkoWhaleQueryFormData = QueryFormData & {
   y_axis_format: string;
   x_axis_format: string;
   waterfall_mode: boolean;
+  show_total_profit: boolean;
 };
 
 export interface MekkoWhaleDataItem {
@@ -72,6 +73,7 @@ export type PluginChartMekkoWhaleProps = PluginChartMekkoWhaleStylesProps & {
   groupby: QueryFormColumn[];
   filterState?: any;
   waterfallMode?: boolean;
+  showTotalProfit?: boolean;
   totalProfit: number;
   totalRevenue: number;
 };
