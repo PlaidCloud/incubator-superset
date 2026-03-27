@@ -115,6 +115,18 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'show_total_profit',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show Total Profit Annotation'),
+              default: true,
+              renderTrigger: true,
+              description: t('Show the total profit annotation at the same position as Peak'),
+            },
+          },
+        ],
       ],
     },
     {
