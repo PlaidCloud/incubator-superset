@@ -907,6 +907,7 @@ const transformProps = (
     all_segments_position = 'start',
     column_sort_order = 'none',
     collapsed_rows,
+    fixed_metric_column = false,
   } = formData;
   const isUsingTimeComparison =
     !isEmpty(time_compare) &&
@@ -1269,6 +1270,7 @@ const transformProps = (
     custom_css,
     collapsed_rows,
     allSegementsTransposeColumnName: all_segments_transposed_column_name,
+    fixedMetricColumn: fixed_metric_column,
   };
 };
 
