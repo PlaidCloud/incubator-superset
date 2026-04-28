@@ -81,6 +81,7 @@ import { PivotTableChartPlugin as PivotTableChartPluginV2 } from '@superset-ui/p
 import { HandlebarsChartPlugin } from '@superset-ui/plugin-chart-handlebars';
 import { FilterPlugins } from 'src/constants';
 import { PluginChartMarimekko } from '@superset-ui/plugin-chart-marimekko';
+import { BenchmarkRangeChartPlugin } from '@superset-ui/plugin-chart-benchmark-range';
 import { BigTextChart } from '@superset-ui/plugin-chart-big-text';
 import { SupersetPluginChartWhale } from '@superset-ui/plugin-chart-whale';
 import { TableChartTransposePlugin } from '@superset-ui/plugin-chart-table-transpose';
@@ -197,6 +198,7 @@ export default class MainPreset extends Preset {
         }).configure({ key: VizType.Cartodiagram }),
         new BigTextChart().configure({ key: 'superset-big-text' }),
         new PluginChartMarimekko().configure({ key: 'ext-marimekko' }),
+        new BenchmarkRangeChartPlugin().configure({ key: 'benchmark-range' }),
         new SupersetPluginChartWhale().configure({ key: 'ext-whale' }),
         new TableChartTransposePlugin().configure({
           key: VizType.TransposeTable,

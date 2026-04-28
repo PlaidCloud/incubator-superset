@@ -110,6 +110,7 @@
     "@superset-ui/plugin-chart-cartodiagram": "file:./plugins/plugin-chart-cartodiagram",
     "@superset-ui/plugin-chart-echarts": "file:./plugins/plugin-chart-echarts",
     "@superset-ui/plugin-chart-handlebars": "file:./plugins/plugin-chart-handlebars",
+    "@superset-ui/plugin-chart-benchmark-range": "file:./plugins/plugin-chart-benchmark-range",
     "@superset-ui/plugin-chart-marimekko": "file:./plugins/plugin-chart-marimekko",
     "@superset-ui/plugin-chart-pivot-table": "file:./plugins/plugin-chart-pivot-table",
     "@superset-ui/plugin-chart-table": "file:./plugins/plugin-chart-table",
