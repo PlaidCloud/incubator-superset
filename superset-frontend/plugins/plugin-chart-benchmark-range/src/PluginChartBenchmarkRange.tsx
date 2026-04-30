@@ -36,6 +36,8 @@ const MEDIAN_COLOR = '#f47f5f';
 const TARGET_COLOR = '#ff5a42';
 const ACTUAL_COLOR = '#5f6368';
 const ALL_VALUE = '__all__';
+const CHART_ROW_HEIGHT = 26;
+const CHART_VERTICAL_PADDING = 96;
 const FILTER_BAR_HEIGHT = 112;
 
 type BenchmarkMetric = 'actual' | 'median' | 'q1' | 'q3' | 'target';
@@ -88,13 +90,25 @@ function getAxisExtent(data: BenchmarkRangeDatum[], factor: number) {
 
 function getTooltip(datum: BenchmarkRangeDatum, formatPercent: (value: number) => string) {
   const category = escapeHtml(datum.category);
+  const gapLine = datum.formatted?.gap
+    ? [
+        `Gap: <span style="color: ${datum.formatted.gapColor || 'inherit'}">`,
+        `${escapeHtml(datum.formatted.gap)}`,
+        '</span>',
+      ].join('')
+    : '';
   return [
     `<strong>${category}</strong>`,
-    `IQR: ${formatPercent(datum.q1)} - ${formatPercent(datum.q3)}`,
-    `Median: ${formatPercent(datum.median)}`,
-    `Target: ${formatPercent(datum.target)}`,
-    `Actual: ${formatPercent(datum.actual)}`,
-  ].join('<br />');
+    `IQR: ${datum.formatted?.low || formatPercent(datum.q1)} - ${
+      datum.formatted?.high || formatPercent(datum.q3)
+    }`,
+    `Median: ${datum.formatted?.median || formatPercent(datum.median)}`,
+    `Target: ${datum.formatted?.target || formatPercent(datum.target)}`,
+    `Actual: ${datum.formatted?.actual || formatPercent(datum.actual)}`,
+    gapLine,
+  ]
+    .filter(Boolean)
+    .join('<br />');
 }
 
 function percentile(values: number[], position: number) {
@@ -170,20 +184,36 @@ function aggregateRecords(
         actualValues.length > 1
           ? average(actualValues) ?? 0
           : actualValues[0] ?? average(medianValues) ?? 0;
+      const midpoint =
+        q1Values.length || q3Values.length ? (lower + upper) / 2 : undefined;
       const median =
-        average(medianValues) ?? percentile(actualValues, 0.5) ?? actual;
+        average(medianValues) ??
+        midpoint ??
+        percentile(actualValues, 0.5) ??
+        actual;
+      const target = average(targetValues) ?? median;
       const { filters: _filters, ...baseRow } = rows[0];
+      const formattedSource = rows.find(row => row.formatted)?.formatted;
+      const formatted = formattedSource
+        ? {
+            ...formattedSource,
+            gapColor:
+              formattedSource.gapColor ||
+              (actual - target >= 0 ? '#0F6E56' : '#A32D2D'),
+          }
+        : undefined;
 
       return {
         ...baseRow,
         actual,
         category,
+        formatted,
         isFiltered: hasSelection && !selectedValues.includes(category),
         median,
         q1: lower,
         q3: upper,
         range: upper - lower,
-        target: average(targetValues) ?? median,
+        target,
       };
     })
     .sort((a, b) => compareValues(a, b, sortBy, sortOrder));
@@ -254,8 +284,13 @@ export default function PluginChartBenchmarkRange(
   const formatPercent = (value: number) => `${formatter(value * factor)}%`;
   const containerHeight = Math.max(0, height - 2);
   const containerWidth = Math.max(0, width - 2);
-  const filterBarHeight = showFilterControls ? FILTER_BAR_HEIGHT : 0;
+  const hasFilterControls = showFilterControls && filterColumns.length > 0;
+  const filterBarHeight = hasFilterControls ? FILTER_BAR_HEIGHT : 0;
   const chartHeight = Math.max(0, containerHeight - filterBarHeight);
+  const renderedChartHeight = Math.max(
+    chartHeight,
+    data.length * CHART_ROW_HEIGHT + CHART_VERTICAL_PADDING,
+  );
 
   const option = useMemo<any>(() => {
     const categories = data.map(row => row.category);
@@ -482,7 +517,7 @@ export default function PluginChartBenchmarkRange(
       },
       yAxis: {
         axisLabel: {
-          hideOverlap: true,
+          hideOverlap: false,
         },
         axisTick: {
           show: false,
@@ -562,7 +597,7 @@ export default function PluginChartBenchmarkRange(
           }
         `}
       </style>
-      {showFilterControls && (
+      {hasFilterControls && (
         <div
           style={{
             boxSizing: 'border-box',
@@ -619,14 +654,23 @@ export default function PluginChartBenchmarkRange(
           </div>
         </div>
       )}
-      <ReactECharts
-        lazyUpdate
-        notMerge
-        onEvents={onEvents}
-        option={option}
-        opts={{ renderer: 'canvas' }}
-        style={{ height: chartHeight, overflow: 'hidden', width: containerWidth }}
-      />
+      <div
+        style={{
+          height: chartHeight,
+          overflowX: 'hidden',
+          overflowY: renderedChartHeight > chartHeight ? 'auto' : 'hidden',
+          width: containerWidth,
+        }}
+      >
+        <ReactECharts
+          lazyUpdate
+          notMerge
+          onEvents={onEvents}
+          option={option}
+          opts={{ renderer: 'canvas' }}
+          style={{ height: renderedChartHeight, width: containerWidth }}
+        />
+      </div>
     </div>
   );
 }

@@ -37,6 +37,19 @@ const metricControl = (name: string, label: string, description: string) => ({
   },
 });
 
+const columnControl = (name: string, label: string) => ({
+  name,
+  config: {
+    ...sharedControls.groupby,
+    label: t(label),
+    description: t(`Optional dataset column to use for the ${label} dropdown`),
+    multi: false,
+    visibility: ({ controls }: { controls?: Record<string, any> }) =>
+      Boolean(controls?.show_filter_controls?.value),
+    validators: [],
+  },
+});
+
 const config: ControlPanelConfig = {
   controlPanelSections: [
     {
@@ -55,43 +68,44 @@ const config: ControlPanelConfig = {
             },
           },
         ],
-        [
-          metricControl(
-            'q1_metric',
-            'IQR Lower',
-            'Metric for the lower bound of the interquartile range',
-          ),
-
-        ],
-        [metricControl(
-          'q3_metric',
-          'IQR Upper',
-          'Metric for the upper bound of the interquartile range',
-        ),],
-        [
-          metricControl(
-            'median_metric',
-            'Median',
-            'Metric for the median marker',
-          ),
-
-        ],
-        [
-          metricControl(
-            'target_metric',
-            'Target',
-            'Metric for the target marker',
-          ),
-        ],
-        [
-          metricControl(
-            'actual_metric',
-            'Actual',
-            'Metric for the actual marker',
-          ),
-        ],
+        [metricControl('bar_left_pct', 'Bar Left Pct', 'Left position of the IQR bar')],
+        [metricControl('bar_width_pct', 'Bar Width Pct', 'Width of the IQR bar')],
+        [metricControl('median_pct', 'Median Pct', 'Position of the median marker')],
+        [metricControl('target_pct', 'Target Pct', 'Position of the target marker')],
+        [metricControl('actual_pct', 'Actual Pct', 'Position of the actual marker')],
+        [metricControl('margin_low_f', 'Margin Low F', 'Formatted low margin for tooltip')],
+        [metricControl('margin_high_f', 'Margin High F', 'Formatted high margin for tooltip')],
+        [metricControl('margin_median_f', 'Margin Median F', 'Formatted median margin for tooltip')],
+        [metricControl('margin_target_f', 'Margin Target F', 'Formatted target margin for tooltip')],
+        [metricControl('margin_actual_f', 'Margin Actual F', 'Formatted actual margin for tooltip')],
+        [metricControl('gap_metric', 'Gap', 'Formatted actual-vs-target gap for tooltip')],
         ['adhoc_filters'],
         ['row_limit'],
+      ],
+    },
+    {
+      label: t('Chart Filters'),
+      expanded: false,
+      controlSetRows: [
+        [
+          {
+            name: 'show_filter_controls',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show Filter Controls'),
+              default: true,
+              renderTrigger: true,
+              description: t('Show in-chart dropdown filters'),
+            },
+          },
+        ],
+        [columnControl('period_filter', 'Period')],
+        [columnControl('entity_type_filter', 'Entity Type')],
+        [columnControl('region_filter', 'Region')],
+        [columnControl('country_filter', 'Country')],
+        [columnControl('entity_filter', 'Entity')],
+        [columnControl('function_filter', 'Function')],
+        [columnControl('profit_center_filter', 'Profit Center')],
       ],
     },
     {
@@ -150,16 +164,6 @@ const config: ControlPanelConfig = {
           },
         ],
         [
-          {
-            name: 'show_filter_controls',
-            config: {
-              type: 'CheckboxControl',
-              label: t('Show Filter Controls'),
-              default: true,
-              renderTrigger: true,
-              description: t('Show in-chart dropdown filters'),
-            },
-          },
           {
             name: 'show_legend',
             config: {
