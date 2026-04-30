@@ -1,0 +1,1714 @@
+From ee786f844e6807d4db918c92190390f26f88360e Mon Sep 17 00:00:00 2001
+From: anantanoutlook <parthmanhas@gmail.com>
+Date: Tue, 28 Apr 2026 10:50:43 +0530
+Subject: [PATCH 1/2] add benchmark chart
+
+---
+ .../plugin-chart-benchmark-range/.gitignore   |  11 +
+ .../babel.config.js                           |  20 +
+ .../jest.config.js                            |  12 +
+ .../plugin-chart-benchmark-range/package.json |  46 ++
+ .../src/PluginChartBenchmarkRange.tsx         | 632 ++++++++++++++++++
+ .../src/images/thumbnail.png                  | Bin 0 -> 9190 bytes
+ .../plugin-chart-benchmark-range/src/index.ts |  19 +
+ .../src/plugin/buildQuery.ts                  |  75 +++
+ .../src/plugin/controlPanel.ts                | 189 ++++++
+ .../src/plugin/index.ts                       |  53 ++
+ .../src/plugin/transformProps.ts              | 199 ++++++
+ .../plugin-chart-benchmark-range/src/types.ts | 111 +++
+ .../tsconfig.json                             |  45 ++
+ .../types/external.d.ts                       |  23 +
+ 14 files changed, 1435 insertions(+)
+ create mode 100644 superset-frontend/plugins/plugin-chart-benchmark-range/.gitignore
+ create mode 100644 superset-frontend/plugins/plugin-chart-benchmark-range/babel.config.js
+ create mode 100644 superset-frontend/plugins/plugin-chart-benchmark-range/jest.config.js
+ create mode 100644 superset-frontend/plugins/plugin-chart-benchmark-range/package.json
+ create mode 100644 superset-frontend/plugins/plugin-chart-benchmark-range/src/PluginChartBenchmarkRange.tsx
+ create mode 100644 superset-frontend/plugins/plugin-chart-benchmark-range/src/images/thumbnail.png
+ create mode 100644 superset-frontend/plugins/plugin-chart-benchmark-range/src/index.ts
+ create mode 100644 superset-frontend/plugins/plugin-chart-benchmark-range/src/plugin/buildQuery.ts
+ create mode 100644 superset-frontend/plugins/plugin-chart-benchmark-range/src/plugin/controlPanel.ts
+ create mode 100644 superset-frontend/plugins/plugin-chart-benchmark-range/src/plugin/index.ts
+ create mode 100644 superset-frontend/plugins/plugin-chart-benchmark-range/src/plugin/transformProps.ts
+ create mode 100644 superset-frontend/plugins/plugin-chart-benchmark-range/src/types.ts
+ create mode 100644 superset-frontend/plugins/plugin-chart-benchmark-range/tsconfig.json
+ create mode 100644 superset-frontend/plugins/plugin-chart-benchmark-range/types/external.d.ts
+
+diff --git a/superset-frontend/plugins/plugin-chart-benchmark-range/.gitignore b/superset-frontend/plugins/plugin-chart-benchmark-range/.gitignore
+new file mode 100644
+index 0000000000..a6c8492ef3
+--- /dev/null
++++ b/superset-frontend/plugins/plugin-chart-benchmark-range/.gitignore
+@@ -0,0 +1,11 @@
++# build output
++esm
++lib
++*.tsbuildinfo
++
++# dependencies
++node_modules/
++
++# logs and coverage
++coverage/
++*.log
+diff --git a/superset-frontend/plugins/plugin-chart-benchmark-range/babel.config.js b/superset-frontend/plugins/plugin-chart-benchmark-range/babel.config.js
+new file mode 100644
+index 0000000000..78476f30aa
+--- /dev/null
++++ b/superset-frontend/plugins/plugin-chart-benchmark-range/babel.config.js
+@@ -0,0 +1,20 @@
++const { getConfig } = require('@airbnb/config-babel');
++
++const config = getConfig({
++  library: true,
++  react: true,
++  next: true,
++  esm: process.env.BABEL_OUTPUT === 'esm',
++  node: process.env.NODE_ENV === 'test',
++  typescript: true,
++  env: {
++    targets: { esmodules: true },
++  },
++});
++
++config.plugins = [
++  ['babel-plugin-transform-dev', { evaluate: false }],
++  ['babel-plugin-typescript-to-proptypes', { loose: true }],
++  ['@babel/plugin-proposal-class-properties', { loose: true }],
++];
++module.exports = config;
+diff --git a/superset-frontend/plugins/plugin-chart-benchmark-range/jest.config.js b/superset-frontend/plugins/plugin-chart-benchmark-range/jest.config.js
+new file mode 100644
+index 0000000000..7f0b77280d
+--- /dev/null
++++ b/superset-frontend/plugins/plugin-chart-benchmark-range/jest.config.js
+@@ -0,0 +1,12 @@
++module.exports = {
++  moduleNameMapper: {
++    '^@superset-ui/chart-controls$':
++      '<rootDir>/test/__mocks__/supersetUiChartControls.js',
++    '^@superset-ui/core$': '<rootDir>/test/__mocks__/supersetUiCore.js',
++    '\\.(png|jpg|gif)$': '<rootDir>/test/__mocks__/mockExportString.js',
++  },
++  testEnvironment: 'jsdom',
++  transform: {
++    '^.+\\.(ts|tsx|js|jsx)$': 'babel-jest',
++  },
++};
+diff --git a/superset-frontend/plugins/plugin-chart-benchmark-range/package.json b/superset-frontend/plugins/plugin-chart-benchmark-range/package.json
+new file mode 100644
+index 0000000000..0fbcb3c98f
+--- /dev/null
++++ b/superset-frontend/plugins/plugin-chart-benchmark-range/package.json
+@@ -0,0 +1,46 @@
++{
++  "name": "@superset-ui/plugin-chart-benchmark-range",
++  "version": "0.1.0",
++  "description": "Superset Plugin Chart Benchmark Range",
++  "sideEffects": false,
++  "main": "lib/index.js",
++  "module": "esm/index.js",
++  "files": [
++    "esm",
++    "lib"
++  ],
++  "private": true,
++  "scripts": {
++    "build": "npm run build-cjs && npm run build-esm && npm run ts-types",
++    "build-cjs": "babel src --extensions \".ts,.tsx,.js,.jsx\" --copy-files --out-dir lib",
++    "build-clean": "npm run clean && npm run build",
++    "build-esm": "BABEL_OUTPUT=esm babel src --extensions \".ts,.tsx,.js,.jsx\" --copy-files --out-dir esm",
++    "dev": "BABEL_OUTPUT=esm babel src --extensions \".ts,.tsx,.js,.jsx\" --watch --copy-files --out-dir esm",
++    "prebuild": "rimraf {lib,esm,tsconfig.tsbuildinfo}",
++    "ts-types": "tsc --build",
++    "test": "jest"
++  },
++  "license": "Apache-2.0",
++  "publishConfig": {
++    "access": "public"
++  },
++  "dependencies": {
++    "echarts": "^5.6.0",
++    "echarts-for-react": "^3.0.3"
++  },
++  "peerDependencies": {
++    "@airbnb/config-babel": "^2.0.1",
++    "@superset-ui/chart-controls": "*",
++    "@superset-ui/core": "*",
++    "antd": "*",
++    "react": "^17.0.2"
++  },
++  "devDependencies": {
++    "@babel/cli": "^7.16.0",
++    "@types/jest": "^26.0.4",
++    "jest": "^29.7.0",
++    "jest-environment-jsdom": "^29.7.0",
++    "rimraf": "^3.0.2",
++    "typescript": "^4.1.2"
++  }
++}
+diff --git a/superset-frontend/plugins/plugin-chart-benchmark-range/src/PluginChartBenchmarkRange.tsx b/superset-frontend/plugins/plugin-chart-benchmark-range/src/PluginChartBenchmarkRange.tsx
+new file mode 100644
+index 0000000000..3e3fca34ab
+--- /dev/null
++++ b/superset-frontend/plugins/plugin-chart-benchmark-range/src/PluginChartBenchmarkRange.tsx
+@@ -0,0 +1,632 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *   http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing,
++ * software distributed under the License is distributed on an
++ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++ * KIND, either express or implied.  See the License for the
++ * specific language governing permissions and limitations
++ * under the License.
++ */
++import React, { useMemo, useState } from 'react';
++import { Select } from 'antd';
++import ReactECharts from 'echarts-for-react';
++import { getNumberFormatter } from '@superset-ui/core';
++import {
++  BenchmarkRangeDatum,
++  BenchmarkRangeRecord,
++  BenchmarkRangeSortBy,
++  BenchmarkRangeSortOrder,
++  BenchmarkRangeTransformedProps,
++  PercentValueMode,
++} from './types';
++
++const IQR_COLOR = '#f7c9a9';
++const IQR_BORDER_COLOR = '#f2a877';
++const IQR_LINE_COLOR = '#a8a8a8';
++const MEDIAN_COLOR = '#f47f5f';
++const TARGET_COLOR = '#ff5a42';
++const ACTUAL_COLOR = '#5f6368';
++const ALL_VALUE = '__all__';
++const FILTER_BAR_HEIGHT = 112;
++
++type BenchmarkMetric = 'actual' | 'median' | 'q1' | 'q3' | 'target';
++
++function escapeHtml(value: string) {
++  return value
++    .replace(/&/g, '&amp;')
++    .replace(/</g, '&lt;')
++    .replace(/>/g, '&gt;')
++    .replace(/"/g, '&quot;')
++    .replace(/'/g, '&#039;');
++}
++
++function getDisplayFactor(mode: PercentValueMode, data: BenchmarkRangeDatum[]) {
++  if (mode === PercentValueMode.Fraction) {
++    return 100;
++  }
++  if (mode === PercentValueMode.Percent) {
++    return 1;
++  }
++  const values = data.flatMap(row => [
++    Math.abs(row.q1),
++    Math.abs(row.q3),
++    Math.abs(row.median),
++    Math.abs(row.target),
++    Math.abs(row.actual),
++  ]);
++  const max = Math.max(...values, 0);
++  return max <= 1 ? 100 : 1;
++}
++
++function getAxisExtent(data: BenchmarkRangeDatum[], factor: number) {
++  const values = data.flatMap(row => [
++    row.q1 * factor,
++    row.q3 * factor,
++    row.median * factor,
++    row.target * factor,
++    row.actual * factor,
++    0,
++  ]);
++  const min = Math.min(...values, 0);
++  const max = Math.max(...values, 0);
++  const range = max - min || 10;
++  const padding = range * 0.08;
++  return {
++    max: Math.ceil((max + padding) / 5) * 5,
++    min: Math.floor((min - padding) / 5) * 5,
++  };
++}
++
++function getTooltip(datum: BenchmarkRangeDatum, formatPercent: (value: number) => string) {
++  const category = escapeHtml(datum.category);
++  return [
++    `<strong>${category}</strong>`,
++    `IQR: ${formatPercent(datum.q1)} - ${formatPercent(datum.q3)}`,
++    `Median: ${formatPercent(datum.median)}`,
++    `Target: ${formatPercent(datum.target)}`,
++    `Actual: ${formatPercent(datum.actual)}`,
++  ].join('<br />');
++}
++
++function percentile(values: number[], position: number) {
++  if (!values.length) {
++    return undefined;
++  }
++  const sorted = [...values].sort((a, b) => a - b);
++  const index = (sorted.length - 1) * position;
++  const lower = Math.floor(index);
++  const upper = Math.ceil(index);
++  if (lower === upper) {
++    return sorted[lower];
++  }
++  return sorted[lower] + (sorted[upper] - sorted[lower]) * (index - lower);
++}
++
++function average(values: number[]) {
++  return values.length
++    ? values.reduce((sum, value) => sum + value, 0) / values.length
++    : undefined;
++}
++
++function compareValues(
++  a: BenchmarkRangeDatum,
++  b: BenchmarkRangeDatum,
++  sortBy: BenchmarkRangeSortBy,
++  sortOrder: BenchmarkRangeSortOrder,
++) {
++  const direction = sortOrder === BenchmarkRangeSortOrder.Desc ? -1 : 1;
++  if (sortBy === BenchmarkRangeSortBy.Category) {
++    return a.category.localeCompare(b.category) * direction;
++  }
++  return ((a[sortBy] as number) - (b[sortBy] as number)) * direction;
++}
++
++function aggregateRecords(
++  records: BenchmarkRangeRecord[],
++  selectedValues: string[],
++  sortBy: BenchmarkRangeSortBy,
++  sortOrder: BenchmarkRangeSortOrder,
++): BenchmarkRangeDatum[] {
++  const hasSelection = selectedValues.length > 0;
++  const groupedRecords = records.reduce<Record<string, BenchmarkRangeRecord[]>>(
++    (accumulator, record) => ({
++      ...accumulator,
++      [record.category]: [...(accumulator[record.category] || []), record],
++    }),
++    {},
++  );
++
++  return Object.entries(groupedRecords)
++    .map(([category, rows]) => {
++      const actualValues = rows
++        .map(row => row.actual)
++        .filter((value): value is number => value !== undefined);
++      const q1Values = rows
++        .map(row => row.q1)
++        .filter((value): value is number => value !== undefined);
++      const q3Values = rows
++        .map(row => row.q3)
++        .filter((value): value is number => value !== undefined);
++      const medianValues = rows
++        .map(row => row.median)
++        .filter((value): value is number => value !== undefined);
++      const targetValues = rows
++        .map(row => row.target)
++        .filter((value): value is number => value !== undefined);
++      const q1 = average(q1Values) ?? percentile(actualValues, 0.25) ?? 0;
++      const q3 = average(q3Values) ?? percentile(actualValues, 0.75) ?? q1;
++      const lower = Math.min(q1, q3);
++      const upper = Math.max(q1, q3);
++      const actual =
++        actualValues.length > 1
++          ? average(actualValues) ?? 0
++          : actualValues[0] ?? average(medianValues) ?? 0;
++      const median =
++        average(medianValues) ?? percentile(actualValues, 0.5) ?? actual;
++      const { filters: _filters, ...baseRow } = rows[0];
++
++      return {
++        ...baseRow,
++        actual,
++        category,
++        isFiltered: hasSelection && !selectedValues.includes(category),
++        median,
++        q1: lower,
++        q3: upper,
++        range: upper - lower,
++        target: average(targetValues) ?? median,
++      };
++    })
++    .sort((a, b) => compareValues(a, b, sortBy, sortOrder));
++}
++
++export default function PluginChartBenchmarkRange(
++  props: BenchmarkRangeTransformedProps,
++) {
++  const {
++    filterColumns,
++    filterState,
++    groupby,
++    height,
++    percentValueMode,
++    records,
++    sortBy,
++    sortOrder,
++    setDataMask,
++    showFilterControls,
++    showLegend,
++    width,
++    xAxisLabel,
++  } = props;
++  const [dropdownFilters, setDropdownFilters] = useState<Record<string, string>>(
++    {},
++  );
++  const filterOptions = useMemo(
++    () =>
++      filterColumns.reduce<Record<string, string[]>>((accumulator, column) => {
++        const values = Array.from(
++          new Set(
++            records
++              .map(record => record.filters[column.key])
++              .filter(Boolean),
++          ),
++        ).sort((a, b) => a.localeCompare(b));
++        return {
++          ...accumulator,
++          [column.key]: values,
++        };
++      }, {}),
++    [filterColumns, records],
++  );
++  const filteredRecords = useMemo(
++    () =>
++      records.filter(record =>
++        filterColumns.every(column => {
++          const selectedValue = dropdownFilters[column.key];
++          return !selectedValue || record.filters[column.key] === selectedValue;
++        }),
++      ),
++    [dropdownFilters, filterColumns, records],
++  );
++  const selectedValues = useMemo(
++    () =>
++      Array.isArray(filterState?.selectedValues)
++        ? (filterState?.selectedValues as string[])
++        : [],
++    [filterState],
++  );
++  const data = useMemo(
++    () =>
++      aggregateRecords(filteredRecords, selectedValues, sortBy, sortOrder),
++    [filteredRecords, selectedValues, sortBy, sortOrder],
++  );
++  const formatter = getNumberFormatter('SMART_NUMBER');
++  const factor = getDisplayFactor(percentValueMode, data);
++  const formatPercent = (value: number) => `${formatter(value * factor)}%`;
++  const containerHeight = Math.max(0, height - 2);
++  const containerWidth = Math.max(0, width - 2);
++  const filterBarHeight = showFilterControls ? FILTER_BAR_HEIGHT : 0;
++  const chartHeight = Math.max(0, containerHeight - filterBarHeight);
++
++  const option = useMemo<any>(() => {
++    const categories = data.map(row => row.category);
++    const maxLabelLength = Math.max(
++      ...categories.map(category => category.length),
++      12,
++    );
++    const left = Math.min(260, Math.max(120, maxLabelLength * 7 + 28));
++    const yAxisNameGap = Math.max(88, left - 12);
++    const extent = getAxisExtent(data, factor);
++    const scaled = (value: number) => value * factor;
++    const markerData = (metric: BenchmarkMetric, color: string) =>
++      data.map(row => ({
++        benchmark: row,
++        itemStyle: {
++          color,
++          opacity: row.isFiltered ? 0.25 : 1,
++        },
++        value: [scaled(row[metric] as number), row.category],
++      }));
++
++    return {
++      animationDuration: 250,
++      animationDurationUpdate: 250,
++      grid: {
++        bottom: 44,
++        containLabel: false,
++        left,
++        right: 28,
++        top: showLegend ? 44 : 18,
++      },
++      legend: {
++        data: [
++          {
++            icon: 'circle',
++            itemStyle: {
++              color: IQR_COLOR,
++            },
++            name: 'IQR',
++          },
++          {
++            icon: 'circle',
++            itemStyle: {
++              color: MEDIAN_COLOR,
++            },
++            name: 'Median',
++          },
++          {
++            icon: 'circle',
++            itemStyle: {
++              color: TARGET_COLOR,
++            },
++            name: 'Target',
++          },
++          {
++            icon: 'circle',
++            itemStyle: {
++              color: ACTUAL_COLOR,
++            },
++            name: 'Actual',
++          },
++        ],
++        show: showLegend,
++        top: 4,
++        type: 'plain',
++      },
++      series: [
++        {
++          data: data.map(row => ({
++            benchmark: row,
++            value: [scaled(row.q1), scaled(row.q3), row.category],
++          })),
++          emphasis: {
++            focus: 'self',
++          },
++          encode: {
++            x: [0, 1],
++            y: 2,
++          },
++          itemStyle: {
++            color: IQR_COLOR,
++          },
++          name: 'IQR',
++          progressive: 1000,
++          renderItem: (params: any, api: any) => {
++            const q1 = api.value(0);
++            const q3 = api.value(1);
++            const category = api.value(2);
++            const start = api.coord([q1, category]);
++            const end = api.coord([q3, category]);
++            const bandSize = api.size([0, 1]);
++            const bandHeight = Math.min(16, Math.max(8, bandSize[1] * 0.55));
++            const capHeight = Math.max(22, bandHeight + 8);
++            const centerY = start[1];
++            const row = data[params.dataIndex] as BenchmarkRangeDatum | undefined;
++
++            if (!Number.isFinite(start[0]) || !Number.isFinite(end[0])) {
++              return null;
++            }
++
++            return {
++              children: [
++                {
++                  shape: {
++                    height: bandHeight,
++                    width: Math.abs(end[0] - start[0]),
++                    x: Math.min(start[0], end[0]),
++                    y: centerY - bandHeight / 2,
++                  },
++                  style: {
++                    fill: IQR_COLOR,
++                    opacity: row?.isFiltered ? 0.25 : 0.9,
++                    stroke: IQR_BORDER_COLOR,
++                  },
++                  type: 'rect',
++                },
++                {
++                  shape: {
++                    x1: start[0],
++                    x2: end[0],
++                    y1: centerY,
++                    y2: centerY,
++                  },
++                  style: {
++                    stroke: IQR_LINE_COLOR,
++                    lineWidth: 1.5,
++                    opacity: row?.isFiltered ? 0.35 : 1,
++                  },
++                  type: 'line',
++                },
++                {
++                  shape: {
++                    x1: start[0],
++                    x2: start[0],
++                    y1: centerY - capHeight / 2,
++                    y2: centerY + capHeight / 2,
++                  },
++                  style: {
++                    stroke: IQR_LINE_COLOR,
++                    lineWidth: 1.5,
++                    opacity: row?.isFiltered ? 0.35 : 1,
++                  },
++                  type: 'line',
++                },
++                {
++                  shape: {
++                    x1: end[0],
++                    x2: end[0],
++                    y1: centerY - capHeight / 2,
++                    y2: centerY + capHeight / 2,
++                  },
++                  style: {
++                    stroke: IQR_LINE_COLOR,
++                    lineWidth: 1.5,
++                    opacity: row?.isFiltered ? 0.35 : 1,
++                  },
++                  type: 'line',
++                },
++              ],
++              type: 'group',
++            };
++          },
++          type: 'custom',
++        },
++        {
++          data: markerData('median', MEDIAN_COLOR),
++          itemStyle: {
++            color: MEDIAN_COLOR,
++          },
++          name: 'Median',
++          symbol: 'circle',
++          symbolSize: 8,
++          type: 'scatter',
++        },
++        {
++          data: markerData('target', TARGET_COLOR),
++          itemStyle: {
++            color: TARGET_COLOR,
++          },
++          name: 'Target',
++          symbol: 'circle',
++          symbolSize: 8,
++          type: 'scatter',
++        },
++        {
++          data: markerData('actual', ACTUAL_COLOR),
++          itemStyle: {
++            color: ACTUAL_COLOR,
++          },
++          name: 'Actual',
++          symbol: 'circle',
++          symbolSize: 8,
++          type: 'scatter',
++        },
++      ],
++      tooltip: {
++        axisPointer: {
++          type: 'shadow',
++        },
++        confine: true,
++        formatter: (params: any) => {
++          const items = Array.isArray(params) ? params : [params];
++          const datum = items.find(item => item?.data?.benchmark)?.data
++            ?.benchmark as BenchmarkRangeDatum | undefined;
++          return datum ? getTooltip(datum, formatPercent) : '';
++        },
++        trigger: 'axis',
++      },
++      xAxis: {
++        axisLabel: {
++          formatter: (value: number) => `${formatter(value)}%`,
++        },
++        max: extent.max,
++        min: extent.min,
++        name: xAxisLabel,
++        nameGap: 28,
++        nameLocation: 'middle',
++        splitLine: {
++          lineStyle: {
++            opacity: 0.45,
++          },
++        },
++        type: 'value',
++      },
++      yAxis: {
++        axisLabel: {
++          hideOverlap: true,
++        },
++        axisTick: {
++          show: false,
++        },
++        data: categories,
++        inverse: true,
++        name: 'Profit Center',
++        nameGap: yAxisNameGap,
++        nameLocation: 'middle',
++        triggerEvent: true,
++        type: 'category',
++      },
++    };
++  }, [
++    data,
++    factor,
++    formatter,
++    formatPercent,
++    chartHeight,
++    showLegend,
++    xAxisLabel,
++  ]);
++
++  const onEvents = useMemo(
++    () => ({
++      click: (params: any) => {
++        const datum = params?.data?.benchmark as BenchmarkRangeDatum | undefined;
++        const selectedName = datum?.category;
++        if (!selectedName || !groupby.length) {
++          return;
++        }
++        const currentValues = filterState?.selectedValues || [];
++        const isSelected = currentValues.includes(selectedName);
++        const nextValues =
++          currentValues.length === 1 && isSelected ? [] : [selectedName];
++
++        setDataMask({
++          extraFormData: {
++            filters: [
++              {
++                col: groupby[0],
++                op: nextValues.length ? 'IN' : 'IS NOT NULL',
++                val: nextValues.length ? nextValues : null,
++              } as any,
++            ],
++          },
++          filterState: {
++            selectedValues: nextValues.length ? nextValues : null,
++            value: nextValues.length ? nextValues : null,
++          },
++        });
++      },
++    }),
++    [filterState, groupby, setDataMask],
++  );
++
++  return (
++    <div
++      style={{
++        boxSizing: 'border-box',
++        height: containerHeight,
++        overflow: 'hidden',
++        width: containerWidth,
++      }}
++    >
++      <style>
++        {`
++          .benchmark-range-filter-dropdown .ant-select-item {
++            height: auto;
++            min-height: 32px;
++          }
++          .benchmark-range-filter-dropdown .ant-select-item-option-content {
++            overflow: visible;
++            text-overflow: clip;
++            white-space: normal;
++            word-break: normal;
++          }
++        `}
++      </style>
++      {showFilterControls && (
++        <div
++          style={{
++            boxSizing: 'border-box',
++            height: FILTER_BAR_HEIGHT,
++            overflow: 'hidden',
++            padding: '4px 0 12px',
++            width: '100%',
++          }}
++        >
++          <div
++            style={{
++              display: 'flex',
++              flexWrap: 'wrap',
++              gap: 12,
++              justifyContent: 'center',
++              overflow: 'hidden',
++            }}
++          >
++            {filterColumns.map(column => (
++              <div key={column.key} style={{ textAlign: 'center' }}>
++                <div style={{ fontSize: 12, marginBottom: 4 }}>
++                  {column.label}
++                </div>
++                <Select
++                  dropdownClassName="benchmark-range-filter-dropdown"
++                  dropdownMatchSelectWidth={false}
++                  dropdownStyle={{
++                    maxWidth: 520,
++                    minWidth: 220,
++                  }}
++                  value={dropdownFilters[column.key] || ALL_VALUE}
++                  onChange={(value: string) =>
++                    setDropdownFilters(currentFilters => {
++                      const nextFilters = { ...currentFilters };
++                      if (value === ALL_VALUE) {
++                        delete nextFilters[column.key];
++                      } else {
++                        nextFilters[column.key] = value;
++                      }
++                      return nextFilters;
++                    })
++                  }
++                  style={{ minWidth: 120 }}
++                >
++                  <Select.Option value={ALL_VALUE}>All</Select.Option>
++                  {(filterOptions[column.key] || []).map(value => (
++                    <Select.Option key={value} title={value} value={value}>
++                      {value}
++                    </Select.Option>
++                  ))}
++                </Select>
++              </div>
++            ))}
++          </div>
++        </div>
++      )}
++      <ReactECharts
++        lazyUpdate
++        notMerge
++        onEvents={onEvents}
++        option={option}
++        opts={{ renderer: 'canvas' }}
++        style={{ height: chartHeight, overflow: 'hidden', width: containerWidth }}
++      />
++    </div>
++  );
++}
+diff --git a/superset-frontend/plugins/plugin-chart-benchmark-range/src/images/thumbnail.png b/superset-frontend/plugins/plugin-chart-benchmark-range/src/images/thumbnail.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..65e5b0679209e0bc57a064bce757664ba3f4afd1
+GIT binary patch
+literal 9190
+zcmd^lXHZk?+IGZ30D&k7(wl;cfJz4;7*wQ25v2wMwxD#78mf|jZUh7bqy|(#HYF58
+z=#e0ZAiX5?4gsVSN`UY!_ugmbowGSJ=ll20yg$}tX3aBMYo6!6ulp+N)m;NER%Tvi
+z5D3Joednej2*hCW>jE<Xcdi~|j{ts{-0qk@1A$mLeqBdE$*E^SAhCDaH*XmErY;Vf
+zJ6UW6j;$WJ-MN?8#Qn<FyzKrruk#+CvnMY!Wob+=l|@J^c(XEfnu}<DQC~DK3OPcU
+z%4O&KqM;bQd%=WK&p_0<`;&8bOr6}XKPmi&WFN1gx4>Y`8FT(iv5$2o9?x8k3VZK$
+z-o7bG`Pt0Djz-4qp4AoZh)&XhtUW#F%{gsQhzaX&Y9P>W+TbHElOYTcd68qn4luAr
+z4+;|UiAe->j{^pJFOCA;)c-%fAcVi_x~h+#xAelrwL^D<wQx~rx79VMw5SLIBiHzE
+z1#S(KmU3U-iakf5^<sIW3Hyt#?5wPh)lNau<il1b8X|ff<WVad-Eh4BIZ?w4oNei9
+z=6Ss^@aRsPPl+Jo%b5Eg4%zuW-`*!4iyo78d;SMXitj#qotud5>DIk{#Dj}?<*w6S
+zweM05`pRhAtC#vEElEtm;Ud+U<%_FzRCPvoRr4k!gRsLwB>BtCZvBbim}0?FQ+CkJ
+z){7SpIp+~tk$CUi#-t}w><^=-=U%@pNqcFhZ}3qln!t4%qb>9n!)iNe+I|cuA9Lf}
+z9&z~STGICoO?M}s3yGz?zxM)5_fwQAHd>|`C;f@FiBpjG=TQZp3?$-pYKr-*HJ#Ty
+zD~F@FHnVNDh@JI52L-R<=Aw^=6X~JD>CBWPmSRqI%x9eL82=ux!!7Y%IgVp1f2`y~
+zcw$>JL(C~+cEQ6stQq;MwP)`tX~6GnhZU;G6i<-$b$xZq8m{a;m6v$bSi!yPJw){L
+z2nkGhhn4Bu4aRoXZAtPatCw4*)p`_+box==PGZr<maRyzu(8NqPU$ldhAQb^Z=A;-
+zAyr+m)X#i&W==+c&YqilUy6TdYTy(_%pj5hf}<9K@vgjQFXT@XDBKQymDv5EeKBj=
+z{!BDhO=(R-V)lDX=ES8@!ER&Z92<4gza$;hWDX|O*!tc-xh0m*)~o(xd<7cpVapgk
+zCj(7ME%4d+NukI}rLH(RDIWd$HMeu-_1hE4BR8dnZNf(G1t}~rg`|t4S}(~F9=~pV
+zjBF<RRyyj*I!PbBcbcdm!z{(<-$@VEui4Id0XZ+?bi;c2nWRr)`Id4^oglS2PqKjJ
+z+ZIab;B($ONUc75Q0h`*L{`idM2+(Y9(;P!^Trph^F30ew%5zrGH;5xP%oLR7jElV
+ze>A$Bn7GO5B|+pjWwW%El*d~#pxhAWt`N>a%Ih2tLxw*8UdqJAHyqI>B}~LXwL}o~
+zasa9M?nkRQ8m+*p`MRshcX}?tLW5vx3y$NPH44WBT6Z^QmPOtCEy(@SIck15Xad&=
+zVRIs%B__`G*<`tL5;k$(@LPJ!Bt^d?O)n!JgZ>FtXJS82Z@Kj@P)GNdd>U-7qE?#3
+zqEE6_CUQ6$VM*<2swCfP+iy{gif1~iTYy7G6_|&W3Z5&0Fm#Ba-1bv>kN=mzH$c#T
+zvR|2Hk7vE8Xlh|$5%kmlDCN}RK?{Y5W^t|Eu>+5HY6%Tj`M3^ZFnhGAIC#+hf>k)g
+zdvSnT;2J2o;0`kURY3oM+J&j}KdELWsmo*Qaf;ged3ZQzBN)ux9=tuxcYuG^4qy7w
+zyTme{`S~Rdoo|1H5&&k=KAjILH?2va9s><qoN^&w+n!2qQ-fB>`nq2Ym~m3>Ft@mT
+z^gn=k%7;R@mrAZtmtxa{98GXT@$j5P%XI#?2|;lQ;wq_&kwc<88faUJZ04TRS-y7U
+zHOj5H`}R?3zGA2=^3))(wWp`OpXV%@Qdr!H$czS$SDq$QMoR{!<~-vOY0__7tUtaT
+zb{lFf78|FGo2$#Zd*r@kWJB*WmL{_xyH`1|LeSOq6sW8`l};6<2aHBQ$y*aFnN~{j
+zmE!R_i;H-dys;9bSLNoW`M4lK7i+X)r^OzQsUGU}6LvjQ-M`8KJy^!lqdR0!Zc@CG
+zga=W6y9I?mh?SD$EAH3SPJ;7{imV;x_a`MR*#mEY&3*Q7)!CghBa1yO7+bTB;}8%!
+zfgD-wy;L4Rp6W?@6D)9YJPh{ITbb;JeU{_-KzE_KF-s0oJXw&x&YRdZg<zCPsIXv(
+zp9`uQY|GZ|#o|5oz6tHooA<@iQY5UT5qb7%3>w^;+taY|A9@6|n{h-$wIoI#V_HqH
+zo$NsU2_NMzIYqszE7sq$M&ch#rIEnqvH-&LiGe&jD3mrx5*q+2E@1c&l#|xd7}1ar
+zMR3)cn`5LcS`m{G<q4@(LxWomf<BD;FAI}__a&W(%_-YL94%Y^g!9N=EY9)vbbD9L
+zQ(5l2<Uu0L*Cv`NjVsgi?8Bd@8w(Ei?=iJ|SfM&{I}@Z9KlJs9&1EE%!Al7zI|oV4
+z30L=v39lh#g%*NOJa*+$qBdUwV3AwT#y`J(?hPZhdhdfB+u+s&JIo3~#NEN4Mnq0O
+zV&~zrQuCPfzs#6v?c_=NBW59I@wRhijks9W1YIawHELwBm3ma{e2U9f>g}l|T*GU9
+z{P@Gjrs0JG&V8dBA{H2r3U{WbhG~VyIefFa=Zkz6q3`HVoa9RPW?*>h7yiF0V%IVt
+zv$#`lx^Y_8rT(ixAx2CJl_eT`^kGoP?|~%apj{Yro%ax`f@`ysH~ZA9Lff0tHS~eP
+zgtH-iv$d%Q&RM^Dsb`)YweqCzKFHJgmI?o5mr87CJACBiWfx}SQbC3cN0H0w8$B~M
+z-dATN`PBEW?9oVb%Ih|x!x)w(Dee}~A?@4r;6rHW($d%Aoe>aHUqm~WP0cIz92%CX
+z2{#bzb->wl7Vu@JNw>G5A!RN+ZOAwL3uC$W&P*v>0&fUoPaT2?hmx<P#gKr_pZ$5p
+z*f7XEl}4dFd1(8F#kkO72OtuB(LPH<NmL~btM8Xl>+9<h@br@+pM>*tVn419mppFa
+z5;-=|l6&uvS)YWEugnjcTW=Vpi!WTHJdIdqiDX0%bR7+$GmTGdxMKIm)ADmNa#|%c
+zMXvYz3f<}}1?`LPLb$@hSW@th)sCwb+!X?^o3bC-$Q1;SH)78S@qR}#BhB2^nYg<H
+zUxEhO8m=9}W=aSSpRq<ciGr`+s;q9<x3$R${zL}&OQd4}`haS#`Wt*WGt^K;YO(my
+zKV*zo!Y0T|cct;uJEPmZNtl{-SA5_amayBiK04T&Fl&D%j$?e=(OR@dV#1h>pLv(v
+zPT_QiIIP^IcWz+Nb(reo5SJ4nl3$7jo>on7OOnM{R<GlEpY{-=RK3sfs|6&s3#p~j
+z-)J@|V^0;rvplfO3IMs0kQ6K`k+rv{FOgM!3Le$BkL=(HyQ2h)_4U$CW@%NV5<-Td
+z;yh}>Fy(s9{MEUO-8zq*+Ye}}_7Bx&e&lciFFPOJ8N;lww-{Y{^<)PRtej1MR%&rt
+z04rQLA89qb|C*8(wAn_GveMF2mA_vX24G#kc1YAIB2L%L)m%4Q-8s{F8SimL|LGiR
+z)|u1^+KJh3xF!@B6X2noxO?#+=OIifaLp=se`?DdNf%EHWhLxon2|TB3F(*zMkCIP
+z+uxa%b3?8-tD|s8LzbP={bqDR6g;-*?!s8jhRXgPXumnPQ$G3Ws^IUk=GDgqGq@iU
+zME4p4(ZlS{%*sYeRyuacYO0mb2FEaa-)9oi4??#D0}h6SlCN+3!{h1CBHA%xB(8;n
+z?M|FaaPL}afxvS0g{k|SBA3}X!%8qVQn9cnbc?Am&8&w9kE7LU3w9t}jIpV7N2f-c
+z8VGXexuz)`ln>BeM`QA?MVwZ)e*vy`mjawCZlRblS-H#7QQ)e=2yDa*q0XSD2_|Kc
+ze`6t4whXY0I$v_VM83Go9=58MC*(c$X8rveD_FU@Se7Tw$MvXKmYuDiVwK=1oirNg
+zkabkhe~hqru#}9!^wzA+Us{0qN5a~u%Pl&H`_kOHV%k|<nN{%X2Q`THVAsSd_;0zL
+z6{<c-Jfj?&HNQ!L{UlI}R}3%xlsc2Bh>(nwQ}1uY7NyoV%J`_44NEaqIULk&XieIo
+zTCiXp;f>=WPI(H$fh(5z2iFu7q=Pzwt8X8ounHIpc@gDY(w5CgFw(3*0YXg3&jHbZ
+z&C9pi^>7~#=)2$19eah7sH6H5G^K=UU=-pTxtc)b-1ywEWA-k&g5J>@{+!M-z6s?W
+zaGni%cuh`~FWV9>#L8x`#?s+>C=-w>&AT0Uj)zZoRQ}!t&XVNk)$dYL90Ty6&j=Ci
+z>Z>fm*uU{=we3CbnFHtlhbT<w&mPoB1PGbc-UN5#w_ln@!Fk{<^=1bL3Sx8h%9Sg!
+zva(R95bOe1glY8A8sed_6iN!(A(W&ap~TW``ZzR}c~YT1DhoUzF1gWRW04$g5q0C=
+zd`4+J8Nq?EC}f|kMl_F}f=e6nM24eXsUQd$btqY^V7<@&$sl~r!7z<Yg!8t}oPG0j
+zzWs}U<kUM*!C<L<C7K?s_%GIT8JP^R`$Hwo=n{2-$%3v&b6@jxcf#|-9HRu7wAh2G
+zEwAEq+5dtWdCr>l+|HjymvH#e%B&ZPx%%mB@j4{?7eln~E%?9q3t^`vt3h<=23XcG
+z_hYX4J>(a)YfM8E<QQyU@K%?S6|)b7=#+0(msLL!l($~05uA3aCK1p@F>Z_^KVZ7E
+z*VBa2@%m{Fn@u0W(}brDLNQil$6fKx>G0&yG3vn1dZM7vBIWv5F>U6|gM6eR=R>(|
+zIL6X^2RyI@hwfJIK-dtUXtFQ-9lX%Sex$04<&pP4@Q{P1VE_v$`fX*wd^oFgP}+64
+zmb#|5&bTZ49?@oLsRx6m3!uHu4y}_{kaWMkiHLB=xYn?h=idZ3?Qd4?(SJ<XU=U|I
+z=Kb2%O4E{2Lmm!tELk!65+UjyV|PonqLx<~M0`#YFTZ}<CD4=n=!3k;Fg^6?cyjS_
+zRusD?8<X|z=IQ5+^npBqzDR4~<>ZS179@lY#Y60}i?%Ax^r3+k1}KHMk7!dt@#@MX
+zrtq`$=VgVhnI(=SK*@-l>zzx%j|iT<c&2%};|KDTiGqTlrJwxpP3QR@W7lHWkM5(o
+zeJ}Dgz@-nRxnarmMqXwIj}QrofpHuYT5+koi{~$a7vH~-J6zfKwN)Nb`D!D)gLK<s
+zD(`(%q7*!s6A~1EPP<P`qn&4HZ}~vCPZoqQ^j$wdqZ{&bLPoABxgA91+k+~z#!5it
+zX$QuKPzFg~t5aWX?d-Bw9}Si{qhI*+ZH4|1ZSrmC9k*yn;O=I=R!I6}&xQZejVT+E
+z>dVf_2@mg9TT*Z$7r9S1D(D}_?@mO>@UkyeE!P6#f!2)F+y-Py;P!a92x>X_U>AOU
+z^=3-;3-cdsZS;ERo+jA3B|%E2dIi=u2?~5%lXKe<XO<#<B;=%TBw!5{D54r{iuL0_
+z8YlAqc7||NfNq%t$@wVnc-RfEe?goxE|gaLL@G@`PElN79iJd}joy8BK$~%zZt;G7
+z3}2OeGHfMs16n;FVcO2HkwOhykwn92M^%V;u8wsP{vo<n=vLK>w^3(P;lyy=SwYZ1
+z%b^V7msN#Z4n$qm9tn~}-NhOx1}OvR{Q51dB9&_4*#);WfEuJ)(5AQ3uh8_!!B++|
+zL#P}?t_L}eBuU@W&o6uDp3i$`TCj;_y%zsq3#gw_I%N}Xkg6A~m&Uwn$!t5>fAYlV
+z(EA?>J{c_m4g~T;jAFv8jaRl>ONMoi0hu(KmP(nwqhZcu-Tg;5?t6EhV7$>KL{eDc
+zyHv0iJ2r^CO8RTylk>${64S+diM5@-jf)#(vuFupP({kUbJM!E595_o2ZY2WYAfaJ
+z9^B7SQ9aqQ%iXfK*)_4#Z$`Nv9Y8Z(Cw=M3>*ko9QB{FE&1-X6;nrMO7!@&k8CIGm
+zHHLX%wer^!KYL!KBx2Gq{nZ7});l7^B`nmL{ic3ZkK^F)E73xiT?Tvb%R2lcdv5Q7
+z2s@LQy*L55w?{hp2WdV>-HNhlECn4LSWO6h19#RXZAOMhkB|t8GigFk=+yS-F<rKS
+zdstBx<5@-nbYXbW`9F;f6S17zDYAyVPmnF|JgeksU&y{Jetd!1rS%{IF~G9;8CaN9
+z|GRCKv&sO}(hv7bRg}zKm`a3{Wt5w-bU*mOyqP3);2D3kaqE-tR5GN@=A+TjLA__I
+zk0PK;^$U5w#{o^h<(lnSTczUmssDjkM;>icrJe0>69X}FQ@m#GD^<@<jYpvL;1TlF
+z(@Ck#Nd4b7Yu*NVW?h)VKnlO#$&IOjxrxg0+D?`*27dq7xN)u#$?u(aPCf>@_UINc
+zm;3mLHurRnG!>U2<jt&7S)QT2)%b=k&kd>~81^}dEEws%al@)~R+qAOC(%W+3l~G^
+zpGP2UL*-uEUyib~JFi7~sMusa1QXhk;0!p>C}`FcUiL6=dVixt`jc;W+^PnCI{EHX
+zH#*0{esyA`F5(b7qhRZgPMhNG4o!C4)3fDOW(6~YCn;}Wu|vKR!XUqAfDMT%@@jGG
+z3!Qp*s7d&r{97E=r7|$b0Y~e%$H)sp_cywogM%vP)}~v8g7@4fi=p}%GB_wo1hqBd
+zFN0d4e2Dg*_&%4-%BLVlmkSRMM?)yOhr1Vm{9z?Y>&xiX_Eya1uy8rx8bd#py`x?R
+z`LS4E+ik!#-<(ayNWX)(^ZaZ^GKU0&6<v{&+x`*-7#4`TSZ<j7f(U4hm-yVqIt4N_
+z_{9d?D`^Tp(s4sN;mAL&nZCNb+v}MsX+f!lVO@95UVN;^TI0M%+qIEg&KBAd`hn!l
+zP!nad&H}jjey@x~H#<;AnHFts7mz)F`w`DJ+|K^ubDWKhvMJ0@!Y^o=q#0a_N7_pH
+z=E+6I<xIaZ-<z7g;=U%0!6+rsmE4-<Asz*x*i$YSP$NeEy9HGbSMrXE!)4O0p#dbY
+ztb44*p7RY<ab~pPTD*>|*7;U}+n)9}m**+tS&8h=`FUT`yz2aQ6JK+o<p6F!iS_b6
+zEgX$K)fWdC@s#sYt@rb)6<6$o1t%UZ7eK!(IXsQQug%>TZi57=8!KJ)lHZ7h?hnrn
+zrl|YQ=&ZE}reF#ks`cOd#c>o0qp$zI&_mgj<W}*#0#fen$HPx@A{UxFlUfJOn$5AT
+zm{-W?w9zHRuciiUgQ&>wK7?ZBjkh#0+;=-o6aK+{(uWk-5EoZ{JM<+r2sLeAnhv6b
+zl^aB6?|!-=@z9r%&CBg{Mw}?i_?@R26|A?q>z$-E*ZoQ>PEI}iP2^-IFr%~C?%&|`
+z;~OodSp$!;??hh-Ty+IJ$b1&Y+d2(3?G+rybuIn8;@kQiIX$GC_3>Id=$fpFVeh2k
+zVFjN~%1~O>kMiAP8|Vv~<h#<`Ez_PtxW-m6mhsv`66L`zyY%!5IVLMlo61hR^;N{_
+z?8P}DDK{=on!#&8JAb+M@4>~wRHWZR1T_h+y0zzdqreh8{v4pwP4?iph6)<@?4Nhl
+zIDv9@6*y_VTHCcEw7fL5-hCY1a4waG0DOTdSrodJoo#Wi`_BT!q&T9A?!FFMKAr)u
+zFgfv0B5bxRb3C84FgfYc+b6-r&AtDWVZQ)4T7VZ6-A=Thg@MiSC+*elL@CQN{|8I%
+zumHyKAbW7Zed6n@#?V<zaIMK@J2kd`C9nA&V0d%F$T&w5nQZcFMi=5?N>Hd(UT;bI
+zi=T)Zr2N9E5ECVNo%V~I%%;(xn>YVG!9gzk(fOu_4{GJN9?Zp}8~v(vBED55Kng%K
+zlMNHF>nE$iFkw`Tj)NEs{8f;cDbW}qof-XL6{cpf;%z9r1PPnCJ2Bm2(pzr<P{&jE
+z_zrOuYLLB8mW*=hJ>_$OvHald#Vlxi3lIDj-=Esvdfw=r5)T`{4iv!bKG`GA!l=c&
+zf9D7bxA;F9a06uSrRa{l@~J37!lr9~XT7cvJAbTZlWNXwk|bdF4NCfI)~FzWZoHf8
+z8F*n}mK?K!hyLQ;fE?dzwet2qmr;On3%nFhi|o$aina5=*-{XZ4WrFLYaWW?M^rSy
+zgUH((f~O;hsVd$dbL)YjoCALzaGHoSuLb7t+#j9qulR^dB%84*@CO$F^Q;(gdHs79
+z`Z)}{T)A%|>0ITxxtCSPsH$vmu)StRVT$)LSK79e5oJ)rYH4oEU}R9~TPBi>?SVmb
+zjG}sfg>}=&)XiUZDmde@L1bYk(6nYML3S;hQLQk0y|iW^o|!l^E(9g7<HZ7sIMrRo
+zSDaH$q$7*Sb$+xabRHFIp<9wJiVBp$c@w)mAZxk6W0rO5kE#(&^l$6r)%w`<*QZ3V
+zL$42wzoOlo-Ww7sthg%EabC?TMKEEBxBL2F!E_th_v~o*&$>u`QV9QPqSx7rtaA83
+zGa$H`&B;8vS<};FJ?ZcC`NYn7lz<gy_L<N8KXQv#vlEc|o2Mz-YBXMJm)CE9-wiG&
+za>)X%-S4S7%Bx%BUsD<s05`jl_+2BN$y)VoOXR|h#Ajrs$7X<-FMHN0xXYdmjS?`e
+zWW4_&I1-(43`S?NPO*UQn0hjQ7Kjz}UHFRdJp-Y=CH;G;{%e{obmHNc13dmXJ8ufV
+zp%9CXfs_Hx6C^^A)w<45-VSX^VC3$ABc)JiNSDujS9<gT&ct)8_73aAHk7Q;Z@-q-
+zjaV>qD!532t@D{1GV`@Sq7x_2{gYYaU|qV3!Bt4A!(?5yeo9F?`iDieue-0W62LG?
+zc&GkYs!~Vy-{M&NKt>Y^yki1*oc7;$w-*o#&9<dUS`sGr_P0g}08d{ExaTq74TlQw
+z>k(vG&_qpkwYPwohgmQLx2Gzv@62MtA@q4HT?cI1|Ko>VmLZc!z<SCkCoH4;uK?rD
+zzq<XSu1G2dv)snb5Rzc>FK-c1=^)qRs0+2C1=eidO02!0>_s)~;{ctSGX%#Cz<@*%
+zN^tjjRH$n8Hr32zh>N%hKqg>Yo*8HTJ{I<olC1I2Xn7NV9#ZOZ5GlLSp?E?OX&oES
+z+18F`(Vgu&q5=qle<m|b)>RL3O4CCI^$pUVjy}`>2n|u6U^RC(%mqXnP5;d0s6{p)
+zi85^V%>N_+T}3{g-_On6N`#g!HwgXoUq$1tlcsJe(aqi|?ey9=ZlOBufq>AN=S<UG
+zz+;sTNIF<=d=+73$ttqfps3)oSh{uUVNRUR^vto5%dOTGL)4_T0*|1jAJnZ=LBL+|
+z^YNM2%jy}VDSJ;urf~R{COq@~c}EGkolfu{d&3`_*-|=ZiTE3;O#%Dw&j3PlFUWaq
+zL&K{Q7<AHYoK--k01cX$l@xqKcPW*!sCXgrkzgLA@H!H&BGDm6b9C?X(#|RYOhB7X
+zmT<&pkK>8aPv_C~4<ySsJhAf1d>x@EH-V+V+Zzg!Sl*`}fWLEHYqFIXG1<?syL1*t
+z8yGJZ(+@&qkig>u=cNkPFEjhwDU*TNg?=f5m{7>(d@V_1d2Z7Ym7|Ukng<-JfU5Yi
+zz_q$%XqC4W#W5wkD|$U*?puSGMJRPTKyBkia~0sMZP<eIjQuB<%e@8xy|4StwOVd{
+zmvQJ`CVoUlN!iQJ$<uhZb`Pa%Cmfy1i}>)1J*WmnsJ1d}ym!HZ3Dl-AtTQE!CY>(C
+zlbWmGx5BZ-uD++mr+WP!W_xOa_{}Q+F?FbI8Udb55jERg189KmFxz-2A0ussm8zZD
+zvFA6^s;ZNsxb^*D#b9@@1$R*T;e+ZjRh_0<;GURN#XH(vmcvllV%6$s{HK%%=J7A^
+zYM^stfZYj{p+AZjYi#UB*e1)-^h&iD)NX@GK*q#X$m4CgkN|{GdEA9N(_=sgDn<QS
+za>CCp0!O`=7(v>)XFmSs{eEv{-o5fOBX^ZlDoc0Jw&blYDSzkDrvcH-utFwlMsuYr
+zh9xaeu(+aW0sObd`cZ;kdre=^-hEP&#>k&=*5IK$MD~%(HIS(Zpm^2EKW$;Xw^_4I
+ztmU?P^0WM5MbM6(?V0jMN!=|WJsDBw>V}|sBiip7k!6`yVC&r>Uy&k6wJ2GVH-Zr8
+z>{nRqJ{?*+Wy5pG)EusL_#EV{&@<@nbv-a&VGP<CQp;-XJTuuqv`8de*op1Y5qbR=
+znn@G1kSj5rbqiZp!~J>6@3L_3PMv7eSOyS-g--$9?<j)GTni>|kA)8Jyq_{!?a6g>
+zf0`l~Vz91r5_At(rRYTNNRv4Rk}4McAD@1B0fVnKMG;Eho*dpWn?hvXT^VNZ)E9Z$
+zg1CF6i8$Tw84>$efcovfPfmZKI6(eFKAHXtkp35aX#y!dVDE~zoTvy54+TEl0cqbd
+LxLF8$^y2>kur@HX
+
+literal 0
+HcmV?d00001
+
+diff --git a/superset-frontend/plugins/plugin-chart-benchmark-range/src/index.ts b/superset-frontend/plugins/plugin-chart-benchmark-range/src/index.ts
+new file mode 100644
+index 0000000000..088eaf1783
+--- /dev/null
++++ b/superset-frontend/plugins/plugin-chart-benchmark-range/src/index.ts
+@@ -0,0 +1,19 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *   http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing,
++ * software distributed under the License is distributed on an
++ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++ * KIND, either express or implied.  See the License for the
++ * specific language governing permissions and limitations
++ * under the License.
++ */
++export { default as BenchmarkRangeChartPlugin } from './plugin';
+diff --git a/superset-frontend/plugins/plugin-chart-benchmark-range/src/plugin/buildQuery.ts b/superset-frontend/plugins/plugin-chart-benchmark-range/src/plugin/buildQuery.ts
+new file mode 100644
+index 0000000000..ba67cb3f55
+--- /dev/null
++++ b/superset-frontend/plugins/plugin-chart-benchmark-range/src/plugin/buildQuery.ts
+@@ -0,0 +1,75 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *   http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing,
++ * software distributed under the License is distributed on an
++ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++ * KIND, either express or implied.  See the License for the
++ * specific language governing permissions and limitations
++ * under the License.
++ */
++import {
++  buildQueryContext,
++  ensureIsArray,
++  QueryFormData,
++  QueryFormColumn,
++  QueryFormMetric,
++} from '@superset-ui/core';
++
++const DEFAULT_DROPDOWN_COLUMNS = [
++  'Period',
++  'Entity Type',
++  'Region',
++  'Country',
++  'Entity',
++  'Function',
++  'Profit Center',
++];
++
++type BenchmarkRangeBuildFormData = QueryFormData & {
++  actual_metric?: QueryFormMetric;
++  groupby?: unknown;
++  median_metric?: QueryFormMetric;
++  q1_metric?: QueryFormMetric;
++  q3_metric?: QueryFormMetric;
++  target_metric?: QueryFormMetric;
++};
++
++export default function buildQuery(formData: BenchmarkRangeBuildFormData) {
++  const {
++    actual_metric: actualMetric,
++    groupby,
++    median_metric: medianMetric,
++    q1_metric: q1Metric,
++    q3_metric: q3Metric,
++    target_metric: targetMetric,
++  } = formData;
++  const metrics = [
++    q1Metric,
++    q3Metric,
++    medianMetric,
++    targetMetric,
++    actualMetric,
++  ].filter((metric): metric is QueryFormMetric => Boolean(metric));
++
++  return buildQueryContext(formData, baseQueryObject => [
++    {
++      ...baseQueryObject,
++      groupby: Array.from(
++        new Set<QueryFormColumn>([
++          ...ensureIsArray(groupby),
++          ...DEFAULT_DROPDOWN_COLUMNS,
++        ]),
++      ),
++      metrics,
++    },
++  ]);
++}
+diff --git a/superset-frontend/plugins/plugin-chart-benchmark-range/src/plugin/controlPanel.ts b/superset-frontend/plugins/plugin-chart-benchmark-range/src/plugin/controlPanel.ts
+new file mode 100644
+index 0000000000..c0c27f53b5
+--- /dev/null
++++ b/superset-frontend/plugins/plugin-chart-benchmark-range/src/plugin/controlPanel.ts
+@@ -0,0 +1,189 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *   http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing,
++ * software distributed under the License is distributed on an
++ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++ * KIND, either express or implied.  See the License for the
++ * specific language governing permissions and limitations
++ * under the License.
++ */
++import { t, validateNonEmpty } from '@superset-ui/core';
++import {
++  ControlPanelConfig,
++  sharedControls,
++} from '@superset-ui/chart-controls';
++import {
++  BenchmarkRangeSortBy,
++  BenchmarkRangeSortOrder,
++  PercentValueMode,
++} from '../types';
++
++const metricControl = (name: string, label: string, description: string) => ({
++  name,
++  config: {
++    ...sharedControls.metric,
++    label: t(label),
++    description: t(description),
++    validators: [],
++  },
++});
++
++const config: ControlPanelConfig = {
++  controlPanelSections: [
++    {
++      label: t('Query'),
++      expanded: true,
++      controlSetRows: [
++        [
++          {
++            name: 'groupby',
++            config: {
++              ...sharedControls.groupby,
++              label: t('Profit Center'),
++              description: t('Category column shown on the Y-axis'),
++              multi: false,
++              validators: [validateNonEmpty],
++            },
++          },
++        ],
++        [
++          metricControl(
++            'q1_metric',
++            'IQR Lower',
++            'Metric for the lower bound of the interquartile range',
++          ),
++
++        ],
++        [metricControl(
++          'q3_metric',
++          'IQR Upper',
++          'Metric for the upper bound of the interquartile range',
++        ),],
++        [
++          metricControl(
++            'median_metric',
++            'Median',
++            'Metric for the median marker',
++          ),
++
++        ],
++        [
++          metricControl(
++            'target_metric',
++            'Target',
++            'Metric for the target marker',
++          ),
++        ],
++        [
++          metricControl(
++            'actual_metric',
++            'Actual',
++            'Metric for the actual marker',
++          ),
++        ],
++        ['adhoc_filters'],
++        ['row_limit'],
++      ],
++    },
++    {
++      label: t('Chart Options'),
++      expanded: true,
++      controlSetRows: [
++        [
++          {
++            name: 'percent_value_mode',
++            config: {
++              type: 'SelectControl',
++              label: t('Percent Value Mode'),
++              default: PercentValueMode.Auto,
++              renderTrigger: true,
++              choices: [
++                [PercentValueMode.Auto, t('Auto')],
++                [PercentValueMode.Percent, t('Values are percentages')],
++                [PercentValueMode.Fraction, t('Values are fractions')],
++              ],
++              description: t(
++                'Use Auto to treat values between -1 and 1 as fractions, otherwise as percentage points',
++              ),
++            },
++          },
++        ],
++        [
++          {
++            name: 'sort_by',
++            config: {
++              type: 'SelectControl',
++              label: t('Sort By'),
++              default: BenchmarkRangeSortBy.Category,
++              renderTrigger: true,
++              choices: [
++                [BenchmarkRangeSortBy.Category, t('Profit Center')],
++                [BenchmarkRangeSortBy.Q1, t('IQR Lower')],
++                [BenchmarkRangeSortBy.Q3, t('IQR Upper')],
++                [BenchmarkRangeSortBy.Median, t('Median')],
++                [BenchmarkRangeSortBy.Target, t('Target')],
++                [BenchmarkRangeSortBy.Actual, t('Actual')],
++              ],
++            },
++          },
++          {
++            name: 'sort_order',
++            config: {
++              type: 'SelectControl',
++              label: t('Sort Order'),
++              default: BenchmarkRangeSortOrder.Asc,
++              renderTrigger: true,
++              choices: [
++                [BenchmarkRangeSortOrder.Asc, t('Ascending')],
++                [BenchmarkRangeSortOrder.Desc, t('Descending')],
++              ],
++            },
++          },
++        ],
++        [
++          {
++            name: 'show_filter_controls',
++            config: {
++              type: 'CheckboxControl',
++              label: t('Show Filter Controls'),
++              default: true,
++              renderTrigger: true,
++              description: t('Show in-chart dropdown filters'),
++            },
++          },
++          {
++            name: 'show_legend',
++            config: {
++              type: 'CheckboxControl',
++              label: t('Show Legend'),
++              default: true,
++              renderTrigger: true,
++            },
++          },
++        ],
++        [
++          {
++            name: 'x_axis_label',
++            config: {
++              type: 'TextControl',
++              label: t('X Axis Label'),
++              default: t('% Value'),
++              renderTrigger: true,
++            },
++          },
++        ],
++      ],
++    },
++  ],
++};
++
++export default config;
+diff --git a/superset-frontend/plugins/plugin-chart-benchmark-range/src/plugin/index.ts b/superset-frontend/plugins/plugin-chart-benchmark-range/src/plugin/index.ts
+new file mode 100644
+index 0000000000..b023ba8421
+--- /dev/null
++++ b/superset-frontend/plugins/plugin-chart-benchmark-range/src/plugin/index.ts
+@@ -0,0 +1,53 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *   http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing,
++ * software distributed under the License is distributed on an
++ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++ * KIND, either express or implied.  See the License for the
++ * specific language governing permissions and limitations
++ * under the License.
++ */
++import { Behavior, ChartMetadata, ChartPlugin, t } from '@superset-ui/core';
++import buildQuery from './buildQuery';
++import controlPanel from './controlPanel';
++import transformProps from './transformProps';
++import thumbnail from '../images/thumbnail.png';
++import {
++  BenchmarkRangeChartProps,
++  BenchmarkRangeQueryFormData,
++} from '../types';
++
++export default class BenchmarkRangeChartPlugin extends ChartPlugin<
++  BenchmarkRangeQueryFormData,
++  BenchmarkRangeChartProps
++> {
++  constructor() {
++    const metadata = new ChartMetadata({
++      behaviors: [Behavior.InteractiveChart],
++      category: t('KPI'),
++      description: t(
++        'Horizontal benchmarking range chart with IQR bars and median, target, and actual markers.',
++      ),
++      name: t('Benchmarking Range Chart'),
++      tags: [t('Benchmark'), t('IQR'), t('KPI'), t('Distribution')],
++      thumbnail,
++    });
++
++    super({
++      buildQuery,
++      controlPanel,
++      loadChart: () => import('../PluginChartBenchmarkRange'),
++      metadata,
++      transformProps,
++    });
++  }
++}
+diff --git a/superset-frontend/plugins/plugin-chart-benchmark-range/src/plugin/transformProps.ts b/superset-frontend/plugins/plugin-chart-benchmark-range/src/plugin/transformProps.ts
+new file mode 100644
+index 0000000000..4fa5ce64ee
+--- /dev/null
++++ b/superset-frontend/plugins/plugin-chart-benchmark-range/src/plugin/transformProps.ts
+@@ -0,0 +1,199 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *   http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing,
++ * software distributed under the License is distributed on an
++ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++ * KIND, either express or implied.  See the License for the
++ * specific language governing permissions and limitations
++ * under the License.
++ */
++import {
++  ChartProps,
++  ensureIsArray,
++  getColumnLabel,
++  getMetricLabel,
++} from '@superset-ui/core';
++import {
++  BenchmarkRangeChartProps,
++  BenchmarkRangeFilterColumn,
++  BenchmarkRangeQueryFormData,
++  BenchmarkRangeRecord,
++  BenchmarkRangeSortBy,
++  BenchmarkRangeSortOrder,
++  PercentValueMode,
++} from '../types';
++
++const DEFAULT_FILTER_LABELS = [
++  'Period',
++  'Entity Type',
++  'Region',
++  'Country',
++  'Entity',
++  'Function',
++  'Profit Center',
++];
++
++const AUTO_KEYS = {
++  actual: ['actual', 'actual value', 'actual %', 'value'],
++  median: ['median', 'p50', '50th percentile'],
++  q1: ['iqr lower', 'q1', 'lower quartile', 'p25', '25th percentile'],
++  q3: ['iqr upper', 'q3', 'upper quartile', 'p75', '75th percentile'],
++  target: ['target', 'target value', 'target %'],
++};
++
++function resolveKey(label: string, keys: string[]) {
++  if (!label) {
++    return '';
++  }
++  if (keys.includes(label)) {
++    return label;
++  }
++  const normalized = label.toLowerCase();
++  return (
++    keys.find(
++      key =>
++        key.toLowerCase() === normalized ||
++        key.toLowerCase().includes(normalized) ||
++        normalized.includes(key.toLowerCase()),
++    ) || ''
++  );
++}
++
++function normalizeKey(value: string) {
++  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
++}
++
++function resolveAutoKey(candidates: string[], keys: string[]) {
++  const normalizedCandidates = candidates.map(normalizeKey);
++  return (
++    keys.find(key => normalizedCandidates.includes(normalizeKey(key))) ||
++    keys.find(key =>
++      normalizedCandidates.some(candidate => normalizeKey(key).includes(candidate)),
++    ) ||
++    ''
++  );
++}
++
++function toNumber(value: unknown): number | undefined {
++  if (typeof value === 'number') {
++    return Number.isFinite(value) ? value : undefined;
++  }
++  if (typeof value === 'string') {
++    const parsed = Number(value.replace(/[%,$\s]/g, ''));
++    return Number.isFinite(parsed) ? parsed : undefined;
++  }
++  return undefined;
++}
++
++function getMetricKey(
++  metric: unknown,
++  keys: string[],
++  candidates: string[],
++) {
++  return resolveKey(metric ? getMetricLabel(metric as any) : '', keys) ||
++    resolveAutoKey(candidates, keys);
++}
++
++function getFilterColumns(keys: string[], dimensionKey: string) {
++  const columns = DEFAULT_FILTER_LABELS.map(label => {
++    const key = resolveKey(label, keys);
++    return key ? { key, label } : null;
++  }).filter(Boolean) as BenchmarkRangeFilterColumn[];
++
++  if (dimensionKey && !columns.some(column => column.key === dimensionKey)) {
++    columns.push({ key: dimensionKey, label: 'Profit Center' });
++  }
++
++  return columns.filter(
++    (column, index, allColumns) =>
++      allColumns.findIndex(candidate => candidate.key === column.key) === index,
++  );
++}
++
++export default function transformProps(chartProps: ChartProps) {
++  const {
++    width,
++    height,
++    formData,
++    queriesData,
++    filterState,
++    hooks,
++  } = chartProps as BenchmarkRangeChartProps;
++  const {
++    actualMetric,
++    groupby: rawGroupby,
++    medianMetric,
++    percentValueMode = PercentValueMode.Auto,
++    q1Metric,
++    q3Metric,
++    showFilterControls = true,
++    showLegend = true,
++    sortBy = BenchmarkRangeSortBy.Category,
++    sortOrder = BenchmarkRangeSortOrder.Asc,
++    targetMetric,
++    xAxisLabel = '% Value',
++  } = formData as BenchmarkRangeQueryFormData;
++  const groupby = ensureIsArray(rawGroupby);
++  const rawData = queriesData?.[0]?.data || [];
++  const keys = rawData.length ? Object.keys(rawData[0]) : [];
++  const dimensionLabel = groupby[0] ? getColumnLabel(groupby[0]) : '';
++  const dimensionKey =
++    resolveKey(dimensionLabel, keys) ||
++    resolveAutoKey(['profit center', 'profit centre', 'category'], keys) ||
++    keys[0] ||
++    '';
++  const q1Key = getMetricKey(q1Metric, keys, AUTO_KEYS.q1);
++  const q3Key = getMetricKey(q3Metric, keys, AUTO_KEYS.q3);
++  const medianKey = getMetricKey(medianMetric, keys, AUTO_KEYS.median);
++  const targetKey = getMetricKey(targetMetric, keys, AUTO_KEYS.target);
++  const actualKey = getMetricKey(actualMetric, keys, AUTO_KEYS.actual);
++  const filterColumns = getFilterColumns(keys, dimensionKey);
++
++  const records = rawData
++    .map(row => {
++      const category = String(row[dimensionKey] ?? '');
++      const filters = filterColumns.reduce<Record<string, string>>(
++        (accumulator, column) => ({
++          ...accumulator,
++          [column.key]: String(row[column.key] ?? ''),
++        }),
++        {},
++      );
++      return {
++        ...row,
++        actual: actualKey ? toNumber(row[actualKey]) : undefined,
++        category,
++        filters,
++        median: medianKey ? toNumber(row[medianKey]) : undefined,
++        q1: q1Key ? toNumber(row[q1Key]) : undefined,
++        q3: q3Key ? toNumber(row[q3Key]) : undefined,
++        target: targetKey ? toNumber(row[targetKey]) : undefined,
++      } as BenchmarkRangeRecord;
++    })
++    .filter(row => row.category);
++
++  return {
++    filterColumns,
++    filterState,
++    groupby,
++    height,
++    percentValueMode,
++    records,
++    sortBy,
++    sortOrder,
++    setDataMask: hooks?.setDataMask || (() => {}),
++    showFilterControls,
++    showLegend,
++    width,
++    xAxisLabel,
++  };
++}
+diff --git a/superset-frontend/plugins/plugin-chart-benchmark-range/src/types.ts b/superset-frontend/plugins/plugin-chart-benchmark-range/src/types.ts
+new file mode 100644
+index 0000000000..f0cdf0622e
+--- /dev/null
++++ b/superset-frontend/plugins/plugin-chart-benchmark-range/src/types.ts
+@@ -0,0 +1,111 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *   http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing,
++ * software distributed under the License is distributed on an
++ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++ * KIND, either express or implied.  See the License for the
++ * specific language governing permissions and limitations
++ * under the License.
++ */
++import {
++  ChartDataResponseResult,
++  ChartProps,
++  DataRecord,
++  FilterState,
++  QueryFormColumn,
++  QueryFormData,
++  QueryFormMetric,
++  SetDataMaskHook,
++} from '@superset-ui/core';
++
++export enum BenchmarkRangeSortBy {
++  Category = 'category',
++  Q1 = 'q1',
++  Q3 = 'q3',
++  Median = 'median',
++  Target = 'target',
++  Actual = 'actual',
++}
++
++export enum BenchmarkRangeSortOrder {
++  Asc = 'ASC',
++  Desc = 'DESC',
++}
++
++export enum PercentValueMode {
++  Auto = 'auto',
++  Fraction = 'fraction',
++  Percent = 'percent',
++}
++
++export type BenchmarkRangeQueryFormData = QueryFormData & {
++  groupby?: QueryFormColumn[] | QueryFormColumn;
++  q1Metric?: QueryFormMetric;
++  q3Metric?: QueryFormMetric;
++  medianMetric?: QueryFormMetric;
++  targetMetric?: QueryFormMetric;
++  actualMetric?: QueryFormMetric;
++  xAxisLabel?: string;
++  sortBy?: BenchmarkRangeSortBy;
++  sortOrder?: BenchmarkRangeSortOrder;
++  showLegend?: boolean;
++  showFilterControls?: boolean;
++  percentValueMode?: PercentValueMode;
++};
++
++export type BenchmarkRangeChartProps =
++  ChartProps<BenchmarkRangeQueryFormData> & {
++    queriesData: ChartDataResponseResult[];
++    formData: BenchmarkRangeQueryFormData;
++  };
++
++export type BenchmarkRangeDatum = DataRecord & {
++  actual: number;
++  category: string;
++  isFiltered: boolean;
++  median: number;
++  q1: number;
++  q3: number;
++  range: number;
++  target: number;
++};
++
++export type BenchmarkRangeFilterColumn = {
++  key: string;
++  label: string;
++};
++
++export type BenchmarkRangeRecord = DataRecord & {
++  actual?: number;
++  category: string;
++  filters: Record<string, string>;
++  median?: number;
++  q1?: number;
++  q3?: number;
++  target?: number;
++};
++
++export type BenchmarkRangeTransformedProps = {
++  filterColumns: BenchmarkRangeFilterColumn[];
++  filterState?: FilterState;
++  groupby: QueryFormColumn[];
++  height: number;
++  percentValueMode: PercentValueMode;
++  records: BenchmarkRangeRecord[];
++  sortBy: BenchmarkRangeSortBy;
++  sortOrder: BenchmarkRangeSortOrder;
++  setDataMask: SetDataMaskHook;
++  showFilterControls: boolean;
++  showLegend: boolean;
++  width: number;
++  xAxisLabel: string;
++};
+diff --git a/superset-frontend/plugins/plugin-chart-benchmark-range/tsconfig.json b/superset-frontend/plugins/plugin-chart-benchmark-range/tsconfig.json
+new file mode 100644
+index 0000000000..60fc08a52b
+--- /dev/null
++++ b/superset-frontend/plugins/plugin-chart-benchmark-range/tsconfig.json
+@@ -0,0 +1,45 @@
++{
++  "compilerOptions": {
++    "allowSyntheticDefaultImports": true,
++    "declaration": true,
++    "declarationDir": "lib",
++    "declarationMap": true,
++    "esModuleInterop": true,
++    "forceConsistentCasingInFileNames": true,
++    "isolatedModules": false,
++    "jsx": "react",
++    "lib": [
++      "dom",
++      "esnext"
++    ],
++    "module": "esnext",
++    "moduleResolution": "node",
++    "noEmitOnError": true,
++    "noImplicitReturns": true,
++    "noUnusedLocals": true,
++    "outDir": "lib",
++    "pretty": true,
++    "removeComments": false,
++    "rootDir": "src",
++    "skipLibCheck": true,
++    "strict": true,
++    "target": "es2015",
++    "types": [
++      "jest"
++    ],
++    "typeRoots": [
++      "./node_modules/@types"
++    ],
++    "useDefineForClassFields": false,
++    "composite": true,
++    "resolveJsonModule": true
++  },
++  "exclude": [
++    "lib",
++    "test"
++  ],
++  "include": [
++    "src/**/*",
++    "types/**/*"
++  ]
++}
+diff --git a/superset-frontend/plugins/plugin-chart-benchmark-range/types/external.d.ts b/superset-frontend/plugins/plugin-chart-benchmark-range/types/external.d.ts
+new file mode 100644
+index 0000000000..a273f3a2ba
+--- /dev/null
++++ b/superset-frontend/plugins/plugin-chart-benchmark-range/types/external.d.ts
+@@ -0,0 +1,23 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *   http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing,
++ * software distributed under the License is distributed on an
++ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++ * KIND, either express or implied.  See the License for the
++ * specific language governing permissions and limitations
++ * under the License.
++ */
++
++declare module '*.png' {
++  const value: any;
++  export default value;
++}
+-- 
+2.39.5 (Apple Git-154)
+

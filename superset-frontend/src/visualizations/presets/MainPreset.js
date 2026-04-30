@@ -61,6 +61,7 @@ import {
   EchartsFunnelChartPlugin,
   EchartsSankeyChartPlugin,
   EchartsTreemapChartPlugin,
+  EchartsRootCauseTreemapChartPlugin,
   EchartsMixedTimeseriesChartPlugin,
   EchartsTreeChartPlugin,
   EchartsSunburstChartPlugin,
@@ -79,14 +80,14 @@ import {
 import { PivotTableChartPlugin as PivotTableChartPluginV2 } from '@superset-ui/plugin-chart-pivot-table';
 import { HandlebarsChartPlugin } from '@superset-ui/plugin-chart-handlebars';
 import { FilterPlugins } from 'src/constants';
-import TimeTableChartPlugin from '../TimeTable';
 import { PluginChartMarimekko } from '@superset-ui/plugin-chart-marimekko';
 import { BigTextChart } from '@superset-ui/plugin-chart-big-text';
 import { SupersetPluginChartWhale } from '@superset-ui/plugin-chart-whale';
 import { TableChartTransposePlugin } from '@superset-ui/plugin-chart-table-transpose';
 import { SupersetPluginDashboardFilters } from '@superset-ui/superset-plugin-dashboard-filters';
-import { PluginTableKpi } from "@superset-ui/plugin-table-kpi";
-import { PluginChartMekkoWhale } from "@superset-ui/plugin-chart-mekko-whale";
+import { PluginTableKpi } from '@superset-ui/plugin-table-kpi';
+import { PluginChartMekkoWhale } from '@superset-ui/plugin-chart-mekko-whale';
+import TimeTableChartPlugin from '../TimeTable';
 
 export default class MainPreset extends Preset {
   constructor() {
@@ -94,10 +95,10 @@ export default class MainPreset extends Preset {
       FeatureFlag.ChartPluginsExperimental,
     )
       ? [
-        new BigNumberPeriodOverPeriodChartPlugin().configure({
-          key: VizType.BigNumberPeriodOverPeriod,
-        }),
-      ]
+          new BigNumberPeriodOverPeriodChartPlugin().configure({
+            key: VizType.BigNumberPeriodOverPeriod,
+          }),
+        ]
       : [];
 
     super({
@@ -118,6 +119,9 @@ export default class MainPreset extends Preset {
         new EchartsFunnelChartPlugin().configure({ key: VizType.Funnel }),
         new EchartsSankeyChartPlugin().configure({ key: VizType.Sankey }),
         new EchartsTreemapChartPlugin().configure({ key: VizType.Treemap }),
+        new EchartsRootCauseTreemapChartPlugin().configure({
+          key: 'root-cause-treemap',
+        }),
         new EchartsGaugeChartPlugin().configure({ key: VizType.Gauge }),
         new EchartsGraphChartPlugin().configure({ key: VizType.Graph }),
         new EchartsRadarChartPlugin().configure({ key: VizType.Radar }),
@@ -194,8 +198,12 @@ export default class MainPreset extends Preset {
         new BigTextChart().configure({ key: 'superset-big-text' }),
         new PluginChartMarimekko().configure({ key: 'ext-marimekko' }),
         new SupersetPluginChartWhale().configure({ key: 'ext-whale' }),
-        new TableChartTransposePlugin().configure({ key: VizType.TransposeTable }),
-        new SupersetPluginDashboardFilters().configure({ key: 'ext-dashboard-filters' }),
+        new TableChartTransposePlugin().configure({
+          key: VizType.TransposeTable,
+        }),
+        new SupersetPluginDashboardFilters().configure({
+          key: 'ext-dashboard-filters',
+        }),
         new PluginTableKpi().configure({ key: 'table-kpi' }),
         new PluginChartMekkoWhale().configure({ key: 'mekko-whale' }),
         ...experimentalPlugins,
