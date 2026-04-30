@@ -19,7 +19,6 @@
 import {
   ChartDataResponseResult,
   ChartProps,
-  DataRecord,
   FilterState,
   QueryFormColumn,
   QueryFormData,
@@ -49,6 +48,24 @@ export enum PercentValueMode {
 
 export type BenchmarkRangeQueryFormData = QueryFormData & {
   groupby?: QueryFormColumn[] | QueryFormColumn;
+  periodFilter?: QueryFormColumn;
+  entityTypeFilter?: QueryFormColumn;
+  regionFilter?: QueryFormColumn;
+  countryFilter?: QueryFormColumn;
+  entityFilter?: QueryFormColumn;
+  functionFilter?: QueryFormColumn;
+  profitCenterFilter?: QueryFormColumn;
+  barLeftPct?: QueryFormMetric;
+  barWidthPct?: QueryFormMetric;
+  medianPct?: QueryFormMetric;
+  targetPct?: QueryFormMetric;
+  actualPct?: QueryFormMetric;
+  marginLowF?: QueryFormMetric;
+  marginHighF?: QueryFormMetric;
+  marginMedianF?: QueryFormMetric;
+  marginTargetF?: QueryFormMetric;
+  marginActualF?: QueryFormMetric;
+  gapMetric?: QueryFormMetric;
   q1Metric?: QueryFormMetric;
   q3Metric?: QueryFormMetric;
   medianMetric?: QueryFormMetric;
@@ -68,9 +85,11 @@ export type BenchmarkRangeChartProps =
     formData: BenchmarkRangeQueryFormData;
   };
 
-export type BenchmarkRangeDatum = DataRecord & {
+export type BenchmarkRangeDatum = {
+  [key: string]: any;
   actual: number;
   category: string;
+  formatted?: BenchmarkRangeFormattedValues;
   isFiltered: boolean;
   median: number;
   q1: number;
@@ -79,15 +98,27 @@ export type BenchmarkRangeDatum = DataRecord & {
   target: number;
 };
 
+export type BenchmarkRangeFormattedValues = {
+  actual?: string;
+  gap?: string;
+  gapColor?: string;
+  high?: string;
+  low?: string;
+  median?: string;
+  target?: string;
+};
+
 export type BenchmarkRangeFilterColumn = {
   key: string;
   label: string;
 };
 
-export type BenchmarkRangeRecord = DataRecord & {
+export type BenchmarkRangeRecord = {
+  [key: string]: any;
   actual?: number;
   category: string;
   filters: Record<string, string>;
+  formatted?: BenchmarkRangeFormattedValues;
   median?: number;
   q1?: number;
   q3?: number;
