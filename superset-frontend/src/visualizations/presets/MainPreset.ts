@@ -69,6 +69,7 @@ import {
   BigNumberPeriodOverPeriodChartPlugin,
   EchartsHeatmapChartPlugin,
   EchartsGanttChartPlugin,
+  EchartsRootCauseTreemapChartPlugin,
 } from '@superset-ui/plugin-chart-echarts';
 import {
   SelectFilterPlugin,
@@ -88,6 +89,15 @@ import { HandlebarsChartPlugin } from '@superset-ui/plugin-chart-handlebars';
 import { ChartCustomizationPlugins, FilterPlugins } from 'src/constants';
 import AgGridTableChartPlugin from '@superset-ui/plugin-chart-ag-grid-table';
 import TimeTableChartPlugin from '../TimeTable';
+import { TableChartTransposePlugin } from '@superset-ui/plugin-chart-table-transpose';
+import { PluginTableKpi } from "@superset-ui/plugin-table-kpi";
+import { SupersetPluginDashboardFilters } from '@superset-ui/superset-plugin-dashboard-filters';
+import { SupersetPluginChartWhale } from '@superset-ui/plugin-chart-whale';
+import { BigTextChart } from '@superset-ui/plugin-chart-big-text';
+import { PluginChartMarimekko } from '@superset-ui/plugin-chart-marimekko';
+import { BenchmarkRangeChartPlugin } from '@superset-ui/plugin-chart-benchmark-range';
+import { PluginChartGantt } from '@superset-ui/plugin-chart-gantt';
+import { PluginChartMekkoWhale } from '@superset-ui/plugin-chart-mekko-whale';
 
 export default class MainPreset extends Preset {
   constructor() {
@@ -123,6 +133,9 @@ export default class MainPreset extends Preset {
         new EchartsFunnelChartPlugin().configure({ key: VizType.Funnel }),
         new EchartsSankeyChartPlugin().configure({ key: VizType.Sankey }),
         new EchartsTreemapChartPlugin().configure({ key: VizType.Treemap }),
+        new EchartsRootCauseTreemapChartPlugin().configure({
+          key: 'root-cause-treemap',
+        }),
         new EchartsGanttChartPlugin().configure({ key: VizType.Gantt }),
         new EchartsGaugeChartPlugin().configure({ key: VizType.Gauge }),
         new EchartsGraphChartPlugin().configure({ key: VizType.Graph }),
@@ -211,6 +224,15 @@ export default class MainPreset extends Preset {
         }).configure({ key: VizType.Cartodiagram }),
         ...experimentalPlugins,
         ...agGridTablePlugin,
+        new TableChartTransposePlugin().configure({ key: VizType.TransposeTable }),
+        new PluginTableKpi().configure({ key: VizType.TableKpi }),
+        new SupersetPluginDashboardFilters().configure({ key: VizType.DashboardFilters }),
+        new SupersetPluginChartWhale().configure({ key: VizType.Whale }),
+        new BigTextChart().configure({ key: VizType.BigText }),
+        new PluginChartMarimekko().configure({ key: VizType.Marimekko }),
+        new BenchmarkRangeChartPlugin().configure({ key: VizType.BenchmarkRange }),
+        new PluginChartMekkoWhale().configure({ key: 'mekko-whale' }),
+        new PluginChartGantt().configure({ key: VizType.Gantt }),
       ],
     });
   }

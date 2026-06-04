@@ -1,0 +1,972 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+import { t } from '@apache-superset/core/translation';
+import { validateNonEmpty } from '@superset-ui/core';
+import {
+  ControlPanelConfig,
+  ControlSubSectionHeader,
+  D3_FORMAT_DOCS,
+  D3_FORMAT_OPTIONS,
+  D3_NUMBER_FORMAT_DESCRIPTION_VALUES_TEXT,
+  D3_TIME_FORMAT_OPTIONS,
+  getStandardizedControls,
+  sharedControls,
+} from '@superset-ui/chart-controls';
+import {
+  DEFAULT_FORM_DATA,
+  PerformanceAggregation,
+  RootCauseTreemapHierarchyPreset,
+  RootCauseTreemapLabelType,
+} from './types';
+
+const ORDER_TYPE_VALUES = ['Dairy Foods', 'Cheese'];
+
+const COHORT_VALUES = [
+  'Aerosol-Fee for Srvce/Manuf',
+  'Aerosol-Foodservice',
+  'Aerosol-Industrial',
+  'Aerosol-Intercompany',
+  'Aerosol-Retail',
+  'Blue-Export',
+  'Blue-Foodservice',
+  'Blue-Industrial',
+  'Blue-Intercompany',
+  'Blue-Retail',
+  'Cheddar-Foodservice',
+  'Cheddar-Industrial',
+  'Cheddar-Intercompany',
+  'Cheddar-Retail',
+  'Cottage Cheese-Fee for Srvce/Manuf',
+  'Cottage Cheese-Foodservice',
+  'Cottage Cheese-Industrial',
+  'Cottage Cheese-Retail',
+  'Cream-Fee for Srvce/Manuf',
+  'Cream-Foodservice',
+  'Cream-Industrial',
+  'Cream-Retail',
+  'Dairy Creamers PCs-Fee for Srvce/Manuf',
+  'Dairy Creamers PCs-Foodservice',
+  'Dairy Creamers PCs-Industrial',
+  'Dairy Creamers PCs-Intercompany',
+  'Dairy Creamers PCs-Retail',
+  'Dry DPW-Export',
+  'Dry DPW-Industrial',
+  'Dry Goat WPC 55-Export',
+  'Dry Goat WPC 80-Export',
+  'Dry Lactose-Export',
+  'Dry Lactose-Intercompany',
+  'Dry Organic Lactose-Fee for Srvce/Manuf',
+  'Dry Organic Lactose-Industrial',
+  'Dry Organic Lactose-Intercompany',
+  'Dry Organic Sweet Whey-Fee for Srvce/Manuf',
+  'Dry Organic WPC 80-Fee for Srvce/Manuf',
+  'Dry Organic WPC 80-Industrial',
+  'Dry Organic WPH 80-Industrial',
+  'Dry Sweet Whey-Export',
+  'Dry Sweet Whey-Industrial',
+  'Dry WPC 35-Export',
+  'Dry WPC 80-Export',
+  'Dry WPC 80-Industrial',
+  'Dry WPC 80-Intercompany',
+  'Farmers Cheese-Foodservice',
+  'Farmers Cheese-Retail',
+  'Feta-Foodservice',
+  'Feta-Retail',
+  'Goat-Foodservice',
+  'Goat-Industrial',
+  'Goat-Retail',
+  'Hard Italian-Foodservice',
+  'Hard Italian-Industrial',
+  'Hard Italian-Intercompany',
+  'Hard Italian-Retail',
+  'Heavy Cream-Fee for Srvce/Manuf',
+  'Heavy Cream-Foodservice',
+  'Heavy Cream-Industrial',
+  'Heavy Cream-Retail',
+  'Ice Coffee/Frappe Mix-Foodservice',
+  'Ice Cream Mix-Fee for Srvce/Manuf',
+  'Ice Cream Mix-Foodservice',
+  'Ice Cream Mix-Retail',
+  'Lactose Free-Fee for Srvce/Manuf',
+  'Lactose Free-Foodservice',
+  'Lactose Free-Retail',
+  'Mozz/Prov Blends-Foodservice',
+  'Mozz/Prov Blends-Industrial',
+  'Mozz/Prov Blends-Intercompany',
+  'Mozz/Prov Blends-Retail',
+  'Non-Core: Food-Foodservice',
+  'Non-Dairy Cream-Fee for Srvce/Manuf',
+  'Non-Dairy Creamers PCs-Fee for Srvce/Manuf',
+  'Non-Dairy Creamers PCs-Foodservice',
+  'Non-Dairy Creamers PCs-Intercompany',
+  'Non-Dairy Creamers PCs-Retail',
+  'Nutritional Beverages-Fee for Srvce/Manuf',
+  'Organic-Retail',
+  'Plant Based Beverages-Retail',
+  'Pressed Mozzarella-Industrial',
+  'Pressed Mozzarella-Retail',
+  'Pressed-Foodservice',
+  'Pressed-Industrial',
+  'Pressed-Retail',
+  'Processed-Retail',
+  'Provolone-Export',
+  'Provolone-Foodservice',
+  'Provolone-Industrial',
+  'Provolone-Retail',
+  'Snack Kits/Variety Packs-Foodservice',
+  'Snack Kits/Variety Packs-Retail',
+  'Soft-Retail',
+  'Sour Cream-Fee for Srvce/Manuf',
+  'Sour Cream-Foodservice',
+  'Sour Cream-Industrial',
+  'Sour Cream-Retail',
+  'Specialty Milk-Fee for Srvce/Manuf',
+  'Specialty Milk-Foodservice',
+  'Sticks/Cubes-Foodservice',
+  'Sticks/Cubes-Intercompany',
+  'Sticks/Cubes-Retail',
+  'Stretched Mozzarella-Export',
+  'Stretched Mozzarella-Foodservice',
+  'Stretched Mozzarella-Industrial',
+  'Stretched Mozzarella-Intercompany',
+  'Stretched Mozzarella-Retail',
+  'String-Export',
+  'String-Foodservice',
+  'String-Intercompany',
+  'String-Retail',
+  'Yogurt-Fee for Srvce/Manuf',
+];
+
+const L3_CUSTOMER_VALUES = [
+  'L3-5GUYS-INDIRECT',
+  'L3-A&W-FSRV',
+  'L3-A2 MILK-FFSV',
+  'L3-AAFES',
+  'L3-ADELMAN-RETL',
+  'L3-AHOLD DELHAIZE USA',
+  'L3-ALBERTSONS',
+  'L3-ALBERTSONS-BREA',
+  'L3-ALBERTSONS-DENVER',
+  'L3-ALBERTSONS-JEWEL',
+  'L3-ALBERTSONS-PORTLAND',
+  'L3-ALBERTSONS-RANDALLS',
+  'L3-ALBERTSONS-SEATTLE',
+  'L3-ALBERTSONS-SHAWS',
+  'L3-ALBERTSONS-TOLLESON',
+  'L3-ALBERTSONS-TRACY',
+  'L3-ALBERTSONS-UNITED SUPRMKTS',
+  'L3-ALDI',
+  'L3-ALPINE FOOD DIST-FSRV',
+  'L3-AMAZONFRESH-RETL',
+  'L3-AMERICANA COMMISSARY/GIORDANOS',
+  "L3-AMY'S KITCHEN-INDU",
+  'L3-ARBYS',
+  'L3-ARMADA WAREHOUSE-FSRV',
+  'L3-ARMANINO FOODS OF DISTINCTION',
+  'L3-ARTHUR SCHUMAN-INDU',
+  'L3-ATLANTIC GRAIN & TRADE-INDU',
+  'L3-AUSTRALIA',
+  'L3-AVH FOODS, INC-INDU',
+  'L3-AWG-RETL',
+  'L3-BAKEMARK USA LLC',
+  'L3-BASKIN ROBBINS-FSRV',
+  'L3-BELLISSIMO FOODS CO-FSRV',
+  'L3-BEN E KEITH',
+  "L3-BERNATELLO'S PIZZA-INDU",
+  'L3-BJS WHOLESALE CLUB INC',
+  'L3-BLUE LINE/LITTLE CAESARS',
+  'L3-BOARS HEAD/BRUNCKHORST',
+  'L3-BOJANGLES-FSRV',
+  'L3-BORDEN',
+  "L3-BOZZUTO'S-RETL",
+  'L3-BRAUMS ICE CREAM PLANT-INDU',
+  'L3-BRAZIL',
+  'L3-BURGER KING-INDIRECT',
+  'L3-BURRIS LOGISTICS-HONOR FOODS',
+  'L3-BY-GEORGE FOODS-FSRV',
+  'L3-C&S WHOLESALE',
+  'L3-C-STORE-CORE MARK',
+  'L3-C-STORE-CUMBERLAND',
+  'L3-C-STORE-MCLANE',
+  'L3-CALIFORNIA PIZZA KITCHEN',
+  'L3-CAMPBELL SOUP-INDU',
+  'L3-CANADA',
+  "L3-CAPRIOTTI'S SANDWICH SHOP",
+  'L3-CARVEL-INDIRECT',
+  'L3-CASTLE IMPORTING INC.-INDU',
+  'L3-CERENZIA FOODS-FSRV',
+  'L3-CHALLENGE DAIRY PRODUCTS-INDU',
+  'L3-CHECKERS',
+  'L3-CHEESECAKE FACTORY-INDIRECT',
+  'L3-CHENEY BROTHERS INC-FSRV',
+  'L3-CHICK-FIL-A',
+  'L3-CHILE',
+  'L3-CHINA',
+  'L3-CHIPOTLE',
+  'L3-CHUCK E CHEESE',
+  'L3-CICI ENTERPRISES LP',
+  'L3-CIRCLE-K',
+  'L3-CLOVER DISTRIBUTION WHS-INDU',
+  'L3-COLD STONE-INDIRECT',
+  'L3-COLOMBIA',
+  'L3-CONAGRA BRANDS-INDU',
+  'L3-COSTAS PROVISIONS-FSRV',
+  'L3-COSTCO EXPORT',
+  'L3-COSTCO MAINLAND',
+  'L3-CUISINE SOLUTIONS-INDU',
+  'L3-CUSTOM FOODS OF AMERICA-INDU',
+  'L3-D&F-FSRV',
+  'L3-DAIRY FARMERS OF AMERICA',
+  'L3-DAIRY QUEEN-INDIRECT',
+  'L3-DANONE',
+  'L3-DARDEN',
+  'L3-DARDEN-INDIRECT',
+  'L3-DEMOULAS',
+  'L3-DENMARK',
+  'L3-DINEEQUITY-INDIRECT',
+  "L3-DOMINO'S",
+  'L3-DONATOS PIZZA',
+  'L3-DRISCOLL FOODS-FSRV',
+  'L3-DUTCH FARMS-RETL',
+  'L3-FACTOR 75, INC/HELLOFRESH',
+  'L3-FERRARO FOODS-FSRV',
+  'L3-FOSTER POULTRY FARMS-INDU',
+  'L3-FRONT BURNER SOCIETY',
+  'L3-FRY FOODS, INC-INDU',
+  'L3-GERMANY',
+  'L3-GIANT EAGLE-RETL',
+  'L3-GOLDEN CORRAL-FSRV',
+  'L3-GOOD CULTURE-FFSV',
+  'L3-GORDON FDSVC',
+  'L3-GOURMET FOODS INTL-RETL',
+  'L3-GREAT BRITAIN',
+  'L3-GREEN MILL',
+  'L3-GROCERY OUTLET-RETL',
+  'L3-H-E-B',
+  'L3-HARRIS TEETER',
+  'L3-HP HOOD',
+  'L3-INDIA',
+  'L3-INGLES-RETL',
+  'L3-INTEGRATED FOOD SERVICE',
+  'L3-INTER-COMPANY',
+  'L3-IPAP',
+  'L3-IPAP/CHENEY',
+  'L3-IPAP/PFG',
+  'L3-IPMF, LLC-INDU',
+  'L3-IRAQ',
+  'L3-J&J SNACK FOODS CORP-INDU',
+  'L3-JACK IN THE BOX',
+  'L3-JACKSON MITCHEL-FFSV',
+  'L3-JAPAN',
+  "L3-JERSEY MIKE'S",
+  "L3-K T'S KITCHEN-INDU",
+  'L3-KEHE DISTRIBUTORS-RETL',
+  'L3-KEMPER FOODS',
+  "L3-KEN'S",
+  'L3-KERRY INGREDIENTS',
+  'L3-KRADJIAN IMPORTING CO',
+  'L3-KRADJIAN-RETL',
+  'L3-KRAFT-DOMESTIC INGR',
+  'L3-KRAFT-UNITED STATES',
+  'L3-KROGER',
+  'L3-KROGER-DILLIONS',
+  'L3-KROGER-FRED MEYER',
+  "L3-KROGER-FRY'S",
+  'L3-KROGER-KING SOOPERS',
+  'L3-KROGER-RALPHS',
+  'L3-KROGER-ROUNDYS',
+  'L3-KROGER-SMITH FOOD & DRUG',
+  'L3-KRYSTAL-FSRV',
+  'L3-L&C DISTRIBUTING-FSRV',
+  'L3-LABATT FOOD SERVICE-FSRV',
+  "L3-LAND O' LAKES",
+  'L3-LANDRYS MANAGEMENT',
+  'L3-LEBANON',
+  'L3-LEDO PIZZA SYSTEMS INC',
+  'L3-LFI INC-FSRV',
+  'L3-LINEAGE FOOD SERVICE',
+  'L3-LION PRODUCTIVITIES ENT LLC-INDU',
+  'L3-LIPARI-RETL',
+  'L3-LISANTI',
+  "L3-MAGGIANO'S",
+  "L3-MARCO'S FRANCHISING, LLC",
+  'L3-MCCAIN FOODS-INDU',
+  'L3-MCDONALDS',
+  'L3-MCLANE FOODSERVICE-FSRV',
+  'L3-MEGA FOODS INTL-RETL',
+  'L3-MEIJER',
+  'L3-MEXICO',
+  'L3-MEXIDELI-RETL',
+  'L3-MILANO RESTAURANT INTL',
+  'L3-MILITARY DELI/BAKERY-RETL',
+  'L3-MILLER CHEESE CORPORATION',
+  'L3-MIRACAPO PIZZA COMPANY-INDU',
+  'L3-MIZKAN AMERICA',
+  'L3-MOD SUPER FAST PIZZA',
+  'L3-MONOGRAM FOOD SOLUTIONS',
+  'L3-NESTLE',
+  'L3-NETHERLANDS',
+  'L3-NEW ZEALAND',
+  'L3-NICHOLAS & CO-FSRV',
+  'L3-OGGIS PIZZA & BREWING CO',
+  'L3-ORGANIC VALLEY',
+  'L3-PACIFIC CHEESE CO.-INDU',
+  'L3-PALERMO VILLA, INC.-INDU',
+  'L3-PANAMA',
+  'L3-PANERA',
+  'L3-PAPA JOHNS FOODSERVICE',
+  'L3-PERFORMANCE FDSVC-PFG',
+  'L3-PERU',
+  'L3-PETER DEFRIES CORP-FSRV',
+  'L3-PETER PIPER LLC',
+  'L3-PHILIPPINES',
+  'L3-PRAIRIE FARMS',
+  'L3-PREMIER NUTRITION-FFSV',
+  'L3-PUBLIX',
+  'L3-RALEYS SUPERMARKETS-RETL',
+  'L3-RANA MEAL SOLUTIONS',
+  'L3-RDP FOODSERVICE-FSRV',
+  'L3-RED LOBSTER-INDIRECT',
+  'L3-RED ROBIN',
+  "L3-RESER'S FINE FOODS",
+  'L3-RESTAURANT DEPOT CENTRAL',
+  'L3-RESTAURANT DEPOT EAST',
+  'L3-RESTAURANT DEPOT WEST',
+  'L3-RICH PRODUCTS',
+  'L3-RICHELIEU FOODS',
+  'L3-ROSE & SHORE INC-INDU',
+  'L3-ROUND TABLE PIZZA',
+  "L3-RUBIO'S RESTAURANTS INC",
+  "L3-SALADINO'S",
+  'L3-SAMS CLUB',
+  'L3-SAPUTO CANADA-AB',
+  'L3-SAPUTO CANADA-BC',
+  'L3-SAPUTO CANADA-ON',
+  'L3-SAPUTO CANADA-QC',
+  'L3-SARA LEE',
+  'L3-SARGENTO CHEESE',
+  'L3-SCHNUCKS MARKETS-RETL',
+  'L3-SHAMROCK',
+  'L3-SIMPLY GOOD FOODS-FFSV',
+  'L3-SINGAPORE',
+  'L3-SK FOOD GROUP INC-INDU',
+  'L3-SMART & FINAL',
+  'L3-SOFO FOODS-FSRV',
+  'L3-SONIC-INDIRECT',
+  'L3-SOUTH AFRICA',
+  'L3-SOUTH KOREA',
+  'L3-SPARTANNASH COMPANY-RETL',
+  'L3-STONYFIELD FARMS-FFSV',
+  'L3-STRAW HAT RESTAURANTS',
+  'L3-SUNNY MORNING FOODS-FSRV',
+  'L3-USDA-WASHINGTON',
+  'L3-USDA-WISCONSIN',
+  'L3-VALLEY FINE FOODS-INDU',
+  'L3-VAN EERDEN-FSRV',
+  'L3-VAN LAW FOOD PRODUCTS, INC-INDU',
+  'L3-VENTURA FOODS-INDU',
+  'L3-VESTA FOODSERVICE-FSRV',
+  'L3-VIETNAM',
+  'L3-VISTAR-RETL',
+  'L3-WAKEFERN',
+  'L3-WALMART',
+  'L3-WEGMANS WHS-RETL',
+  'L3-WHATABURGER',
+  'L3-WHOLE FOODS',
+  'L3-WINCO',
+  'L3-WINGSTOP RESTAURANTS',
+  'L3-WINLAND FOODS INC',
+  'L3-WINONA-INDU',
+  'L3-WM. BOLTHOUSE FARMS INC-INDU',
+  'L3-WORLD CHEESE',
+  'L3-WORLD IMPORT DISTRIBUTORS-RETL',
+  'L3-Y HATA & CO-FSRV',
+];
+
+const PRODUCT_DISTANCE_VALUES = [
+  'Distance Zone 1',
+  'Distance Zone 2',
+  'Distance Zone 3',
+  'Distance Zone 4',
+  'Distance Zone 5',
+  'None Distance',
+];
+
+const PRODUCTION_PLANT_VALUES = [
+  '3100',
+  '3102',
+  '3105',
+  '3108',
+  '3110',
+  '3113',
+  '3116',
+  '3117',
+  '3119',
+  '3120',
+  '3127',
+  '3139',
+  '3150',
+  '3151',
+  '3502',
+  '3505',
+  '3506',
+  '3508',
+  '3509',
+  '3510',
+  '3511',
+  '3513',
+  '3514',
+  '3515',
+  '3536',
+  '3543',
+  '3570',
+  '3571',
+  '3577',
+  '3587',
+  '3593',
+  '3601',
+  '3603',
+  '3604',
+];
+
+const PRODUCT_GROUP_VALUES = [
+  'Aerosol',
+  'Blue',
+  'Cheddar',
+  'Cottage Cheese',
+  'Cream',
+  'Dairy Creamers PCs',
+  'Dry DPW',
+  'Dry Goat WPC 55',
+  'Dry Goat WPC 80',
+  'Dry Lactose',
+  'Dry Organic Lactose',
+  'Dry Organic Sweet Whey',
+  'Dry Organic WPC 80',
+  'Dry Organic WPH 80',
+  'Dry Sweet Whey',
+  'Dry WPC 35',
+  'Dry WPC 80',
+  'Farmers Cheese',
+  'Feta',
+  'Goat',
+  'Hard Italian',
+  'Heavy Cream',
+  'Ice Coffee/Frappe Mix',
+  'Ice Cream Mix',
+  'Lactose Free',
+  'Mozz/Prov Blends',
+  'Non-Core: Food',
+  'Non-Dairy Cream',
+  'Non-Dairy Creamers PCs',
+  'Nutritional Beverages',
+  'Organic',
+  'Plant Based Beverages',
+  'Pressed',
+  'Pressed Mozzarella',
+  'Processed',
+  'Provolone',
+  'Snack Kits/Variety Packs',
+  'Soft',
+  'Sour Cream',
+  'Specialty Milk',
+  'Sticks/Cubes',
+  'Stretched Mozzarella',
+  'String',
+  'Yogurt',
+];
+
+const DISTRIBUTION_CHANNEL_VALUES = [
+  'Export',
+  'Fee for Srvce/Manuf',
+  'Foodservice',
+  'Industrial',
+  'Intercompany',
+  'Retail',
+];
+
+const KOSHER_NON_KOSHER_VALUES = ['Non-Kosher'];
+
+const ORGANIC_NON_ORGANIC_VALUES = ['Organic', 'Non-Organic'];
+
+const NON_GMO_INDICATOR_VALUES = ['GMO', 'Non-GMO'];
+
+const LACTOSE_FREE_INDICATOR_VALUES = ['Contains Lactose', 'Lactose Free'];
+
+const BRANDED_PRIVATE_LABEL_VALUES = [
+  'Branded (Licensed)',
+  'Branded (Owned)',
+  'Private Label (Cust)',
+  'Procured / Purchased',
+  'Unbranded / No Brand',
+];
+
+const buildChoices = (values: string[]) => values.map(value => [value, value]);
+
+const includeAllControl = (
+  label: string,
+  description: string,
+  values: string[] = [],
+) => ({
+  type: 'SelectControl',
+  label,
+  default: [],
+  multi: true,
+  freeForm: true,
+  choices: buildChoices(values),
+  placeholder: t('Include All'),
+  description,
+});
+
+const {
+  excludeNegativeContribution,
+  hierarchyPreset,
+  labelType,
+  numberFormat,
+  performanceAggregation,
+  performanceFormat,
+  removePerformanceOutliers,
+  showLabels,
+  showUpperLabels,
+  visibleMin,
+} = DEFAULT_FORM_DATA;
+
+const config: ControlPanelConfig = {
+  controlPanelSections: [
+    {
+      label: t('Query'),
+      expanded: true,
+      controlSetRows: [
+        [
+          {
+            name: 'hierarchy_preset',
+            config: {
+              type: 'SelectControl',
+              label: t('Hierarchy order'),
+              default: hierarchyPreset,
+              clearable: false,
+              renderTrigger: false,
+              choices: [
+                [
+                  RootCauseTreemapHierarchyPreset.OrderCustomerProductChannel,
+                  t('Order Type -> Customer -> Product -> Channel'),
+                ],
+                [
+                  RootCauseTreemapHierarchyPreset.OrderProductChannelCustomer,
+                  t('Order Type -> Product -> Channel -> Customer'),
+                ],
+                [
+                  RootCauseTreemapHierarchyPreset.CustomerOrderProductChannel,
+                  t('Customer -> Order Type -> Product -> Channel'),
+                ],
+                [RootCauseTreemapHierarchyPreset.Custom, t('Custom')],
+              ],
+              description: t(
+                'Choose one of the default hierarchy orders, or choose Custom to use the Root cause hierarchy columns below.',
+              ),
+            },
+          },
+        ],
+        ['columns'],
+        ['metric'],
+        ['secondary_metric'],
+        [
+          {
+            name: 'tooltip_metrics',
+            config: {
+              ...sharedControls.metrics,
+              label: t('Tooltip metrics'),
+              validators: [],
+              description: t(
+                'Additional metrics to aggregate and display in the tooltip.',
+              ),
+            },
+          },
+        ],
+        ['adhoc_filters'],
+        ['time_range'],
+        ['row_limit'],
+        ['sort_by_metric'],
+      ],
+    },
+    {
+      label: t('Root Cause Options'),
+      expanded: true,
+      controlSetRows: [
+        [
+          {
+            name: 'exclude_negative_contribution',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Exclude negative contribution'),
+              default: excludeNegativeContribution,
+              renderTrigger: true,
+              description: t(
+                'Remove rows where the contribution metric is below zero before building the hierarchy.',
+              ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'remove_performance_outliers',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Remove EP% outliers (1.5x IQR)'),
+              default: removePerformanceOutliers,
+              renderTrigger: true,
+              description: t(
+                'Remove rows outside the 1.5x IQR range of the EP% performance metric before building the hierarchy.',
+              ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'performance_aggregation',
+            config: {
+              type: 'SelectControl',
+              label: t('Performance aggregation'),
+              default: performanceAggregation,
+              clearable: false,
+              renderTrigger: true,
+              choices: [
+                [
+                  PerformanceAggregation.WeightedAverage,
+                  t('Weighted average by contribution'),
+                ],
+                [PerformanceAggregation.Average, t('Average')],
+                [PerformanceAggregation.Sum, t('Sum')],
+              ],
+              description: t(
+                'How parent tiles calculate the performance metric from child tiles.',
+              ),
+            },
+          },
+        ],
+      ],
+    },
+    {
+      label: t('Root Cause Dimensions'),
+      expanded: true,
+      controlSetRows: [
+        [
+          <ControlSubSectionHeader>
+            {t('Business Attributes')}
+          </ControlSubSectionHeader>,
+        ],
+        [
+          {
+            name: 'order_type_values',
+            config: includeAllControl(
+              t('Order Type'),
+              t('Select order type values to include. Leave empty for all.'),
+              ORDER_TYPE_VALUES,
+            ),
+          },
+        ],
+        [
+          {
+            name: 'cohort_values',
+            config: includeAllControl(
+              t('Cohort'),
+              t('Select cohort values to include. Leave empty for all.'),
+              COHORT_VALUES,
+            ),
+          },
+        ],
+        [
+          <ControlSubSectionHeader>
+            {t('Customer Attributes')}
+          </ControlSubSectionHeader>,
+        ],
+        [
+          {
+            name: 'l3_customer_values',
+            config: includeAllControl(
+              t('L3 Customer'),
+              t('Select L3 customer values to include. Leave empty for all.'),
+              L3_CUSTOMER_VALUES,
+            ),
+          },
+        ],
+        [
+          {
+            name: 'product_distance_values',
+            config: includeAllControl(
+              t('Product Distance'),
+              t(
+                'Select product distance values to include. Leave empty for all.',
+              ),
+              PRODUCT_DISTANCE_VALUES,
+            ),
+          },
+        ],
+        [
+          <ControlSubSectionHeader>
+            {t('Facility Attributes')}
+          </ControlSubSectionHeader>,
+        ],
+        [
+          {
+            name: 'production_plant_values',
+            config: includeAllControl(
+              t('Production Plant'),
+              t(
+                'Select production plant values to include. Leave empty for all.',
+              ),
+              PRODUCTION_PLANT_VALUES,
+            ),
+          },
+        ],
+        [
+          <ControlSubSectionHeader>
+            {t('Product Attributes')}
+          </ControlSubSectionHeader>,
+        ],
+        [
+          {
+            name: 'product_group_ibp_group_2_values',
+            config: includeAllControl(
+              t('Product Group (IBP Group 2)'),
+              t('Select product group values to include. Leave empty for all.'),
+              PRODUCT_GROUP_VALUES,
+            ),
+          },
+        ],
+        [
+          {
+            name: 'distribution_channel_values',
+            config: includeAllControl(
+              t('Distribution Channel'),
+              t(
+                'Select distribution channel values to include. Leave empty for all.',
+              ),
+              DISTRIBUTION_CHANNEL_VALUES,
+            ),
+          },
+        ],
+        [
+          {
+            name: 'kosher_non_kosher_values',
+            config: includeAllControl(
+              t('Kosher v. Non-Kosher'),
+              t('Select kosher status values to include. Leave empty for all.'),
+              KOSHER_NON_KOSHER_VALUES,
+            ),
+          },
+        ],
+        [
+          {
+            name: 'organic_non_organic_values',
+            config: includeAllControl(
+              t('Organic v. Non-Organic'),
+              t(
+                'Select organic status values to include. Leave empty for all.',
+              ),
+              ORGANIC_NON_ORGANIC_VALUES,
+            ),
+          },
+        ],
+        [
+          {
+            name: 'non_gmo_indicator_values',
+            config: includeAllControl(
+              t('Non-GMO Indicator'),
+              t(
+                'Select Non-GMO indicator values to include. Leave empty for all.',
+              ),
+              NON_GMO_INDICATOR_VALUES,
+            ),
+          },
+        ],
+        [
+          {
+            name: 'lactose_free_indicator_values',
+            config: includeAllControl(
+              t('Lactose-Free Indicator'),
+              t(
+                'Select lactose-free indicator values to include. Leave empty for all.',
+              ),
+              LACTOSE_FREE_INDICATOR_VALUES,
+            ),
+          },
+        ],
+        [
+          {
+            name: 'branded_private_label_values',
+            config: includeAllControl(
+              t('Branded v. Private Label'),
+              t(
+                'Select branded or private label values to include. Leave empty for all.',
+              ),
+              BRANDED_PRIVATE_LABEL_VALUES,
+            ),
+          },
+        ],
+      ],
+    },
+    {
+      label: t('Chart Options'),
+      expanded: true,
+      controlSetRows: [
+        [<ControlSubSectionHeader>{t('Labels')}</ControlSubSectionHeader>],
+        [
+          {
+            name: 'show_labels',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show labels'),
+              renderTrigger: true,
+              default: showLabels,
+              description: t('Whether to display labels inside leaf tiles.'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'show_upper_labels',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show parent labels'),
+              renderTrigger: true,
+              default: showUpperLabels,
+              description: t('Show labels on tiles that contain children.'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'label_type',
+            config: {
+              type: 'SelectControl',
+              label: t('Label type'),
+              default: labelType,
+              clearable: false,
+              renderTrigger: true,
+              choices: [
+                [RootCauseTreemapLabelType.Name, t('Name')],
+                [RootCauseTreemapLabelType.NameValue, t('Name and value')],
+                [
+                  RootCauseTreemapLabelType.RootCause,
+                  t('Name, performance, and value'),
+                ],
+              ],
+              description: t('Metrics displayed inside each tile.'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'visible_min',
+            config: {
+              type: 'TextControl',
+              label: t('Minimum visible tile size'),
+              default: visibleMin,
+              isFloat: true,
+              renderTrigger: true,
+              description: t(
+                'Tiles smaller than this pixel area are hidden to keep large hierarchies responsive.',
+              ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'number_format',
+            config: {
+              type: 'SelectControl',
+              freeForm: true,
+              label: t('Number format'),
+              renderTrigger: true,
+              default: numberFormat,
+              choices: D3_FORMAT_OPTIONS,
+              description: `${D3_FORMAT_DOCS} ${D3_NUMBER_FORMAT_DESCRIPTION_VALUES_TEXT}`,
+            },
+          },
+        ],
+        ['currency_format'],
+        [
+          {
+            name: 'performance_format',
+            config: {
+              type: 'SelectControl',
+              freeForm: true,
+              label: t('Performance format'),
+              renderTrigger: true,
+              default: performanceFormat,
+              choices: D3_FORMAT_OPTIONS,
+              description: `${D3_FORMAT_DOCS} ${D3_NUMBER_FORMAT_DESCRIPTION_VALUES_TEXT}`,
+            },
+          },
+        ],
+        [
+          {
+            name: 'date_format',
+            config: {
+              type: 'SelectControl',
+              freeForm: true,
+              label: t('Date format'),
+              renderTrigger: true,
+              choices: D3_TIME_FORMAT_OPTIONS,
+              default: DEFAULT_FORM_DATA.dateFormat,
+              description: D3_FORMAT_DOCS,
+            },
+          },
+        ],
+      ],
+    },
+  ],
+  controlOverrides: {
+    columns: {
+      label: t('Root cause hierarchy'),
+      description: t(
+        'Used when Hierarchy order is set to Custom. Drag columns to switch the hierarchy order.',
+      ),
+      visibility: ({ controls }) =>
+        controls?.hierarchy_preset?.value ===
+        RootCauseTreemapHierarchyPreset.Custom,
+    },
+    metric: {
+      label: t('Contribution metric'),
+      description: t(
+        'Metric used for rectangle area, such as revenue or count.',
+      ),
+      validators: [validateNonEmpty],
+    },
+    secondary_metric: {
+      label: t('Performance metric'),
+      description: t(
+        'Metric used for the red-to-green color scale, such as EP % of sales.',
+      ),
+      validators: [validateNonEmpty],
+    },
+    row_limit: {
+      default: 10000,
+    },
+  },
+  formDataOverrides: formData => ({
+    ...formData,
+    groupby: getStandardizedControls().popAllColumns(),
+    metric: getStandardizedControls().shiftMetric(),
+    secondary_metric: getStandardizedControls().shiftMetric(),
+  }),
+};
+
+export default config;
