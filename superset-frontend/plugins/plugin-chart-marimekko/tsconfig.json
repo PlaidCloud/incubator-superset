@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "allowSyntheticDefaultImports": true,
+    "baseUrl": ".",
     "declaration": true,
     "declarationDir": "lib",
     "esModuleInterop": true,
@@ -17,6 +18,14 @@
     "noImplicitReturns": true,
     "noUnusedLocals": true,
     "outDir": "lib",
+    "paths": {
+      "@apache-superset/core": [
+        "../../packages/superset-core/lib/index.d.ts"
+      ],
+      "@apache-superset/core/*": [
+        "../../packages/superset-core/lib/*/index.d.ts"
+      ]
+    },
     "pretty": true,
     "removeComments": false,
     "strict": true,

@@ -30,6 +30,7 @@
   },
   "peerDependencies": {
     "@airbnb/config-babel": "^2.0.1",
+    "@apache-superset/core": "*",
     "@superset-ui/chart-controls": "*",
     "@superset-ui/core": "*",
     "echarts": "*",

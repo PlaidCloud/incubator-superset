@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import React from 'react';
 import { getNumberFormatter } from '@superset-ui/core';
 import ReactECharts from 'echarts-for-react';
 import { PluginChartMarimekkoProps } from './types';

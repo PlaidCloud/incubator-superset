@@ -1,18 +1,58 @@
 {
-  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "composite": true,
-    "rootDir": "src",
-    "outDir": "lib",
+    "allowSyntheticDefaultImports": true,
     "baseUrl": ".",
+    "composite": true,
+    "declaration": true,
+    "declarationDir": "lib",
+    "declarationMap": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "jsx": "react-jsx",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "module": "esnext",
+    "moduleResolution": "node",
+    "noEmitOnError": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noUnusedLocals": true,
+    "outDir": "lib",
     "paths": {
-      "@superset-ui/core/components": ["../../packages/superset-ui-core/src/components"]
-    }
+      "@apache-superset/core": [
+        "../../packages/superset-core/lib/index.d.ts"
+      ],
+      "@apache-superset/core/*": [
+        "../../packages/superset-core/lib/*/index.d.ts"
+      ],
+      "@superset-ui/chart-controls": [
+        "../../packages/superset-ui-chart-controls/lib/index.d.ts"
+      ],
+      "@superset-ui/chart-controls/*": [
+        "../../packages/superset-ui-chart-controls/lib/*/index.d.ts"
+      ],
+      "@superset-ui/core": [
+        "../../packages/superset-ui-core/lib/index.d.ts"
+      ],
+      "@superset-ui/core/*": [
+        "../../packages/superset-ui-core/lib/*/index.d.ts"
+      ],
+      "@superset-ui/core/components": [
+        "../../packages/superset-ui-core/lib/components/index.d.ts"
+      ],
+      "@superset-ui/core/components/*": [
+        "../../packages/superset-ui-core/lib/components/*/index.d.ts"
+      ]
+    },
+    "resolveJsonModule": true,
+    "rootDir": "src",
+    "skipLibCheck": true,
+    "strictNullChecks": true,
+    "target": "es2020",
+    "typeRoots": ["./node_modules/@types", "../../node_modules/@types"],
+    "types": ["jest", "node"],
+    "useDefineForClassFields": false
   },
   "include": ["src/**/*", "types/**/*"],
-  "exclude": ["lib", "test", "src/**/*.test.ts", "src/**/*.test.tsx"],
-  "references": [
-    { "path": "../../packages/superset-ui-core" },
-    { "path": "../../packages/superset-ui-chart-controls" }
-  ]
+  "exclude": ["lib", "test", "src/**/*.test.ts", "src/**/*.test.tsx"]
 }

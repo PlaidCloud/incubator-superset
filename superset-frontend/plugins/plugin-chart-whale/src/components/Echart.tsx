@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import {
+import React, {
   useRef,
   useEffect,
   useMemo,
@@ -25,7 +25,7 @@ import {
   useCallback,
   Ref,
 } from 'react';
-import { styled } from '@superset-ui/core';
+import { styled } from '@apache-superset/core/theme';
 import { EChartsType, init } from 'echarts';
 import { EchartsHandler, EchartsProps, EchartsStylesProps } from '../types';
 

@@ -34,6 +34,7 @@
     "moment": "^2.30.1"
   },
   "peerDependencies": {
+    "@apache-superset/core": "*",
     "@superset-ui/chart-controls": "*",
     "@superset-ui/core": "*",
     "echarts": "*",

@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import React from 'react';
 import { allEventHandlers } from '@superset-ui/plugin-chart-echarts/src/utils/eventHandlers';
 import { WhaleChartTransformedProps } from './types';
 import Echart from './components/Echart';

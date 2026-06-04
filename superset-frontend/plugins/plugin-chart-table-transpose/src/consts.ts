@@ -16,9 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { t } from '@apache-superset/core/translation';
+import { addLocaleData, t } from '@apache-superset/core/translation';
 import { formatSelectOptions } from '@superset-ui/chart-controls';
-import { addLocaleData } from '@superset-ui/core';
 import i18n from './i18n';
 
 addLocaleData(i18n);

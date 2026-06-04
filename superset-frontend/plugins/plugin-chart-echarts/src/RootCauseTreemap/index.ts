@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import { t } from '@apache-superset/core/translation';
 import { Behavior } from '@superset-ui/core';
 import thumbnail from '../Treemap/images/thumbnail.png';
 import { EchartsChartPlugin } from '../types';

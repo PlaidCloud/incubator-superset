@@ -42,16 +42,13 @@ import {
   DataRecordValue,
   DTTM_ALIAS,
   ensureIsArray,
-  GenericDataType,
   getSelectedText,
   getTimeFormatterForGranularity,
   BinaryQueryObjectFilterClause,
-  styled,
-  css,
-  t,
-  tn,
-  useTheme,
 } from '@superset-ui/core';
+import { GenericDataType } from '@apache-superset/core/common';
+import { t, tn } from '@apache-superset/core/translation';
+import { css, styled, useTheme } from '@apache-superset/core/theme';
 import { Dropdown, Menu } from '@superset-ui/chart-controls';
 import { Tooltip } from '@superset-ui/core/components';
 import {

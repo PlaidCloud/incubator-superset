@@ -18,12 +18,12 @@
  */
 import React, { MouseEvent } from 'react';
 import {
-  t,
   getNumberFormatter,
   createSmartDateVerboseFormatter,
   computeMaxFontSize,
-  styled,
 } from '@superset-ui/core';
+import { t } from '@apache-superset/core/translation';
+import { styled } from '@apache-superset/core/theme';
 import { BigNumberVizProps } from '../types';
 import { BRAND_COLOR } from '../utils';
 

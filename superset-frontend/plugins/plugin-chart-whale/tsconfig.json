@@ -1,19 +1,58 @@
 {
   "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "composite": true,
+    "declaration": true,
     "declarationDir": "lib",
+    "declarationMap": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": false,
+    "jsx": "react",
+    "lib": [
+      "dom",
+      "esnext"
+    ],
+    "module": "esnext",
+    "moduleResolution": "node",
+    "noEmitOnError": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noImplicitAny": false,
     "outDir": "lib",
-    "rootDir": "src",
-    "noImplicitAny": false
-  },
-  "exclude": ["lib", "test"],
-  "extends": "../../tsconfig.json",
-  "include": ["src/**/*", "types/**/*", "../../types/**/*"],
-  "references": [
-    {
-      "path": "../../packages/superset-ui-chart-controls"
+    "paths": {
+      "@apache-superset/core": [
+        "../../packages/superset-core/lib/index.d.ts"
+      ],
+      "@apache-superset/core/*": [
+        "../../packages/superset-core/lib/*/index.d.ts"
+      ],
+      "@superset-ui/plugin-chart-echarts/src/*": [
+        "../plugin-chart-echarts/lib/*"
+      ]
     },
-    {
-      "path": "../../packages/superset-ui-core"
-    }
+    "pretty": true,
+    "removeComments": false,
+    "resolveJsonModule": true,
+    "rootDir": "src",
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "es2015",
+    "typeRoots": [
+      "./node_modules/@types",
+      "../../node_modules/@types"
+    ],
+    "types": [
+      "jest"
+    ],
+    "useDefineForClassFields": false
+  },
+  "exclude": [
+    "lib",
+    "test"
+  ],
+  "include": [
+    "src/**/*",
+    "types/**/*"
   ]
 }

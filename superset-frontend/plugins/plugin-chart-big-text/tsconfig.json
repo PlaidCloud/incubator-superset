@@ -16,6 +16,9 @@
   ],
   "references": [
     {
+      "path": "../../packages/superset-core"
+    },
+    {
       "path": "../../packages/superset-ui-chart-controls"
     },
     {

@@ -18,7 +18,7 @@
  */
 import React, { useEffect, createRef, useState, useRef } from 'react';
 import { Select, Button } from 'antd';
-import { styled } from '@superset-ui/core';
+import { styled } from '@apache-superset/core/theme';
 import type { TimeseriesDataRecord } from '@superset-ui/core';
 import {
   SupersetPluginDashboardFiltersProps,

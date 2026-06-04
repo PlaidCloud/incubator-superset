@@ -17,7 +17,7 @@
  * under the License.
  */
 import { memo } from 'react';
-import { t } from '@superset-ui/core';
+import { t } from '@apache-superset/core/translation';
 import { formatSelectOptions } from '@superset-ui/chart-controls';
 
 export type SizeOption = [number, string];

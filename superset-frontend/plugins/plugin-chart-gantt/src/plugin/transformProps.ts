@@ -17,7 +17,8 @@
  * under the License.
  */
 import { ChartProps, getCategoricalSchemeRegistry } from '@superset-ui/core';
-import { EChartsOption } from 'echarts';
+import type { EChartsOption } from 'echarts';
+import type { CallbackDataParams } from 'echarts/types/src/util/types';
 import { GanttTask, FlattenedGanttTask, PluginChartGanttProps } from '../types';
 
 const HEIGHT_RATIO = 0.6;
@@ -29,7 +30,6 @@ const DIM_COLOR = 4;
 const DIM_LEVEL = 5;
 const DIM_IS_GROUP = 6;
 const DIM_EXPANDED = 7;
-const DIM_TASK_ID = 8;
 const DIM_PROGRESS = 9;
 
 /**
@@ -187,6 +187,15 @@ function generateCategoryLabels(flattenedTasks: FlattenedGanttTask[]): string[] 
     });
 }
 
+function getTooltipValues(
+  params: CallbackDataParams | CallbackDataParams[],
+): (number | string)[] {
+  const item = Array.isArray(params) ? params[0] : params;
+  return Array.isArray(item?.value)
+    ? (item.value as (number | string)[])
+    : [];
+}
+
 export default function transformProps(chartProps: ChartProps): PluginChartGanttProps {
   const { width, height, formData, hooks, queriesData } = chartProps;
   const {
@@ -342,7 +351,7 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
   });
 
   // Get expanded state from hooks or initialize based on defaultExpandLevel
-  const expandedState: Record<string, boolean> = (hooks?.setControlValue as Record<string, boolean>) || {};
+  const expandedState: Record<string, boolean> = (hooks?.setControlValue as unknown as Record<string, boolean>) || {};
 
   // Initialize expanded state based on defaultExpandLevel if not set
   const initialExpandedState: Record<string, boolean> = {};
@@ -379,13 +388,14 @@ export default function transformProps(chartProps: ChartProps): PluginChartGantt
 
   const echartOptions: EChartsOption = {
     tooltip: {
-      formatter: (params: { value: (number | string)[] }) => {
-        const name = params.value[DIM_TASK_NAME];
-        const start = params.value[DIM_TIME_START];
-        const end = params.value[DIM_TIME_END];
-        const level = params.value[DIM_LEVEL];
-        const isGroup = params.value[DIM_IS_GROUP];
-        const progress = params.value[DIM_PROGRESS];
+      formatter: params => {
+        const values = getTooltipValues(params);
+        const name = values[DIM_TASK_NAME];
+        const start = values[DIM_TIME_START];
+        const end = values[DIM_TIME_END];
+        const level = values[DIM_LEVEL];
+        const isGroup = values[DIM_IS_GROUP];
+        const progress = values[DIM_PROGRESS];
 
         const startDate = new Date(start as number).toLocaleDateString();
         const endDate = new Date(end as number).toLocaleDateString();

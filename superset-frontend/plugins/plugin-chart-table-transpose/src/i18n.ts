@@ -17,7 +17,7 @@
  * under the License.
  */
 
-import { Locale } from '@superset-ui/core';
+import type { Locale } from '@apache-superset/core/translation';
 
 const en = {
   'Query Mode': [''],

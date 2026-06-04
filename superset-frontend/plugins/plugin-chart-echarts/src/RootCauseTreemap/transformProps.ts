@@ -27,10 +27,10 @@ import {
   isAdhocMetricSimple,
   QueryFormMetric,
   NumberFormats,
-  t,
   tooltipHtml,
   ValueFormatter,
 } from '@superset-ui/core';
+import { t } from '@apache-superset/core/translation';
 import type { EChartsCoreOption } from 'echarts/core';
 import type { TreemapSeriesOption } from 'echarts/charts';
 import type { TreemapSeriesNodeItemOption } from 'echarts/types/src/chart/treemap/TreemapSeries';
@@ -493,6 +493,9 @@ export default function transformProps(
   } = datasource;
   const { setDataMask = () => {}, onContextMenu } = hooks;
   const coltypeMapping = getColtypesMapping(queriesData[0]);
+  const textColor = theme.colorText;
+  const inverseTextColor = theme.colorTextLightSolid;
+  const breadcrumbBackgroundColor = theme.colorBgLayout;
   const refs: Refs = {};
   const {
     colorMax,
@@ -614,8 +617,8 @@ export default function transformProps(
         visualMax,
       );
       const labelColor = getLabelColor({
-        darkTextColor: theme.colors.grayscale.dark2,
-        lightTextColor: theme.colors.grayscale.light5,
+        darkTextColor: textColor,
+        lightTextColor: inverseTextColor,
         max: visualMax,
         min: visualMin,
         value: node.performance,
@@ -678,19 +681,19 @@ export default function transformProps(
         bottom: 0,
         height: 18,
         itemStyle: {
-          color: theme.colors.grayscale.light2,
+          color: breadcrumbBackgroundColor,
           borderColor: BORDER_COLOR,
           textStyle: {
-            color: theme.colors.grayscale.dark2,
+            color: textColor,
           },
         },
         emphasis: {
           disabled: true,
           itemStyle: {
-            color: theme.colors.grayscale.light2,
+            color: breadcrumbBackgroundColor,
             borderColor: BORDER_COLOR,
             textStyle: {
-              color: theme.colors.grayscale.dark2,
+              color: textColor,
             },
           },
         },
@@ -710,7 +713,7 @@ export default function transformProps(
             performanceFormatter,
             labelType,
           }),
-        color: theme.colors.grayscale.dark2,
+        color: textColor,
         fontSize: 11,
         fontWeight: 400,
         lineHeight: 15,
@@ -734,7 +737,7 @@ export default function transformProps(
             performanceFormatter,
             labelType: RootCauseTreemapLabelType.Name,
           }),
-        color: theme.colors.grayscale.dark2,
+        color: textColor,
         height: 24,
         fontSize: 14,
         fontWeight: 400,
@@ -808,7 +811,7 @@ export default function transformProps(
             top: 0,
             style: {
               text: t('EP\n(% of sales)'),
-              fill: theme.colors.grayscale.dark2,
+              fill: textColor,
               fontSize: 14,
               fontWeight: 400,
               lineHeight: 20,
@@ -843,7 +846,7 @@ export default function transformProps(
             top: legendY(value) - 9,
             style: {
               text: legendFormatter(value * 1000),
-              fill: theme.colors.grayscale.dark2,
+              fill: textColor,
               fontSize: 14,
               fontWeight: 400,
             },
