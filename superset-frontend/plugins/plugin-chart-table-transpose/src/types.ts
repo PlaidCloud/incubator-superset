@@ -97,6 +97,7 @@ export type TableChartFormData = QueryFormData & {
   column_config?: Record<string, TableColumnConfig>;
   allow_rearrange_columns?: boolean;
   enable_pivot?: boolean;
+  fixed_metric_column?: boolean;
   custom_css?: string;
 };
 
@@ -158,6 +159,7 @@ export interface TableChartTransformedProps<D extends DataRecord = DataRecord> {
   transposeColumnConfig?: Record<string, TableColumnConfig>;
   collapsed_rows?: string[];
   allSegementsTransposeColumnName?: string;
+  fixedMetricColumn?: boolean;
 }
 
 export enum ColorSchemeEnum {

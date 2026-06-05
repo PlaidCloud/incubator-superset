@@ -563,6 +563,22 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
             },
           },
+          {
+            name: 'fixed_metric_column',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Fixed metric column'),
+              default: false,
+              description: t(
+                'Keep the first metric column visible while horizontally scrolling the transposed table.',
+              ),
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                isAggMode({ controls }) &&
+                Boolean(controls?.enable_pivot?.value),
+              resetOnHide: false,
+              renderTrigger: true,
+            },
+          },
         ],
         [
           {

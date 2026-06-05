@@ -272,6 +272,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     custom_css,
     collapsed_rows,
     allSegementsTransposeColumnName,
+    fixedMetricColumn,
   } = props;
   const comparisonColumns = [
     { key: 'all', label: t('Display all') },
@@ -1321,7 +1322,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
   const { width: widthFromState, height: heightFromState } = tableSize;
 
   return (
-    <Styles>
+    <Styles className={cx({ 'fixed-metric-column': fixedMetricColumn })}>
       <DataTable<D>
         columns={columns}
         data={visibleData}

@@ -195,5 +195,21 @@ export default styled.div`
     table .right-border-only:last-child {
       border-right: none;
     }
+
+    &.fixed-metric-column {
+      table tbody td:first-child,
+      table thead th:first-child,
+      table tfoot th:first-child {
+        position: sticky;
+        left: 0;
+        z-index: 10;
+        background-color: ${theme.colors.grayscale.light5};
+      }
+
+      table thead th:first-child,
+      table tfoot th:first-child {
+        z-index: 11;
+      }
+    }
   `}
 `;
