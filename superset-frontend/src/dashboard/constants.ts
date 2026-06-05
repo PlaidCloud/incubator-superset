@@ -49,5 +49,5 @@ export const DEFAULT_CROSS_FILTER_SCOPING: NativeFilterScope = {
   excluded: [],
 };
 
-export const CHART_WIDTH = 4;
+export const CHART_WIDTH = 8;
 export const CHART_HEIGHT = 50;

@@ -29,6 +29,7 @@ export function tooltipHtml(
   data: string[][],
   title?: string,
   focusedRow?: number,
+  textWrap?: boolean,
 ) {
   const titleRow = title
     ? `<span style="font-weight: 700;${TRUNCATION_STYLE}">${title}</span>`
@@ -47,6 +48,7 @@ export function tooltipHtml(
                   text-align: ${j > 0 ? 'right' : 'left'};
                   padding-left: ${j === 0 ? 0 : 16}px;
                   ${TRUNCATION_STYLE}
+                  ${textWrap ? 'text-wrap: auto; text-overflow: none!;' : ''}
                 `;
                 return `<td style="${cellStyle}">${cell}</td>`;
               });
