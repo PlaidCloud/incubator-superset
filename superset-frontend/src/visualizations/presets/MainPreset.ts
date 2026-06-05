@@ -61,6 +61,7 @@ import {
   EchartsFunnelChartPlugin,
   EchartsSankeyChartPlugin,
   EchartsTreemapChartPlugin,
+  EchartsRootCauseTreemapChartPlugin,
   EchartsMixedTimeseriesChartPlugin,
   EchartsTreeChartPlugin,
   EchartsSunburstChartPlugin,
@@ -69,7 +70,6 @@ import {
   BigNumberPeriodOverPeriodChartPlugin,
   EchartsHeatmapChartPlugin,
   EchartsGanttChartPlugin,
-  EchartsRootCauseTreemapChartPlugin,
 } from '@superset-ui/plugin-chart-echarts';
 import {
   SelectFilterPlugin,
@@ -222,12 +222,6 @@ export default class MainPreset extends Preset {
             },
           ],
         }).configure({ key: VizType.Cartodiagram }),
-        new BigTextChart().configure({ key: 'superset-big-text' }),
-        new PluginChartMarimekko().configure({ key: 'ext-marimekko' }),
-        new SupersetPluginChartWhale().configure({ key: 'ext-whale' }),
-        new TableChartTransposePlugin().configure({ key: 'ext-table-transpose' }),
-        new SupersetPluginDashboardFilters().configure({ key: 'ext-dashboard-filters' }),
-        new PluginTableKpi().configure({ key: 'table-kpi' }),
         ...experimentalPlugins,
         ...agGridTablePlugin,
         new TableChartTransposePlugin().configure({ key: VizType.TransposeTable }),
@@ -237,7 +231,7 @@ export default class MainPreset extends Preset {
         new BigTextChart().configure({ key: VizType.BigText }),
         new PluginChartMarimekko().configure({ key: VizType.Marimekko }),
         new BenchmarkRangeChartPlugin().configure({ key: VizType.BenchmarkRange }),
-        new PluginChartMekkoWhale().configure({ key: 'mekko-whale' }),
+        new PluginChartMekkoWhale().configure({ key: VizType.MekkoWhale }),
         new PluginChartGantt().configure({ key: VizType.Gantt }),
       ],
     });
