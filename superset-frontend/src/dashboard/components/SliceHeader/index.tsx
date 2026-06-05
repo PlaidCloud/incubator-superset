@@ -63,6 +63,8 @@ type SliceHeaderProps = SliceHeaderControlsProps & {
   queriedDttm?: string | null;
   exportPivotExcel?: (arg0: string) => void;
   chartHolderRef?: RefObject<HTMLDivElement>;
+  exportDisplayedTableCSV?: (sliceId: number) => void;
+  exportDisplayedTableXLSX?: (sliceId: number) => void;
 };
 
 const annotationsLoading = t('Annotation layers are still loading.');
@@ -161,6 +163,8 @@ const SliceHeader = forwardRef<HTMLDivElement, SliceHeaderProps>(
       exportPivotCSV,
       exportFullCSV,
       exportFullXLSX,
+      exportDisplayedTableCSV,
+      exportDisplayedTableXLSX,
       slice,
       componentId,
       dashboardId,
@@ -362,6 +366,8 @@ const SliceHeader = forwardRef<HTMLDivElement, SliceHeaderProps>(
                   exportFullCSV={exportFullCSV}
                   exportXLSX={exportXLSX}
                   exportFullXLSX={exportFullXLSX}
+                  exportDisplayedTableCSV={exportDisplayedTableCSV}
+                  exportDisplayedTableXLSX={exportDisplayedTableXLSX}
                   supersetCanExplore={supersetCanExplore}
                   supersetCanShare={supersetCanShare}
                   supersetCanCSV={supersetCanCSV}

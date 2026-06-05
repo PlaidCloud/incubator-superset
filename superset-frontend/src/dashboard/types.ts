@@ -371,6 +371,8 @@ export enum MenuKeys {
   ExportFullCsv = 'export_full_csv',
   ExportXlsx = 'export_xlsx',
   ExportFullXlsx = 'export_full_xlsx',
+  ExportDisplayedTableCsv = 'export_displayed_table_csv',
+  ExportDisplayedTableXlsx = 'export_displayed_table_xlsx',
   ForceRefresh = 'force_refresh',
   Fullscreen = 'fullscreen',
   ToggleChartDescription = 'toggle_chart_description',
@@ -393,4 +395,5 @@ export enum MenuKeys {
   ManageEmailReports = 'manage_email_reports',
   ExportPivotXlsx = 'export_pivot_xlsx',
   EmbedCode = 'embed_code',
+  
 }

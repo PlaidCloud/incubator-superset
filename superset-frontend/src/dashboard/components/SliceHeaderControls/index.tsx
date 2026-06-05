@@ -132,6 +132,8 @@ export interface SliceHeaderControlsProps {
   exportFullCSV?: (sliceId: number) => void;
   exportXLSX?: (sliceId: number) => void;
   exportFullXLSX?: (sliceId: number) => void;
+  exportDisplayedTableCSV?: (sliceId: number) => void;
+  exportDisplayedTableXLSX?: (sliceId: number) => void;
   handleToggleFullSize: () => void;
   exportPivotExcel?: (tableSelector: string, sliceName: string) => void;
 
@@ -353,6 +355,16 @@ const SliceHeaderControls = (
         }
         break;
       }
+      case MenuKeys.ExportDisplayedTableCsv: {
+        // eslint-disable-next-line no-unused-expressions
+        props.exportDisplayedTableCSV?.(props.slice.slice_id);
+        break;
+      }
+      case MenuKeys.ExportDisplayedTableXlsx: {
+        // eslint-disable-next-line no-unused-expressions
+        props.exportDisplayedTableXLSX?.(props.slice.slice_id);
+        break;
+      }
       default:
         break;
     }
@@ -437,7 +449,7 @@ const SliceHeaderControls = (
       label: fullscreenLabel,
     },
     {
-      type: 'divider',
+      type: 'divider' as const,
     },
   ];
 

@@ -49,6 +49,10 @@ import { useToasts } from 'src/components/MessageToasts/withToasts';
 import { DEFAULT_CSV_STREAMING_ROW_THRESHOLD } from 'src/constants';
 import { exportChart, getChartKey } from 'src/explore/exploreUtils';
 import downloadAsImage from 'src/utils/downloadAsImage';
+import {
+  exportTableAsCSV,
+  exportTableAsExcel,
+} from 'src/utils/downloadDisplayedTable';
 import { getChartPermalink } from 'src/utils/urlUtils';
 import copyTextToClipboard from 'src/utils/copy';
 import { useHeaderReportMenuItems } from 'src/features/reports/ReportModal/HeaderReportDropdown';
@@ -86,6 +90,8 @@ const MENU_KEYS = {
   EXPORT_TO_CSV: 'export_to_csv',
   EXPORT_TO_JSON: 'export_to_json',
   EXPORT_TO_XLSX: 'export_to_xlsx',
+  EXPORT_DISPLAYED_TABLE_CSV: 'export_displayed_table_csv',
+  EXPORT_DISPLAYED_TABLE_XLSX: 'export_displayed_table_xlsx',
   EXPORT_ALL_SCREENSHOT: 'export_all_screenshot',
   EXPORT_CURRENT_TO_CSV: 'export_current_to_csv',
   EXPORT_CURRENT_TO_JSON: 'export_current_to_json',
@@ -765,6 +771,32 @@ export const useExploreAdditionalActionsMenu = (
               chartName: slice?.slice_name,
             }),
           );
+        },
+      },
+      {
+        key: MENU_KEYS.EXPORT_DISPLAYED_TABLE_CSV,
+        label: t('Export Displayed Table to .CSV'),
+        icon: <Icons.FileOutlined />,
+        onClick: () => {
+          // Use chart-id selector if available, fallback to chart-container class
+          const selector = slice?.slice_id
+            ? `#chart-id-${slice.slice_id}`
+            : '.chart-container';
+          exportTableAsCSV(selector, slice?.slice_name ?? t('chart'));
+          setIsDropdownVisible(false);
+        },
+      },
+      {
+        key: MENU_KEYS.EXPORT_DISPLAYED_TABLE_XLSX,
+        label: t('Export Displayed Table to Excel'),
+        icon: <Icons.FileOutlined />,
+        onClick: () => {
+          // Use chart-id selector if available, fallback to chart-container class
+          const selector = slice?.slice_id
+            ? `#chart-id-${slice.slice_id}`
+            : '.chart-container';
+          exportTableAsExcel(selector, slice?.slice_name ?? t('chart'));
+          setIsDropdownVisible(false);
         },
       },
     );
