@@ -67,6 +67,7 @@ export enum VizType {
   TransposeTable = 'ext-table-transpose',
   Tree = 'tree_chart',
   Treemap = 'treemap_v2',
+  TransposeTable = 'ext-table-transpose',
   Waterfall = 'waterfall',
   Whale = 'ext-whale',
   WordCloud = 'word_cloud',
