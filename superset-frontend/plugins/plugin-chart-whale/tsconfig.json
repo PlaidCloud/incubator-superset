@@ -8,7 +8,7 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": false,
-    "jsx": "react",
+    "jsx": "react-jsx",
     "lib": [
       "dom",
       "esnext"
@@ -27,7 +27,7 @@
       "@apache-superset/core/*": [
         "../../packages/superset-core/lib/*/index.d.ts"
       ],
-      "@superset-ui/plugin-chart-echarts/src/*": [
+      "@superset-ui/plugin-chart-echarts/*": [
         "../plugin-chart-echarts/lib/*"
       ]
     },

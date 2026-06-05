@@ -40,7 +40,7 @@ import {
 import {
   extractGroupbyLabel,
   getColtypesMapping,
-} from '@superset-ui/plugin-chart-echarts/src/utils/series';
+} from '@superset-ui/plugin-chart-echarts/utils/series';
 
 const PARETO_COLOR = '#FF6B6B';
 const PARETO_REFERENCE_LINE_NAME = '80/20 Pareto Reference';

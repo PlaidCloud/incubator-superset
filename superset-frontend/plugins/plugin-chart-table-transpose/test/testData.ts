@@ -20,12 +20,12 @@ import {
   ChartDataResponseResult,
   ChartProps,
   DatasourceType,
-  GenericDataType,
   QueryMode,
-  supersetTheme,
   ComparisonType,
   VizType,
 } from '@superset-ui/core';
+import { GenericDataType } from '@apache-superset/core/common';
+import { supersetTheme } from '@apache-superset/core/theme';
 import { TableChartProps, TableChartFormData } from '../src/types';
 
 const basicFormData: TableChartFormData = {
@@ -75,6 +75,7 @@ const basicQueryResult: ChartDataResponseResult = {
   cache_key: null,
   cached_dttm: null,
   cache_timeout: null,
+  queried_dttm: null,
   data: [],
   colnames: [],
   coltypes: [],

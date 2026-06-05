@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Select } from 'antd';
 import ReactECharts from 'echarts-for-react';
 import { getNumberFormatter } from '@superset-ui/core';
