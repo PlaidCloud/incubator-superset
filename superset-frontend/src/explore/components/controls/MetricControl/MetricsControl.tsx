@@ -57,7 +57,11 @@ function getOptionsForSavedMetrics(
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function isDictionaryForAdhocMetric(value: any) {
-  return value && !(value instanceof AdhocMetric) && value.expressionType;
+  return (
+    value &&
+    !(value instanceof AdhocMetric) &&
+    (value.expressionType || value.emptyRowHeading || value.isEmpty)
+  );
 }
 
 // adhoc metrics are stored as dictionaries in URL params. We convert them back into the
@@ -118,6 +122,7 @@ interface MetricsControlProps {
   datasource?: unknown;
   clearable?: boolean;
   isLoading?: boolean;
+  allowEmptyRowHeading?: boolean;
   [key: string]: unknown;
 }
 
@@ -128,6 +133,7 @@ const MetricsControl = ({
   columns,
   savedMetrics,
   datasource,
+  allowEmptyRowHeading,
   ...props
 }: MetricsControlProps) => {
   const [value, setValue] = useState(coerceAdhocMetrics(propsValue));
@@ -243,12 +249,14 @@ const MetricsControl = ({
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           datasource={datasource as any}
           isNew
+          allowEmptyRowHeading={allowEmptyRowHeading}
         >
           {trigger}
         </AdhocMetricPopoverTrigger>
       );
     },
     [
+      allowEmptyRowHeading,
       columns,
       datasource,
       isAddNewMetricDisabled,
@@ -309,11 +317,13 @@ const MetricsControl = ({
         onMoveLabel={moveLabel}
         onDropLabel={onDropLabel}
         multi={multi}
+        allowEmptyRowHeading={allowEmptyRowHeading}
       />
     ),
     [
       columns,
       datasource,
+      allowEmptyRowHeading,
       moveLabel,
       multi,
       onDropLabel,

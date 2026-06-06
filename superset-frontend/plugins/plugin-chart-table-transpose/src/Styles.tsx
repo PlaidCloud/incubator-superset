@@ -203,7 +203,7 @@ export default styled.div`
         position: sticky;
         left: 0;
         z-index: 10;
-        background-color: ${theme.colors.grayscale.light5};
+        background-color: ${theme.colorBgLayout};
       }
 
       table thead th:first-child,

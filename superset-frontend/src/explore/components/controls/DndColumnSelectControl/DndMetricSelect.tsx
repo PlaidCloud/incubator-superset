@@ -49,7 +49,18 @@ const isDictionaryForAdhocMetric = (value: QueryFormMetric) =>
   value &&
   !(value instanceof AdhocMetric) &&
   typeof value !== 'string' &&
-  value.expressionType;
+  (value.expressionType ||
+    (value as Record<string, unknown>).emptyRowHeading ||
+    (value as Record<string, unknown>).isEmpty);
+
+const isRowHeadingMetric = (value: QueryFormMetric) =>
+  Boolean(
+    value &&
+      typeof value === 'object' &&
+      !(value instanceof AdhocMetric) &&
+      ((value as unknown as Record<string, unknown>).emptyRowHeading === true ||
+        (value as unknown as Record<string, unknown>).isEmpty === true),
+  );
 
 const coerceMetrics = (
   addedMetrics: QueryFormMetric | QueryFormMetric[] | undefined | null,
@@ -61,9 +72,16 @@ const coerceMetrics = (
   }
   const metricsCompatibleWithDataset = ensureIsArray(addedMetrics).filter(
     metric => {
+      if (isRowHeadingMetric(metric)) {
+        return true;
+      }
       if (isAdhocMetricSimple(metric)) {
+        const columnName = metric.column?.column_name;
+        if (!columnName) {
+          return true;
+        }
         return columns.some(
-          column => column.column_name === metric.column.column_name,
+          column => column.column_name === columnName,
         );
       }
       return true;
@@ -84,10 +102,14 @@ const coerceMetrics = (
     if (!isDictionaryForAdhocMetric(metric)) {
       return metric;
     }
+    if (isRowHeadingMetric(metric)) {
+      return new AdhocMetric(metric as unknown as Record<string, unknown>);
+    }
     if (isAdhocMetricSimple(metric)) {
-      const column = columns.find(
-        col => col.column_name === metric.column.column_name,
-      );
+      const columnName = metric.column?.column_name;
+      const column = columnName
+        ? columns.find(col => col.column_name === columnName)
+        : undefined;
       if (column) {
         // Cast entire config object to handle type mismatch between @superset-ui/core and local types
         return new AdhocMetric({
@@ -299,6 +321,7 @@ const DndMetricSelect = (props: any) => {
             ? t('This metric might be incompatible with current dataset')
             : undefined
         }
+        allowEmptyRowHeading={props.allowEmptyRowHeading}
       />
     ),
     [
@@ -310,6 +333,7 @@ const DndMetricSelect = (props: any) => {
       onRemoveMetric,
       props.columns,
       props.datasource,
+      props.allowEmptyRowHeading,
       props.label,
       props.name,
       props.savedMetrics,
@@ -396,6 +420,7 @@ const DndMetricSelect = (props: any) => {
         savedMetricsOptions={newSavedMetricOptions}
         savedMetric={EMPTY_OBJECT as savedMetricType}
         datasource={props.datasource}
+        allowEmptyRowHeading={props.allowEmptyRowHeading}
         isControlledComponent
         visible={newMetricPopoverVisible}
         togglePopover={togglePopover}

@@ -40,6 +40,7 @@ interface AdhocMetricOptionProps {
   type?: string;
   multi?: boolean;
   datasourceWarningMessage?: string;
+  allowEmptyRowHeading?: boolean;
 }
 
 class AdhocMetricOption extends PureComponent<AdhocMetricOptionProps> {
@@ -67,6 +68,7 @@ class AdhocMetricOption extends PureComponent<AdhocMetricOptionProps> {
       type,
       multi,
       datasourceWarningMessage,
+      allowEmptyRowHeading,
     } = this.props;
     const withCaret = !(savedMetric as SavedMetricTypeDef).error_text;
 
@@ -78,6 +80,7 @@ class AdhocMetricOption extends PureComponent<AdhocMetricOptionProps> {
         savedMetricsOptions={savedMetricsOptions ?? []}
         savedMetric={savedMetric}
         datasource={datasource!}
+        allowEmptyRowHeading={allowEmptyRowHeading}
       >
         <OptionControlLabel
           // eslint-disable-next-line @typescript-eslint/no-explicit-any

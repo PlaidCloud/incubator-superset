@@ -405,6 +405,7 @@ const config: ControlPanelConfig = {
                   form_data.metrics ||
                   (form_data.metric ? [form_data.metric] : []),
                 datasource,
+                allowEmptyRowHeading: true,
                 externalValidationErrors: validateAggControlValues(controls, [
                   controls.groupby?.value,
                   controls.percent_metrics?.value,

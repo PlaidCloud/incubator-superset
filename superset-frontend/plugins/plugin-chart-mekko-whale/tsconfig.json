@@ -36,7 +36,6 @@
     "skipLibCheck": true,
     "emitDeclarationOnly": true,
     "resolveJsonModule": true,
-    "types": ["jest"],
     "typeRoots": [
       "./node_modules/@types"
     ]

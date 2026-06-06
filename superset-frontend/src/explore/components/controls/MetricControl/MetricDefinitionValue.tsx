@@ -37,6 +37,7 @@ interface MetricDefinitionValueProps {
   datasource?: Datasource & ISaveableDatasource;
   datasourceWarningMessage?: string;
   type?: string;
+  allowEmptyRowHeading?: boolean;
 }
 
 export default function MetricDefinitionValue({
@@ -53,6 +54,7 @@ export default function MetricDefinitionValue({
   type,
   multi,
   datasourceWarningMessage,
+  allowEmptyRowHeading,
 }: MetricDefinitionValueProps) {
   const getSavedMetricByName = (metricName: string) =>
     savedMetrics?.find(metric => metric.metric_name === metricName);
@@ -82,6 +84,7 @@ export default function MetricDefinitionValue({
       type,
       multi,
       datasourceWarningMessage,
+      allowEmptyRowHeading,
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

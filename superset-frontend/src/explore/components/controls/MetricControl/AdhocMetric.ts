@@ -39,6 +39,9 @@ interface AdhocMetricInput {
   column?: ColumnType | null;
   aggregate?: string | null;
   sqlExpression?: string | null;
+  emptyRowHeading?: boolean;
+  emptyRowHeadingText?: string;
+  isEmpty?: boolean;
   datasourceWarning?: boolean;
   hasCustomLabel?: boolean;
   label?: string;
@@ -96,6 +99,9 @@ export default class AdhocMetric {
   hasCustomLabel: boolean;
   label: string;
   optionName: string;
+  emptyRowHeading: boolean;
+  isEmpty: boolean;
+  emptyRowHeadingText: string;
 
   constructor(adhocMetric: AdhocMetricInput) {
     this.expressionType = adhocMetric.expressionType || EXPRESSION_TYPES.SIMPLE;
@@ -113,6 +119,9 @@ export default class AdhocMetric {
       this.column = null;
       this.aggregate = null;
     }
+    this.emptyRowHeading = !!adhocMetric.emptyRowHeading;
+    this.isEmpty = !!adhocMetric.isEmpty;
+    this.emptyRowHeadingText = adhocMetric.emptyRowHeadingText ?? '';
     this.datasourceWarning = !!adhocMetric.datasourceWarning;
     this.hasCustomLabel = !!(adhocMetric.hasCustomLabel && adhocMetric.label);
     this.label = this.hasCustomLabel
@@ -127,6 +136,9 @@ export default class AdhocMetric {
   }
 
   getDefaultLabel(): string {
+    if (this.emptyRowHeading || this.isEmpty) {
+      return this.emptyRowHeadingText || 'Empty row';
+    }
     return this.translateToSql({ useVerboseName: true });
   }
 
@@ -136,6 +148,9 @@ export default class AdhocMetric {
       transformCountDistinct: false,
     },
   ): string {
+    if (this.emptyRowHeading || this.isEmpty) {
+      return this.emptyRowHeadingText || '';
+    }
     if (this.expressionType === EXPRESSION_TYPES.SIMPLE) {
       const aggregate = this.aggregate || '';
       // eslint-disable-next-line camelcase
@@ -174,12 +189,18 @@ export default class AdhocMetric {
       adhocMetric.expressionType === this.expressionType &&
       adhocMetric.sqlExpression === this.sqlExpression &&
       adhocMetric.aggregate === this.aggregate &&
+      adhocMetric.emptyRowHeading === this.emptyRowHeading &&
+      adhocMetric.emptyRowHeadingText === this.emptyRowHeadingText &&
+      adhocMetric.isEmpty === this.isEmpty &&
       (adhocMetric.column && adhocMetric.column.column_name) ===
         (this.column && this.column.column_name)
     );
   }
 
   isValid(): boolean {
+    if (this.emptyRowHeading || this.isEmpty) {
+      return this.isEmpty || !!this.emptyRowHeadingText;
+    }
     if (this.expressionType === EXPRESSION_TYPES.SIMPLE) {
       return !!(this.column && this.aggregate);
     }
@@ -213,7 +234,10 @@ export function isDictionaryForAdhocMetric(
       'column' in value ||
       'aggregate' in value ||
       'sqlExpression' in value ||
-      'metric_name' in value)
+      'metric_name' in value ||
+      'emptyRowHeading' in value ||
+      'emptyRowHeadingText' in value ||
+      'isEmpty' in value)
   );
 }
 

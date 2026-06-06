@@ -52,6 +52,22 @@ export function getQueryMode(formData: TableChartFormData) {
   return hasRawColumns ? QueryMode.Raw : QueryMode.Aggregate;
 }
 
+const isRowHeadingMetric = (metric: unknown) => {
+  if (!metric || typeof metric !== 'object') {
+    return false;
+  }
+  const { emptyRowHeading, isEmpty: isEmptyRow, column } = metric as {
+    emptyRowHeading?: boolean;
+    isEmpty?: boolean;
+    column?: { column_name?: string };
+  };
+  return (
+    emptyRowHeading === true ||
+    isEmptyRow === true ||
+    column?.column_name?.startsWith('__heading') === true
+  );
+};
+
 const buildQuery: BuildQuery<TableChartFormData> = (
   formData: TableChartFormData,
   options,
@@ -65,21 +81,17 @@ const buildQuery: BuildQuery<TableChartFormData> = (
   const sortByMetric = ensureIsArray(formData.timeseries_limit_metric)[0];
   const time_grain_sqla =
     extra_form_data?.time_grain_sqla || formData.time_grain_sqla;
-  const { metrics = [], ...rest } = formData;
-
-  // Filter out heading objects from metrics before sending to API
-  const filteredMetrics = metrics.filter(
-    (metric: any) => !(metric.column?.column_name.startsWith('__heading')),
-  );
-  formData = {
-    ...rest,
-    metrics: filteredMetrics,
-  }
-  let formDataCopy = formData;
+  const queryFormData = {
+    ...formData,
+    metrics: ensureIsArray(formData.metrics).filter(
+      metric => !isRowHeadingMetric(metric),
+    ),
+  };
+  let formDataCopy = queryFormData;
   // never include time in raw records mode
   if (queryMode === QueryMode.Raw) {
     formDataCopy = {
-      ...formData,
+      ...queryFormData,
       include_time: false,
     };
   }

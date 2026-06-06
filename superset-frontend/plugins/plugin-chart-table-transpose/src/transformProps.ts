@@ -197,6 +197,22 @@ const processComparisonDataRecords = memoizeOne(
   },
 );
 
+const isRowHeadingMetric = (metric: unknown) => {
+  if (!metric || typeof metric !== 'object') {
+    return false;
+  }
+  const { emptyRowHeading, isEmpty: isEmptyRow, column } = metric as {
+    emptyRowHeading?: boolean;
+    isEmpty?: boolean;
+    column?: { column_name?: string };
+  };
+  return (
+    emptyRowHeading === true ||
+    isEmptyRow === true ||
+    column?.column_name?.startsWith('__heading') === true
+  );
+};
+
 function processColumns(props: TableChartProps): [
   string[],
   string[],
@@ -214,9 +230,8 @@ function processColumns(props: TableChartProps): [
     column_config: columnConfig = {},
   } = formData;
 
-  // Filter out headings from metrics when processing columns
-  const metricsWithoutHeadings = formDataMetrics.filter(
-    (metric: any) => !(typeof metric === 'object' && 'heading' in metric)
+  const metricsWithoutHeadings = (formDataMetrics ?? []).filter(
+    metric => !isRowHeadingMetric(metric),
   );
 
   const granularity = extractTimegrain(formData);
@@ -624,22 +639,35 @@ function transposeData(
         }
       });
       return newRow;
-    })
-
-
+    });
 
     const newRows = formDataMetricsInOrder.map(metricOrHeadingItem => {
       const newRow: DataRecord = {};
       if (
         typeof metricOrHeadingItem === 'object' &&
+        metricOrHeadingItem !== null &&
+        metricOrHeadingItem.isEmpty === true
+      ) {
+        newRow.__isHeading = false;
+        newRow.isEmpty = true;
+        newRow.metric = '\u200B';
+        transposedColumnHeaders.forEach(headerCol => {
+          if (headerCol.key !== 'metric') {
+            newRow[headerCol.key] = '';
+          }
+        });
+        return newRow;
+      }
+
+      if (
+        typeof metricOrHeadingItem === 'object' &&
+        metricOrHeadingItem !== null &&
         metricOrHeadingItem.emptyRowHeading === true
       ) {
         newRow.__isHeading = true;
-        // Set the heading text in the 'metric' column
         newRow.metric = metricOrHeadingItem.emptyRowHeadingText || '';
-        // Blank out all other columns for this heading row
         transposedColumnHeaders.forEach(headerCol => {
-          if (headerCol.key !== 'metric') { // Skip the 'metric' column as it has the heading
+          if (headerCol.key !== 'metric') {
             newRow[headerCol.key] = '';
           }
         });
@@ -679,9 +707,13 @@ function transposeData(
     let currentRowSum = 0;
     let currentRowHasNumeric = false;
 
-    if (metricOrHeadingItem.isEmpty) {
-      newRow.metric = '\u200B',
-        newRow.isEmpty = true;
+    if (
+      typeof metricOrHeadingItem === 'object' &&
+      metricOrHeadingItem !== null &&
+      metricOrHeadingItem.isEmpty === true
+    ) {
+      newRow.metric = '\u200B';
+      newRow.isEmpty = true;
       const emptyRowConfig = rowConfig?.[''] || rowConfig?.['empty'];
       if (emptyRowConfig?.rowColor) {
         newRow.__rowColor__ = emptyRowConfig.rowColor;
@@ -692,10 +724,10 @@ function transposeData(
 
     if (
       typeof metricOrHeadingItem === 'object' &&
+      metricOrHeadingItem !== null &&
       metricOrHeadingItem.emptyRowHeading === true
     ) {
       newRow.__isHeading = true;
-      // Set the heading text in the 'metric' column
       newRow.metric = metricOrHeadingItem.emptyRowHeadingText || '';
 
       const headingRowConfig = rowConfig?.[metricOrHeadingItem.emptyRowHeadingText || ''];
@@ -703,9 +735,8 @@ function transposeData(
         newRow.__rowColor__ = headingRowConfig.rowColor;
       }
 
-      // Blank out all other columns for this heading row
       transposedColumnHeaders.forEach(headerCol => {
-        if (headerCol.key !== 'metric') { // Skip the 'metric' column as it has the heading
+        if (headerCol.key !== 'metric') {
           newRow[headerCol.key] = '';
         }
       });

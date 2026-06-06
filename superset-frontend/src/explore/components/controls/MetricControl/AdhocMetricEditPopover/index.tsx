@@ -17,7 +17,7 @@
  * under the License.
  */
 /* eslint-disable camelcase */
-import { PureComponent, createRef } from 'react';
+import React, { PureComponent, createRef, type ChangeEvent } from 'react';
 import { isDefined, ensureIsArray, DatasourceType } from '@superset-ui/core';
 import { t } from '@apache-superset/core/translation';
 import type { editors } from '@apache-superset/core';
@@ -25,10 +25,13 @@ import { styled } from '@apache-superset/core/theme';
 import Tabs from '@superset-ui/core/components/Tabs';
 import {
   Button,
+  Checkbox,
+  type CheckboxChangeEvent,
   EmptyState,
   Form,
   FormItem,
   Icons,
+  Input,
   Select,
   Tooltip,
 } from '@superset-ui/core/components';
@@ -94,6 +97,7 @@ interface AdhocMetricEditPopoverProps {
   datasource?: DatasourceInfo;
   isNewMetric?: boolean;
   isLabelModified?: boolean;
+  allowEmptyRowHeading?: boolean;
 }
 
 interface AdhocMetricEditPopoverState {
@@ -122,6 +126,32 @@ const StyledSelect = styled(Select)`
 `;
 
 export const SAVED_TAB_KEY = 'SAVED';
+export const HEADING_TAB_KEY = 'HEADING';
+
+const StyledMetricTabs = styled(Tabs)`
+  && .ant-tabs-nav-wrap {
+    padding: 0;
+  }
+
+  && .ant-tabs-nav-list {
+    display: flex;
+    column-gap: ${({ theme }) => theme.sizeUnit * 8}px;
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  && .ant-tabs-tab {
+    flex: 0 0 auto;
+    margin: 0 !important;
+    min-width: max-content;
+  }
+
+  && .ant-tabs-tab-btn {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
+  }
+`;
 
 export default class AdhocMetricEditPopover extends PureComponent<
   AdhocMetricEditPopoverProps,
@@ -148,6 +178,7 @@ export default class AdhocMetricEditPopover extends PureComponent<
     this.onAggregateChange = this.onAggregateChange.bind(this);
     this.onSavedMetricChange = this.onSavedMetricChange.bind(this);
     this.onSqlExpressionChange = this.onSqlExpressionChange.bind(this);
+    this.onHeadingChange = this.onHeadingChange.bind(this);
     this.onDragDown = this.onDragDown.bind(this);
     this.onMouseMove = this.onMouseMove.bind(this);
     this.onMouseUp = this.onMouseUp.bind(this);
@@ -155,6 +186,7 @@ export default class AdhocMetricEditPopover extends PureComponent<
     this.editorRef = createRef();
     this.refreshEditor = this.refreshEditor.bind(this);
     this.getDefaultTab = this.getDefaultTab.bind(this);
+    this.onEmptyRowChange = this.onEmptyRowChange.bind(this);
 
     this.state = {
       adhocMetric: this.props.adhocMetric,
@@ -175,11 +207,16 @@ export default class AdhocMetricEditPopover extends PureComponent<
   ) {
     if (
       prevState.adhocMetric?.sqlExpression !==
-        this.state.adhocMetric?.sqlExpression ||
+      this.state.adhocMetric?.sqlExpression ||
       prevState.adhocMetric?.aggregate !== this.state.adhocMetric?.aggregate ||
       prevState.adhocMetric?.column?.column_name !==
-        this.state.adhocMetric?.column?.column_name ||
-      prevState.savedMetric?.metric_name !== this.state.savedMetric?.metric_name
+      this.state.adhocMetric?.column?.column_name ||
+      prevState.savedMetric?.metric_name !== this.state.savedMetric?.metric_name ||
+      prevState.adhocMetric?.emptyRowHeading !==
+        this.state.adhocMetric?.emptyRowHeading ||
+      prevState.adhocMetric?.emptyRowHeadingText !==
+        this.state.adhocMetric?.emptyRowHeadingText ||
+      prevState.adhocMetric?.isEmpty !== this.state.adhocMetric?.isEmpty
     ) {
       this.props.getCurrentLabel?.({
         savedMetricLabel:
@@ -198,6 +235,14 @@ export default class AdhocMetricEditPopover extends PureComponent<
   getDefaultTab() {
     const { adhocMetric, savedMetric, savedMetricsOptions, isNewMetric } =
       this.props;
+
+    if (
+      this.props.allowEmptyRowHeading &&
+      (adhocMetric.emptyRowHeading || adhocMetric.isEmpty)
+    ) {
+      return HEADING_TAB_KEY;
+    }
+
     if (isDefined(adhocMetric.column) || isDefined(adhocMetric.sqlExpression)) {
       return adhocMetric.expressionType;
     }
@@ -245,6 +290,9 @@ export default class AdhocMetricEditPopover extends PureComponent<
       adhocMetric: prevState.adhocMetric.duplicateWith({
         column,
         expressionType: EXPRESSION_TYPES.SIMPLE,
+        emptyRowHeading: false,
+        emptyRowHeadingText: '',
+        isEmpty: false,
       }),
       savedMetric: undefined,
     }));
@@ -256,6 +304,9 @@ export default class AdhocMetricEditPopover extends PureComponent<
       adhocMetric: prevState.adhocMetric.duplicateWith({
         aggregate,
         expressionType: EXPRESSION_TYPES.SIMPLE,
+        emptyRowHeading: false,
+        emptyRowHeadingText: '',
+        isEmpty: false,
       }),
       savedMetric: undefined,
     }));
@@ -272,6 +323,9 @@ export default class AdhocMetricEditPopover extends PureComponent<
         aggregate: undefined,
         sqlExpression: undefined,
         expressionType: EXPRESSION_TYPES.SIMPLE,
+        emptyRowHeading: false,
+        emptyRowHeadingText: '',
+        isEmpty: false,
       }),
     }));
   }
@@ -281,6 +335,24 @@ export default class AdhocMetricEditPopover extends PureComponent<
       adhocMetric: prevState.adhocMetric.duplicateWith({
         sqlExpression,
         expressionType: EXPRESSION_TYPES.SQL,
+        emptyRowHeading: false,
+        emptyRowHeadingText: '',
+        isEmpty: false,
+      }),
+      savedMetric: undefined,
+    }));
+  }
+
+  onHeadingChange(event: ChangeEvent<HTMLInputElement>) {
+    this.setState(prevState => ({
+      adhocMetric: prevState.adhocMetric.duplicateWith({
+        emptyRowHeading: true,
+        emptyRowHeadingText: event.target.value,
+        isEmpty: false,
+        column: undefined,
+        aggregate: undefined,
+        sqlExpression: undefined,
+        expressionType: undefined,
       }),
       savedMetric: undefined,
     }));
@@ -340,6 +412,22 @@ export default class AdhocMetricEditPopover extends PureComponent<
     return <StyledMetricOption metric={savedMetric} showType />;
   }
 
+  onEmptyRowChange(event: CheckboxChangeEvent) {
+    const isEmpty = event.target.checked;
+    this.setState(prevState => ({
+      adhocMetric: prevState.adhocMetric.duplicateWith({
+        emptyRowHeading: isEmpty || !!prevState.adhocMetric.emptyRowHeadingText,
+        isEmpty: isEmpty,
+        emptyRowHeadingText: isEmpty ? '' : prevState.adhocMetric.emptyRowHeadingText,
+        column: undefined,
+        aggregate: undefined,
+        sqlExpression: undefined,
+        expressionType: undefined,
+      }),
+      savedMetric: undefined,
+    }));
+  }
+
   render() {
     const {
       adhocMetric: propsAdhocMetric,
@@ -352,6 +440,7 @@ export default class AdhocMetricEditPopover extends PureComponent<
       datasource,
       isNewMetric,
       isLabelModified,
+      allowEmptyRowHeading,
       ...popoverProps
     } = this.props;
     const { adhocMetric, savedMetric } = this.state;
@@ -397,16 +486,42 @@ export default class AdhocMetricEditPopover extends PureComponent<
       autoFocus: true,
     };
 
-    const stateIsValid = adhocMetric.isValid() || savedMetric?.metric_name;
-    const hasUnsavedChanges =
-      isLabelModified ||
-      isNewMetric ||
-      !adhocMetric.equals(propsAdhocMetric) ||
+    const stateIsValid = Boolean(
+      adhocMetric.isValid() ||
+        savedMetric?.metric_name ||
+        (allowEmptyRowHeading &&
+          adhocMetric.emptyRowHeading &&
+          (adhocMetric.emptyRowHeadingText || adhocMetric.isEmpty)),
+    );
+
+    let adhocMetricContentChanged = !adhocMetric.equals(propsAdhocMetric);
+    // If propsAdhocMetric exists and both are headings, explicitly check text change
+    if (
+      propsAdhocMetric &&
+      (propsAdhocMetric.emptyRowHeading || propsAdhocMetric.isEmpty) &&
+      (adhocMetric.emptyRowHeading || adhocMetric.isEmpty)
+    ) {
+      if (
+        adhocMetric.emptyRowHeadingText !==
+          propsAdhocMetric.emptyRowHeadingText ||
+        adhocMetric.isEmpty !== propsAdhocMetric.isEmpty
+      ) {
+        adhocMetricContentChanged = true;
+      }
+    }
+
+    const savedMetricContentChanged =
       (!(
         typeof savedMetric?.metric_name === 'undefined' &&
         typeof propsSavedMetric?.metric_name === 'undefined'
       ) &&
         savedMetric?.metric_name !== propsSavedMetric?.metric_name);
+
+    const hasUnsavedChanges =
+      isLabelModified ||
+      isNewMetric ||
+      adhocMetricContentChanged ||
+      savedMetricContentChanged;
 
     let extra: ExtraConfig = {};
     if (datasource?.extra && typeof datasource.extra === 'string') {
@@ -415,6 +530,162 @@ export default class AdhocMetricEditPopover extends PureComponent<
       } catch {} // eslint-disable-line no-empty
     }
 
+    const tabItems = [
+      {
+        key: SAVED_TAB_KEY,
+        label: t('Saved'),
+        children:
+          ensureIsArray(savedMetricsOptions).length > 0 ? (
+            <FormItem label={t('Saved metric')}>
+              <StyledSelect
+                options={ensureIsArray(savedMetricsOptions).map(savedMetric => ({
+                  value: savedMetric.metric_name,
+                  label: this.renderMetricOption(savedMetric),
+                  key: savedMetric.id,
+                  metric_name: savedMetric.metric_name,
+                  verbose_name: savedMetric.verbose_name ?? '',
+                }))}
+                optionFilterProps={['metric_name', 'verbose_name']}
+                {...savedSelectProps}
+              />
+            </FormItem>
+          ) : datasource?.type === DatasourceType.Table ? (
+            <EmptyState
+              image="empty.svg"
+              size="small"
+              title={t('No saved metrics found')}
+              description={t(
+                'Add metrics to dataset in "Edit datasource" modal',
+              )}
+            />
+          ) : (
+            <EmptyState
+              image="empty.svg"
+              size="small"
+              title={t('No saved metrics found')}
+              description={
+                <>
+                  <span
+                    tabIndex={0}
+                    role="button"
+                    onClick={() => {
+                      this.props.handleDatasetModal?.(true);
+                      this.props.onClose();
+                    }}
+                  >
+                    {t('Create a dataset')}
+                  </span>
+                  {t(' to add metrics')}
+                </>
+              }
+            />
+          ),
+      },
+      {
+        key: EXPRESSION_TYPES.SIMPLE,
+        label: extra.disallow_adhoc_metrics ? (
+          <Tooltip
+            title={t('Simple ad-hoc metrics are not enabled for this dataset')}
+          >
+            {t('Simple')}
+          </Tooltip>
+        ) : (
+          t('Simple')
+        ),
+        disabled: extra.disallow_adhoc_metrics,
+        children: (
+          <>
+            <FormItem label={t('column')}>
+              <Select
+                options={columnsArray.map(column => ({
+                  value: column.column_name,
+                  key: (column as { id?: unknown }).id,
+                  label: this.renderColumnOption(column),
+                  column_name: column.column_name,
+                  verbose_name: column.verbose_name ?? '',
+                }))}
+                optionFilterProps={['column_name', 'verbose_name']}
+                {...columnSelectProps}
+              />
+            </FormItem>
+            <FormItem label={t('aggregate')}>
+              <Select
+                options={AGGREGATES_OPTIONS.map(option => ({
+                  value: option,
+                  label: option,
+                  key: option,
+                }))}
+                {...aggregateSelectProps}
+              />
+            </FormItem>
+          </>
+        ),
+      },
+      {
+        key: EXPRESSION_TYPES.SQL,
+        label: extra.disallow_adhoc_metrics ? (
+          <Tooltip
+            title={t('Custom SQL ad-hoc metrics are not enabled for this dataset')}
+          >
+            {t('Custom SQL')}
+          </Tooltip>
+        ) : (
+          t('Custom SQL')
+        ),
+        disabled: extra.disallow_adhoc_metrics,
+        children: (
+          <SQLEditorWithValidation
+            data-test="sql-editor"
+            ref={this.editorRef}
+            keywords={keywords}
+            height={`${this.state.height - 120}px`}
+            onChange={this.onSqlExpressionChange}
+            width="100%"
+            lineNumbers={false}
+            value={
+              adhocMetric.sqlExpression ||
+              adhocMetric.translateToSql({ transformCountDistinct: true })
+            }
+            wordWrap
+            showValidation
+            expressionType="metric"
+            datasourceId={datasource?.id}
+            datasourceType={datasource?.type}
+          />
+        ),
+      },
+      ...(allowEmptyRowHeading
+        ? [
+            {
+              key: HEADING_TAB_KEY,
+              label: t('Row Heading'),
+              children: (
+                <div>
+                  <FormItem label={t('Section Heading')}>
+                    <Input
+                      placeholder={t('Enter heading text')}
+                      value={adhocMetric.emptyRowHeadingText || ''}
+                      onChange={this.onHeadingChange}
+                      autoFocus
+                      data-test="heading-input"
+                    />
+                  </FormItem>
+                  <FormItem>
+                    <Checkbox
+                      checked={adhocMetric.isEmpty || false}
+                      onChange={this.onEmptyRowChange}
+                      data-test="empty-row-checkbox"
+                    >
+                      {t('Empty row')}
+                    </Checkbox>
+                  </FormItem>
+                </div>
+              ),
+            },
+          ]
+        : []),
+    ];
+
     return (
       <Form
         layout="vertical"
@@ -422,7 +693,7 @@ export default class AdhocMetricEditPopover extends PureComponent<
         data-test="metrics-edit-popover"
         {...popoverProps}
       >
-        <Tabs
+        <StyledMetricTabs
           id="adhoc-metric-edit-tabs"
           data-test="adhoc-metric-edit-tabs"
           defaultActiveKey={this.defaultActiveTabKey}
@@ -430,137 +701,7 @@ export default class AdhocMetricEditPopover extends PureComponent<
           style={{ height: this.state.height, width: this.state.width }}
           onChange={this.onTabChange}
           allowOverflow
-          items={[
-            {
-              key: SAVED_TAB_KEY,
-              label: t('Saved'),
-              children:
-                ensureIsArray(savedMetricsOptions).length > 0 ? (
-                  <FormItem label={t('Saved metric')}>
-                    <StyledSelect
-                      options={ensureIsArray(savedMetricsOptions).map(
-                        savedMetric => ({
-                          value: savedMetric.metric_name,
-                          label: this.renderMetricOption(savedMetric),
-                          key: savedMetric.id,
-                          metric_name: savedMetric.metric_name,
-                          verbose_name: savedMetric.verbose_name ?? '',
-                        }),
-                      )}
-                      optionFilterProps={['metric_name', 'verbose_name']}
-                      {...savedSelectProps}
-                    />
-                  </FormItem>
-                ) : datasource?.type === DatasourceType.Table ? (
-                  <EmptyState
-                    image="empty.svg"
-                    size="small"
-                    title={t('No saved metrics found')}
-                    description={t(
-                      'Add metrics to dataset in "Edit datasource" modal',
-                    )}
-                  />
-                ) : (
-                  <EmptyState
-                    image="empty.svg"
-                    size="small"
-                    title={t('No saved metrics found')}
-                    description={
-                      <>
-                        <span
-                          tabIndex={0}
-                          role="button"
-                          onClick={() => {
-                            this.props.handleDatasetModal?.(true);
-                            this.props.onClose();
-                          }}
-                        >
-                          {t('Create a dataset')}
-                        </span>
-                        {t(' to add metrics')}
-                      </>
-                    }
-                  />
-                ),
-            },
-            {
-              key: EXPRESSION_TYPES.SIMPLE,
-              label: extra.disallow_adhoc_metrics ? (
-                <Tooltip
-                  title={t(
-                    'Simple ad-hoc metrics are not enabled for this dataset',
-                  )}
-                >
-                  {t('Simple')}
-                </Tooltip>
-              ) : (
-                t('Simple')
-              ),
-              disabled: extra.disallow_adhoc_metrics,
-              children: (
-                <>
-                  <FormItem label={t('column')}>
-                    <Select
-                      options={columnsArray.map(column => ({
-                        value: column.column_name,
-                        key: (column as { id?: unknown }).id,
-                        label: this.renderColumnOption(column),
-                        column_name: column.column_name,
-                        verbose_name: column.verbose_name ?? '',
-                      }))}
-                      optionFilterProps={['column_name', 'verbose_name']}
-                      {...columnSelectProps}
-                    />
-                  </FormItem>
-                  <FormItem label={t('aggregate')}>
-                    <Select
-                      options={AGGREGATES_OPTIONS.map(option => ({
-                        value: option,
-                        label: option,
-                        key: option,
-                      }))}
-                      {...aggregateSelectProps}
-                    />
-                  </FormItem>
-                </>
-              ),
-            },
-            {
-              key: EXPRESSION_TYPES.SQL,
-              label: extra.disallow_adhoc_metrics ? (
-                <Tooltip
-                  title={t(
-                    'Custom SQL ad-hoc metrics are not enabled for this dataset',
-                  )}
-                >
-                  {t('Custom SQL')}
-                </Tooltip>
-              ) : (
-                t('Custom SQL')
-              ),
-              disabled: extra.disallow_adhoc_metrics,
-              children: (
-                <SQLEditorWithValidation
-                  data-test="sql-editor"
-                  ref={this.editorRef}
-                  keywords={keywords}
-                  height={`${this.state.height - 120}px`}
-                  onChange={this.onSqlExpressionChange}
-                  width="100%"
-                  lineNumbers={false}
-                  value={
-                    adhocMetric.sqlExpression ||
-                    adhocMetric.translateToSql({ transformCountDistinct: true })
-                  }
-                  wordWrap
-                  showValidation
-                  expressionType="metric"
-                  datasourceId={datasource?.id}
-                  datasourceType={datasource?.type}
-                />
-              ),
-            },
-          ]}
+          items={tabItems}
         />
         <div>
           <Button

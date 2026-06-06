@@ -46,6 +46,7 @@ export type AdhocMetricPopoverTriggerProps = {
   togglePopover?: (visible: boolean) => void;
   closePopover?: () => void;
   isNew?: boolean;
+  allowEmptyRowHeading?: boolean;
 };
 
 export type AdhocMetricPopoverTriggerState = {
@@ -186,6 +187,7 @@ class AdhocMetricPopoverTrigger extends PureComponent<
       savedMetricsOptions,
       datasource,
       isControlledComponent,
+      allowEmptyRowHeading,
     } = this.props;
     const { verbose_name, metric_name } = savedMetric;
     const { hasCustomLabel, label } = adhocMetric;
@@ -235,9 +237,9 @@ class AdhocMetricPopoverTrigger extends PureComponent<
           getCurrentLabel={this.getCurrentLabel}
           isNewMetric={this.props.isNew}
           isLabelModified={
-            this.state.labelModified &&
-            adhocMetricLabel !== this.state.title.label
+            this.state.labelModified && adhocMetricLabel !== this.state.title.label
           }
+          allowEmptyRowHeading={allowEmptyRowHeading}
         />
       </ExplorePopoverContent>
     );

@@ -268,14 +268,14 @@ export default function EchartsWaterfall(
         axisLine: {
           show: true,
           lineStyle: {
-            color: theme.colors.grayscale.light3,
+            color: theme.colorSplit,
             width: 1,
           },
         },
         splitLine: {
           show: true,
           lineStyle: {
-            color: theme.colors.grayscale.light2,
+            color: theme.colorSplit,
             width: 1,
             type: 'solid',
           },
@@ -318,7 +318,7 @@ export default function EchartsWaterfall(
                 const xAxis0 = chartRef.current.getEchartInstance().convertToPixel({ xAxisIndex: 0 }, 0);
                 const labelRectX = params.labelRect.x;
                 const isOverlap = labelRectX < xAxis0;
-                const labelGap = theme.gridUnit * 2;
+                const labelGap = theme.sizeUnit * 2;
                 if (isOverlap) {
                   return {
                     y: params.rect.y,
