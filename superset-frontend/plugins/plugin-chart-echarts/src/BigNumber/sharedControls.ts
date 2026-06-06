@@ -35,6 +35,7 @@ const FONT_SIZE_OPTIONS_LARGE = [
   { label: t('Normal'), value: 0.4 },
   { label: t('Large'), value: 0.5 },
   { label: t('Huge'), value: 0.6 },
+  { label: t('Auto Size'), value: 0 },
 ];
 
 function makeFontSizeControl(
@@ -111,5 +112,40 @@ export const metricNameFontSizeWithVisibility: CustomControlItem = {
     ...metricNameFontSize.config,
     visibility: ({ controls }) => controls?.show_metric_name?.value === true,
     resetOnHide: false,
+  },
+};
+
+export const hideFilter: CustomControlItem = {
+  name: 'hide_filter',
+  config: {
+    type: 'CheckboxControl',
+    label: t('Hide filter badge'),
+    renderTrigger: true,
+    default: false,
+    description: t('Visually hide the filter badge indicator'),
+  },
+};
+
+export const placeFilterBelow: CustomControlItem = {
+  name: 'place_filter_below',
+  config: {
+    type: 'CheckboxControl',
+    label: t('Place filter below 3-dot menu'),
+    renderTrigger: true,
+    default: true,
+    description: t('Position the filter badge below the options menu'),
+  },
+};
+
+export const headerNowrap: CustomControlItem = {
+  name: 'header_nowrap',
+  config: {
+    type: 'CheckboxControl',
+    label: t('Do not wrap header text'),
+    renderTrigger: true,
+    default: true,
+    description: t(
+      'Prevent the chart header text from wrapping to multiple lines',
+    ),
   },
 };

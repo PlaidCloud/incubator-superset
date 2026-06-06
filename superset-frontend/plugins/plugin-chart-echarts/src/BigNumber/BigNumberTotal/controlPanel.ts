@@ -32,6 +32,9 @@ import {
   subtitleControl,
   showMetricNameControl,
   metricNameFontSizeWithVisibility,
+  hideFilter,
+  placeFilterBelow,
+  headerNowrap,
 } from '../sharedControls';
 
 export default {
@@ -50,6 +53,9 @@ export default {
         [subtitleFontSize],
         [showMetricNameControl],
         [metricNameFontSizeWithVisibility],
+        [hideFilter],
+        [placeFilterBelow],
+        [headerNowrap],
         ['y_axis_format'],
         ['currency_format'],
         [

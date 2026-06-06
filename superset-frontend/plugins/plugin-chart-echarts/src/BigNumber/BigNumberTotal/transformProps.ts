@@ -127,6 +127,7 @@ export default function transformProps(
     headerFormatter,
     headerFontSize,
     subheaderFontSize,
+    formData,
     subtitleFontSize: formattedSubtitleFontSize,
     subtitle: formattedSubtitle,
     onContextMenu,

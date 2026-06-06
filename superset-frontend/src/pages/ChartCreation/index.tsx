@@ -20,8 +20,11 @@ import { PureComponent, ReactNode } from 'react';
 import rison from 'rison';
 import { t } from '@apache-superset/core/translation';
 import { isDefined, JsonResponse, SupersetClient } from '@superset-ui/core';
-import { styled } from '@apache-superset/core/theme';
-import { withTheme, Theme } from '@emotion/react';
+import {
+  styled,
+  withTheme,
+  type SupersetTheme,
+} from '@apache-superset/core/theme';
 import { getUrlParam } from 'src/utils/urlUtils';
 import { FilterPlugins, URL_PARAMS } from 'src/constants';
 import { Link, withRouter, RouteComponentProps } from 'react-router-dom';
@@ -48,7 +51,7 @@ import { Icons } from '@superset-ui/core/components/Icons';
 export interface ChartCreationProps extends RouteComponentProps {
   user: UserWithPermissionsAndRoles;
   addSuccessToast: (arg: string) => void;
-  theme: Theme;
+  theme: SupersetTheme;
 }
 
 export type ChartCreationState = {
