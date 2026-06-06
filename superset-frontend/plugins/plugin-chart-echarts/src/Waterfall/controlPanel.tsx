@@ -39,6 +39,68 @@ const config: ControlPanelConfig = {
         ['metric'],
         ['adhoc_filters'],
         ['row_limit'],
+        [
+          {
+            name: 'seriesOrderByColumn',
+            config: {
+              type: 'SelectControl',
+              label: t('Order Series By Column'),
+              description: t(
+                'Column to use for ordering the waterfall series with columns not in the chart',
+              ),
+              mapStateToProps: state => ({
+                choices: [
+                  ...(state.datasource?.columns || []).map(col => [
+                    col.column_name,
+                    col.column_name,
+                  ]),
+                ],
+                default: state.form_data?.x_axis || '',
+              }),
+              clearable: false,
+              renderTrigger: true,
+            },
+          },
+        ],
+        [
+          {
+            name: 'seriesOrderDirection',
+            config: {
+              type: 'SelectControl',
+              label: t('Order Direction'),
+              choices: [
+                ['ASC', t('Ascending')],
+                ['DESC', t('Descending')],
+              ],
+              default: 'ASC',
+              clearable: false,
+              renderTrigger: true,
+              description: t(
+                'Ordering direction for the series, to be used with "Order Series By Column"',
+              ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'tooltip_column',
+            config: {
+              type: 'SelectControl',
+              label: t('Tooltip Column'),
+              description: t('Column to use for tooltip content'),
+              mapStateToProps: state => ({
+                choices: [
+                  ...(state.datasource?.columns || []).map(col => [
+                    col.column_name,
+                    col.column_name,
+                  ]),
+                ],
+              }),
+              clearable: true,
+              resetOnHide: false,
+            },
+          },
+        ],
       ],
     },
     {
@@ -58,121 +120,85 @@ const config: ControlPanelConfig = {
             },
           },
         ],
-      ],
-    },
-    {
-      label: t('Series settings'),
-      expanded: true,
-      controlSetRows: [
+        [
+          {
+            name: 'show_total',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show Total'),
+              default: true,
+              renderTrigger: true,
+              description: t('Show the total value in the waterfall chart'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'useFirstValueAsSubtotal',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Use first value as subtotal'),
+              default: false,
+              renderTrigger: true,
+              description: t('Render the first bar in the chart as a subtotal'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'bold_labels',
+            config: {
+              type: 'SelectControl',
+              label: t('Bold Labels'),
+              default: 'both',
+              choices: [
+                ['none', t('None')],
+                ['total', t('Total Only')],
+                ['subtotal', t('Subtotal Only')],
+                ['both', t('Both Total and Subtotal')],
+              ],
+              renderTrigger: true,
+              description: t(
+                'Choose which labels to display in bold in the waterfall chart',
+              ),
+            },
+          },
+        ],
         [
           <ControlSubSectionHeader>
-            {t('Series increase setting')}
+            {t('Series colors')}
           </ControlSubSectionHeader>,
         ],
         [
           {
             name: 'increase_color',
             config: {
-              label: t('Increase color'),
+              label: t('Increase'),
               type: 'ColorPickerControl',
               default: { r: 90, g: 193, b: 137, a: 1 },
               renderTrigger: true,
-              description: t(
-                'Select the color used for values that indicate an increase in the chart',
-              ),
             },
           },
-          {
-            name: 'increase_label',
-            config: {
-              label: t('Increase label'),
-              type: 'TextControl',
-              renderTrigger: true,
-              description: t(
-                'Customize the label displayed for increasing values in the chart tooltips and legend.',
-              ),
-            },
-          },
-        ],
-        [
-          <ControlSubSectionHeader>
-            {t('Series decrease setting')}
-          </ControlSubSectionHeader>,
-        ],
-        [
           {
             name: 'decrease_color',
             config: {
-              label: t('Decrease color'),
+              label: t('Decrease'),
               type: 'ColorPickerControl',
               default: { r: 224, g: 67, b: 85, a: 1 },
               renderTrigger: true,
-              description: t(
-                'Select the color used for values ​​that indicate a decrease in the chart.',
-              ),
             },
           },
-          {
-            name: 'decrease_label',
-            config: {
-              label: t('Decrease label'),
-              type: 'TextControl',
-              renderTrigger: true,
-              description: t(
-                'Customize the label displayed for decreasing values in the chart tooltips and legend.',
-              ),
-            },
-          },
-        ],
-        [
-          <ControlSubSectionHeader>
-            {t('Series total setting')}
-          </ControlSubSectionHeader>,
-        ],
-        [
-          {
-            name: 'show_total',
-            config: {
-              type: 'CheckboxControl',
-              label: t('Show total'),
-              renderTrigger: true,
-              default: true,
-              description: t('Display cumulative total at end'),
-            },
-          },
-        ],
-        [
           {
             name: 'total_color',
             config: {
-              label: t('Total color'),
+              label: t('Total'),
               type: 'ColorPickerControl',
               default: { r: 102, g: 102, b: 102, a: 1 },
               renderTrigger: true,
-              description: t(
-                'Select the color used for values that represent total bars in the chart',
-              ),
-            },
-          },
-
-          {
-            name: 'total_label',
-            config: {
-              label: t('Total label'),
-              type: 'TextControl',
-              renderTrigger: true,
-              description: t(
-                'Customize the label displayed for total values in the chart tooltips, legend, and chart axis.',
-              ),
             },
           },
         ],
-      ],
-    },
-    {
-      label: t('X Axis'),
-      expanded: true,
-      controlSetRows: [
+        [<ControlSubSectionHeader>{t('X Axis')}</ControlSubSectionHeader>],
         [
           {
             name: 'x_axis_label',
@@ -213,13 +239,55 @@ const config: ControlPanelConfig = {
               description: t('The way the ticks are laid out on the X-axis'),
             },
           },
+          {
+            name: 'x_ticks_wrap_length',
+            config: {
+              type: 'TextControl',
+              label: t('X Tick Wrap Length'),
+              description: t(
+                'Maximum line length for wrapped text (when Flat layout is selected)',
+              ),
+              default: '20',
+              renderTrigger: true,
+              visibility: ({ controls }) =>
+                controls.x_ticks_layout.value === 'flat',
+            },
+          },
         ],
-      ],
-    },
-    {
-      label: t('Y Axis'),
-      expanded: true,
-      controlSetRows: [
+        [
+          {
+            name: 'sort_x_axis',
+            config: {
+              type: 'SelectControl',
+              label: t('Sort X Axis'),
+              default: 'none',
+              choices: [
+                ['none', t('None')],
+                ['asc', t('Ascending')],
+                ['desc', t('Descending')],
+              ],
+              renderTrigger: true,
+              description: t('Sort X axis in ascending or descending order'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'orientation',
+            config: {
+              type: 'SelectControl',
+              label: t('Orientation'),
+              default: 'vertical',
+              choices: [
+                ['vertical', t('Vertical')],
+                ['horizontal', t('Horizontal')],
+              ],
+              renderTrigger: true,
+              description: t('Orientation of the chart'),
+            },
+          },
+        ],
+        [<ControlSubSectionHeader>{t('Y Axis')}</ControlSubSectionHeader>],
         [
           {
             name: 'y_axis_label',

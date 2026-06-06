@@ -19,6 +19,7 @@
 import {
   ChartDataResponseResult,
   ChartProps,
+  DataRecordValue,
   QueryFormColumn,
   QueryFormData,
   QueryFormMetric,
@@ -38,6 +39,8 @@ export type WaterfallFormXTicksLayout =
 export type ISeriesData = {
   originalValue?: number;
   totalSum?: number;
+  crossFilterColumn?: QueryFormColumn;
+  crossFilterValue?: DataRecordValue | null;
 } & BarDataItemOption;
 
 export type ICallbackDataParams = CallbackDataParams & {
@@ -49,6 +52,8 @@ export type EchartsWaterfallFormData = QueryFormData &
   LegendFormData & {
     increaseColor: RgbaColor;
     decreaseColor: RgbaColor;
+    orientation: 'vertical' | 'horizontal';
+    boldLabels: string;
     totalColor: RgbaColor;
     metric: QueryFormMetric;
     xAxis: QueryFormColumn;
@@ -56,11 +61,14 @@ export type EchartsWaterfallFormData = QueryFormData &
     xAxisTimeFormat?: string;
     xTicksLayout?: WaterfallFormXTicksLayout;
     yAxisLabel: string;
+    yAxisLabelDistance: string;
     yAxisFormat: string;
     increaseLabel?: string;
     decreaseLabel?: string;
     totalLabel?: string;
     showTotal: boolean;
+    seriesOrderByColumn: string;
+    seriesOrderDirection: 'ASC' | 'DESC';
   };
 
 export const DEFAULT_FORM_DATA: Partial<EchartsWaterfallFormData> = {
@@ -72,5 +80,11 @@ export interface EchartsWaterfallChartProps extends ChartProps {
   queriesData: ChartDataResponseResult[];
 }
 
-export type WaterfallChartTransformedProps =
-  BaseTransformedProps<EchartsWaterfallFormData>;
+export interface WaterfallChartTransformedProps
+  extends BaseTransformedProps<EchartsWaterfallFormData> {
+  emitCrossFilters?: boolean;
+  filterState?: {
+    col?: QueryFormColumn;
+    value?: DataRecordValue | null;
+  };
+}

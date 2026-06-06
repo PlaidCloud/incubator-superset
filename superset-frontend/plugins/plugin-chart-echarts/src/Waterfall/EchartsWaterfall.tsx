@@ -16,18 +16,119 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import { EChartsCoreOption } from 'echarts/core';
+import { useRef } from 'react';
 import Echart from '../components/Echart';
-import { WaterfallChartTransformedProps } from './types';
+import { ISeriesData, WaterfallChartTransformedProps } from './types';
 import { EventHandlers } from '../types';
 import { LEGEND } from './constants';
+import { useTheme } from '@apache-superset/core/theme';
 
 export default function EchartsWaterfall(
   props: WaterfallChartTransformedProps,
 ) {
-  const { height, width, echartOptions, refs, onLegendStateChanged, formData } =
-    props;
+  const {
+    height,
+    width,
+    echartOptions,
+    setDataMask,
+    onContextMenu,
+    refs,
+    onLegendStateChanged,
+    formData: {
+      sortXAxis,
+      orientation,
+      showTotal,
+      useFirstValueAsSubtotal,
+      totalColor,
+      boldLabels,
+    },
+    emitCrossFilters,
+  } = props;
+
+  const theme = useTheme();
+  const chartRef = useRef<any>(null);
+  const baseSeriesRef = useRef<any[]>([]);
 
   const eventHandlers: EventHandlers = {
+    click: params => {
+      if (!setDataMask || !emitCrossFilters) return;
+
+      const { name: axisValue, dataIndex } = params;
+      const clickedData = (params.data ?? {}) as Pick<
+        ISeriesData,
+        'crossFilterColumn' | 'crossFilterValue'
+      >;
+      const filterColumn =
+        clickedData.crossFilterColumn ?? props.formData.xAxis;
+      const filterValue = clickedData.crossFilterValue ?? axisValue;
+
+      if (filterValue === null || filterValue === undefined) return;
+
+      const isCurrentValue =
+        props.filterState?.col === filterColumn &&
+        props.filterState?.value === filterValue;
+
+      if (isCurrentValue) {
+        // Clear the filter and visual state
+        setDataMask({
+          extraFormData: {},
+          filterState: {
+            col: undefined,
+            value: null,
+          },
+        });
+
+        if (chartRef.current) {
+          chartRef.current.getEchartInstance().setOption({
+            series: baseSeriesRef.current,
+          });
+        }
+        return;
+      }
+
+      // Set new filter
+      setDataMask({
+        extraFormData: {
+          filters: [
+            {
+              col: filterColumn,
+              op: '==',
+              val: filterValue,
+            },
+          ],
+        },
+        filterState: {
+          col: filterColumn,
+          value: filterValue,
+        },
+      });
+
+      if (chartRef.current) {
+        const series = baseSeriesRef.current;
+        const valueIndex = dataIndex;
+
+        const updatedSeries = series.map(s => ({
+          ...s,
+          data: s.data.map((d: any, idx: number) => ({
+            ...d,
+            itemStyle: {
+              ...d.itemStyle,
+              opacity: !Number.isNaN(d.value) && idx === valueIndex ? 1 : 0.3,
+            },
+          })),
+        }));
+
+        chartRef.current.getEchartInstance().setOption({
+          series: updatedSeries,
+        });
+      }
+    },
+    contextmenu: params => {
+      if (onContextMenu) {
+        onContextMenu(params.name, 0);
+      }
+    },
     legendselectchanged: payload => {
       onLegendStateChanged?.(payload.selected);
     },
@@ -397,12 +498,12 @@ export default function EchartsWaterfall(
 
   return (
     <Echart
-      refs={refs}
+      ref={chartRef}
       height={height}
       width={width}
-      echartOptions={echartOptions}
+      echartOptions={formattedAxisOptions}
       eventHandlers={eventHandlers}
-      vizType={formData.vizType}
+      refs={refs}
     />
   );
 }
