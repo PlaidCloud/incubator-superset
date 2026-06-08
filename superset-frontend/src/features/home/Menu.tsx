@@ -289,30 +289,45 @@ export function Menu({
   };
   const renderBrand = () => {
     let link;
+    const brandImage = (
+      <StyledImage
+        preview={false}
+        src={ensureStaticPrefix(brand.icon)}
+        alt={brand.alt}
+      />
+    );
     if (theme.brandLogoUrl) {
+      const themeLogo = (
+        <StyledImage
+          preview={false}
+          src={ensureStaticPrefix(theme.brandLogoUrl)}
+          alt={theme.brandLogoAlt || 'Apache Superset'}
+          height={theme.brandLogoHeight}
+        />
+      );
       link = (
         <StyledBrandWrapper margin={theme.brandLogoMargin}>
-          <StyledBrandLink href={ensureAppRoot(theme.brandLogoHref)}>
-            <StyledImage
-              preview={false}
-              src={ensureStaticPrefix(theme.brandLogoUrl)}
-              alt={theme.brandLogoAlt || 'Apache Superset'}
-              height={theme.brandLogoHeight}
-            />
-          </StyledBrandLink>
+          {theme.brandLogoHref ? (
+            <StyledBrandLink href={ensureAppRoot(theme.brandLogoHref)}>
+              {themeLogo}
+            </StyledBrandLink>
+          ) : (
+            // No href configured: render the logo without a link (non-clickable)
+            themeLogo
+          )}
         </StyledBrandWrapper>
       );
+    } else if (!brand.path) {
+      // Navigation disabled via LOGO_TARGET_PATH ("" / "NO_CLICK"): render the
+      // logo without a surrounding link so clicking it does nothing.
+      link = <span className="navbar-brand">{brandImage}</span>;
     } else if (isFrontendRoute(window.location.pathname)) {
       // ---------------------------------------------------------------------------------
       // TODO: deprecate this once Theme is fully rolled out
       // Kept as is for backwards compatibility with the old theme system / superset_config.py
       link = (
         <GenericLink className="navbar-brand" to={brand.path}>
-          <StyledImage
-            preview={false}
-            src={ensureStaticPrefix(brand.icon)}
-            alt={brand.alt}
-          />
+          {brandImage}
         </GenericLink>
       );
     } else {
@@ -322,11 +337,7 @@ export function Menu({
           href={ensureAppRoot(brand.path)}
           tabIndex={-1}
         >
-          <StyledImage
-            preview={false}
-            src={ensureStaticPrefix(brand.icon)}
-            alt={brand.alt}
-          />
+          {brandImage}
         </Typography.Link>
       );
     }

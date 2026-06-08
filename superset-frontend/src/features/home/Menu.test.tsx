@@ -796,3 +796,36 @@ test('brand link falls back to brand.path when theme brandLogoUrl is absent', as
   // ensureAppRoot must have been applied: /welcome/ → /superset/welcome/
   expect(brandLink).toHaveAttribute('href', '/superset/welcome/');
 });
+
+test('brand logo is not clickable when brand.path is empty (navigation disabled)', async () => {
+  // An empty brand.path corresponds to LOGO_TARGET_PATH being "" or "NO_CLICK".
+  useSelectorMock.mockReturnValue({ roles: user.roles });
+
+  const propsWithNoNav = {
+    ...mockedProps,
+    data: {
+      ...mockedProps.data,
+      brand: {
+        ...mockedProps.data.brand,
+        path: '',
+      },
+    },
+  };
+
+  render(<Menu {...propsWithNoNav} />, {
+    useRedux: true,
+    useQueryParams: true,
+    useRouter: true,
+    useTheme: true,
+  });
+
+  // The logo image is still rendered...
+  const logo = await screen.findByAltText(propsWithNoNav.data.brand.alt);
+  expect(logo).toBeInTheDocument();
+  // ...but it is not wrapped in a link, so clicking it navigates nowhere.
+  expect(
+    screen.queryByRole('link', {
+      name: new RegExp(propsWithNoNav.data.brand.alt, 'i'),
+    }),
+  ).not.toBeInTheDocument();
+});

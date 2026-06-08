@@ -279,10 +279,24 @@ def menu_data(user: User) -> dict[str, Any]:
     # Get centralized version metadata
     version_metadata = get_version_metadata()
 
+    # Resolve where clicking the brand logo takes the user:
+    #   - None                 -> default welcome page
+    #   - "" or "NO_CLICK"      -> navigation disabled (logo rendered without a
+    #                              link); the frontend treats an empty path as
+    #                              "non-clickable"
+    #   - any other value       -> navigate to that URL
+    logo_target_path = app.config["LOGO_TARGET_PATH"]
+    if logo_target_path is None:
+        brand_path = url_for("Superset.welcome")
+    elif logo_target_path in ("", "NO_CLICK"):
+        brand_path = ""
+    else:
+        brand_path = logo_target_path
+
     return {
         "menu": appbuilder.menu.get_data(),
         "brand": {
-            "path": app.config["LOGO_TARGET_PATH"] or url_for("Superset.welcome"),
+            "path": brand_path,
             "icon": appbuilder.app_icon,
             "alt": appbuilder.app_name,
             "tooltip": app.config["LOGO_TOOLTIP"],
