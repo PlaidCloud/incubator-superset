@@ -23,21 +23,13 @@ import { CrossFilterIndicator } from 'src/dashboard/components/nativeFilters/sel
 import { Tag } from 'src/components/Tag';
 import { Tooltip } from '@superset-ui/core/components';
 import { FilterBarOrientation } from 'src/dashboard/types';
-import { ellipsisCss } from './styles';
 
-const StyledCrossFilterValue = styled.b`
-  ${({ theme }) => `
-    max-width: ${theme.sizeUnit * 25}px;
-  `}
-  ${ellipsisCss}
-`;
+const StyledCrossFilterValue = styled.b``;
 
 const StyledCrossFilterColumn = styled('span')`
   ${({ theme }) => `
-    max-width: ${theme.sizeUnit * 25}px;
     padding-right: ${theme.sizeUnit}px;
   `}
-  ${ellipsisCss}
 `;
 
 const StyledTag = styled(Tag)`

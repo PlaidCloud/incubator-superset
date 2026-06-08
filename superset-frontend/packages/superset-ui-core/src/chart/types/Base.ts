@@ -58,6 +58,13 @@ export enum AppSection {
 
 export type FilterState = {
   value?: any;
+  selectedValues?: any[] | null;
+  filters?: Record<string, any>;
+  multiColumnFilters?: Array<{
+    column: string;
+    value: any;
+    operator?: string;
+  }>;
   customColumnLabel?: string;
   [key: string]: any;
 };
@@ -65,6 +72,9 @@ export type FilterState = {
 export type DataMask = {
   extraFormData?: ExtraFormData;
   filterState?: FilterState;
+  currentState?: {
+    value?: any;
+  };
   ownState?: JsonObject;
 };
 

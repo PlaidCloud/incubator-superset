@@ -411,37 +411,45 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     [data],
   );
 
+  const areFilterValuesEqual = useCallback(
+    (filterVal: DataRecordValue, val: DataRecordValue) => {
+      if (filterVal === val) return true;
+      // DateWithFormatter extends Date — compare by time value
+      // since memoization cache misses can create new instances
+      if (filterVal instanceof Date && val instanceof Date) {
+        return filterVal.getTime() === val.getTime();
+      }
+      return false;
+    },
+    [],
+  );
+
   const isActiveFilterValue = useCallback(
     function isActiveFilterValue(key: string, val: DataRecordValue) {
       if (!filters || !filters[key]) return false;
-      return filters[key].some(filterVal => {
-        if (filterVal === val) return true;
-        // DateWithFormatter extends Date — compare by time value
-        // since memoization cache misses can create new instances
-        if (filterVal instanceof Date && val instanceof Date) {
-          return filterVal.getTime() === val.getTime();
-        }
-        return false;
-      });
+      return filters[key].some(filterVal =>
+        areFilterValuesEqual(filterVal, val),
+      );
     },
-    [filters],
+    [areFilterValuesEqual, filters],
   );
 
   const getCrossFilterDataMask = useCallback(
     (key: string, value: DataRecordValue) => {
-      let updatedFilters = { ...filters };
+      const updatedFilters = { ...(filters || {}) };
+
       if (filters && isActiveFilterValue(key, value)) {
-        updatedFilters = {};
+        const currentValues = ensureIsArray(updatedFilters[key]);
+        updatedFilters[key] = currentValues.filter(
+          filterVal => !areFilterValuesEqual(filterVal, value),
+        );
+
+        if (updatedFilters[key].length === 0) {
+          delete updatedFilters[key];
+        }
       } else {
-        updatedFilters = {
-          [key]: [value],
-        };
-      }
-      if (
-        Array.isArray(updatedFilters[key]) &&
-        updatedFilters[key].length === 0
-      ) {
-        delete updatedFilters[key];
+        const currentValues = ensureIsArray(updatedFilters[key]);
+        updatedFilters[key] = [...currentValues, value];
       }
 
       const groupBy = Object.keys(updatedFilters);
@@ -454,7 +462,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           const valueLabels = filterValues.map(value =>
             isTimestamp ? timestampFormatter(value) : value,
           );
-          labelElements.push(`${valueLabels.join(', ')}`);
+          labelElements.push(`${col}: ${valueLabels.join(', ')}`);
         }
       });
 
@@ -485,18 +493,19 @@ export default function TableChart<D extends DataRecord = DataRecord>(
                   }),
           },
           filterState: {
-            label: labelElements.join(', '),
+            label: labelElements.join(' & '),
             value: groupByValues.length ? groupByValues : null,
             filters:
               updatedFilters && Object.keys(updatedFilters).length
                 ? updatedFilters
-                : null,
+                : undefined,
           },
         },
         isCurrentValueSelected: isActiveFilterValue(key, value),
       };
     },
     [
+      areFilterValuesEqual,
       filters,
       isActiveFilterValue,
       timestampFormatter,
@@ -505,14 +514,58 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     ],
   );
 
+  const getSingleCrossFilterDataMask = useCallback(
+    (key: string, value: DataRecordValue) => {
+      const resolvedCol = columnLabelToNameMap[key] ?? key;
+      const isTimestamp = key === DTTM_ALIAS;
+      const valueLabel = isTimestamp ? timestampFormatter(value) : value;
+
+      return {
+        extraFormData: {
+          filters: [
+            {
+              col: resolvedCol,
+              op: 'IN' as const,
+              val: [value instanceof Date ? value.getTime() : value!],
+              grain: resolvedCol === DTTM_ALIAS ? timeGrain : undefined,
+            },
+          ],
+        },
+        filterState: {
+          label: `${key}: ${valueLabel}`,
+          value: [[value]],
+          filters: {
+            [key]: [value],
+          },
+        },
+      };
+    },
+    [columnLabelToNameMap, timeGrain, timestampFormatter],
+  );
+
   const toggleFilter = useCallback(
-    function toggleFilter(key: string, val: DataRecordValue) {
+    function toggleFilter(
+      key: string,
+      val: DataRecordValue,
+      event?: MouseEvent,
+    ) {
       if (!emitCrossFilters) {
         return;
       }
-      setDataMask(getCrossFilterDataMask(key, val).dataMask);
+
+      if (event?.ctrlKey || event?.metaKey) {
+        setDataMask(getCrossFilterDataMask(key, val).dataMask);
+        return;
+      }
+
+      setDataMask(getSingleCrossFilterDataMask(key, val));
     },
-    [emitCrossFilters, getCrossFilterDataMask, setDataMask],
+    [
+      emitCrossFilters,
+      getCrossFilterDataMask,
+      getSingleCrossFilterDataMask,
+      setDataMask,
+    ],
   );
 
   const getSharedStyle = useCallback(
@@ -1097,10 +1150,10 @@ export default function TableChart<D extends DataRecord = DataRecord>(
             title: typeof value === 'number' ? String(value) : undefined,
             onClick:
               emitCrossFilters && !valueRange && !isMetric
-                ? () => {
+                ? (event: MouseEvent) => {
                     // allow selecting text in a cell
                     if (!getSelectedText()) {
-                      toggleFilter(key, value);
+                      toggleFilter(key, value, event);
                     }
                   }
                 : undefined,

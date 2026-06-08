@@ -1743,7 +1743,7 @@ describe('plugin-chart-table', () => {
         );
       });
 
-      test('clicking a cell emits cross-filter, clicking again clears it', () => {
+      test('clicking a cell emits cross-filter, Ctrl-clicking again clears it', () => {
         const setDataMask = jest.fn();
         const props = transformProps({
           ...testData.basic,
@@ -1775,6 +1775,7 @@ describe('plugin-chart-table', () => {
         expect(firstCallArg.filterState.filters).toEqual({
           name: ['Michael'],
         });
+        expect(firstCallArg.filterState.label).toBe('name: Michael');
         expect(firstCallArg.extraFormData.filters).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
@@ -1803,10 +1804,10 @@ describe('plugin-chart-table', () => {
         const activeCells = document.querySelectorAll('.dt-is-active-filter');
         expect(activeCells.length).toBeGreaterThan(0);
 
-        // Click same cell again to clear cross-filter
+        // Ctrl-click same cell again to clear cross-filter
         setDataMask.mockClear();
         const sameCellAgain = screen.getByText('Michael');
-        fireEvent.click(sameCellAgain);
+        fireEvent.click(sameCellAgain, { ctrlKey: true });
 
         // Find the cross-filter clearing call
         const clearCall = setDataMask.mock.calls.find(
@@ -1815,8 +1816,50 @@ describe('plugin-chart-table', () => {
         expect(clearCall).toBeDefined();
         const secondCallArg = clearCall![0];
         // Should clear the filter
-        expect(secondCallArg.filterState.filters).toBeNull();
+        expect(secondCallArg.filterState.filters).toBeUndefined();
         expect(secondCallArg.extraFormData.filters).toEqual([]);
+      });
+
+      test('Ctrl-clicking a second cell adds it to the cross-filter', () => {
+        const setDataMask = jest.fn();
+        const props = transformProps({
+          ...testData.basic,
+          hooks: { setDataMask },
+          emitCrossFilters: true,
+        });
+        render(
+          <ProviderWrapper>
+            <TableChart
+              {...props}
+              emitCrossFilters
+              setDataMask={setDataMask}
+              filters={{ name: ['Michael'] }}
+              sticky={false}
+            />
+          </ProviderWrapper>,
+        );
+
+        const secondNameCell = screen.getByText('Joe');
+        fireEvent.click(secondNameCell, { ctrlKey: true });
+
+        const crossFilterCall = setDataMask.mock.calls.find(
+          (call: any[]) => call[0]?.filterState?.filters,
+        );
+        expect(crossFilterCall).toBeDefined();
+        const callArg = crossFilterCall![0];
+        expect(callArg.filterState.label).toBe('name: Michael, Joe');
+        expect(callArg.filterState.filters).toEqual({
+          name: ['Michael', 'Joe'],
+        });
+        expect(callArg.extraFormData.filters).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              col: 'name',
+              op: 'IN',
+              val: ['Michael', 'Joe'],
+            }),
+          ]),
+        );
       });
 
       test('cross-filter toggle works with DateWithFormatter values', () => {
@@ -1872,17 +1915,17 @@ describe('plugin-chart-table', () => {
         const activeCells = document.querySelectorAll('.dt-is-active-filter');
         expect(activeCells.length).toBeGreaterThan(0);
 
-        // Click the same timestamp cell again to clear
+        // Ctrl-click the same timestamp cell again to clear
         setDataMask.mockClear();
         const sameCell = screen.getByText('2020-01-01 12:34:56');
-        fireEvent.click(sameCell);
+        fireEvent.click(sameCell, { ctrlKey: true });
 
         const clearCall = setDataMask.mock.calls.find(
           (call: any[]) => call[0]?.filterState !== undefined,
         );
         expect(clearCall).toBeDefined();
         // Should CLEAR the filter (not re-apply it)
-        expect(clearCall![0].filterState.filters).toBeNull();
+        expect(clearCall![0].filterState.filters).toBeUndefined();
         expect(clearCall![0].extraFormData.filters).toEqual([]);
       });
 
@@ -1924,16 +1967,16 @@ describe('plugin-chart-table', () => {
         const activeCells = container.querySelectorAll('.dt-is-active-filter');
         expect(activeCells.length).toBeGreaterThan(0);
 
-        // Clicking should CLEAR the filter, not re-apply it
+        // Ctrl-clicking should CLEAR the filter, not re-apply it
         setDataMask.mockClear();
         const timestampCell = screen.getByText('2020-01-01 12:34:56');
-        fireEvent.click(timestampCell);
+        fireEvent.click(timestampCell, { ctrlKey: true });
 
         const clearCall = setDataMask.mock.calls.find(
           (call: any[]) => call[0]?.filterState !== undefined,
         );
         expect(clearCall).toBeDefined();
-        expect(clearCall![0].filterState.filters).toBeNull();
+        expect(clearCall![0].filterState.filters).toBeUndefined();
         expect(clearCall![0].extraFormData.filters).toEqual([]);
       });
 
