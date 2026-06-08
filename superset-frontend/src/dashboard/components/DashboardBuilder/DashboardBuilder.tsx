@@ -213,7 +213,7 @@ const DashboardContentWrapper = styled.div`
       /* provide hit area in case row contents is edge to edge */
       .dashboard-component-tabs-content {
         > .dragdroppable-row {
-          padding-top: ${theme.sizeUnit * 4}px;
+          padding-top: ${theme.sizeUnit * 2}px;
         }
       }
 
@@ -243,7 +243,7 @@ const DashboardContentWrapper = styled.div`
 
     & .dashboard-component-tabs-content {
       & > div:not(:last-child):not(.empty-droptarget) {
-        margin-bottom: ${theme.sizeUnit * 4}px;
+        margin-bottom: ${theme.sizeUnit * 2}px;
       }
 
       & > .empty-droptarget {
@@ -253,12 +253,12 @@ const DashboardContentWrapper = styled.div`
       }
 
       & > .empty-droptarget:first-child:not(.empty-droptarget--full) {
-        height: ${theme.sizeUnit * 4}px;
+        height: ${theme.sizeUnit * 2}px;
         top: 0;
       }
 
       & > .empty-droptarget:last-child {
-        height: ${theme.sizeUnit * 4}px;
+        height: ${theme.sizeUnit * 2}px;
         bottom: ${-theme.sizeUnit * 4}px;
       }
     }
@@ -313,7 +313,7 @@ const StyledDashboardContent = styled.div<{
       height: 100%;
       background-color: ${theme.colorBgContainer};
       position: relative;
-      padding: ${theme.sizeUnit * 4}px;
+      padding: ${theme.sizeUnit * 2}px;
       overflow-y: visible;
 
       // transitionable traits to show filter relevance

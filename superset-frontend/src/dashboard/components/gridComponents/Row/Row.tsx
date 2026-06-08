@@ -89,16 +89,16 @@ const GridRow = styled.div<{ editMode: boolean }>`
     height: fit-content;
 
     & > :not(:last-child):not(.hover-menu) {
-      ${!editMode && `margin-right: ${theme.sizeUnit * 4}px;`}
+      ${!editMode && `margin-right: ${(theme.sizeUnit + 1) * 2}px;`}
     }
 
     & .empty-droptarget {
       position: relative;
       align-self: center;
       &.empty-droptarget--vertical {
-        min-width: ${theme.sizeUnit * 4}px;
+        min-width: ${(theme.sizeUnit + 1) * 2}px;
         &:not(:last-child) {
-          width: ${theme.sizeUnit * 4}px;
+          width: ${(theme.sizeUnit + 1) * 2}px;
         }
         &:first-child:not(.droptarget-side) {
           z-index: ${EMPTY_CONTAINER_Z_INDEX};
@@ -110,7 +110,7 @@ const GridRow = styled.div<{ editMode: boolean }>`
       &.droptarget-side {
         z-index: ${EMPTY_CONTAINER_Z_INDEX};
         position: absolute;
-        width: ${theme.sizeUnit * 4}px;
+        width: ${theme.sizeUnit * 2}px;
         &:first-child {
           inset-inline-start: 0;
         }
@@ -332,7 +332,6 @@ const Row = memo((props: RowProps) => {
               editMode
               style={{
                 height: rowItems.length > 0 ? containerHeight : '100%',
-                ...(rowItems.length > 0 && { width: 16 }),
               }}
             >
               {({ dropIndicatorProps }: { dropIndicatorProps: JsonObject }) =>
@@ -379,8 +378,6 @@ const Row = memo((props: RowProps) => {
                     editMode
                     style={{
                       height: containerHeight,
-                      ...(remainColumnCount === 0 &&
-                        itemIndex === rowItems.length - 1 && { width: 16 }),
                     }}
                   >
                     {({

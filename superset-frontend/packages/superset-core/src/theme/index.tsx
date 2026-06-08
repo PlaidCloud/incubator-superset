@@ -60,7 +60,11 @@ export function useTheme() {
 
 const styled: CreateStyled = emotionStyled;
 
-const themeObject: Theme = Theme.fromConfig();
+const themeObject: Theme = Theme.fromConfig({
+  token: {
+    sizeUnit: 3,
+  },
+});
 
 const { theme } = themeObject;
 const supersetTheme = theme;
