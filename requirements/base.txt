@@ -319,8 +319,6 @@ pyasn1==0.6.2
     # via
     #   apache-superset (pyproject.toml)
     #   plaidcloud-rpc
-pyasn1==0.6.1
-    # via
     #   pyasn1-modules
     #   rsa
 pyasn1-modules==0.4.2
@@ -380,9 +378,9 @@ pyyaml==6.0.2
     #   apache-superset (pyproject.toml)
     #   apispec
 redis==5.3.1
+    # via
+    #   apache-superset (pyproject.toml)
     #   plaidcloud-rpc
-redis==4.6.0
-    # via apache-superset (pyproject.toml)
 referencing==0.37.0
     # via
     #   jsonschema
@@ -408,9 +406,9 @@ rsa==4.9.1
 selenium==4.32.0
     # via apache-superset (pyproject.toml)
 setuptools==80.9.0
-    # via -r requirements/base.in
-setuptools==80.9.0
-    # via plaidcloud-rpc
+    # via
+    #   -r requirements/base.in
+    #   plaidcloud-rpc
 shillelagh==1.4.3
     # via apache-superset (pyproject.toml)
 simplejson==3.20.1
