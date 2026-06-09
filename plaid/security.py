@@ -42,6 +42,17 @@ class PlaidSecurityManager(SupersetSecurityManager):
     """Custom security manager class for PlaidCloud integration.
     """
 
+    # The admin SPA routes (UsersListView, RolesListView, GroupsListView,
+    # ActionLogView, UserRegistrationsView) all gate on the ("read", "security")
+    # permission. Upstream only marks the "Security" menu category and the
+    # individual menu items as admin-only, not the shared "security" view-menu,
+    # so ("read", "security") gets granted to Alpha/Gamma and those roles can
+    # reach /users/, /roles/, /list_groups/ etc. directly even though the menu
+    # is hidden. Adding "security" here makes the routes Admin-only too.
+    ADMIN_ONLY_VIEW_MENUS = SupersetSecurityManager.ADMIN_ONLY_VIEW_MENUS | {
+        "security",
+    }
+
     def __init__(self, appbuilder):
         # These allowed me to turn this on without adjusting the superset_config.py
         # app = appbuilder.get_app
