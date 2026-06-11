@@ -149,6 +149,7 @@
     "@superset-ui/plugin-chart-table": "file:./plugins/plugin-chart-table",
     "@superset-ui/plugin-chart-table-transpose": "file:./plugins/plugin-chart-table-transpose",
     "@superset-ui/plugin-chart-whale": "file:./plugins/plugin-chart-whale",
+    "@superset-ui/plugin-chart-whale3d": "file:./plugins/plugin-chart-whale3d",
     "@superset-ui/plugin-chart-word-cloud": "file:./plugins/plugin-chart-word-cloud",
     "@superset-ui/plugin-table-kpi": "file:./plugins/plugin-table-kpi",
     "@superset-ui/superset-plugin-dashboard-filters": "file:./plugins/superset-plugin-dashboard-filters",
