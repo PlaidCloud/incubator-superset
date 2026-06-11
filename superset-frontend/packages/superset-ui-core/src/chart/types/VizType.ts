@@ -19,6 +19,7 @@
 export enum VizType {
   Area = 'echarts_area',
   Bar = 'echarts_timeseries_bar',
+  Bar3D = 'ext-bar3d',
   BenchmarkRange = 'benchmark-range',
   BigNumber = 'big_number',
   BigNumberTotal = 'big_number_total',
