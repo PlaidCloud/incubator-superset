@@ -98,6 +98,7 @@ import { PluginChartMarimekko } from '@superset-ui/plugin-chart-marimekko';
 import { BenchmarkRangeChartPlugin } from '@superset-ui/plugin-chart-benchmark-range';
 import { PluginChartGantt } from '@superset-ui/plugin-chart-gantt';
 import { PluginChartMekkoWhale } from '@superset-ui/plugin-chart-mekko-whale';
+import { PluginChartBar3D } from '@superset-ui/plugin-chart-bar3d';
 
 export default class MainPreset extends Preset {
   constructor() {
@@ -232,6 +233,7 @@ export default class MainPreset extends Preset {
         new PluginChartMarimekko().configure({ key: VizType.Marimekko }),
         new BenchmarkRangeChartPlugin().configure({ key: VizType.BenchmarkRange }),
         new PluginChartMekkoWhale().configure({ key: VizType.MekkoWhale }),
+        new PluginChartBar3D().configure({ key: VizType.Bar3D }),
         new PluginChartGantt().configure({ key: VizType.Gantt }),
       ],
     });
