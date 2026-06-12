@@ -261,6 +261,18 @@ const controlPanel: ControlPanelConfig = {
         ],
         [
           {
+            name: 'symbolColor',
+            config: {
+              type: 'ColorPickerControl',
+              label: t('Symbol color'),
+              renderTrigger: true,
+              default: DEFAULT_FORM_DATA.symbolColor,
+              description: t('Color of the node symbols'),
+            },
+          },
+        ],
+        [
+          {
             name: 'roam',
             config: {
               type: 'SelectControl',
