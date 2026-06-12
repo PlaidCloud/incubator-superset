@@ -234,10 +234,11 @@ RUN --mount=type=cache,target=${SUPERSET_HOME}/.cache/uv \
 # Install the superset package
 RUN --mount=type=cache,target=${SUPERSET_HOME}/.cache/uv \
     uv pip install -e .
-# Install the MCP server extra (fastmcp) so `superset mcp run` works. Lean is
-# inherited by the ci and showtime stages, so the deployed image gets it too.
+# Install extras needed at runtime by the deployed image: fastmcp (for
+# `superset mcp run`) and prophet (Predictive Analytics forecasting). Lean is
+# inherited by the ci and showtime stages, so the deployed image gets them too.
 RUN --mount=type=cache,target=${SUPERSET_HOME}/.cache/uv \
-    uv pip install .[fastmcp]
+    uv pip install .[fastmcp,prophet]
 RUN python -m compileall /app/superset
 
 USER superset
