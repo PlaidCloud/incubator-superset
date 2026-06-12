@@ -51,7 +51,7 @@ export const buildSelectionCrossFilterDataMask = ({
     return {
       dataMask: {
         extraFormData: { filters: [] },
-        filterState: { label: null, value: null, filters: null },
+        filterState: { label: null, value: null, filters: undefined },
       },
     };
   }
