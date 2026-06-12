@@ -234,6 +234,10 @@ RUN --mount=type=cache,target=${SUPERSET_HOME}/.cache/uv \
 # Install the superset package
 RUN --mount=type=cache,target=${SUPERSET_HOME}/.cache/uv \
     uv pip install -e .
+# Install the MCP server extra (fastmcp) so `superset mcp run` works. Lean is
+# inherited by the ci and showtime stages, so the deployed image gets it too.
+RUN --mount=type=cache,target=${SUPERSET_HOME}/.cache/uv \
+    uv pip install .[fastmcp]
 RUN python -m compileall /app/superset
 
 USER superset
