@@ -99,6 +99,8 @@ import { BenchmarkRangeChartPlugin } from '@superset-ui/plugin-chart-benchmark-r
 import { PluginChartGantt } from '@superset-ui/plugin-chart-gantt';
 import { PluginChartMekkoWhale } from '@superset-ui/plugin-chart-mekko-whale';
 import { PluginChartBar3D } from '@superset-ui/plugin-chart-bar3d';
+import { PluginChartWhale3D } from '@superset-ui/plugin-chart-whale3d';
+import { PluginChartWaterfall3D } from '@superset-ui/plugin-chart-waterfall3d';
 
 export default class MainPreset extends Preset {
   constructor() {
@@ -234,6 +236,8 @@ export default class MainPreset extends Preset {
         new BenchmarkRangeChartPlugin().configure({ key: VizType.BenchmarkRange }),
         new PluginChartMekkoWhale().configure({ key: VizType.MekkoWhale }),
         new PluginChartBar3D().configure({ key: VizType.Bar3D }),
+        new PluginChartWhale3D().configure({ key: VizType.WhaleCurve3D }),
+        new PluginChartWaterfall3D().configure({ key: VizType.Waterfall3D }),
         new PluginChartGantt().configure({ key: VizType.Gantt }),
       ],
     });

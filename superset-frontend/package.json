@@ -143,6 +143,8 @@
     "@superset-ui/plugin-chart-gantt": "file:./plugins/plugin-chart-gantt",
     "@superset-ui/plugin-chart-handlebars": "file:./plugins/plugin-chart-handlebars",
     "@superset-ui/plugin-chart-bar3d": "file:./plugins/plugin-chart-bar3d",
+    "@superset-ui/plugin-chart-whale3d": "file:./plugins/plugin-chart-whale3d",
+    "@superset-ui/plugin-chart-waterfall3d": "file:./plugins/plugin-chart-waterfall3d",
     "@superset-ui/plugin-chart-benchmark-range": "file:./plugins/plugin-chart-benchmark-range",
     "@superset-ui/plugin-chart-marimekko": "file:./plugins/plugin-chart-marimekko",
     "@superset-ui/plugin-chart-mekko-whale": "file:./plugins/plugin-chart-mekko-whale",
