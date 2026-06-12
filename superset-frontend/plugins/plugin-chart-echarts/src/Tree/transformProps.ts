@@ -20,6 +20,7 @@ import {
   getMetricLabel,
   DataRecordValue,
   tooltipHtml,
+  rgbToHex,
 } from '@superset-ui/core';
 import type { EChartsCoreOption } from 'echarts/core';
 import type { TreeSeriesOption } from 'echarts/charts';
@@ -71,6 +72,7 @@ export default function transformProps(
     orient,
     symbol,
     symbolSize,
+    symbolColor,
     roam,
     nodeLabelPosition,
     childLabelPosition,
@@ -78,6 +80,12 @@ export default function transformProps(
     initialTreeDepth,
   }: EchartsTreeFormData = { ...DEFAULT_FORM_DATA, ...formData };
   const metricLabel = getMetricLabel(metric);
+
+  // Color applied to all node symbols (border for hollow symbols, fill for
+  // solid ones). Left unset to keep the ECharts default until chosen.
+  const symbolColorHex = symbolColor
+    ? rgbToHex(symbolColor.r, symbolColor.g, symbolColor.b)
+    : undefined;
 
   const nameColumn = name || id;
 
@@ -204,6 +212,7 @@ export default function transformProps(
       symbol,
       roam,
       symbolSize,
+      ...(symbolColorHex ? { itemStyle: { color: symbolColorHex } } : {}),
       lineStyle: {
         color: theme.colorText,
         width: 1.5,

@@ -18,7 +18,11 @@
  */
 import type { OptionName } from 'echarts/types/src/util/types';
 import type { TreeSeriesNodeItemOption } from 'echarts/types/src/chart/tree/TreeSeries';
-import { ChartDataResponseResult, QueryFormData } from '@superset-ui/core';
+import {
+  ChartDataResponseResult,
+  QueryFormData,
+  RgbaColor,
+} from '@superset-ui/core';
 import { BaseChartProps, BaseTransformedProps } from '../types';
 
 export type EchartsTreeFormData = QueryFormData & {
@@ -29,6 +33,7 @@ export type EchartsTreeFormData = QueryFormData & {
   orient: 'LR' | 'RL' | 'TB' | 'BT';
   symbol: string;
   symbolSize: number;
+  symbolColor?: RgbaColor;
   colorScheme?: string;
   metric?: string;
   layout: 'orthogonal' | 'radial';
