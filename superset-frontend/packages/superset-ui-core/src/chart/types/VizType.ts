@@ -70,7 +70,9 @@ export enum VizType {
   Treemap = 'treemap_v2',
   TransposeTable = 'ext-table-transpose',
   Waterfall = 'waterfall',
+  Waterfall3D = 'ext-waterfall3d',
   Whale = 'ext-whale',
+  WhaleCurve3D = 'ext-whale3d',
   WordCloud = 'word_cloud',
   WorldMap = 'world_map',
 }
