@@ -17,18 +17,25 @@
  * under the License.
  */
 import {
+  CurrencyFormatter,
   getColumnLabel,
   getMetricLabel,
   getNumberFormatter,
-  rgbToHex,
+  RgbaColor,
 } from '@superset-ui/core';
 import {
+  BarType,
   Waterfall3DChartProps,
   Waterfall3DTransformedProps,
-  WaterfallStep,
+  WaterfallBar,
+  WaterfallLane,
 } from '../types';
 
-const hex = (c: { r: number; g: number; b: number }) => rgbToHex(c.r, c.g, c.b);
+const toHex = (c?: RgbaColor) =>
+  c ? (c.r << 16) + (c.g << 8) + c.b : 0x888888;
+
+const toRgba = (c: RgbaColor | undefined, fallback: string) =>
+  c ? `rgba(${c.r},${c.g},${c.b},${c.a ?? 1})` : fallback;
 
 export default function transformProps(
   chartProps: Waterfall3DChartProps,
@@ -38,41 +45,48 @@ export default function transformProps(
     stepColumn,
     seriesColumn,
     metric,
+    tooltip_column: tooltipColumn,
     showTotal = true,
     totalLabel = 'Total',
     showConnectors = true,
-    stickWidth = 10,
-    increaseColor = { r: 90, g: 193, b: 137, a: 1 },
-    decreaseColor = { r: 224, g: 67, b: 85, a: 1 },
-    totalColor = { r: 102, g: 102, b: 102, a: 1 },
+    stickWidth = 12,
+    show_value: showValue = false,
+    useFirstValueAsSubtotal = false,
+    bold_labels: boldMode = 'both',
+    show_legend: showLegend = false,
+    increaseColor = { r: 34, g: 197, b: 94, a: 1 },
+    decreaseColor = { r: 239, g: 68, b: 68, a: 1 },
+    totalColor = { r: 59, g: 130, b: 246, a: 1 },
+    subtotalColor = { r: 139, g: 92, b: 246, a: 1 },
+    labelColor,
     autoRotate = false,
     valueFormat = 'SMART_NUMBER',
+    currency_format: currencyFormat,
     xAxisLabel,
     yAxisLabel,
     zAxisLabel,
-    xAxisNameGap = 25,
-    yAxisNameGap = 25,
   } = formData;
 
   const data = (queriesData[0]?.data ?? []) as Record<string, any>[];
   const stepLabel = getColumnLabel(stepColumn);
   const seriesLabel = getColumnLabel(seriesColumn);
   const mLabel = getMetricLabel(metric);
-  const fmt = getNumberFormatter(valueFormat);
+  const tipColumnLabel = tooltipColumn ? getColumnLabel(tooltipColumn) : '';
 
-  const incHex = hex(increaseColor);
-  const decHex = hex(decreaseColor);
-  const totHex = hex(totalColor);
+  const numFmt = getNumberFormatter(valueFormat);
+  const curFmt = currencyFormat?.symbol
+    ? new CurrencyFormatter({ d3Format: valueFormat, currency: currencyFormat })
+    : null;
+  const fmt = (v: number) => (curFmt ? curFmt.format(v) : numFmt(v));
 
-  // Global ordered list of step labels (first-seen) shared by all series, so
-  // every waterfall lines up on the same X positions.
+  // First-seen step order (shared X positions) and series categories (depth).
   const stepOrder: string[] = [];
   const stepSeen = new Set<string>();
-  // Series categories (depth axis), first-seen order.
   const seriesCats: string[] = [];
   const catSeen = new Set<string>();
-  // Aggregate metric per (category, step).
   const agg = new Map<string, Map<string, number>>();
+  const tipByCell: Record<string, string> = {};
+  const cellKey = (cat: string, step: string) => `${cat} ${step}`;
 
   data.forEach(row => {
     const step = String(row[stepLabel] ?? '');
@@ -86,151 +100,91 @@ export default function transformProps(
       seriesCats.push(cat);
     }
     if (!agg.has(cat)) agg.set(cat, new Map());
-    const byStep = agg.get(cat)!;
-    byStep.set(step, (byStep.get(step) ?? 0) + (Number(row[mLabel]) || 0));
+    agg
+      .get(cat)!
+      .set(step, (agg.get(cat)!.get(step) ?? 0) + (Number(row[mLabel]) || 0));
+    if (tipColumnLabel) {
+      tipByCell[cellKey(cat, step)] = String(row[tipColumnLabel] ?? '');
+    }
   });
 
-  // X axis labels: the bridge steps, plus an optional trailing Total.
-  const axisSteps = showTotal ? [...stepOrder, totalLabel] : [...stepOrder];
-  const stepIndex = new Map<string, number>(
-    axisSteps.map((s, i) => [s, i]),
-  );
-
-  // Build per-category waterfall steps (running totals → floating bars).
-  const stepsByCat = new Map<string, WaterfallStep[]>();
-  let minZ = 0;
-  let maxZ = 0;
-  seriesCats.forEach(cat => {
+  let minVal = 0;
+  let maxVal = 0;
+  const lanes: WaterfallLane[] = seriesCats.map(cat => {
     const byStep = agg.get(cat)!;
-    const steps: WaterfallStep[] = [];
-    let total = 0;
+    const bars: WaterfallBar[] = [];
+    let running = 0;
+    let first = true;
     stepOrder.forEach(step => {
       if (!byStep.has(step)) return;
       const value = byStep.get(step)!;
-      const base = total;
-      total += value;
-      steps.push({ step, base, top: total, value, isTotal: false });
-      minZ = Math.min(minZ, base, total);
-      maxZ = Math.max(maxZ, base, total);
-    });
-    if (showTotal) {
-      steps.push({
-        step: totalLabel,
-        base: 0,
-        top: total,
-        value: total,
-        isTotal: true,
-      });
-      minZ = Math.min(minZ, 0, total);
-      maxZ = Math.max(maxZ, 0, total);
-    }
-    stepsByCat.set(cat, steps);
-  });
-
-  const series: any[] = [];
-  // Markers at each bar top double as reliable hover targets for the tooltip,
-  // since the thin line3D sticks are hard to hover directly.
-  const caps: any[] = [];
-  seriesCats.forEach((cat, j) => {
-    const steps = stepsByCat.get(cat)!;
-    let prevXi: number | null = null;
-    let prevTop: number | null = null;
-    steps.forEach(s => {
-      const xi = stepIndex.get(s.step)!;
-      const color = s.isTotal ? totHex : s.value >= 0 ? incHex : decHex;
-
-      // Connector from the previous step's top across to this step.
-      if (showConnectors && prevXi !== null && prevTop !== null) {
-        series.push({
-          type: 'line3D',
-          name: '',
-          silent: true,
-          data: [
-            [prevXi, j, prevTop],
-            [xi, j, prevTop],
-          ],
-          lineStyle: { width: 1, color: totHex, opacity: 0.5 },
-        });
+      const isSubtotal = useFirstValueAsSubtotal && first;
+      let base: number;
+      let top: number;
+      if (isSubtotal) {
+        running += value;
+        base = 0;
+        top = running;
+      } else {
+        base = running;
+        running += value;
+        top = running;
       }
-
-      // The floating bar itself (a thick vertical stick from base to top).
-      const label = [
-        `${cat} · ${s.step}`,
-        `${s.isTotal ? 'Total' : s.value >= 0 ? 'Increase' : 'Decrease'}: ${fmt(s.value)}`,
-        `Running total: ${fmt(s.top)}`,
-      ].join('<br/>');
-      series.push({
-        type: 'line3D',
-        name: label,
-        data: [
-          [xi, j, s.base],
-          [xi, j, s.top],
-        ],
-        lineStyle: { width: stickWidth, color },
-      });
-      caps.push({ value: [xi, j, s.top], label, itemStyle: { color } });
-
-      prevXi = xi;
-      prevTop = s.top;
+      first = false;
+      const type: BarType = isSubtotal
+        ? 'subtotal'
+        : value >= 0
+          ? 'positive'
+          : 'negative';
+      bars.push({ step, value, running, type, base, top });
+      minVal = Math.min(minVal, base, top);
+      maxVal = Math.max(maxVal, base, top);
     });
+    if (showTotal && bars.length) {
+      bars.push({
+        step: totalLabel,
+        value: running,
+        running,
+        type: 'total',
+        base: 0,
+        top: running,
+      });
+      minVal = Math.min(minVal, 0, running);
+      maxVal = Math.max(maxVal, 0, running);
+    }
+    return { cat, bars };
   });
 
-  series.push({
-    type: 'scatter3D',
-    name: 'caps',
-    symbolSize: Math.max(6, stickWidth + 2),
-    data: caps,
-  });
-
-  const zName = zAxisLabel || mLabel;
-  const nCats = seriesCats.length;
-  const pad = (maxZ - minZ) * 0.05 || 1;
-
-  const echartOptions: any = {
-    tooltip: {
-      formatter: (params: any) =>
-        params?.data?.label || params?.seriesName || '',
+  return {
+    formData,
+    width,
+    height,
+    refs: {},
+    lanes,
+    stepOrder: showTotal ? [...stepOrder, totalLabel] : [...stepOrder],
+    totalLabel,
+    colors: {
+      positive: toHex(increaseColor),
+      negative: toHex(decreaseColor),
+      total: toHex(totalColor),
+      subtotal: toHex(subtotalColor),
     },
-    xAxis3D: {
-      type: 'value',
-      name: xAxisLabel || stepLabel,
-      min: -0.5,
-      max: axisSteps.length - 0.5,
-      interval: 1,
-      nameGap: xAxisNameGap,
-      axisLabel: {
-        formatter: (v: number) => axisSteps[Math.round(v)] ?? '',
-      },
+    labelColor: toRgba(labelColor, 'rgba(20,40,100,1)'),
+    showValue: Boolean(showValue),
+    boldMode: String(boldMode),
+    showLegend: Boolean(showLegend),
+    showConnectors: Boolean(showConnectors),
+    barWidth: stickWidth,
+    autoRotate: Boolean(autoRotate),
+    fmt,
+    axisLabels: {
+      x: xAxisLabel || stepLabel,
+      y: zAxisLabel || mLabel,
+      z: yAxisLabel || seriesLabel,
     },
-    yAxis3D: {
-      type: 'value',
-      name: yAxisLabel || seriesLabel,
-      min: 0,
-      max: Math.max(0, nCats - 1),
-      interval: 1,
-      nameGap: yAxisNameGap,
-      axisLabel: {
-        formatter: (v: number) => seriesCats[Math.round(v)] ?? '',
-      },
-    },
-    zAxis3D: {
-      type: 'value',
-      name: zName,
-      min: minZ - pad,
-      max: maxZ + pad,
-      axisLabel: { formatter: (v: number) => fmt(v) },
-    },
-    grid3D: {
-      boxWidth: 120,
-      boxDepth: 80,
-      viewControl: { autoRotate, projection: 'perspective' },
-      light: {
-        main: { intensity: 1.2, shadow: true },
-        ambient: { intensity: 0.3 },
-      },
-    },
-    series,
+    minVal,
+    maxVal,
+    tipColumnLabel,
+    tipByCell,
   };
-
-  return { echartOptions, formData, height, width, refs: {} };
 }

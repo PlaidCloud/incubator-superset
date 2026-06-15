@@ -16,22 +16,50 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { buildQueryContext } from '@superset-ui/core';
+import { buildQueryContext, QueryFormColumn } from '@superset-ui/core';
 import { Waterfall3DFormData } from '../types';
 
 /**
  * Query for a 3D waterfall: the step dimension (bridge stages along X) and a
  * series dimension (depth), with one metric aggregated per (step, series)
  * pair. The running totals / floating bars are computed in transformProps.
+ *
+ * Step order drives the bridge, so it is set explicitly. Following the native
+ * 2D waterfall, the sort column (and any tooltip column) is added to the group
+ * by so ordering by it is valid SQL; falls back to the metric descending.
  */
 export default function buildQuery(formData: Waterfall3DFormData) {
-  const { stepColumn, seriesColumn, metric } = formData;
+  const {
+    stepColumn,
+    seriesColumn,
+    metric,
+    seriesOrderByColumn,
+    seriesOrderDirection,
+    tooltip_column: tooltipColumn,
+  } = formData;
+
+  const columns = [stepColumn, seriesColumn].filter(
+    Boolean,
+  ) as QueryFormColumn[];
+  if (seriesOrderByColumn && !columns.includes(seriesOrderByColumn)) {
+    columns.push(seriesOrderByColumn);
+  }
+  if (tooltipColumn && !columns.includes(tooltipColumn)) {
+    columns.push(tooltipColumn);
+  }
+
+  const orderby: [QueryFormColumn, boolean][] = seriesOrderByColumn
+    ? [[seriesOrderByColumn, seriesOrderDirection !== 'DESC']]
+    : metric
+      ? [[metric as unknown as QueryFormColumn, false]]
+      : [];
 
   return buildQueryContext(formData, baseQueryObject => [
     {
       ...baseQueryObject,
-      columns: [stepColumn, seriesColumn].filter(Boolean),
+      columns,
       metrics: metric ? [metric] : baseQueryObject.metrics,
+      orderby,
     },
   ]);
 }

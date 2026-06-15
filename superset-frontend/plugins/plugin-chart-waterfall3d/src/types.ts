@@ -24,7 +24,7 @@ import {
   QueryFormMetric,
   RgbaColor,
 } from '@superset-ui/core';
-import { EChartsType, EChartsCoreOption } from 'echarts/core';
+import { EChartsType } from 'echarts/core';
 import { Ref, RefObject } from 'react';
 
 export type Waterfall3DFormData = QueryFormData & {
@@ -34,15 +34,32 @@ export type Waterfall3DFormData = QueryFormData & {
   seriesColumn: QueryFormColumn;
   // Metric whose signed increments build the bridge.
   metric: QueryFormMetric;
+  // Column whose values order the bridge steps (added to the group by).
+  seriesOrderByColumn?: string;
+  seriesOrderDirection?: 'ASC' | 'DESC';
+  // Extra column surfaced in the hover tooltip.
+  tooltip_column?: string;
   showTotal: boolean;
   totalLabel?: string;
   showConnectors: boolean;
   stickWidth?: number;
+  // Show the metric value as a label on each bar.
+  show_value?: boolean;
+  // Render the first present step of each waterfall as a subtotal bar.
+  useFirstValueAsSubtotal?: boolean;
+  // Which step labels to render in bold.
+  bold_labels?: 'none' | 'total' | 'subtotal' | 'both';
+  // Show a legend keying the increase / decrease / total colors.
+  show_legend?: boolean;
   increaseColor: RgbaColor;
   decreaseColor: RgbaColor;
   totalColor: RgbaColor;
+  subtotalColor?: RgbaColor;
+  // Text color for step / series / axis labels.
+  labelColor?: RgbaColor;
   autoRotate: boolean;
   valueFormat?: string;
+  currency_format?: { symbol?: string; symbolPosition?: string };
   xAxisLabel?: string;
   yAxisLabel?: string;
   zAxisLabel?: string;
@@ -81,12 +98,55 @@ export interface Waterfall3DChartProps extends ChartProps<Waterfall3DFormData> {
   formData: Waterfall3DFormData;
 }
 
+export type BarType = 'positive' | 'negative' | 'total' | 'subtotal';
+
+// One rendered bar of a waterfall lane.
+export interface WaterfallBar {
+  step: string;
+  value: number;
+  running: number;
+  type: BarType;
+  base: number; // grid-units low edge
+  top: number; // grid-units high edge
+}
+
+// One waterfall (a bridge) placed at its own depth position.
+export interface WaterfallLane {
+  cat: string;
+  bars: WaterfallBar[];
+}
+
+export interface WaterfallColors {
+  positive: number;
+  negative: number;
+  total: number;
+  subtotal: number;
+}
+
 export type Waterfall3DTransformedProps = {
-  echartOptions: EChartsCoreOption;
   formData: Waterfall3DFormData;
   height: number;
   width: number;
   refs: Refs;
+  // Render model consumed by the Three.js renderer.
+  lanes: WaterfallLane[];
+  stepOrder: string[];
+  totalLabel: string;
+  colors: WaterfallColors;
+  // CSS rgba() string for step / series / axis label text.
+  labelColor: string;
+  showValue: boolean;
+  boldMode: string;
+  showLegend: boolean;
+  showConnectors: boolean;
+  barWidth: number;
+  autoRotate: boolean;
+  fmt: (v: number) => string;
+  axisLabels: { x: string; y: string; z: string };
+  minVal: number;
+  maxVal: number;
+  tipColumnLabel: string;
+  tipByCell: Record<string, string>;
 };
 
 // One bridge step for a given series category.
@@ -96,4 +156,5 @@ export interface WaterfallStep {
   top: number;
   value: number;
   isTotal: boolean;
+  isSubtotal?: boolean;
 }

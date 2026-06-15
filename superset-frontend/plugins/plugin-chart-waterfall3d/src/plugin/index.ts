@@ -37,13 +37,7 @@ export default class PluginChartWaterfall3D extends ChartPlugin<
           'category (e.g. a margin bridge per customer or region).',
       ),
       name: t('3D Waterfall'),
-      tags: [
-        t('3D'),
-        t('Business'),
-        t('Waterfall'),
-        t('Bridge'),
-        t('ECharts'),
-      ],
+      tags: [t('3D'), t('Business'), t('Waterfall'), t('Bridge'), t('ECharts')],
       thumbnail,
     });
 
