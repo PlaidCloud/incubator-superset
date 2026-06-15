@@ -16,20 +16,9 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-// Importing echarts-gl registers the 3D components (line3D, grid3D, *Axis3D)
-// on the shared echarts instance as a side effect. Must come after echarts.
-import 'echarts-gl';
 import { Waterfall3DTransformedProps } from './types';
-import Echart from './components/Echart';
+import ThreeWaterfall from './components/ThreeWaterfall';
 
 export default function Waterfall3DChart(props: Waterfall3DTransformedProps) {
-  const { height, width, echartOptions, refs } = props;
-  return (
-    <Echart
-      refs={refs}
-      height={height * 0.999}
-      width={width * 0.999}
-      echartOptions={echartOptions}
-    />
-  );
+  return <ThreeWaterfall {...props} />;
 }

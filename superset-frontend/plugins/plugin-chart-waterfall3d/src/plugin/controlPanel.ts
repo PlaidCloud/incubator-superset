@@ -74,6 +74,74 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'seriesOrderByColumn',
+            config: {
+              type: 'SelectControl',
+              label: t('Order Series By Column'),
+              description: t(
+                'Column used to order the bridge steps (it is added to the ' +
+                  'group by). Falls back to the metric if unset.',
+              ),
+              mapStateToProps: state => ({
+                choices: [
+                  ...(state.datasource?.columns || []).map(col => [
+                    col.column_name,
+                    col.column_name,
+                  ]),
+                ],
+                default: state.form_data?.stepColumn || '',
+              }),
+              clearable: true,
+              renderTrigger: false,
+            },
+          },
+        ],
+        [
+          {
+            name: 'seriesOrderDirection',
+            config: {
+              type: 'SelectControl',
+              label: t('Order Direction'),
+              choices: [
+                ['ASC', t('Ascending')],
+                ['DESC', t('Descending')],
+              ],
+              default: 'ASC',
+              clearable: false,
+              renderTrigger: false,
+              description: t(
+                'Ordering direction for the steps, used with "Order Series By Column"',
+              ),
+              visibility: ({ controls }) =>
+                Boolean(controls?.seriesOrderByColumn?.value),
+            },
+          },
+        ],
+        [
+          {
+            name: 'tooltip_column',
+            config: {
+              type: 'SelectControl',
+              label: t('Tooltip Column'),
+              description: t(
+                'Extra column surfaced in the hover tooltip (should be ' +
+                  'functionally dependent on the step/series).',
+              ),
+              mapStateToProps: state => ({
+                choices: [
+                  ...(state.datasource?.columns || []).map(col => [
+                    col.column_name,
+                    col.column_name,
+                  ]),
+                ],
+              }),
+              clearable: true,
+              resetOnHide: false,
+            },
+          },
+        ],
         ['adhoc_filters'],
         ['row_limit'],
       ],
@@ -104,6 +172,66 @@ const config: ControlPanelConfig = {
               default: 'Total',
               description: t('Label for the total step'),
               visibility: ({ controls }) => Boolean(controls?.showTotal?.value),
+            },
+          },
+        ],
+        [
+          {
+            name: 'useFirstValueAsSubtotal',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Use first value as subtotal'),
+              default: false,
+              renderTrigger: true,
+              description: t(
+                'Render the first bar of each waterfall as a subtotal',
+              ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'show_value',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show Value'),
+              default: false,
+              renderTrigger: true,
+              description: t('Show the metric value as a label on each bar'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'bold_labels',
+            config: {
+              type: 'SelectControl',
+              label: t('Bold Labels'),
+              default: 'both',
+              choices: [
+                ['none', t('None')],
+                ['total', t('Total Only')],
+                ['subtotal', t('Subtotal Only')],
+                ['both', t('Both Total and Subtotal')],
+              ],
+              renderTrigger: true,
+              description: t('Which value labels to render in bold'),
+              visibility: ({ controls }) =>
+                Boolean(controls?.show_value?.value),
+            },
+          },
+        ],
+        [
+          {
+            name: 'show_legend',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show legend'),
+              default: false,
+              renderTrigger: true,
+              description: t(
+                'Show a legend keying the increase/decrease/total colors',
+              ),
             },
           },
         ],
@@ -162,6 +290,7 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        ['currency_format'],
       ],
     },
     {
@@ -194,9 +323,36 @@ const config: ControlPanelConfig = {
             config: {
               label: t('Total'),
               type: 'ColorPickerControl',
-              default: { r: 102, g: 102, b: 102, a: 1 },
+              default: { r: 59, g: 130, b: 246, a: 1 },
               renderTrigger: true,
               description: t('Color for total bars'),
+            },
+          },
+          {
+            name: 'subtotalColor',
+            config: {
+              label: t('Subtotal'),
+              type: 'ColorPickerControl',
+              default: { r: 139, g: 92, b: 246, a: 1 },
+              renderTrigger: true,
+              description: t(
+                'Color for subtotal bars (first value as subtotal)',
+              ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'labelColor',
+            config: {
+              label: t('Label text'),
+              type: 'ColorPickerControl',
+              default: { r: 20, g: 40, b: 100, a: 1 },
+              renderTrigger: true,
+              description: t(
+                'Text color for the step, series and axis labels. ' +
+                  'Value labels follow their bar (increase/decrease) color.',
+              ),
             },
           },
         ],

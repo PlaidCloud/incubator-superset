@@ -1,7 +1,7 @@
 {
   "name": "@superset-ui/plugin-chart-waterfall3d",
   "version": "0.1.0",
-  "description": "Superset Plugin Chart 3D Waterfall (echarts-gl)",
+  "description": "Superset Plugin Chart 3D Waterfall (Three.js solid bars + depth lanes)",
   "sideEffects": false,
   "main": "lib/index.js",
   "module": "esm/index.js",
@@ -27,7 +27,8 @@
   "dependencies": {
     "cross-env": "^7.0.3",
     "echarts": "^5.6.0",
-    "echarts-gl": "^2.0.9"
+    "echarts-gl": "^2.0.9",
+    "three": "^0.160.0"
   },
   "peerDependencies": {
     "@airbnb/config-babel": "^2.0.1",
