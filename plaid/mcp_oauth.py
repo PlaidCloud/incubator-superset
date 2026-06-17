@@ -84,9 +84,15 @@ def build_mcp_auth_factory(app: Any) -> Any:
 
     Returns ``MultiAuth(OAuthProxy, [verifier])`` when the proxy is configured
     (``MCP_OAUTH_CLIENT_ID`` + ``MCP_OAUTH_SIGNING_KEY`` set), else the bare
-    verifier. Never returns ``None`` / raises, so auth is never disabled.
+    verifier. Never raises; returns ``None`` only if even the verifier can't be
+    built (``server._create_auth_provider`` treats that as "no auth", the same
+    as the default factory).
     """
-    verifier = build_keycloak_verifier(app)
+    try:
+        verifier = build_keycloak_verifier(app)
+    except Exception:
+        log.exception('Failed to build MCP JWT verifier; MCP auth not configured')
+        return None
 
     client_id = app.config.get('MCP_OAUTH_CLIENT_ID')
     signing_key = app.config.get('MCP_OAUTH_SIGNING_KEY')
@@ -100,6 +106,20 @@ def build_mcp_auth_factory(app: Any) -> Any:
 
         service_url = (app.config.get('MCP_SERVICE_URL') or '').rstrip('/')
         base_url = app.config.get('MCP_OAUTH_BASE_URL') or f'{service_url}/mcp'
+        if not base_url.lower().startswith(('http://', 'https://')):
+            log.error(
+                'MCP OAuth proxy needs an absolute MCP_SERVICE_URL/'
+                'MCP_OAUTH_BASE_URL (got %r); using token validation only',
+                base_url,
+            )
+            return verifier
+        if not (app.config.get('MCP_JWT_ISSUER')
+                or app.config.get('MCP_OAUTH_UPSTREAM_AUTHORIZE_URL')):
+            log.error(
+                'MCP OAuth proxy needs MCP_JWT_ISSUER (or explicit upstream '
+                'endpoints); using token validation only',
+            )
+            return verifier
         endpoints = _keycloak_endpoints(app)
 
         extra_authorize_params = None
@@ -123,6 +143,8 @@ def build_mcp_auth_factory(app: Any) -> Any:
             allowed_client_redirect_uris=LOOPBACK_REDIRECT_URIS,
             valid_scopes=['openid', 'profile', 'email'],
             client_storage=_client_storage(),
+            # No consent screen (matches controlplane-rpc); the resource is
+            # IP-allowlisted and the upstream is a single trusted Keycloak realm.
             require_authorization_consent=False,
             jwt_signing_key=signing_key,
             extra_authorize_params=extra_authorize_params,
