@@ -6,7 +6,7 @@ import logging
 import uuid
 import time
 import jwt
-from typing import Union, List, Optional
+from typing import Union, List, Optional, override
 
 from urllib.parse import urljoin
 from flask import session
@@ -23,6 +23,9 @@ from plaid.auth_oidc import PlaidAuthOAuthView
 # from plaid.blacklist_api import TokenBlacklistApi
 
 from superset.security import SupersetSecurityManager
+
+from sqlalchemy import func
+from sqlalchemy.orm.exc import MultipleResultsFound
 
 __author__ = "Garrett Bates"
 __copyright__ = "© Copyright 2018=2026, PlaidCloud, Inc"
@@ -122,6 +125,46 @@ class PlaidSecurityManager(SupersetSecurityManager):
                 "email": data.get("email", ""),
                 "role_keys": role_keys  # These role_keys get mapped to real roles via the AUTH_ROLES_MAPPING config value
             }
+
+    @override
+    def find_user(self, username=None, email=None):
+        """
+        Finds user by username or email
+
+        CRL 2026 this is a temporary override until Flask AppBuilder adds a way to make
+        the email check case-insensitive
+        """
+        if username:
+            try:
+                if self.auth_username_ci:
+                    return (
+                        self.session.query(self.user_model)
+                        .filter(
+                            func.lower(self.user_model.username) == func.lower(username)
+                        )
+                        .one_or_none()
+                    )
+                else:
+                    return (
+                        self.session.query(self.user_model)
+                        .filter(self.user_model.username == username)
+                        .one_or_none()
+                    )
+            except MultipleResultsFound:
+                log.error("Multiple results found for user %s", username)
+                return None
+        elif email:
+            try:
+                return (
+                    self.session.query(self.user_model)
+                    .filter(
+                        func.lower(self.user_model.email) == func.lower(email)
+                    )
+                    .one_or_none()
+                )
+            except MultipleResultsFound:
+                log.error("Multiple results found for user with email %s", email)
+                return None
 
     def auth_user_oauth(self, userinfo):
         """
