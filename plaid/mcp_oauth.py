@@ -105,7 +105,12 @@ def build_mcp_auth_factory(app: Any) -> Any:
         from fastmcp.server.auth.oauth_proxy import OAuthProxy
 
         service_url = (app.config.get('MCP_SERVICE_URL') or '').rstrip('/')
-        base_url = app.config.get('MCP_OAUTH_BASE_URL') or f'{service_url}/mcp'
+        # base_url is the host root, NOT the /mcp endpoint. FastMCP appends the
+        # transport mount path (/mcp) itself when it derives the resource URL and
+        # the .well-known discovery routes (resource_url = base_url + mcp_path).
+        # Passing '<host>/mcp' here double-counts the mount and advertises a
+        # bogus resource of '<host>/mcp/mcp', which strict MCP clients reject.
+        base_url = app.config.get('MCP_OAUTH_BASE_URL') or service_url
         if not base_url.lower().startswith(('http://', 'https://')):
             log.error(
                 'MCP OAuth proxy needs an absolute MCP_SERVICE_URL/'
@@ -137,7 +142,7 @@ def build_mcp_auth_factory(app: Any) -> Any:
             forward_pkce=True,
             token_verifier=verifier,
             base_url=base_url,
-            # Resolves under base_url (.../mcp/auth/callback); must be a valid
+            # Resolves under base_url (<host>/auth/callback); must be a valid
             # redirect URI on the upstream Keycloak client.
             redirect_path='/auth/callback',
             allowed_client_redirect_uris=LOOPBACK_REDIRECT_URIS,
