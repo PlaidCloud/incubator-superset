@@ -27,6 +27,7 @@ import {
   getColumnLabel,
   JsonObject,
   finestTemporalGrainFormatter,
+  SupersetClient,
 } from '@superset-ui/core';
 import { tn } from '@apache-superset/core/translation';
 import { styled } from '@apache-superset/core/theme';
@@ -151,6 +152,50 @@ export default function PluginFilterSelect(props: PluginFilterSelectProps) {
   const [col] = groupby;
   const [initialColtypeMap] = useState(coltypeMap);
   const [search, setSearch] = useState('');
+
+  // When searching all options, the loaded list is capped (row limit), so the
+  // "%s options" placeholder would show the cap (e.g. 1000) instead of the real
+  // cardinality. Fetch COUNT(DISTINCT col) to show the true number of values.
+  const [totalCount, setTotalCount] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    if (!searchAllOptions || !col || !formData.datasource) {
+      return undefined;
+    }
+    const [idStr, dtype] = String(formData.datasource).split('__');
+    let cancelled = false;
+    SupersetClient.post({
+      endpoint: '/api/v1/chart/data',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        datasource: { id: Number(idStr), type: dtype },
+        queries: [
+          {
+            metrics: [
+              {
+                expressionType: 'SQL',
+                sqlExpression: `COUNT(DISTINCT "${col}")`,
+                label: 'count',
+              },
+            ],
+            row_limit: 1,
+          },
+        ],
+        result_format: 'json',
+        result_type: 'full',
+      }),
+    })
+      .then(({ json }) => {
+        const row = (json as JsonObject)?.result?.[0]?.data?.[0];
+        const n = row ? Number(Object.values(row)[0]) : NaN;
+        if (!cancelled && Number.isFinite(n)) {
+          setTotalCount(n);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [col, formData.datasource, searchAllOptions]);
   const prevDataRef = useRef(data);
   const [dataMask, dispatchDataMask] = useImmerReducer(reducer, {
     extraFormData: {},
@@ -276,10 +321,11 @@ export default function PluginFilterSelect(props: PluginFilterSelectProps) {
     [updateDataMask, formData.nativeFilterId, clearAllTrigger],
   );
 
+  const optionCount = totalCount ?? data.length;
   const placeholderText =
     data.length === 0
       ? t('No data')
-      : tn('%s option', '%s options', data.length, data.length);
+      : tn('%s option', '%s options', optionCount, optionCount);
 
   const formItemExtra = useMemo(() => {
     if (filterState.validateMessage) {
