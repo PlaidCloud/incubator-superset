@@ -93,6 +93,7 @@ import { TableChartTransposePlugin } from '@superset-ui/plugin-chart-table-trans
 import { PluginTableKpi } from "@superset-ui/plugin-table-kpi";
 import { SupersetPluginDashboardFilters } from '@superset-ui/superset-plugin-dashboard-filters';
 import { SupersetPluginChartWhale } from '@superset-ui/plugin-chart-whale';
+import { FilterBoxModernChartPlugin } from '@superset-ui/plugin-chart-filter-box-modern';
 import { BigTextChart } from '@superset-ui/plugin-chart-big-text';
 import { PluginChartMarimekko } from '@superset-ui/plugin-chart-marimekko';
 import { BenchmarkRangeChartPlugin } from '@superset-ui/plugin-chart-benchmark-range';
@@ -101,6 +102,9 @@ import { PluginChartMekkoWhale } from '@superset-ui/plugin-chart-mekko-whale';
 import { PluginChartBar3D } from '@superset-ui/plugin-chart-bar3d';
 import { PluginChartWhale3D } from '@superset-ui/plugin-chart-whale3d';
 import { PluginChartWaterfall3D } from '@superset-ui/plugin-chart-waterfall3d';
+import { PluginChartScatterRegression } from '@superset-ui/plugin-chart-scatter-regression';
+import { PluginChartBubbleTimeline } from '@superset-ui/plugin-chart-bubble-timeline';
+import { PluginChartBarNegative } from '@superset-ui/plugin-chart-bar-negative';
 
 export default class MainPreset extends Preset {
   constructor() {
@@ -231,6 +235,9 @@ export default class MainPreset extends Preset {
         new PluginTableKpi().configure({ key: VizType.TableKpi }),
         new SupersetPluginDashboardFilters().configure({ key: VizType.DashboardFilters }),
         new SupersetPluginChartWhale().configure({ key: VizType.Whale }),
+        new FilterBoxModernChartPlugin().configure({
+          key: VizType.FilterBoxModern,
+        }),
         new BigTextChart().configure({ key: VizType.BigText }),
         new PluginChartMarimekko().configure({ key: VizType.Marimekko }),
         new BenchmarkRangeChartPlugin().configure({ key: VizType.BenchmarkRange }),
@@ -238,6 +245,15 @@ export default class MainPreset extends Preset {
         new PluginChartBar3D().configure({ key: VizType.Bar3D }),
         new PluginChartWhale3D().configure({ key: VizType.WhaleCurve3D }),
         new PluginChartWaterfall3D().configure({ key: VizType.Waterfall3D }),
+        new PluginChartScatterRegression().configure({
+          key: VizType.ScatterRegression,
+        }),
+        new PluginChartBubbleTimeline().configure({
+          key: VizType.BubbleTimeline,
+        }),
+        new PluginChartBarNegative().configure({
+          key: VizType.BarNegative,
+        }),
         new PluginChartGantt().configure({ key: VizType.Gantt }),
       ],
     });
