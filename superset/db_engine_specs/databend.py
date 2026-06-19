@@ -21,6 +21,8 @@ import re
 from datetime import datetime
 from typing import Any, cast, TYPE_CHECKING
 
+import sqlalchemy as sa
+from databend_sqlalchemy.databend_dialect import DatabendCompiler
 from flask_babel import gettext as __
 from marshmallow import fields, Schema
 from marshmallow.validate import Range
@@ -47,6 +49,35 @@ if TYPE_CHECKING:
     from superset.models.core import Database
 
 logger = logging.getLogger(__name__)
+
+
+# Databend has no ILIKE operator. ``DatabendCompiler`` inherits ILIKE rendering
+# from SQLAlchemy's ``PGCompiler``, which emits the Postgres-native ``x ILIKE y``
+# that Databend rejects. Superset builds case-insensitive filters with
+# ``sqla_col.ilike()`` / ``not_ilike()`` (see superset/models/helpers.py), so we
+# override the compiler to emit ``LOWER(x) LIKE LOWER(y)`` instead -- the same
+# approach SQLAlchemy core and the MySQL/BigQuery/Trino dialects use. This
+# preserves LIKE-wildcard semantics (``%``/``_``) without converting to regex.
+def _databend_visit_ilike_op_binary(
+    self: DatabendCompiler, binary: Any, operator: Any, **kw: Any
+) -> str:
+    binary = binary._clone()  # pylint: disable=protected-access
+    binary.left = sa.func.lower(binary.left)
+    binary.right = sa.func.lower(binary.right)
+    return self.visit_like_op_binary(binary, operator, **kw)
+
+
+def _databend_visit_not_ilike_op_binary(
+    self: DatabendCompiler, binary: Any, operator: Any, **kw: Any
+) -> str:
+    binary = binary._clone()  # pylint: disable=protected-access
+    binary.left = sa.func.lower(binary.left)
+    binary.right = sa.func.lower(binary.right)
+    return self.visit_not_like_op_binary(binary, operator, **kw)
+
+
+DatabendCompiler.visit_ilike_op_binary = _databend_visit_ilike_op_binary  # type: ignore[method-assign]
+DatabendCompiler.visit_not_ilike_op_binary = _databend_visit_not_ilike_op_binary  # type: ignore[method-assign]
 
 
 class DatabendBaseEngineSpec(BaseEngineSpec):
