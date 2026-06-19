@@ -139,7 +139,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
             try:
                 if self.auth_username_ci:
                     return (
-                        self.session.query(self.user_model)
+                        self.get_session.query(self.user_model)
                         .filter(
                             func.lower(self.user_model.username) == func.lower(username)
                         )
@@ -147,7 +147,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
                     )
                 else:
                     return (
-                        self.session.query(self.user_model)
+                        self.get_session.query(self.user_model)
                         .filter(self.user_model.username == username)
                         .one_or_none()
                     )
@@ -157,7 +157,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         elif email:
             try:
                 return (
-                    self.session.query(self.user_model)
+                    self.get_session.query(self.user_model)
                     .filter(
                         func.lower(self.user_model.email) == func.lower(email)
                     )
