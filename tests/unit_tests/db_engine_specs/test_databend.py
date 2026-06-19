@@ -138,3 +138,31 @@ def test_make_label_compatible(column_name: str, expected_result: str) -> None:
 
     label = spec.make_label_compatible(column_name)
     assert label == expected_result
+
+
+@pytest.mark.parametrize(
+    "build_expr,expected",
+    [
+        (lambda col: col.ilike("%Test%"), "lower(name) LIKE lower('%%Test%%')"),
+        (
+            lambda col: col.not_ilike("%Test%"),
+            "lower(name) NOT LIKE lower('%%Test%%')",
+        ),
+        # LIKE / NOT LIKE remain case-sensitive and untouched
+        (lambda col: col.like("%Test%"), "name LIKE '%%Test%%'"),
+        (lambda col: col.not_like("%Test%"), "name NOT LIKE '%%Test%%'"),
+    ],
+)
+def test_ilike_compiles_to_lower_like(build_expr: Any, expected: str) -> None:
+    """Databend has no ILIKE; it must compile to LOWER(x) LIKE LOWER(y)."""
+    import sqlalchemy as sa
+
+    # Importing the engine spec installs the ILIKE compiler override.
+    import superset.db_engine_specs.databend  # noqa: F401
+    from databend_sqlalchemy.databend_dialect import DatabendDialect
+
+    expr = build_expr(sa.column("name"))
+    compiled = expr.compile(
+        dialect=DatabendDialect(), compile_kwargs={"literal_binds": True}
+    )
+    assert str(compiled) == expected
