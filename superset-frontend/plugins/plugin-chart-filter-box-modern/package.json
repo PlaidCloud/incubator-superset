@@ -1,0 +1,22 @@
+{
+  "name": "@superset-ui/plugin-chart-filter-box-modern",
+  "version": "0.0.0",
+  "description": "Superset Chart - Filter Box (modern, dataMask-based)",
+  "sideEffects": false,
+  "main": "lib/index.js",
+  "module": "esm/index.js",
+  "files": [
+    "esm",
+    "lib"
+  ],
+  "private": true,
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "echo noop"
+  },
+  "peerDependencies": {
+    "@superset-ui/chart-controls": "*",
+    "@superset-ui/core": "*",
+    "react": "^16.13.1 || ^17.0.0 || ^18.0.0"
+  }
+}
