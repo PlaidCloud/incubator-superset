@@ -33,6 +33,7 @@ import {
   ListViewProps,
   ListViewFilterOperator,
   ListViewFilters,
+  ListViewFilterValue,
 } from 'src/components';
 import { isUserAdmin } from 'src/dashboard/util/permissionUtils';
 import {
@@ -51,19 +52,35 @@ enum ModalType {
   EDIT = 'edit',
 }
 
-const isActiveOptions = [
-  {
-    label: 'Yes',
-    value: true,
-  },
-  {
-    label: 'No',
-    value: false,
-  },
-];
-
 function UsersList({ user }: UsersListProps) {
   const { addDangerToast, addSuccessToast } = useToasts();
+  // Hide deactivated users by default; admins can reveal them with the
+  // "Show inactive users" toggle below. This is a screen-level filter sent with
+  // every request the Users page makes -- the REST API's own default is
+  // untouched, so the external user-management app (and any other API consumer)
+  // still sees all users. baseFilters must be memoized: useListViewResource
+  // compares it by reference and rebuilds fetchData (triggering a refetch) when
+  // it changes, which is what makes the toggle reload the list.
+  //
+  // Known limitation: toggling does not reset the list to page 1. The page index
+  // lives in ListView's own URL state, which this screen-level base filter
+  // bypasses, so toggling back to active-only while on a high page can briefly
+  // land on an empty page until you click page 1. Accepted as a minor,
+  // self-healing edge case.
+  const [showInactiveUsers, setShowInactiveUsers] = useState(false);
+  const baseFilters = useMemo<ListViewFilterValue[]>(
+    () =>
+      showInactiveUsers
+        ? []
+        : [
+            {
+              id: 'active',
+              operator: ListViewFilterOperator.Equals,
+              value: true,
+            },
+          ],
+    [showInactiveUsers],
+  );
   const {
     state: {
       loading,
@@ -78,6 +95,9 @@ function UsersList({ user }: UsersListProps) {
     'security/users',
     t('User'),
     addDangerToast,
+    true,
+    [],
+    baseFilters,
   );
   const [modalState, setModalState] = useState({
     edit: false,
@@ -367,7 +387,16 @@ function UsersList({ user }: UsersListProps) {
     [isAdmin],
   );
 
-  const subMenuButtons: SubMenuProps['buttons'] = [];
+  const subMenuButtons: SubMenuProps['buttons'] = [
+    {
+      name: showInactiveUsers
+        ? t('Hide inactive users')
+        : t('Show inactive users'),
+      onClick: () => setShowInactiveUsers(prev => !prev),
+      buttonStyle: 'secondary',
+      'data-test': 'toggle-inactive-users-button',
+    },
+  ];
 
   if (isAdmin) {
     subMenuButtons.push(
@@ -418,18 +447,6 @@ function UsersList({ user }: UsersListProps) {
         id: 'email',
         input: 'search',
         operator: ListViewFilterOperator.Contains,
-      },
-      {
-        Header: t('Is active?'),
-        key: 'active',
-        id: 'active',
-        input: 'select',
-        operator: ListViewFilterOperator.Equals,
-        unfilteredLabel: t('All'),
-        selects: isActiveOptions?.map(option => ({
-          label: option.label,
-          value: option.value,
-        })),
       },
       {
         Header: t('Roles'),

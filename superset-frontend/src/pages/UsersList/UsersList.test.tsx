@@ -127,6 +127,32 @@ describe('UsersList', () => {
     });
   });
 
+  test('hides inactive users by default and lets admins toggle them', async () => {
+    await renderAndWait();
+
+    const toggle = await screen.findByTestId('toggle-inactive-users-button');
+    expect(toggle).toHaveTextContent(/show inactive users/i);
+
+    // By default the screen asks the API for active users only.
+    await waitFor(() => {
+      const url = fetchMock.callHistory.lastCall(usersEndpoint)?.url ?? '';
+      expect(url).toContain('active');
+    });
+
+    // Toggling on drops the active filter so inactive users are included.
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('toggle-inactive-users-button'),
+      ).toHaveTextContent(/hide inactive users/i);
+    });
+    await waitFor(() => {
+      const url = fetchMock.callHistory.lastCall(usersEndpoint)?.url ?? '';
+      expect(url).not.toContain('active');
+    });
+  });
+
   test('fetches roles on load', async () => {
     await renderAndWait();
     await waitFor(() => {
@@ -144,7 +170,6 @@ describe('UsersList', () => {
     expect(within(submenu).getByText(/email/i)).toBeInTheDocument();
     expect(within(submenu).getByText(/username/i)).toBeInTheDocument();
     expect(within(submenu).getByText(/roles/i)).toBeInTheDocument();
-    expect(within(submenu).getByText(/is active?/i)).toBeInTheDocument();
     expect(within(submenu).getByText(/created on/i)).toBeInTheDocument();
     expect(within(submenu).getByText(/changed on/i)).toBeInTheDocument();
     expect(within(submenu).getByText(/last login/i)).toBeInTheDocument();
