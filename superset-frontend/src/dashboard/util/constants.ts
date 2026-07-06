@@ -35,7 +35,7 @@ export const NEW_DYNAMIC_COMPONENT = 'NEW_DYNAMIC_COMPONENT';
 
 // grid constants
 export const DASHBOARD_ROOT_DEPTH = 0;
-export const GRID_BASE_UNIT = 8;
+export const GRID_BASE_UNIT = 4;
 export const GRID_GUTTER_SIZE = 2 * GRID_BASE_UNIT;
 export const GRID_COLUMN_COUNT = 24;
 export const GRID_MIN_COLUMN_COUNT = 1;
