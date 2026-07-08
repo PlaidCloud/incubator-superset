@@ -360,10 +360,10 @@ class PlaidSecurityManager(SupersetSecurityManager):
         from superset.models.core import Database
         if PROJECT_ACCESS not in session:
             if self.is_admin():
-                return self.get_session.query(Database)
+                return self.session.query(Database)
             return []
         project_uuids = set(session[PROJECT_ACCESS])
-        return self.get_session.query(Database).filter(Database.uuid.in_(project_uuids))
+        return self.session.query(Database).filter(Database.uuid.in_(project_uuids))
 
     def user_view_menu_names(self, permission_name: str) -> set[str]:
         if permission_name == 'database_access':
