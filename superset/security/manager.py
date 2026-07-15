@@ -26,6 +26,8 @@ from typing import Any, Callable, cast, NamedTuple, Optional, TYPE_CHECKING
 from flask import current_app, Flask, g, Request
 from flask_appbuilder import Model
 from flask_appbuilder.models.filters import BaseFilter
+from flask_appbuilder.models.sqla.filters import FilterContains, SQLAFilterConverter
+from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.security.sqla.apis import (
     PermissionViewMenuApi,
     RoleApi,
@@ -189,16 +191,53 @@ class SupersetUserApi(UserApi):
         item.roles = []
 
 
+class DottedRelationFilterConverter(SQLAFilterConverter):
+    """
+    Resolves dotted relationship columns (e.g. `permission.name`) to a
+    `contains` filter.
+
+    FAB's stock converter type-checks columns via `list_properties[col]`
+    lookups that KeyError on dotted names, so it silently drops them and they
+    can never be filtered. FAB's query engine (`get_field_setup_query`) already
+    joins one level of dotted relation, so a `FilterContains` bound to the
+    dotted name produces correct SQL. See sc-23044.
+    """
+
+    def convert(self, col_name: str) -> Optional[list[BaseFilter]]:
+        if "." in col_name:
+            return [FilterContains(col_name, self.datamodel)]
+        return super().convert(col_name)
+
+
+class SupersetPermissionViewInterface(SQLAInterface):
+    filter_converter_class = DottedRelationFilterConverter
+
+
 class SupersetPermissionViewMenuApi(PermissionViewMenuApi):
     """
-    Overriding PermissionViewMenuApi to allow filtering by `id`.
+    Overriding PermissionViewMenuApi to allow filtering by `id`, and by the
+    related `permission.name` / `view_menu.name` fields.
 
     FAB's default search_columns for this API omit the `id` primary key, but
     the Roles UI fetches a role's assigned permissions with a `col:id,opr:in`
-    filter, which FAB then rejects with a 400. See apache/superset#40293.
+    filter, which FAB then rejects with a 400 (apache/superset#40293).
+
+    The Roles permission typeahead separately searches the related
+    `permission.name` / `view_menu.name` fields (`col:permission.name,opr:ct`).
+    FAB's stock converter can't type-check dotted relationship columns, so it
+    drops them and rejects the filter with the same 400; the dotted-aware
+    converter above resolves them to a join-backed `contains` filter. See
+    sc-23044.
     """
 
-    search_columns = ["id", "permission", "view_menu"]
+    datamodel = SupersetPermissionViewInterface(PermissionView)
+    search_columns = [
+        "id",
+        "permission",
+        "view_menu",
+        "permission.name",
+        "view_menu.name",
+    ]
 
 
 # Limiting routes on FAB model views
