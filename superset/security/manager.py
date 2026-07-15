@@ -26,7 +26,11 @@ from typing import Any, Callable, cast, NamedTuple, Optional, TYPE_CHECKING
 from flask import current_app, Flask, g, Request
 from flask_appbuilder import Model
 from flask_appbuilder.models.filters import BaseFilter
-from flask_appbuilder.security.sqla.apis import RoleApi, UserApi
+from flask_appbuilder.security.sqla.apis import (
+    PermissionViewMenuApi,
+    RoleApi,
+    UserApi,
+)
 from flask_appbuilder.security.sqla.manager import SecurityManager
 from flask_appbuilder.security.sqla.models import (
     assoc_group_role,
@@ -185,6 +189,18 @@ class SupersetUserApi(UserApi):
         item.roles = []
 
 
+class SupersetPermissionViewMenuApi(PermissionViewMenuApi):
+    """
+    Overriding PermissionViewMenuApi to allow filtering by `id`.
+
+    FAB's default search_columns for this API omit the `id` primary key, but
+    the Roles UI fetches a role's assigned permissions with a `col:id,opr:in`
+    filter, which FAB then rejects with a 400. See apache/superset#40293.
+    """
+
+    search_columns = ["id", "permission", "view_menu"]
+
+
 # Limiting routes on FAB model views
 PermissionViewModelView.include_route_methods = {RouteMethod.LIST}
 PermissionModelView.include_route_methods = {RouteMethod.LIST}
@@ -267,6 +283,7 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
 
     role_api = SupersetRoleApi
     user_api = SupersetUserApi
+    permission_view_menu_api = SupersetPermissionViewMenuApi
 
     USER_MODEL_VIEWS = {
         "RegisterUserModelView",
