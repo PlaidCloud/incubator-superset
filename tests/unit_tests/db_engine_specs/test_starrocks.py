@@ -15,7 +15,9 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import sys
 from typing import Any, Optional
+from unittest import mock
 
 import pytest
 from pytest_mock import MockerFixture
@@ -283,3 +285,26 @@ def test_adjust_engine_params_with_catalog(
         url, {}, catalog=catalog, schema=schema
     )
     assert returned_url.database == expected_database
+
+
+def test_fetch_data_without_mysqlclient(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Test that fetching data doesn't require mysqlclient.
+
+    The StarRocks dialect is built on PyMySQL, so ``MySQLdb`` is not necessarily
+    installed; ``fetch_data`` used to fail with ``ModuleNotFoundError`` because
+    it inherits ``get_datatype`` from the MySQL spec.
+    """
+    from superset.db_engine_specs.starrocks import StarRocksEngineSpec
+
+    # ``None`` in ``sys.modules`` makes the import raise ``ImportError``
+    monkeypatch.setitem(sys.modules, "MySQLdb", None)
+    monkeypatch.setitem(sys.modules, "MySQLdb.constants", None)
+    monkeypatch.setattr(StarRocksEngineSpec, "type_code_map", {})
+
+    # PyMySQL reports field types as integer codes: 0 is DECIMAL, 253 VAR_STRING
+    cursor = mock.Mock()
+    cursor.description = [("dec", 0), ("str", 253)]
+    cursor.fetchall.return_value = [("1.23456", "abc")]
+
+    assert StarRocksEngineSpec.fetch_data(cursor) == [("1.23456", "abc")]

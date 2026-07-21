@@ -15,6 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import sys
+from collections.abc import Iterator
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Optional
@@ -262,3 +264,47 @@ def test_column_type_mutator(
     mock_cursor.description = description
 
     assert spec.fetch_data(mock_cursor) == expected_result
+
+
+@pytest.fixture
+def empty_type_code_map() -> Iterator[None]:
+    """
+    Reset the memoized type code map, since it's stored on the class.
+    """
+    from superset.db_engine_specs.mysql import MySQLEngineSpec
+
+    original = MySQLEngineSpec.type_code_map
+    MySQLEngineSpec.type_code_map = {}
+    yield
+    MySQLEngineSpec.type_code_map = original
+
+
+def test_get_datatype(empty_type_code_map: None) -> None:
+    """
+    Test that ``get_datatype`` maps MySQL protocol field type codes.
+    """
+    from superset.db_engine_specs.mysql import MySQLEngineSpec
+
+    assert MySQLEngineSpec.get_datatype(246) == "NEWDECIMAL"
+    assert MySQLEngineSpec.get_datatype("VARCHAR") == "VARCHAR"
+    assert MySQLEngineSpec.get_datatype(-1) is None
+
+
+def test_get_datatype_without_mysqlclient(
+    empty_type_code_map: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    Test that ``get_datatype`` falls back to PyMySQL when mysqlclient is absent.
+
+    Subclasses like StarRocks and Doris speak the MySQL wire protocol but ship a
+    pure Python driver, so ``MySQLdb`` is not necessarily installed.
+    """
+    from superset.db_engine_specs.mysql import MySQLEngineSpec
+
+    # ``None`` in ``sys.modules`` makes the import raise ``ImportError``
+    monkeypatch.setitem(sys.modules, "MySQLdb", None)
+    monkeypatch.setitem(sys.modules, "MySQLdb.constants", None)
+
+    assert MySQLEngineSpec.get_datatype(246) == "NEWDECIMAL"
+    assert MySQLEngineSpec.get_datatype(253) == "VAR_STRING"

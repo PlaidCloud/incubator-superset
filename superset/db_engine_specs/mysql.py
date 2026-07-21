@@ -402,9 +402,14 @@ class MySQLEngineSpec(BasicParametersMixin, BaseEngineSpec):
         if not cls.type_code_map:
             # only import and store if needed at least once
             # pylint: disable=import-outside-toplevel
-            import MySQLdb
+            try:
+                from MySQLdb.constants import FIELD_TYPE as ft
+            except ImportError:
+                # Subclasses such as StarRocks and Doris speak the MySQL wire
+                # protocol but ship a pure Python driver, so mysqlclient may not
+                # be installed. The field type constants are identical.
+                from pymysql.constants import FIELD_TYPE as ft  # type: ignore
 
-            ft = MySQLdb.constants.FIELD_TYPE
             cls.type_code_map = {
                 getattr(ft, k): k for k in dir(ft) if not k.startswith("_")
             }
