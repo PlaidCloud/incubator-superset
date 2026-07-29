@@ -21,6 +21,7 @@ import {
   QueryFormData,
   SetDataMaskHook,
   FilterState,
+  QueryObjectFilterClause,
 } from '@superset-ui/core';
 
 export type FilterBoxModernFormData = QueryFormData & {
@@ -46,4 +47,10 @@ export interface FilterBoxModernTransformedProps {
   instantFiltering: boolean;
   setDataMask: SetDataMaskHook;
   filterState?: FilterState;
+  /**
+   * Native filters from the dashboard whose scope includes this chart. They
+   * are applied to each column's option query so the dropdown lists are
+   * limited by the dashboard's current selections (cross-filter into the box).
+   */
+  dashboardFilters: QueryObjectFilterClause[];
 }

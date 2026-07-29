@@ -35,6 +35,10 @@ export default function transformProps(
   const rawInstant = formData.instant_filtering ?? raw?.instant_filtering;
   const filterColumns = ensureIsArray(rawFilterColumns).map(getColumnLabel);
   const rowLimit = Number(formData.row_limit ?? raw?.row_limit) || 1000;
+  // Native filters from the dashboard whose scope includes this chart are
+  // merged into `extra_form_data` by the dashboard. Pass their value filters
+  // through so the option queries can be scoped by the current selections.
+  const dashboardFilters = ensureIsArray(formData.extra_form_data?.filters);
 
   return {
     width,
@@ -45,5 +49,6 @@ export default function transformProps(
     instantFiltering: !!rawInstant,
     setDataMask: hooks?.setDataMask ?? (() => {}),
     filterState,
+    dashboardFilters,
   };
 }
