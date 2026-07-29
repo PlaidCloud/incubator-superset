@@ -17,9 +17,15 @@
  * under the License.
  */
 import { useCallback, useMemo, useState } from 'react';
+import { useSelector } from 'react-redux';
 import { t } from '@apache-superset/core/translation';
-import { SupersetClient, ensureIsArray } from '@superset-ui/core';
-import { AsyncSelect, Button } from '@superset-ui/core/components';
+import {
+  SupersetClient,
+  ensureIsArray,
+  DataMaskStateWithId,
+  QueryObjectFilterClause,
+} from '@superset-ui/core';
+import { AsyncSelect, Button, SelectValue } from '@superset-ui/core/components';
 import { FilterBoxModernTransformedProps, FilterValue } from './types';
 
 // AsyncSelect (labelInValue) keeps values as {label, value, key}; the state
@@ -39,8 +45,16 @@ function toRawValues(vals: unknown): FilterValue[] {
  * Server-side, paginated value fetcher for one column. Searches with
  * LOWER(col) LIKE LOWER('%term%') so it works on Databend (no ILIKE) and is
  * case-insensitive. Lets the user reach ALL values, not just the first 1000.
+ *
+ * `dashboardFilters` are the dashboard's native filters scoped to this chart;
+ * applying them here limits the option list to the current selections
+ * (e.g. picking a Plant Key in the sidebar narrows every dropdown's values).
  */
-function makeFetcher(datasource: string, col: string) {
+function makeFetcher(
+  datasource: string,
+  col: string,
+  dashboardFilters: QueryObjectFilterClause[],
+) {
   const [idStr, type] = (datasource || '__table').split('__');
   const id = Number(idStr);
   return async (search: string, page: number, pageSize: number) => {
@@ -58,6 +72,9 @@ function makeFetcher(datasource: string, col: string) {
             columns: [col],
             metrics: [],
             orderby: [],
+            ...(dashboardFilters.length
+              ? { filters: dashboardFilters }
+              : {}),
             row_limit: pageSize,
             row_offset: page * pageSize,
             ...(where ? { extras: { where } } : {}),
@@ -92,15 +109,35 @@ export default function FilterBoxModern(
     rowLimit,
     instantFiltering,
     setDataMask,
+    dashboardFilters,
   } = props;
   const [selected, setSelected] = useState<Selection>({});
+
+  // Native (sidebar) filters live in the dashboard's `dataMask`, not in this
+  // chart's formData. Read them from the store and keep only the dashboard
+  // native filters (keys prefixed `NATIVE_FILTER-`); chart cross-filters use
+  // numeric keys (including this box itself) and are skipped so the box does
+  // not limit its own options. Combined with `dashboardFilters` (the chart's
+  // own "Limit selector values"), these scope every option query.
+  const dataMask = useSelector(
+    (state: { dataMask?: DataMaskStateWithId }) => state.dataMask,
+  );
+  const activeFilters = useMemo(() => {
+    const fromSidebar = Object.entries(dataMask ?? {})
+      .filter(([id]) => id.startsWith('NATIVE_FILTER-'))
+      .flatMap(([, mask]) => ensureIsArray(mask?.extraFormData?.filters));
+    return [...dashboardFilters, ...fromSidebar];
+  }, [dataMask, dashboardFilters]);
 
   const fetchers = useMemo(
     () =>
       Object.fromEntries(
-        filterColumns.map(col => [col, makeFetcher(datasource, col)]),
+        filterColumns.map(col => [
+          col,
+          makeFetcher(datasource, col, activeFilters),
+        ]),
       ),
-    [datasource, filterColumns],
+    [datasource, filterColumns, activeFilters],
   );
 
   const emit = useCallback(
@@ -139,11 +176,11 @@ export default function FilterBoxModern(
             allowClear
             ariaLabel={col}
             placeholder={t('Type to search %s', col)}
-            value={selected[col] || []}
+            value={(selected[col] ?? []) as SelectValue}
             options={fetchers[col]}
             pageSize={rowLimit}
             onChange={(vals: unknown) => onColumnChange(col, ensureIsArray(vals))}
-            style={{ width: '100%' }}
+            css={{ width: '100%' }}
           />
         </div>
       ))}
