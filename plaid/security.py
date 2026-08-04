@@ -151,7 +151,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
     def _resolve_single_user(self, query, field, value):
         """
-        Picks one user from a case-insensitive match.
+        Picks one user when a lookup matches more than one row.
 
         ab_user.email and ab_user.username are case-sensitively unique, so rows
         differing only in case legally coexist. Prefer an exact match, else the
