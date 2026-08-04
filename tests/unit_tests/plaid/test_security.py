@@ -21,7 +21,13 @@ import pytest
 from flask_appbuilder.security.sqla.models import User
 from sqlalchemy.orm.exc import MultipleResultsFound
 
-from plaid.security import PlaidSecurityManager
+# plaid/ imports plaidcloud-rpc, which is in requirements/base.txt but not in the
+# development.txt that CI installs, so this module is only importable where the
+# runtime dependencies are present (the superset image). Skipping loudly beats a
+# collection error that aborts the whole unit-test run.
+pytest.importorskip("plaidcloud.rpc.connection.jsonrpc")
+
+from plaid.security import PlaidSecurityManager  # noqa: E402
 
 
 class FakeQuery:
