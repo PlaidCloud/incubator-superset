@@ -25,7 +25,6 @@ from plaid.auth_oidc import PlaidAuthOAuthView
 from superset.security import SupersetSecurityManager
 
 from sqlalchemy import func
-from sqlalchemy.orm.exc import MultipleResultsFound
 
 __author__ = "Garrett Bates"
 __copyright__ = "© Copyright 2018=2026, PlaidCloud, Inc"
@@ -135,36 +134,41 @@ class PlaidSecurityManager(SupersetSecurityManager):
         the email check case-insensitive
         """
         if username:
-            try:
-                if self.auth_username_ci:
-                    return (
-                        self.session.query(self.user_model)
-                        .filter(
-                            func.lower(self.user_model.username) == func.lower(username)
-                        )
-                        .one_or_none()
-                    )
-                else:
-                    return (
-                        self.session.query(self.user_model)
-                        .filter(self.user_model.username == username)
-                        .one_or_none()
-                    )
-            except MultipleResultsFound:
-                log.error("Multiple results found for user %s", username)
-                return None
-        elif email:
-            try:
-                return (
-                    self.session.query(self.user_model)
-                    .filter(
-                        func.lower(self.user_model.email) == func.lower(email)
-                    )
-                    .one_or_none()
+            if self.auth_username_ci:
+                query = self.session.query(self.user_model).filter(
+                    func.lower(self.user_model.username) == func.lower(username)
                 )
-            except MultipleResultsFound:
-                log.error("Multiple results found for user with email %s", email)
-                return None
+            else:
+                query = self.session.query(self.user_model).filter(
+                    self.user_model.username == username
+                )
+            return self._resolve_single_user(query, "username", username)
+        elif email:
+            query = self.session.query(self.user_model).filter(
+                func.lower(self.user_model.email) == func.lower(email)
+            )
+            return self._resolve_single_user(query, "email", email)
+
+    def _resolve_single_user(self, query, field, value):
+        """
+        Picks one user from a case-insensitive match.
+
+        ab_user.email and ab_user.username are case-sensitively unique, so rows
+        differing only in case legally coexist. Prefer an exact match, else the
+        oldest row, so a login never fails on the ambiguity.
+        """
+        users = query.order_by(self.user_model.id).all()
+        if len(users) > 1:
+            log.warning(
+                "Multiple users match %s %s case-insensitively; ids %s",
+                field,
+                value,
+                [user.id for user in users],
+            )
+        for user in users:
+            if getattr(user, field) == value:
+                return user
+        return users[0] if users else None
 
     def auth_user_oauth(self, userinfo):
         """
