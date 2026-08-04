@@ -25,16 +25,18 @@ from plaid.security import PlaidSecurityManager
 
 
 class FakeQuery:
-    """Stand-in for a SQLAlchemy Query over case-insensitively matched rows."""
+    """Stand-in for a SQLAlchemy Query, recording the criteria it is filtered on."""
 
-    def __init__(self, rows):
+    def __init__(self, rows, criteria):
         self.rows = rows
+        self.criteria = criteria
 
-    def filter(self, *args, **kwargs):
+    def filter(self, criterion):
+        self.criteria.append(criterion)
         return self
 
     def order_by(self, *args):
-        return FakeQuery(sorted(self.rows, key=lambda row: row.id))
+        return FakeQuery(sorted(self.rows, key=lambda row: row.id), self.criteria)
 
     def all(self):
         return list(self.rows)
@@ -57,13 +59,37 @@ class StubSecurityManager(PlaidSecurityManager):
 
 def make_manager(rows, auth_username_ci=True):
     manager = StubSecurityManager.__new__(StubSecurityManager)
-    manager.session = SimpleNamespace(query=lambda model: FakeQuery(rows))
+    manager.criteria = []
+    manager.session = SimpleNamespace(
+        query=lambda model: FakeQuery(rows, manager.criteria)
+    )
     manager.auth_username_ci = auth_username_ci
     return manager
 
 
 def user(user_id, name):
     return SimpleNamespace(id=user_id, username=name, email=name)
+
+
+def compiled(criterion):
+    return str(criterion.compile(compile_kwargs={"literal_binds": True}))
+
+
+@pytest.mark.parametrize(
+    ("field", "auth_username_ci", "expected"),
+    [
+        ("email", True, "lower(ab_user.email) = lower('Bob@Example.com')"),
+        ("email", False, "lower(ab_user.email) = lower('Bob@Example.com')"),
+        ("username", True, "lower(ab_user.username) = lower('Bob@Example.com')"),
+        ("username", False, "ab_user.username = 'Bob@Example.com'"),
+    ],
+)
+def test_find_user_filters_on_expected_column(field, auth_username_ci, expected):
+    manager = make_manager([], auth_username_ci=auth_username_ci)
+
+    manager.find_user(**{field: "Bob@Example.com"})
+
+    assert [compiled(criterion) for criterion in manager.criteria] == [expected]
 
 
 @pytest.mark.parametrize("field", ["email", "username"])

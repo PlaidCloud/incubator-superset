@@ -155,12 +155,13 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
         ab_user.email and ab_user.username are case-sensitively unique, so rows
         differing only in case legally coexist. Prefer an exact match, else the
-        oldest row, so a login never fails on the ambiguity.
+        lowest id, so a login never fails on the ambiguity.
         """
         users = query.order_by(self.user_model.id).all()
         if len(users) > 1:
             log.warning(
-                "Multiple users match %s %s case-insensitively; ids %s",
+                "Multiple users match %s %s; using the exact-case match if there is "
+                "one, else the lowest id. Matching ids: %s",
                 field,
                 value,
                 [user.id for user in users],
