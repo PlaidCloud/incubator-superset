@@ -6,7 +6,8 @@ import logging
 import uuid
 import time
 import jwt
-from typing import Union, List, Optional, override
+from typing import Union, List, Optional
+from typing_extensions import override
 
 from urllib.parse import urljoin
 from flask import session
