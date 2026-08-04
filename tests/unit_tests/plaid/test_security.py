@@ -119,6 +119,30 @@ def test_find_user_falls_back_to_lowest_id(field):
 
 
 @pytest.mark.parametrize("field", ["email", "username"])
+def test_find_user_lowest_id_wins_among_several_duplicates(field):
+    rows = [
+        user(9, "BOB@example.com"),
+        user(5, "bob@EXAMPLE.com"),
+        user(4, "bob@example.com"),
+    ]
+    manager = make_manager(rows)
+
+    assert manager.find_user(**{field: "Bob@Example.com"}) is rows[2]
+
+
+@pytest.mark.parametrize("field", ["email", "username"])
+def test_find_user_exact_match_beats_lower_ids(field):
+    rows = [
+        user(2, "BOB@example.com"),
+        user(4, "bob@example.com"),
+        user(9, "Bob@Example.com"),
+    ]
+    manager = make_manager(rows)
+
+    assert manager.find_user(**{field: "Bob@Example.com"}) is rows[2]
+
+
+@pytest.mark.parametrize("field", ["email", "username"])
 def test_find_user_single_match(field):
     rows = [user(3, "bob@example.com")]
     manager = make_manager(rows)
@@ -138,6 +162,22 @@ def test_find_user_case_sensitive_username_lookup():
     manager = make_manager(rows, auth_username_ci=False)
 
     assert manager.find_user(username="bob") is rows[0]
+
+
+# The case-sensitive branch still resolves duplicates: on a database with a
+# case-insensitive collation an equality filter matches case variants anyway.
+def test_find_user_case_sensitive_username_prefers_exact_case_match():
+    rows = [user(7, "Bob"), user(3, "bob")]
+    manager = make_manager(rows, auth_username_ci=False)
+
+    assert manager.find_user(username="Bob") is rows[0]
+
+
+def test_find_user_case_sensitive_username_falls_back_to_lowest_id():
+    rows = [user(7, "BOB"), user(3, "bob")]
+    manager = make_manager(rows, auth_username_ci=False)
+
+    assert manager.find_user(username="Bob") is rows[1]
 
 
 def test_find_user_logs_duplicate_ids(caplog):
