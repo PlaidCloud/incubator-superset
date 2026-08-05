@@ -28,6 +28,7 @@ from sqlalchemy.orm.exc import MultipleResultsFound
 pytest.importorskip("plaidcloud.rpc.connection.jsonrpc")
 
 from plaid.security import PlaidSecurityManager  # noqa: E402
+from superset.security import SupersetSecurityManager  # noqa: E402
 
 
 class FakeQuery:
@@ -290,3 +291,33 @@ def test_find_user_logs_duplicate_ids(caplog):
 
     warnings = [record for record in caplog.records if record.levelname == "WARNING"]
     assert "[3, 7]" in warnings[0].getMessage()
+
+
+def pvm(permission_name, view_menu_name):
+    return SimpleNamespace(
+        permission=SimpleNamespace(name=permission_name),
+        view_menu=SimpleNamespace(name=view_menu_name),
+    )
+
+
+REGISTRATION_PERMISSIONS = ["can_list", "can_show", "can_add", "can_edit", "can_delete"]
+
+
+@pytest.mark.parametrize("permission_name", REGISTRATION_PERMISSIONS)
+def test_user_registrations_api_is_admin_only(permission_name):
+    manager = PlaidSecurityManager.__new__(PlaidSecurityManager)
+    permission_view = pvm(permission_name, "UserRegistrationsRestAPI")
+
+    assert manager._is_admin_only(permission_view)
+    assert not manager._is_alpha_pvm(permission_view)
+    assert not manager._is_gamma_pvm(permission_view)
+
+
+@pytest.mark.parametrize("permission_name", REGISTRATION_PERMISSIONS)
+def test_upstream_grants_user_registrations_api_to_alpha_and_gamma(permission_name):
+    """Pins the upstream gap the override exists to close."""
+    manager = SupersetSecurityManager.__new__(SupersetSecurityManager)
+    permission_view = pvm(permission_name, "UserRegistrationsRestAPI")
+
+    assert manager._is_alpha_pvm(permission_view)
+    assert manager._is_gamma_pvm(permission_view)

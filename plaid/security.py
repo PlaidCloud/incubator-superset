@@ -52,8 +52,18 @@ class PlaidSecurityManager(SupersetSecurityManager):
     # so ("read", "security") gets granted to Alpha/Gamma and those roles can
     # reach /users/, /roles/, /list_groups/ etc. directly even though the menu
     # is hidden. Adding "security" here makes the routes Admin-only too.
+    # UserRegistrationsRestAPI is a full ModelRestApi over RegisterUser, so FAB
+    # registers can_add/can_edit/can_delete alongside can_list/can_show. Upstream
+    # guards the "User Registrations" ModelView menu but not the REST API's
+    # view-menu, so Alpha/Gamma can POST a registration with any email and a
+    # chosen registration_hash, then activate it into a real ab_user row via the
+    # unauthenticated /register/activation/<hash> route. Spelled as a literal
+    # rather than UserRegistrationsRestAPI.__name__ because importing that class
+    # here pulls superset.models.core in at config-load time, before init_app,
+    # which raises "App not initialized yet" out of encrypted_field_factory.
     ADMIN_ONLY_VIEW_MENUS = SupersetSecurityManager.ADMIN_ONLY_VIEW_MENUS | {
         "security",
+        "UserRegistrationsRestAPI",
     }
 
     def __init__(self, appbuilder):

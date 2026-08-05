@@ -354,6 +354,10 @@ class UserRegistrationsRestAPI(BaseSupersetModelRestApi):
 
     resource_name = "security/user_registrations"
     datamodel = SQLAInterface(RegisterUser)
+    # Without this FAB also registers post/put, letting anyone holding the
+    # permission mint a registration and its activation hash. The frontend only
+    # lists, reads and deletes.
+    include_route_methods = {"get_list", "get", "delete", "info"}
     allow_browser_login = True
     list_columns = [
         "id",
