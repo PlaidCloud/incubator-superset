@@ -155,21 +155,24 @@ class PlaidSecurityManager(SupersetSecurityManager):
         Picks one user when a lookup matches more than one row.
 
         ab_user.email and ab_user.username are case-sensitively unique, so rows
-        differing only in case legally coexist. Prefer an exact match, else the
-        lowest id, so a login never fails on the ambiguity.
+        differing only in case legally coexist. Prefer an active row, then an
+        exact match, then the lowest id, so a login never fails on the ambiguity
+        and never lands on a deactivated duplicate. Deactivated rows are still
+        returned when they are all there is, leaving the active check to the
+        caller.
         """
         users = query.order_by(self.user_model.id).all()
         if len(users) > 1:
             log.warning(
-                "Multiple users match %s %s; using the exact-case match if there is "
-                "one, else the lowest id. Matching ids: %s",
+                "Multiple users match %s %s; preferring an active row, then the "
+                "exact-case match, then the lowest id. Matching ids: %s",
                 field,
                 value,
                 [user.id for user in users],
             )
-        for user in users:
-            if getattr(user, field) == value:
-                return user
+        users.sort(
+            key=lambda user: (not user.active, getattr(user, field) != value, user.id)
+        )
         return users[0] if users else None
 
     def auth_user_oauth(self, userinfo):

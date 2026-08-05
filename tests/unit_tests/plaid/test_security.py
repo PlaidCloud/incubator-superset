@@ -73,8 +73,8 @@ def make_manager(rows, auth_username_ci=True):
     return manager
 
 
-def user(user_id, name):
-    return SimpleNamespace(id=user_id, username=name, email=name)
+def user(user_id, name, active=True):
+    return SimpleNamespace(id=user_id, username=name, email=name, active=active)
 
 
 def compiled(criterion):
@@ -140,6 +140,70 @@ def test_find_user_exact_match_beats_lower_ids(field):
     manager = make_manager(rows)
 
     assert manager.find_user(**{field: "Bob@Example.com"}) is rows[2]
+
+
+@pytest.mark.parametrize("field", ["email", "username"])
+def test_find_user_skips_inactive_lowest_id(field):
+    rows = [
+        user(3, "bob@example.com", active=False),
+        user(7, "BOB@example.com"),
+    ]
+    manager = make_manager(rows)
+
+    assert manager.find_user(**{field: "Bob@Example.com"}) is rows[1]
+
+
+@pytest.mark.parametrize("field", ["email", "username"])
+def test_find_user_active_beats_inactive_exact_case_match(field):
+    rows = [
+        user(3, "Bob@Example.com", active=False),
+        user(7, "bob@example.com"),
+    ]
+    manager = make_manager(rows)
+
+    assert manager.find_user(**{field: "Bob@Example.com"}) is rows[1]
+
+
+@pytest.mark.parametrize("field", ["email", "username"])
+def test_find_user_exact_case_wins_among_active_rows(field):
+    rows = [
+        user(2, "bob@example.com", active=False),
+        user(4, "BOB@example.com"),
+        user(9, "Bob@Example.com"),
+    ]
+    manager = make_manager(rows)
+
+    assert manager.find_user(**{field: "Bob@Example.com"}) is rows[2]
+
+
+@pytest.mark.parametrize("field", ["email", "username"])
+def test_find_user_returns_inactive_exact_case_match_when_all_inactive(field):
+    rows = [
+        user(3, "bob@example.com", active=False),
+        user(7, "Bob@Example.com", active=False),
+    ]
+    manager = make_manager(rows)
+
+    assert manager.find_user(**{field: "Bob@Example.com"}) is rows[1]
+
+
+@pytest.mark.parametrize("field", ["email", "username"])
+def test_find_user_returns_inactive_lowest_id_when_all_inactive(field):
+    rows = [
+        user(7, "BOB@example.com", active=False),
+        user(3, "bob@example.com", active=False),
+    ]
+    manager = make_manager(rows)
+
+    assert manager.find_user(**{field: "Bob@Example.com"}) is rows[1]
+
+
+@pytest.mark.parametrize("field", ["email", "username"])
+def test_find_user_single_inactive_match(field):
+    rows = [user(3, "bob@example.com", active=False)]
+    manager = make_manager(rows)
+
+    assert manager.find_user(**{field: "BOB@EXAMPLE.COM"}) is rows[0]
 
 
 @pytest.mark.parametrize("field", ["email", "username"])
