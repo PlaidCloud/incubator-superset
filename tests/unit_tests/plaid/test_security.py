@@ -73,8 +73,8 @@ def make_manager(rows, auth_username_ci=True):
     return manager
 
 
-def user(user_id, name):
-    return SimpleNamespace(id=user_id, username=name, email=name)
+def user(user_id, name, active=True):
+    return SimpleNamespace(id=user_id, username=name, email=name, active=active)
 
 
 def compiled(criterion):
@@ -140,6 +140,108 @@ def test_find_user_exact_match_beats_lower_ids(field):
     manager = make_manager(rows)
 
     assert manager.find_user(**{field: "Bob@Example.com"}) is rows[2]
+
+
+@pytest.mark.parametrize("field", ["email", "username"])
+def test_find_user_skips_inactive_lowest_id(field):
+    rows = [
+        user(3, "bob@example.com", active=False),
+        user(7, "BOB@example.com"),
+    ]
+    manager = make_manager(rows)
+
+    assert manager.find_user(**{field: "Bob@Example.com"}) is rows[1]
+
+
+@pytest.mark.parametrize("field", ["email", "username"])
+def test_find_user_active_beats_inactive_exact_case_match(field):
+    rows = [
+        user(3, "Bob@Example.com", active=False),
+        user(7, "bob@example.com"),
+    ]
+    manager = make_manager(rows)
+
+    assert manager.find_user(**{field: "Bob@Example.com"}) is rows[1]
+
+
+@pytest.mark.parametrize("field", ["email", "username"])
+def test_find_user_exact_case_wins_among_active_rows(field):
+    rows = [
+        user(2, "bob@example.com", active=False),
+        user(4, "BOB@example.com"),
+        user(9, "Bob@Example.com"),
+    ]
+    manager = make_manager(rows)
+
+    assert manager.find_user(**{field: "Bob@Example.com"}) is rows[2]
+
+
+@pytest.mark.parametrize("field", ["email", "username"])
+def test_find_user_returns_inactive_exact_case_match_when_all_inactive(field):
+    rows = [
+        user(3, "bob@example.com", active=False),
+        user(7, "Bob@Example.com", active=False),
+    ]
+    manager = make_manager(rows)
+
+    assert manager.find_user(**{field: "Bob@Example.com"}) is rows[1]
+
+
+@pytest.mark.parametrize("field", ["email", "username"])
+def test_find_user_returns_inactive_lowest_id_when_all_inactive(field):
+    rows = [
+        user(7, "BOB@example.com", active=False),
+        user(3, "bob@example.com", active=False),
+    ]
+    manager = make_manager(rows)
+
+    assert manager.find_user(**{field: "Bob@Example.com"}) is rows[1]
+
+
+@pytest.mark.parametrize("field", ["email", "username"])
+def test_find_user_single_inactive_match(field):
+    rows = [user(3, "bob@example.com", active=False)]
+    manager = make_manager(rows)
+
+    assert manager.find_user(**{field: "BOB@EXAMPLE.COM"}) is rows[0]
+
+
+# FakeQuery.order_by sorts by id like the real ORDER BY does, which would let a
+# resolver that only relied on a stable sort look correct. Feeding the resolver
+# rows in another order pins its own id tie-break.
+@pytest.mark.parametrize("field", ["email", "username"])
+def test_resolve_single_user_lowest_id_wins_on_unordered_rows(field):
+    rows = [user(9, "BOB@example.com"), user(3, "bob@EXAMPLE.com")]
+    unordered = SimpleNamespace(
+        order_by=lambda *args: SimpleNamespace(all=lambda: list(rows))
+    )
+    manager = make_manager(rows)
+
+    found = manager._resolve_single_user(unordered, field, "Bob@Example.com")
+
+    assert found is rows[1]
+
+
+# active is Optional[bool] with a Python-side default, so a row written by raw
+# SQL can hold NULL. auth_user_oauth rejects those too, so de-preferring them
+# keeps this resolution in lockstep with the login gate.
+@pytest.mark.parametrize("field", ["email", "username"])
+def test_find_user_prefers_active_over_null_active(field):
+    rows = [
+        user(3, "bob@example.com", active=None),
+        user(7, "BOB@example.com"),
+    ]
+    manager = make_manager(rows)
+
+    assert manager.find_user(**{field: "Bob@Example.com"}) is rows[1]
+
+
+@pytest.mark.parametrize("field", ["email", "username"])
+def test_find_user_single_null_active_match(field):
+    rows = [user(3, "bob@example.com", active=None)]
+    manager = make_manager(rows)
+
+    assert manager.find_user(**{field: "BOB@EXAMPLE.COM"}) is rows[0]
 
 
 @pytest.mark.parametrize("field", ["email", "username"])
