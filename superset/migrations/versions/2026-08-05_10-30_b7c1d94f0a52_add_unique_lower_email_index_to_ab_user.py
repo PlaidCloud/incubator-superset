@@ -23,6 +23,7 @@ Create Date: 2026-08-05 10:30:00.000000
 """
 
 import logging
+import re
 
 import sqlalchemy as sa
 from alembic import op
@@ -63,20 +64,130 @@ CREATE_INDEX_DDL = (
 )
 DROP_INDEX_DDL = f"DROP INDEX IF EXISTS {INDEX_NAME}"
 
+# The index expression this migration requires, in its unnormalised form.
+EXPECTED_EXPRESSION = "lower(email)"
 
-def _find_duplicates(bind: sa.engine.Connection) -> list[tuple[str, int, list[int]]]:
+
+def _normalize_expression(expression: str) -> str:
+    """
+    Reduce an index expression to a form comparable across backends.
+
+    Postgres reports the expression with its own casts and parenthesisation
+    (``lower((email)::text)``) while SQLite echoes back the literal text we wrote
+    (``lower(email)``). Stripping casts, quoting, whitespace and parentheses makes
+    both collapse to ``loweremail``, while a genuinely different expression such as
+    ``lower(btrim(email))`` still compares unequal.
+    """
+
+    return re.sub(r"::text|[\s()\"`\[\]]", "", expression).lower()
+
+
+def _describe_conflicting_index(bind: sa.engine.Connection) -> str | None:
+    """
+    Describe the existing index of our name if it is not the one we require.
+
+    ``CREATE UNIQUE INDEX IF NOT EXISTS`` matches on *name* only. An index of this
+    name that is not unique, or not on ``lower(email)``, or not even on
+    ``ab_user`` -- for instance a non-unique ``lower(email)`` index hand-created
+    while hot-fixing sc-23689 -- would turn this migration into a silent no-op that
+    reports success while the invariant goes unenforced.
+
+    :param bind: An open connection to the metadata database
+    :returns: A human-readable description of the offending index, or None when the
+        index is absent or already exactly what this migration would create
+    """
+
+    if bind.dialect.name == "postgresql":
+        # Deliberately not filtered by table: Postgres index names are unique per
+        # schema, so an index of this name on another table also blocks creation
+        # (silently, under IF NOT EXISTS).
+        row = bind.execute(
+            sa.text(
+                """
+                SELECT t.relname AS table_name,
+                       i.indisunique AS is_unique,
+                       pg_get_expr(i.indexprs, i.indrelid) AS expression
+                  FROM pg_index i
+                  JOIN pg_class c ON c.oid = i.indexrelid
+                  JOIN pg_class t ON t.oid = i.indrelid
+                 WHERE c.relname = :index_name
+                """
+            ),
+            {"index_name": INDEX_NAME},
+        ).first()
+
+        if row is None:
+            return None
+        if (
+            row.table_name == TABLE_NAME
+            and row.is_unique
+            and _normalize_expression(row.expression or "")
+            == _normalize_expression(EXPECTED_EXPRESSION)
+        ):
+            return None
+        return (
+            f"table={row.table_name}, unique={row.is_unique}, "
+            f"expression={row.expression}"
+        )
+
+    existing_ddl = bind.execute(
+        sa.text(
+            """
+            SELECT sql
+              FROM sqlite_master
+             WHERE type = 'index' AND name = :index_name
+            """
+        ),
+        {"index_name": INDEX_NAME},
+    ).scalar()
+
+    if existing_ddl is None:
+        return None
+    if _normalize_expression(existing_ddl) == _normalize_expression(
+        CREATE_INDEX_DDL.replace(" IF NOT EXISTS", "")
+    ):
+        return None
+    return existing_ddl
+
+
+def _format_conflict_failure(found: str) -> str:
+    return "\n".join(
+        [
+            f"Cannot create {INDEX_NAME}: an index of that name already exists but "
+            "is not a unique index on lower(email), so it does not enforce "
+            "case-insensitive uniqueness.",
+            "",
+            f"  found:    {found}",
+            f"  expected: table={TABLE_NAME}, unique=True, "
+            f"expression={EXPECTED_EXPRESSION}",
+            "",
+            "`CREATE UNIQUE INDEX IF NOT EXISTS` matches on the index name alone, so "
+            "leaving this in place would let the migration report success while "
+            "case-variant duplicates remained possible.",
+            "",
+            "Remedy:",
+            "  1. Confirm nothing depends on the existing index.",
+            f"  2. DROP INDEX {INDEX_NAME};",
+            "  3. Re-run `superset db upgrade`.",
+        ]
+    )
+
+
+def _find_duplicates(
+    bind: sa.engine.Connection,
+) -> tuple[int, list[tuple[str, int, list[int]]]]:
     """
     Find email addresses that collide once lowercased.
 
-    NULL emails are excluded because a unique index does not constrain NULLs; the
-    empty string is *not* excluded because it is a real value the index will
-    constrain. The predicate is exactly ``lower(email)`` -- no ``btrim`` -- so that
-    the index matches the case-insensitive lookup the application performs. Adding
-    whitespace trimming here would make the index stricter than the queries it
-    backs, and could block a deploy over rows the application treats as distinct.
+    NULL emails are excluded because a unique index does not constrain NULLs. The
+    predicate is exactly ``lower(email)`` -- no ``btrim`` -- so that the index
+    matches the case-insensitive lookup the application performs. Adding whitespace
+    trimming here would make the index stricter than the queries it backs, and
+    could block a deploy over rows the application treats as distinct.
 
     :param bind: An open connection to the metadata database
-    :returns: ``(lowercased_email, row_count, row_ids)`` per colliding group
+    :returns: the total number of colliding groups, and ``(lowercased_email,
+        row_count, row_ids)`` for at most ``MAX_REPORTED_GROUPS`` of them
     """
 
     groups = bind.execute(
@@ -107,27 +218,32 @@ def _find_duplicates(bind: sa.engine.Connection) -> list[tuple[str, int, list[in
         ).scalars()
         duplicates.append((lowered, row_count, list(ids)))
 
-    if len(groups) > MAX_REPORTED_GROUPS:
-        logger.warning(
-            "Found %s duplicate lower(email) groups; reporting the first %s.",
-            len(groups),
-            MAX_REPORTED_GROUPS,
-        )
-
-    return duplicates
+    return len(groups), duplicates
 
 
-def _format_failure(duplicates: list[tuple[str, int, list[int]]]) -> str:
+def _format_failure(
+    total_groups: int, duplicates: list[tuple[str, int, list[int]]]
+) -> str:
     lines = [
-        f"Cannot create {INDEX_NAME}: {len(duplicates)} email address(es) in "
+        f"Cannot create {INDEX_NAME}: {total_groups} email address(es) in "
         f"{TABLE_NAME} are duplicated when compared case-insensitively.",
         "",
     ]
+    if total_groups > len(duplicates):
+        lines += [
+            f"Showing the first {len(duplicates)}; re-run `superset db upgrade` "
+            "after fixing these to see the rest.",
+            "",
+        ]
     for lowered, row_count, ids in duplicates:
         shown = ", ".join(str(row_id) for row_id in ids[:MAX_REPORTED_IDS])
         if len(ids) > MAX_REPORTED_IDS:
             shown += f", ... ({len(ids) - MAX_REPORTED_IDS} more)"
-        lines.append(f"  {lowered!r}: {row_count} rows, ab_user.id in [{shown}]")
+        # Rendered as a SQL literal (quotes doubled) so it can be pasted straight
+        # into the remedy query below; repr() would emit "o'brien@x.com", which
+        # Postgres reads as an identifier.
+        literal = "'" + lowered.replace("'", "''") + "'"
+        lines.append(f"  {literal}: {row_count} rows, ab_user.id in [{shown}]")
     lines += [
         "",
         "This migration does not de-duplicate automatically: it cannot know which "
@@ -137,7 +253,7 @@ def _format_failure(duplicates: list[tuple[str, int, list[int]]]) -> str:
         "Remedy -- for each address listed above:",
         "  1. Inspect the rows, e.g.",
         "     SELECT id, username, email, active, last_login, login_count",
-        "       FROM ab_user WHERE lower(email) = '<address>' ORDER BY id;",
+        "       FROM ab_user WHERE lower(email) = <address> ORDER BY id;",
         "  2. Keep the canonical row: prefer active=true, then the most recent "
         "last_login, then the highest login_count, then the lowest id.",
         "  3. Re-point anything owned by the losing rows at the canonical id "
@@ -173,8 +289,12 @@ def upgrade():
         )
         return
 
-    if duplicates := _find_duplicates(bind):
-        raise RuntimeError(_format_failure(duplicates))
+    if conflict := _describe_conflicting_index(bind):
+        raise RuntimeError(_format_conflict_failure(conflict))
+
+    total_groups, duplicates = _find_duplicates(bind)
+    if duplicates:
+        raise RuntimeError(_format_failure(total_groups, duplicates))
 
     logger.info("Creating unique index %s on %s.", INDEX_NAME, TABLE_NAME)
     op.execute(sa.text(CREATE_INDEX_DDL))
