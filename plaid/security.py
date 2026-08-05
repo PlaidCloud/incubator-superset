@@ -57,7 +57,10 @@ class PlaidSecurityManager(SupersetSecurityManager):
     # guards the "User Registrations" ModelView menu but not the REST API's
     # view-menu, so Alpha/Gamma can POST a registration with any email and a
     # chosen registration_hash, then activate it into a real ab_user row via the
-    # unauthenticated /register/activation/<hash> route.
+    # unauthenticated /register/activation/<hash> route. Spelled as a literal
+    # rather than UserRegistrationsRestAPI.__name__ because importing that class
+    # here pulls superset.models.core in at config-load time, before init_app,
+    # which raises "App not initialized yet" out of encrypted_field_factory.
     ADMIN_ONLY_VIEW_MENUS = SupersetSecurityManager.ADMIN_ONLY_VIEW_MENUS | {
         "security",
         "UserRegistrationsRestAPI",
