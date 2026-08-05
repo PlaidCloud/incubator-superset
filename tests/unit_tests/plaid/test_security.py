@@ -206,6 +206,44 @@ def test_find_user_single_inactive_match(field):
     assert manager.find_user(**{field: "BOB@EXAMPLE.COM"}) is rows[0]
 
 
+# FakeQuery.order_by sorts by id like the real ORDER BY does, which would let a
+# resolver that only relied on a stable sort look correct. Feeding the resolver
+# rows in another order pins its own id tie-break.
+@pytest.mark.parametrize("field", ["email", "username"])
+def test_resolve_single_user_lowest_id_wins_on_unordered_rows(field):
+    rows = [user(9, "BOB@example.com"), user(3, "bob@EXAMPLE.com")]
+    unordered = SimpleNamespace(
+        order_by=lambda *args: SimpleNamespace(all=lambda: list(rows))
+    )
+    manager = make_manager(rows)
+
+    found = manager._resolve_single_user(unordered, field, "Bob@Example.com")
+
+    assert found is rows[1]
+
+
+# active is Optional[bool] with a Python-side default, so a row written by raw
+# SQL can hold NULL. auth_user_oauth rejects those too, so de-preferring them
+# keeps this resolution in lockstep with the login gate.
+@pytest.mark.parametrize("field", ["email", "username"])
+def test_find_user_prefers_active_over_null_active(field):
+    rows = [
+        user(3, "bob@example.com", active=None),
+        user(7, "BOB@example.com"),
+    ]
+    manager = make_manager(rows)
+
+    assert manager.find_user(**{field: "Bob@Example.com"}) is rows[1]
+
+
+@pytest.mark.parametrize("field", ["email", "username"])
+def test_find_user_single_null_active_match(field):
+    rows = [user(3, "bob@example.com", active=None)]
+    manager = make_manager(rows)
+
+    assert manager.find_user(**{field: "BOB@EXAMPLE.COM"}) is rows[0]
+
+
 @pytest.mark.parametrize("field", ["email", "username"])
 def test_find_user_single_match(field):
     rows = [user(3, "bob@example.com")]
