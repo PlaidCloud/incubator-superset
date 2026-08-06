@@ -948,6 +948,56 @@ def test_data_for_slices_handles_missing_datasource(mocker: MockerFixture) -> No
     assert "verbose_map" in result
 
 
+def test_data_for_slices_handles_unresolvable_metric(mocker: MockerFixture) -> None:
+    """
+    Test that data_for_slices skips a pseudo-metric that cannot be resolved to a
+    name instead of failing the whole dashboard.
+
+    Layout-only row headings are persisted in form_data as metric-shaped dicts
+    with no `expressionType` and an empty `label`. get_metric_name() raises
+    ValueError on those, which previously propagated and made
+    /api/v1/dashboard/<id>/datasets fail, leaving native filters with no
+    datasources.
+    """
+    database = mocker.MagicMock()
+    database.id = 1
+
+    table = SqlaTable(
+        table_name="test_table",
+        database=database,
+        columns=[],
+        metrics=[],
+    )
+
+    row_heading = {
+        "aggregate": None,
+        "column": {"column_name": "__heading__"},
+        "emptyRowHeading": True,
+        "emptyRowHeadingText": "SALES",
+        "hasCustomLabel": False,
+        "isEmpty": False,
+        "label": "",
+        "optionName": "metric_ruu5z64aum_xnww8skbcu",
+        "sqlExpression": None,
+    }
+
+    mock_slice = mocker.MagicMock()
+    mock_slice.id = 1
+    mock_slice.slice_name = "EBITx by Segment"
+    mock_slice.form_data = {"metrics": [row_heading, "count"]}
+    mock_slice.get_query_context.return_value = None
+
+    mocker.patch.object(SqlaTable, "columns", [])
+    mocker.patch.object(SqlaTable, "metrics", [])
+
+    # Must not raise: the unresolvable heading is skipped, the real metric is kept
+    result = table.data_for_slices([mock_slice])
+
+    assert "columns" in result
+    assert "metrics" in result
+    assert "verbose_map" in result
+
+
 def test_owners_data_includes_email(mocker: MockerFixture) -> None:
     """Test that the owners_data property includes the email field."""
     database = mocker.MagicMock()
