@@ -22,7 +22,6 @@ from datetime import datetime
 from typing import Any, cast, TYPE_CHECKING
 
 import sqlalchemy as sa
-from databend_sqlalchemy.databend_dialect import DatabendCompiler
 from flask_babel import gettext as __
 from marshmallow import fields, Schema
 from marshmallow.validate import Range
@@ -51,6 +50,20 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+try:
+    from databend_sqlalchemy.databend_dialect import DatabendCompiler
+except ImportError:
+
+    class DatabendCompiler:  # type: ignore
+        """Dummy class used when databend-sqlalchemy is not installed.
+
+        Keeps this module importable (e.g. for collection by the test suite,
+        or for ``get_available_engine_specs()``) without the optional driver
+        present. Mirrors the pattern used for the optional ``databricks``
+        driver in ``superset/db_engine_specs/databricks.py``.
+        """
+
+
 # Databend has no ILIKE operator. ``DatabendCompiler`` inherits ILIKE rendering
 # from SQLAlchemy's ``PGCompiler``, which emits the Postgres-native ``x ILIKE y``
 # that Databend rejects. Superset builds case-insensitive filters with
@@ -76,8 +89,8 @@ def _databend_visit_not_ilike_op_binary(
     return self.visit_not_like_op_binary(binary, operator, **kw)
 
 
-DatabendCompiler.visit_ilike_op_binary = _databend_visit_ilike_op_binary  # type: ignore[method-assign]
-DatabendCompiler.visit_not_ilike_op_binary = _databend_visit_not_ilike_op_binary  # type: ignore[method-assign]
+DatabendCompiler.visit_ilike_op_binary = _databend_visit_ilike_op_binary
+DatabendCompiler.visit_not_ilike_op_binary = _databend_visit_not_ilike_op_binary
 
 
 class DatabendBaseEngineSpec(BaseEngineSpec):

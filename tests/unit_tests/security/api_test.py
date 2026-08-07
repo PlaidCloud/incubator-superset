@@ -33,7 +33,14 @@ def test_csrf_not_exempt(app_context: None) -> None:
         "MenuApi",
         "SecurityApi",
         "OpenApi",
-        "PermissionViewMenuApi",
+        # The fork registers SecurityManager.permission_view_menu_api =
+        # SupersetPermissionViewMenuApi (superset/security/manager.py), a
+        # subclass of FAB's PermissionViewMenuApi, to allow filtering by `id`
+        # and by related permission/view_menu name fields (sc-23044 /
+        # apache/superset#40293). FAB derives the Flask blueprint name from
+        # the runtime class name, so the registered blueprint is named after
+        # the fork's subclass, not the upstream base class.
+        "SupersetPermissionViewMenuApi",
         "SupersetRoleApi",
         "SupersetUserApi",
         "PermissionApi",
