@@ -250,14 +250,6 @@ disallow_untyped_defs = true
 ignore_missing_imports = true
 no_implicit_optional = true
 warn_unused_ignores = true
-# Type-check imported modules for accurate inference, but only *report* errors
-# for the files explicitly passed on the command line. Without this, the
-# pre-commit `mypy` hook -- even when scoped to a PR's own diff -- surfaces
-# pre-existing errors from any module transitively imported by a touched
-# file (e.g. touching superset/db_engine_specs/databend.py alone pulls in an
-# unrelated, pre-existing error in superset/dashboards/permalink/api.py).
-# That made `pre-commit` fail identically on every PR regardless of content.
-follow_imports = "silent"
 
 [[tool.mypy.overrides]]
 module = "superset.migrations.versions.*"
