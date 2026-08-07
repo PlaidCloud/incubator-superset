@@ -68,7 +68,18 @@ jobs:
         run: |
           set +e  # Don't exit immediately on failure
           export SKIP=eslint-frontend,type-checking-frontend
-          pre-commit run --all-files
+          # Scope pre-commit to the files actually touched by this change instead of
+          # `--all-files`. The fork has accumulated pre-existing pre-commit drift
+          # (formatting, i18n, mypy) across files no PR touches; running `--all-files`
+          # unconditionally means every PR inherits that baseline debt and can never
+          # gate on its own diff. This mirrors the diff-scoping the local `pylint`
+          # hook already does internally (see .pre-commit-config.yaml).
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.base.ref }}"
+            pre-commit run --from-ref FETCH_HEAD --to-ref HEAD
+          else
+            pre-commit run --all-files
+          fi
           PRE_COMMIT_EXIT_CODE=$?
           git diff --quiet --exit-code
           GIT_DIFF_EXIT_CODE=$?
