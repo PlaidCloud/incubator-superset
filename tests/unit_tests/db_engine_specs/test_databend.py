@@ -164,10 +164,10 @@ def test_ilike_compiles_to_lower_like(build_expr: Any, expected: str) -> None:
     pytest.importorskip("databend_sqlalchemy")
 
     import sqlalchemy as sa
+    from databend_sqlalchemy.databend_dialect import DatabendDialect
 
     # Importing the engine spec installs the ILIKE compiler override.
     import superset.db_engine_specs.databend  # noqa: F401
-    from databend_sqlalchemy.databend_dialect import DatabendDialect
 
     expr = build_expr(sa.column("name"))
     compiled = expr.compile(
