@@ -19,11 +19,10 @@ from datetime import datetime
 from io import BytesIO
 from urllib import parse
 
-from flask import request, Response, url_for, send_file
+from flask import g, request, Response, url_for, send_file
 from flask_appbuilder.api import expose, protect, safe
 from marshmallow import ValidationError
 
-from superset import security_manager
 from superset.commands.dashboard.exceptions import (
     DashboardAccessDeniedError,
     DashboardNotFoundError,
@@ -36,7 +35,6 @@ from superset.dashboards.permalink.schemas import DashboardPermalinkStateSchema
 from superset.extensions import event_logger
 from superset.key_value.exceptions import KeyValueAccessDeniedError
 from superset.views.base_api import BaseSupersetApi, requires_json
-from superset.utils.core import override_user
 from superset.utils.screenshots import DashboardScreenshot
 from superset.utils.urls import headless_url
 
@@ -293,12 +291,10 @@ class DashboardPermalinkRestApi(BaseSupersetApi):
 
             logger.info("Create dashboard PDF for : %s", dashboard_url)
 
-            user = security_manager.find_user("admin")
-            with override_user(user):
-                screenshot = DashboardScreenshot(dashboard_url, None)
-                pdf = screenshot.get_pdf(user=user)
-                buf = BytesIO(pdf)
-                buf.seek(0)
+            screenshot = DashboardScreenshot(dashboard_url, None)
+            pdf = screenshot.get_pdf(user=g.user)
+            buf = BytesIO(pdf)
+            buf.seek(0)
 
             timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
             root = f"dashboard_pdf_{timestamp}"
