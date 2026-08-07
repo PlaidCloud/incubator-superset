@@ -156,6 +156,13 @@ def test_make_label_compatible(column_name: str, expected_result: str) -> None:
 )
 def test_ilike_compiles_to_lower_like(build_expr: Any, expected: str) -> None:
     """Databend has no ILIKE; it must compile to LOWER(x) LIKE LOWER(y)."""
+    # Unlike the rest of this module, this test exercises the real
+    # databend_sqlalchemy dialect's compiler rather than just superset's
+    # own engine-spec code, so it needs the (optional, not installed by
+    # default -- see requirements/development.in) driver package itself.
+    # Mirrors tests/unit_tests/db_engine_specs/test_datastore.py.
+    pytest.importorskip("databend_sqlalchemy")
+
     import sqlalchemy as sa
 
     # Importing the engine spec installs the ILIKE compiler override.
