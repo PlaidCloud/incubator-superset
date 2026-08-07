@@ -362,7 +362,11 @@ class TestGenerateDashboard:
                 assert chart_data["type"] == "CHART"
                 assert "meta" in chart_data
                 assert chart_data["meta"]["chartId"] == chart_id
-                assert chart_data["meta"]["width"] == 4
+                # GRID_DEFAULT_CHART_WIDTH (superset/mcp_service/dashboard/constants.py)
+                # was proportionally doubled from 4 to 8 alongside GRID_COLUMN_COUNT
+                # (12 -> 24) by 71ac9253af ("add 24 cols dashboard with migration
+                # script"); this test was never updated to match.
+                assert chart_data["meta"]["width"] == 8
 
                 chart_parents = chart_data["parents"]
                 column_key = chart_parents[-1]
@@ -1300,9 +1304,13 @@ class TestLayoutHelpers:
         assert layout[row_key]["children"] == [column_key]
         assert layout[column_key]["type"] == "COLUMN"
         assert layout[column_key]["children"] == [chart_key]
-        assert layout[column_key]["meta"]["width"] == 12
+        # GRID_COLUMN_COUNT / GRID_DEFAULT_CHART_WIDTH (superset/mcp_service/dashboard/
+        # constants.py) were proportionally doubled (12 -> 24, 4 -> 8) by 71ac9253af
+        # ("add 24 cols dashboard with migration script"); this test was never
+        # updated to match.
+        assert layout[column_key]["meta"]["width"] == 24
         assert layout[chart_key]["type"] == "CHART"
-        assert layout[chart_key]["meta"]["width"] == 4
+        assert layout[chart_key]["meta"]["width"] == 8
         assert layout[chart_key]["meta"]["chartId"] == 42
 
     def test_ensure_layout_structure_creates_missing(self):

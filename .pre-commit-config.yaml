@@ -24,7 +24,15 @@ repos:
     hooks:
       - id: mypy
         name: mypy (main)
-        args: [--check-untyped-defs]
+        # --follow-imports=silent: still use imported modules for accurate type
+        # inference, but only *report* errors for the files explicitly passed
+        # to this invocation. Without it, a PR touching one file can inherit
+        # pre-existing errors from unrelated modules it merely imports (e.g.
+        # touching only superset/db_engine_specs/databend.py surfaced a
+        # pre-existing, unrelated error in superset/dashboards/permalink/api.py)
+        # -- which defeated scoping `pre-commit run` to a PR's own diff. Files
+        # passed explicitly are unaffected: their errors still surface.
+        args: [--check-untyped-defs, --follow-imports=silent]
         exclude: ^superset-extensions-cli/
         additional_dependencies: [
             types-cachetools,
