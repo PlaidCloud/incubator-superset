@@ -102,6 +102,10 @@ import { PluginChartMekkoWhale } from '@superset-ui/plugin-chart-mekko-whale';
 import { PluginChartBar3D } from '@superset-ui/plugin-chart-bar3d';
 import { PluginChartWhale3D } from '@superset-ui/plugin-chart-whale3d';
 import { PluginChartWaterfall3D } from '@superset-ui/plugin-chart-waterfall3d';
+import { PluginChartScatterRegression } from '@superset-ui/plugin-chart-scatter-regression';
+import { PluginChartBubbleTimeline } from '@superset-ui/plugin-chart-bubble-timeline';
+import { PluginChartBarNegative } from '@superset-ui/plugin-chart-bar-negative';
+import { PluginChartDumbbell } from '@superset-ui/plugin-chart-dumbbell';
 
 export default class MainPreset extends Preset {
   constructor() {
@@ -242,6 +246,10 @@ export default class MainPreset extends Preset {
         new PluginChartBar3D().configure({ key: VizType.Bar3D }),
         new PluginChartWhale3D().configure({ key: VizType.WhaleCurve3D }),
         new PluginChartWaterfall3D().configure({ key: VizType.Waterfall3D }),
+        new PluginChartScatterRegression().configure({ key: VizType.ScatterRegression }),
+        new PluginChartBubbleTimeline().configure({ key: VizType.BubbleTimeline }),
+        new PluginChartBarNegative().configure({ key: VizType.BarNegative }),
+        new PluginChartDumbbell().configure({ key: VizType.Dumbbell }),
         new PluginChartGantt().configure({ key: VizType.Gantt }),
       ],
     });

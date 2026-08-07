@@ -1,0 +1,24 @@
+{
+  "name": "@superset-ui/plugin-chart-bar-negative",
+  "version": "0.1.0",
+  "description": "Superset Chart Plugin - Diverging (Negative) Bar",
+  "sideEffects": false,
+  "main": "lib/index.js",
+  "module": "esm/index.js",
+  "files": [
+    "esm",
+    "lib"
+  ],
+  "private": true,
+  "license": "Apache-2.0",
+  "dependencies": {
+    "echarts": "^5.6.0",
+    "echarts-for-react": "^3.0.3"
+  },
+  "peerDependencies": {
+    "@apache-superset/core": "*",
+    "@superset-ui/chart-controls": "*",
+    "@superset-ui/core": "*",
+    "react": "^17.0.2"
+  }
+}
