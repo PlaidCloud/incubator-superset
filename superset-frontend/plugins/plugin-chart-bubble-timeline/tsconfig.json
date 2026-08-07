@@ -1,0 +1,54 @@
+{
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": ".",
+    "declaration": true,
+    "declarationDir": "lib",
+    "declarationMap": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": false,
+    "jsx": "react-jsx",
+    "lib": [
+      "dom",
+      "esnext"
+    ],
+    "module": "esnext",
+    "moduleResolution": "node",
+    "noEmitOnError": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "outDir": "lib",
+    "paths": {
+      "@apache-superset/core": [
+        "../../packages/superset-core/lib/index.d.ts"
+      ],
+      "@apache-superset/core/*": [
+        "../../packages/superset-core/lib/*/index.d.ts"
+      ]
+    },
+    "pretty": true,
+    "removeComments": false,
+    "rootDir": "src",
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "es2015",
+    "types": [
+      "jest"
+    ],
+    "typeRoots": [
+      "./node_modules/@types"
+    ],
+    "useDefineForClassFields": false,
+    "composite": true,
+    "resolveJsonModule": true
+  },
+  "exclude": [
+    "lib",
+    "test"
+  ],
+  "include": [
+    "src/**/*",
+    "types/**/*"
+  ]
+}
