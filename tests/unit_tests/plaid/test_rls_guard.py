@@ -38,6 +38,9 @@ from plaid import rls_guard
 def app():
     application = Flask(__name__)
     application.config['PLAID_RLS_AUTOMATION_USERNAME'] = 'admin'
+    # A couple of tests write to flask.session (to simulate an OAuth-derived
+    # request), which Flask refuses without a secret key configured.
+    application.config['SECRET_KEY'] = 'test-secret-key'
     return application
 
 
@@ -365,3 +368,193 @@ def test_install_is_idempotent(monkeypatch):
     twice_post = FakeRLSRestApi.post
 
     assert once_post is twice_post
+
+
+
+
+# --- ORM-level guard: proves the reported bypass is actually closed ------
+#
+# Real FAB models (`flask_appbuilder.security.sqla.models`), a real
+# SQLAlchemy session against in-memory SQLite, and the ACTUAL
+# `rls_guard.install_orm_listeners()` -- not a reimplementation of its
+# logic. Each test performs the exact write shape a bypass route would
+# issue and asserts on the real ORM-level effect (row landed or didn't),
+# not on a mocked call.
+
+from flask_appbuilder.security.sqla.models import Group, Model, Role, User
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+
+@pytest.fixture()
+def orm_session():
+    rls_guard.install_orm_listeners()
+    engine = create_engine('sqlite:///:memory:')
+    Model.metadata.create_all(engine)
+    return sessionmaker(bind=engine)()
+
+
+def _user(session, username):
+    u = User(first_name='A', last_name='B', username=username, email=f'{username}@example.com')
+    session.add(u)
+    session.commit()
+    return u
+
+
+def _role(session, name):
+    r = Role(name=name)
+    session.add(r)
+    session.commit()
+    return r
+
+
+def _group(session, name):
+    grp = Group(name=name)
+    session.add(grp)
+    session.commit()
+    return grp
+
+
+def test_role_update_role_users_shape_is_blocked_for_non_automation_user(app, orm_session):
+    """RoleApi.update_role_users: `role.user = [...]`."""
+    with app.test_request_context():
+        g.user = SimpleNamespace(username='attacker')
+        role = _role(orm_session, 'plaid_rls_group-a')
+        attacker = _user(orm_session, 'attacker')
+
+        with pytest.raises(rls_guard.PlaidRlsGuardError):
+            role.user = [attacker]
+
+        assert role.user == []
+
+
+def test_role_update_role_groups_shape_is_blocked(app, orm_session):
+    """RoleApi.update_role_groups: `role.groups = [...]` -- the FIRST
+    reported bypass. Fires via the Group.roles backref."""
+    with app.test_request_context():
+        g.user = SimpleNamespace(username='attacker')
+        role = _role(orm_session, 'plaid_rls_group-a')
+        attacker_group = _group(orm_session, 'attacker-group')
+
+        with pytest.raises(rls_guard.PlaidRlsGuardError):
+            role.groups = [attacker_group]
+
+        assert role.groups == []
+        assert attacker_group.roles == []
+
+
+def test_group_api_post_shape_is_blocked(app, orm_session):
+    """GroupApi POST/PUT: one call setting both `roles` and `users` -- the
+    SECOND reported bypass, and the exact scenario the review asked to be
+    reproduced as a test."""
+    with app.test_request_context():
+        g.user = SimpleNamespace(username='attacker')
+        role = _role(orm_session, 'plaid_rls_group-a')
+        attacker = _user(orm_session, 'attacker')
+        new_group = Group(name='attacker-made-group')
+        orm_session.add(new_group)
+
+        with pytest.raises(rls_guard.PlaidRlsGuardError):
+            new_group.roles = [role]
+            new_group.users = [attacker]
+
+        # The role assignment is what must be refused; assert the
+        # entitlement was never granted regardless of which of the two
+        # assignments the exception interrupted.
+        assert role not in new_group.roles
+
+
+def test_user_api_put_roles_shape_is_blocked(app, orm_session):
+    """UserApi.put with `roles`: `user.roles = [...]` -- the THIRD reported
+    bypass. Fires via the Role.user backref."""
+    with app.test_request_context():
+        g.user = SimpleNamespace(username='attacker')
+        role = _role(orm_session, 'plaid_rls_group-a')
+        attacker = _user(orm_session, 'attacker')
+
+        with pytest.raises(rls_guard.PlaidRlsGuardError):
+            attacker.roles = [role]
+
+        assert attacker.roles == []
+
+
+def test_user_api_put_groups_shape_is_blocked_when_group_holds_protected_role(app, orm_session):
+    """UserApi.put with `groups`, targeting a group that ALREADY holds a
+    protected role -- the fourth path: no write to ab_group_role at all,
+    only ab_user_group, so the previous three checks alone would miss it.
+    Fires via the Group.users backref."""
+    with app.test_request_context():
+        role = _role(orm_session, 'plaid_rls_group-a')
+        holder_group = _group(orm_session, 'holder-group')
+        # Grant the group's role as the automation principal first, so only
+        # the user-membership step below is under test.
+        g.user = SimpleNamespace(username='admin')
+        holder_group.roles = [role]
+        orm_session.commit()
+
+        g.user = SimpleNamespace(username='attacker')
+        attacker = _user(orm_session, 'attacker')
+        with pytest.raises(rls_guard.PlaidRlsGuardError):
+            attacker.groups = [holder_group]
+
+        assert attacker.groups == []
+        assert attacker not in holder_group.users
+
+
+def test_unprotected_role_is_unaffected_by_any_of_the_four_paths(app, orm_session):
+    """The guard must not become a blanket lock on all role/group
+    administration -- only `plaid_rls_*`-prefixed resources."""
+    with app.test_request_context():
+        g.user = SimpleNamespace(username='attacker')
+        ordinary_role = _role(orm_session, 'CONTRACTS')
+        attacker = _user(orm_session, 'attacker')
+        ordinary_group = _group(orm_session, 'sales-team')
+
+        ordinary_role.user = [attacker]
+        ordinary_group.roles = [ordinary_role]
+        ordinary_group.users = [attacker]
+
+        assert ordinary_role.user == [attacker]
+        assert ordinary_role in ordinary_group.roles
+
+
+def test_automation_principal_can_still_grant_every_path(app, orm_session):
+    with app.test_request_context():
+        g.user = SimpleNamespace(username='admin')
+        role = _role(orm_session, 'plaid_rls_group-a')
+        member = _user(orm_session, 'legit-member')
+        role.user = [member]
+        assert role.user == [member]
+
+        group = _group(orm_session, 'reconciler-group')
+        group.roles = [role]
+        assert role in group.roles
+
+
+def test_oauth_session_cannot_satisfy_automation_principal_even_with_matching_username(app, orm_session):
+    """Non-blocking review item: a Keycloak OAuth login's username is
+    attacker-controlled input, not proof of identity. An OAuth-derived
+    session must be refused even if its username happens to be 'admin'."""
+    with app.test_request_context():
+        from flask import session
+        session['oauth'] = ('token', 'secret')
+        g.user = SimpleNamespace(username='admin')
+
+        role = _role(orm_session, 'plaid_rls_group-a')
+        attacker = _user(orm_session, 'attacker-as-admin')
+        with pytest.raises(rls_guard.PlaidRlsGuardError):
+            role.user = [attacker]
+
+
+def test_install_orm_listeners_is_idempotent(app, orm_session):
+    with app.test_request_context():
+        rls_guard.install_orm_listeners()
+        rls_guard.install_orm_listeners()
+        # No duplicate-listener double-raise / double-log; a single veto
+        # still refuses exactly once (no assertion error from being called
+        # twice with conflicting internal state).
+        g.user = SimpleNamespace(username='attacker')
+        role = _role(orm_session, 'plaid_rls_group-a')
+        attacker = _user(orm_session, 'attacker')
+        with pytest.raises(rls_guard.PlaidRlsGuardError):
+            role.user = [attacker]

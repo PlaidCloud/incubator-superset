@@ -99,6 +99,11 @@ class PlaidSecurityManager(SupersetSecurityManager):
         # module-load time. See `plaid/rls_guard.py`.
         rls_guard.install()
 
+        # The actual control for role/group escalation -- see rls_guard's
+        # module docstring "What this protects" section for why route
+        # patching alone (RoleApi above) is not enough on its own.
+        rls_guard.install_orm_listeners()
+
         if self.auth_type == AUTH_OAUTH:
             self.authoauthview = PlaidAuthOAuthView
 
