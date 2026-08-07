@@ -387,6 +387,16 @@ AUTH_TYPE = AUTH_DB
 # Uncomment to setup Full admin role name
 # AUTH_ROLE_ADMIN = 'Admin'
 
+# sc-23432 Part 4 -- the Superset username PlaidCloud's own service calls
+# authenticate as (`POST /api/v1/security/login`, provider `db` -- never
+# Keycloak OAuth). `plaid/rls_guard.py` refuses every `plaid_rls_*` role/rule
+# write from any OTHER Superset identity, including one holding `Admin` via a
+# Keycloak `is_admin` claim -- a customer workspace admin is always a
+# DIFFERENT `ab_user` row than this one. Must match the tenant's
+# `cfg.superset.username` (plaid's `plaidcloud-config`); default matches
+# plaid's own default. Empty/unset fails CLOSED, not open.
+PLAID_RLS_AUTOMATION_USERNAME = 'admin'
+
 # Uncomment to setup Public role name, no authentication needed
 # AUTH_ROLE_PUBLIC = 'Public'
 

@@ -19,11 +19,13 @@ from requests.exceptions import HTTPError
 
 from plaidcloud.rpc.connection.jsonrpc import SimpleRPC
 from plaid.auth_oidc import PlaidAuthOAuthView
+from plaid import rls_guard
 # from plaid.blacklist_api import is_token_blacklisted
 # from plaid.auth_oidc import AuthOIDCView
 # from plaid.blacklist_api import TokenBlacklistApi
 
 from superset.security import SupersetSecurityManager
+from superset.security.manager import SupersetRoleApi
 
 from sqlalchemy import func
 
@@ -39,6 +41,14 @@ log = logging.getLogger(__name__)
 USE_REFRESH_TOKENS = False
 PROJECT_ACCESS = 'project_access'
 
+
+class _PlaidGuardedRoleApi(rls_guard.PlaidRoleApi, SupersetRoleApi):
+    """`PlaidRoleApi`'s guard methods call `super()` on the allowed path,
+    which MRO resolves to `SupersetRoleApi` / FAB's `RoleApi` -- so a
+    legitimate write (the automation principal, or a role outside the
+    `plaid_rls_` prefix) behaves exactly as upstream, including
+    `SupersetRoleApi.pre_delete`'s permission-clearing override.
+    """
 
 
 class PlaidSecurityManager(SupersetSecurityManager):
@@ -66,6 +76,10 @@ class PlaidSecurityManager(SupersetSecurityManager):
         "UserRegistrationsRestAPI",
     }
 
+    # sc-23432 Part 4 -- protects `plaid_rls_*` roles from write access by
+    # anyone but the automation principal. See `plaid/rls_guard.py`.
+    role_api = _PlaidGuardedRoleApi
+
     def __init__(self, appbuilder):
         # These allowed me to turn this on without adjusting the superset_config.py
         # app = appbuilder.get_app
@@ -73,6 +87,17 @@ class PlaidSecurityManager(SupersetSecurityManager):
         # app.config['AUTH_USER_REGISTRATION'] = True
         # app.config['AUTH_ROLES_SYNC_AT_LOGIN'] = True
         super().__init__(appbuilder)
+
+        # sc-23432 Part 4 -- the RLS rules API (`RowLevelSecurityFilter`) has
+        # no override attribute like `role_api` above; `RLSRestApi`'s write
+        # routes are patched in place instead. Here, not at module import
+        # time: `RLSRestApi` pulls in Superset's command/DAO layer, which
+        # this constructor -- running after `super().__init__`, well after
+        # Superset's own app factory has set up its view registry, and still
+        # well before the app accepts its first request -- is a safer point
+        # to depend on than being importable at `plaid.security`'s own
+        # module-load time. See `plaid/rls_guard.py`.
+        rls_guard.install()
 
         if self.auth_type == AUTH_OAUTH:
             self.authoauthview = PlaidAuthOAuthView
