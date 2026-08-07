@@ -272,10 +272,10 @@ def test_nested_conditions(sql: str, dialect: str, expected: str) -> None:
         "databricks",
         "presto",
         "trino",
+        "databend",
         # Unknown engines should return SQL unchanged
         "unknown_database_engine",
         "crate",
-        "databend",
         "db2",
         "denodo",
         "dynamodb",
@@ -296,7 +296,6 @@ def test_transpilation_does_not_error(dialect: str) -> None:
     [
         "unknown_database_engine",
         "crate",
-        "databend",
         "db2",
         "denodo",
         "dynamodb",
