@@ -110,8 +110,14 @@ Superset differently:
   ``SupersetSecurityManager`` sets it to ``SupersetRoleApi`` (see
   ``superset/security/manager.py``) so that FAB's own
   ``register_views()`` -> ``self.appbuilder.add_api(self.role_api)`` picks up
-  the subclass. ``PlaidRoleApi`` here extends that same subclass; wiring it in
-  is one line on ``PlaidSecurityManager`` (``role_api = PlaidRoleApi``).
+  the subclass. ``PlaidRoleApi`` here extends ``RoleApi`` directly (the same
+  class ``SupersetRoleApi`` extends) -- not as a bare mixin: it is always
+  combined with ``SupersetRoleApi`` at the point it is actually used
+  (``plaid/security.py``'s ``_PlaidGuardedRoleApi``), and declaring the real
+  shared ancestor is both correct typing (mypy can see ``post``/``put``/
+  ``delete``/``update_role_users``/``datamodel`` are genuinely inherited, not
+  merely hoped for) and a truer statement of the contract than an untyped
+  mixin would be.
 * RLS rules: ``RLSRestApi`` (``superset/row_level_security/api.py``) has no
   equivalent override attribute -- Superset registers the class directly. Its
   ``post`` / ``put`` / ``delete`` / ``bulk_delete`` are monkeypatched in place
@@ -128,8 +134,15 @@ from __future__ import annotations
 
 import functools
 import logging
+from typing import Any, Callable, TYPE_CHECKING
 
-from flask import current_app, g
+from flask import current_app, g, Response
+from flask_appbuilder.security.sqla.apis import RoleApi
+
+if TYPE_CHECKING:
+    from flask_appbuilder.api import BaseApi
+    from flask_appbuilder.security.sqla.models import Group, Role, User
+    from sqlalchemy.orm.attributes import Event
 
 logger = logging.getLogger(__name__)
 
@@ -137,8 +150,8 @@ logger = logging.getLogger(__name__)
 # a guard). Rules use this stem with either `_` (Regular) or `guard_`
 # (Base guard) after it -- `is_protected_rule_name` checks the shorter,
 # underscore-less stem so both survive one check.
-PLAID_RLS_ROLE_PREFIX = 'plaid_rls_'
-PLAID_RLS_NAME_STEM = 'plaid_rls'
+PLAID_RLS_ROLE_PREFIX = "plaid_rls_"
+PLAID_RLS_NAME_STEM = "plaid_rls"
 
 DENIAL_MESSAGE = (
     "{name!r} is a PlaidCloud-generated row-access resource. It can only be "
@@ -146,12 +159,16 @@ DENIAL_MESSAGE = (
 )
 
 
-def is_protected_role_name(name) -> bool:
-    return bool(name) and name.startswith(PLAID_RLS_ROLE_PREFIX)
+def is_protected_role_name(name: str | None) -> bool:
+    # `is not None` rather than `bool(name)`: both treat `''` the same way
+    # (an empty string is falsy either way, and `''.startswith(...)` would
+    # correctly return False regardless), but only `is not None` is a form
+    # mypy recognizes as narrowing `name` from `str | None` to `str`.
+    return name is not None and name.startswith(PLAID_RLS_ROLE_PREFIX)
 
 
-def is_protected_rule_name(name) -> bool:
-    return bool(name) and name.startswith(PLAID_RLS_NAME_STEM)
+def is_protected_rule_name(name: str | None) -> bool:
+    return name is not None and name.startswith(PLAID_RLS_NAME_STEM)
 
 
 def _session_is_oauth() -> bool:
@@ -163,7 +180,8 @@ def _session_is_oauth() -> bool:
     username alone is attacker-controlled input on the OAuth path.
     """
     from flask import session
-    return 'oauth' in session
+
+    return "oauth" in session
 
 
 def is_automation_principal() -> bool:
@@ -173,44 +191,59 @@ def is_automation_principal() -> bool:
     must never be read as "no restriction." Also fails closed on an
     OAuth-derived session regardless of username -- see `_session_is_oauth`.
     """
-    automation_username = current_app.config.get('PLAID_RLS_AUTOMATION_USERNAME')
+    automation_username = current_app.config.get("PLAID_RLS_AUTOMATION_USERNAME")
     if not automation_username:
         return False
     if _session_is_oauth():
         return False
-    user = getattr(g, 'user', None)
-    username = getattr(user, 'username', None)
+    user = getattr(g, "user", None)
+    username = getattr(user, "username", None)
     return username is not None and username == automation_username
 
 
-def _denied(api, name):
+def _denied(api: "BaseApi", name: str | None) -> Response:
+    """Build the refusal response. Deliberately calls the generic
+    ``BaseApi.response(code, **kwargs)`` rather than ``response_403()`` --
+    FAB 5.0.2's ``response_403`` takes NO ``message`` argument at all
+    (``def response_403(self) -> Response``, hardcoded to "Forbidden"; no
+    subclass in FAB or this fork overrides it). ``response_400``/
+    ``response_422`` both build their own message the same way this does.
+    The earlier version of this file called ``response_403(message=...)``,
+    which would have raised ``TypeError`` at the first real invocation --
+    masked in testing by a hand-rolled mock that (wrongly) accepted the
+    kwarg the real method does not.
+    """
     logger.warning(
         "Blocked write to protected RLS resource %r by user %r (automation "
         "principal required).",
         name,
-        getattr(getattr(g, 'user', None), 'username', None),
+        getattr(getattr(g, "user", None), "username", None),
     )
-    return api.response_403(message=DENIAL_MESSAGE.format(name=name))
+    return api.response(403, message=DENIAL_MESSAGE.format(name=name))
 
 
-class PlaidRoleApi:
-    """Mixin applied ahead of the vendor Role API subclass -- see wiring notes
-    in ``plaid/security.py``. Guards the four writes that can affect a
-    `plaid_rls_*` role's membership or existence; read/list/permission routes
-    are untouched.
+class PlaidRoleApi(RoleApi):
+    """Guard mixin for the vendor Role API -- see the wiring notes in the
+    module docstring and in ``plaid/security.py``. Guards the four writes
+    that can affect a `plaid_rls_*` role's membership or existence;
+    read/list/permission routes are untouched. Declared as a `RoleApi`
+    subclass (not a bare mixin) because it is always combined with
+    `SupersetRoleApi` at its point of use -- see the module docstring.
     """
 
-    def post(self):
+    def post(self) -> Response:
         from flask import request
-        name = (request.json or {}).get('name') if request.is_json else None
+
+        name = (request.json or {}).get("name") if request.is_json else None
         if is_protected_role_name(name) and not is_automation_principal():
             return _denied(self, name)
         return super().post()
 
-    def put(self, pk):
+    def put(self, pk: int) -> Response:
         from flask import request
+
         existing = self.datamodel.get(pk)
-        requested_name = (request.json or {}).get('name') if request.is_json else None
+        requested_name = (request.json or {}).get("name") if request.is_json else None
         current_name = existing.name if existing else None
         # Whichever of the two names is actually the protected one drives
         # both the check and the message -- a rename INTO the prefix must
@@ -224,14 +257,14 @@ class PlaidRoleApi:
             return _denied(self, protected_name)
         return super().put(pk)
 
-    def delete(self, pk):
+    def delete(self, pk: int) -> Response:
         existing = self.datamodel.get(pk)
         name = existing.name if existing else None
         if is_protected_role_name(name) and not is_automation_principal():
             return _denied(self, name)
         return super().delete(pk)
 
-    def update_role_users(self, pk):
+    def update_role_users(self, pk: int) -> Response:
         existing = self.datamodel.get(pk)
         name = existing.name if existing else None
         if is_protected_role_name(name) and not is_automation_principal():
@@ -239,47 +272,56 @@ class PlaidRoleApi:
         return super().update_role_users(pk)
 
 
-def _guard_rls_rule_write(get_names):
+GetNamesFn = Callable[..., list[str]]
+RlsRouteFn = Callable[..., Response]
+
+
+def _guard_rls_rule_write(get_names: GetNamesFn) -> Callable[[RlsRouteFn], RlsRouteFn]:
     """Wrap an `RLSRestApi` method: block it when any name `get_names(self,
     *args, **kwargs)` returns is protected and the caller is not the
     automation principal. `get_names` returns a list so `bulk_delete` (many
     rules per call) and the single-item routes share one wrapper.
     """
-    def decorator(method):
+
+    def decorator(method: RlsRouteFn) -> RlsRouteFn:
         @functools.wraps(method)
-        def wrapped(self, *args, **kwargs):
+        def wrapped(self: "BaseApi", *args: Any, **kwargs: Any) -> Response:
             names = get_names(self, *args, **kwargs)
             protected = [n for n in names if is_protected_rule_name(n)]
             if protected and not is_automation_principal():
                 return _denied(self, protected[0])
             return method(self, *args, **kwargs)
+
         return wrapped
+
     return decorator
 
 
-def _post_names(api):
+def _post_names(api: "BaseApi") -> list[str]:
     from flask import request
-    name = (request.json or {}).get('name') if request.is_json else None
+
+    name = (request.json or {}).get("name") if request.is_json else None
     return [name] if name else []
 
 
-def _put_names(api, pk):
+def _put_names(api: "BaseApi", pk: int) -> list[str]:
     from flask import request
+
     existing = api.datamodel.get(pk)
     names = [existing.name] if existing else []
-    requested = (request.json or {}).get('name') if request.is_json else None
+    requested = (request.json or {}).get("name") if request.is_json else None
     if requested:
         names.append(requested)
     return names
 
 
-def _delete_names(api, pk):
+def _delete_names(api: "BaseApi", pk: int) -> list[str]:
     existing = api.datamodel.get(pk)
     return [existing.name] if existing else []
 
 
-def _bulk_delete_names(api, **kwargs):
-    item_ids = kwargs.get('rison') or []
+def _bulk_delete_names(api: "BaseApi", **kwargs: Any) -> list[str]:
+    item_ids = kwargs.get("rison") or []
     names = []
     for pk in item_ids:
         row = api.datamodel.get(pk)
@@ -294,15 +336,17 @@ def install() -> None:
     """
     from superset.row_level_security.api import RLSRestApi
 
-    if getattr(RLSRestApi, '_plaid_rls_guard_installed', False):
+    if getattr(RLSRestApi, "_plaid_rls_guard_installed", False):
         return
 
     RLSRestApi.post = _guard_rls_rule_write(_post_names)(RLSRestApi.post)
     RLSRestApi.put = _guard_rls_rule_write(_put_names)(RLSRestApi.put)
     RLSRestApi.delete = _guard_rls_rule_write(_delete_names)(RLSRestApi.delete)
-    RLSRestApi.bulk_delete = _guard_rls_rule_write(_bulk_delete_names)(RLSRestApi.bulk_delete)
+    RLSRestApi.bulk_delete = _guard_rls_rule_write(_bulk_delete_names)(
+        RLSRestApi.bulk_delete
+    )
     RLSRestApi._plaid_rls_guard_installed = True
-    logger.info('plaid_rls write guard installed on RLSRestApi.')
+    logger.info("plaid_rls write guard installed on RLSRestApi.")
 
 
 # --- ORM-level guard: the actual control -----------------------------------
@@ -326,52 +370,55 @@ class PlaidRlsGuardError(Exception):
     """
 
 
-def _group_holds_protected_role(group) -> bool:
-    return any(is_protected_role_name(getattr(r, 'name', None)) for r in group.roles)
+def _group_holds_protected_role(group: "Group") -> bool:
+    return any(is_protected_role_name(getattr(r, "name", None)) for r in group.roles)
 
 
-def _veto_protected_role_grant(role_name) -> None:
+def _veto_protected_role_grant(role_name: str | None) -> None:
     if is_protected_role_name(role_name) and not is_automation_principal():
         logger.warning(
             "Blocked ORM-level grant of protected role %r to user %r "
             "(automation principal required).",
             role_name,
-            getattr(getattr(g, 'user', None), 'username', None),
+            getattr(getattr(g, "user", None), "username", None),
         )
         raise PlaidRlsGuardError(DENIAL_MESSAGE.format(name=role_name))
 
 
-def _guard_role_user_append(role, user, initiator):  # noqa: ARG001 -- SQLAlchemy event signature
+def _guard_role_user_append(role: "Role", user: "User", initiator: "Event") -> None:
     """Fires on `role.user.append(...)` / `role.user = [...]` (RoleApi.
     update_role_users' shape) AND on `user.roles.append(role)` / `user.roles
     = [...]` via the backref (UserApi.put's shape) -- empirically confirmed
     both directions fire this same event; see the test suite.
     """
-    _veto_protected_role_grant(getattr(role, 'name', None))
+    del user, initiator  # unused -- SQLAlchemy's event signature is fixed
+    _veto_protected_role_grant(getattr(role, "name", None))
 
 
-def _guard_group_role_append(group, role, initiator):  # noqa: ARG001
+def _guard_group_role_append(group: "Group", role: "Role", initiator: "Event") -> None:
     """Fires on `group.roles.append(...)` / `group.roles = [...]` (GroupApi's
     shape) AND on `role.groups.append(group)` / `role.groups = [...]` via the
     backref (RoleApi.update_role_groups' shape)."""
-    _veto_protected_role_grant(getattr(role, 'name', None))
+    del group, initiator  # unused -- SQLAlchemy's event signature is fixed
+    _veto_protected_role_grant(getattr(role, "name", None))
 
 
-def _guard_group_user_append(group, user, initiator):  # noqa: ARG001
+def _guard_group_user_append(group: "Group", user: "User", initiator: "Event") -> None:
     """Adding a user to a group that ALREADY holds a protected role grants
     that role's entitlement without ever writing `ab_group_role` -- this is
     the third leg (GroupApi's `users` field, and UserApi.put's `groups`
     field via the backref) and needs its own check: is the GROUP protected,
     not the (irrelevant here) role name."""
+    del initiator  # unused -- SQLAlchemy's event signature is fixed
     if not is_automation_principal() and _group_holds_protected_role(group):
         logger.warning(
             "Blocked ORM-level group-membership grant into %r, which holds a "
             "protected role, for user %r (automation principal required).",
-            getattr(group, 'name', None),
-            getattr(user, 'username', None),
+            getattr(group, "name", None),
+            getattr(user, "username", None),
         )
         raise PlaidRlsGuardError(
-            f'{getattr(group, "name", None)!r} holds a PlaidCloud-generated '
+            f"{getattr(group, 'name', None)!r} holds a PlaidCloud-generated "
             "row-access role. Membership can only be written by PlaidCloud's "
             "own automation."
         )
@@ -389,13 +436,13 @@ def install_orm_listeners() -> None:
     """
     from flask_appbuilder.security.sqla.models import Group, Role
 
-    if getattr(Role, '_plaid_rls_orm_guard_installed', False):
+    if getattr(Role, "_plaid_rls_orm_guard_installed", False):
         return
 
     from sqlalchemy import event
 
-    event.listen(Role.user, 'append', _guard_role_user_append)
-    event.listen(Group.roles, 'append', _guard_group_role_append)
-    event.listen(Group.users, 'append', _guard_group_user_append)
+    event.listen(Role.user, "append", _guard_role_user_append)
+    event.listen(Group.roles, "append", _guard_group_role_append)
+    event.listen(Group.users, "append", _guard_group_user_append)
     Role._plaid_rls_orm_guard_installed = True
-    logger.info('plaid_rls ORM-level role/group guard installed.')
+    logger.info("plaid_rls ORM-level role/group guard installed.")
