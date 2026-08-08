@@ -165,7 +165,9 @@ class PlaidSecurityManager(SupersetSecurityManager):
                 "first_name": data.get("given_name", ""),
                 "last_name": data.get("family_name", ""),
                 "email": data.get("email", ""),
-                "role_keys": role_keys,  # These role_keys get mapped to real roles via the AUTH_ROLES_MAPPING config value
+                # These role_keys get mapped to real roles via the
+                # AUTH_ROLES_MAPPING config value
+                "role_keys": role_keys,
             }
 
     @override
@@ -340,8 +342,9 @@ class PlaidSecurityManager(SupersetSecurityManager):
                     logout_user()
                     session.clear()
                     raise Exception(
-                        "There were problems authenticating your access with PlaidCloud. "
-                        "If you see this message, please refresh your browser"
+                        "There were problems authenticating your access with "
+                        "PlaidCloud. If you see this message, please refresh "
+                        "your browser"
                     ) from e
                 raise
 
@@ -374,7 +377,8 @@ class PlaidSecurityManager(SupersetSecurityManager):
         log.info(f"Checking access to datasource db id: {datasource.database.uuid}")
         if datasource.schema is None:
             log.info(f"No Schema: {datasource}")
-            # Call the base method if there is no schema since there isn't a plaid schema.
+            # Call the base method if there is no schema since there isn't a
+            # plaid schema.
             return super().can_access_datasource(datasource)
 
         project_id = str(datasource.database.uuid)
@@ -402,7 +406,9 @@ class PlaidSecurityManager(SupersetSecurityManager):
     #     log.info(f"Fetched user's projects in {end - start} seconds.")
     #     project_uuids = {str(uuid.UUID(project['id'])) for project in projects}
     #     log.info(f"Project IDs: {project_uuids}")
-    #     return self.get_session.query(Database.id).filter(Database.uuid.in_(project_uuids))
+    #     return self.get_session.query(Database.id).filter(
+    #         Database.uuid.in_(project_uuids)
+    #     )
 
     # Not actually called anywhere any more! Success!
     # def get_project_ids(self):
@@ -426,12 +432,19 @@ class PlaidSecurityManager(SupersetSecurityManager):
         return super().user_view_menu_names(permission_name)
 
     # - Database.perm!
-    # So I think maybe the other thing to do is to override user_view_menu_names, and add accessible projects in if it's queried on "database_access "?
-    # Superset's get_accessible_databases is based on self.user_view_menu_names("database_access"), and it uses DATABASE_PERM_REGEX to extract the id, I think?
-    # According to unpack_database_and_schema, it looks like a schema_permission looks like [database_name].[schema|table] , I think with the square brackets included.
+    # So I think maybe the other thing to do is to override
+    # user_view_menu_names, and add accessible projects in if it's queried on
+    # "database_access "?
+    # Superset's get_accessible_databases is based on
+    # self.user_view_menu_names("database_access"), and it uses
+    # DATABASE_PERM_REGEX to extract the id, I think?
+    # According to unpack_database_and_schema, it looks like a
+    # schema_permission looks like [database_name].[schema|table] , I think
+    # with the square brackets included.
     # unpack_database_and_schema is run on the things erturned by user_view_menu_names
     # so is the regex in get_accessible_databases()
-    # Looks like maybe it's [database_name].[schema|table].id:<id> (where the first id is literal, the second is an id)
+    # Looks like maybe it's [database_name].[schema|table].id:<id> (where the
+    # first id is literal, the second is an id)
     # Actual examples:
     # ('all_database_access',),
     # ('all_query_access',),
@@ -447,9 +460,11 @@ class PlaidSecurityManager(SupersetSecurityManager):
     # ('[International Motors (21dc)].[ResourceDriverSplitRecord](id:52)',),
     # ('[International Motors (21dc)].[ResourceDriverValueRecord](id:53)',)
 
-    # Not actually necessary to override this, since it depends on user_view_menu_names(), and we're overriding that.
+    # Not actually necessary to override this, since it depends on
+    # user_view_menu_names(), and we're overriding that.
     # def get_accessible_databases():
-    #     # Return any databases that would be accessible under superset's security system, and also any
+    #     # Return any databases that would be accessible under superset's
+    #     # security system, and also any
     #     # projects accessible under plaid's security system.
     #     return self.get_project_ids() + super().get_accessible_databases()
 
@@ -477,7 +492,10 @@ class PlaidSecurityManager(SupersetSecurityManager):
     #     start = time.time()
     #     tables = rpc.analyze.table.published_tables_by_project()
     #     end = time.time()
-    #     table_ids = {str(uuid.UUID(table['id'].replace('analyzetable_', ''))) for table in tables}
+    #     table_ids = {
+    #         str(uuid.UUID(table['id'].replace('analyzetable_', '')))
+    #         for table in tables
+    #     }
     #     log.debug(f"Fetched table IDs in {end - start}: {table_ids}")
     #     return table_ids
 
@@ -533,11 +551,13 @@ class PlaidSecurityManager(SupersetSecurityManager):
                             return True
 
                         if USE_REFRESH_TOKENS:
-                            # to do the below, it needs custom `set_oauth_session` to save the `oauth_token_dict`
+                            # to do the below, it needs custom
+                            # `set_oauth_session` to save the `oauth_token_dict`
                             provider = session["oauth_provider"]
                             token_dict = session["oauth_token_dict"]
                             logging.info("Provider %s, Token %s", provider, token_dict)
-                            # this will refresh the token if it is expired (via `token_update` listener)
+                            # this will refresh the token if it is expired
+                            # (via `token_update` listener)
                             self.appbuilder.sm.oauth_remotes[
                                 provider
                             ].token = token_dict
@@ -546,16 +566,28 @@ class PlaidSecurityManager(SupersetSecurityManager):
                             )
                             user_resp.raise_for_status()
                             logging.info("Got user response")
-                            # ToDo - probably should check token now refreshed, or use the introspection
+                            # ToDo - probably should check token now
+                            # refreshed, or use the introspection
 
-                            # ToDo - I could not get introspection to work, I was calling from FlaskOAuth2App, but needs to be and OAuth2Session which is the _get_oauth_client() of the Flask thing
-                            # maybe we don't need to introspect anyway, can just check expiry.
+                            # ToDo - I could not get introspection to work, I
+                            # was calling from FlaskOAuth2App, but needs to be
+                            # and OAuth2Session which is the
+                            # _get_oauth_client() of the Flask thing
+                            # maybe we don't need to introspect anyway, can
+                            # just check expiry.
 
                             # # new token now stored in session
                             # token_dict = session['oauth_token_dict']
-                            # logging.info('Provider %s, Revised Token %s', provider, token_dict)
-                            # token_endpoint = self.appbuilder.sm.oauth.plaidkeycloak.access_token_url
-                            # intro_resp = self.appbuilder.sm.oauth_remotes[provider].introspect_token(token_endpoint, token=token_dict)
+                            # logging.info(
+                            #     'Provider %s, Revised Token %s', provider, token_dict
+                            # )
+                            # token_endpoint = (
+                            #     self.appbuilder.sm.oauth.plaidkeycloak
+                            #     .access_token_url
+                            # )
+                            # intro_resp = self.appbuilder.sm.oauth_remotes[
+                            #     provider
+                            # ].introspect_token(token_endpoint, token=token_dict)
                             # intro_resp.raise_for_status()
                             # logging.info('Did introspection')
                             # token_info = intro_resp.json()
