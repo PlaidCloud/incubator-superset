@@ -2,7 +2,6 @@
 """
 Plaid Security Class for Superset
 """
-
 import logging
 import time
 import uuid
