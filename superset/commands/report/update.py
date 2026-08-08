@@ -120,6 +120,14 @@ class UpdateReportScheduleCommand(UpdateMixin, BaseReportScheduleCommand):
                 exceptions.append(DatabaseNotFoundValidationError())
             self._properties["database"] = database
 
+        # Enforce query access to the alert's target database (create-time parity):
+        # visibility alone must not authorize arbitrary SQL against the whole database.
+        if report_type == ReportScheduleType.ALERT and has_database and not exceptions:
+            self.raise_for_alert_database_access(
+                self._properties.get("database") or self._model.database,
+                self._properties.get("sql") or self._model.sql,
+            )
+
         # validate report frequency
         try:
             self.validate_report_frequency(
