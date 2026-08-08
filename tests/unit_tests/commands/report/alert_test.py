@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from unittest.mock import Mock
 from uuid import uuid4
 
 import numpy as np
@@ -510,7 +511,7 @@ def _alert_command_with_db(
     mocker: MockerFixture,
     *,
     rendered_sql: str = "SELECT value FROM metrics",
-) -> tuple[AlertCommand, object]:
+) -> tuple[AlertCommand, Mock]:
     """Wire a real ``AlertCommand._execute_query`` with a mocked database."""
     database = mocker.Mock()
     database.db_engine_spec.engine = "postgresql"
@@ -587,15 +588,15 @@ def test_execute_query_passthrough_when_no_rls(mocker: MockerFixture) -> None:
     """Un-governed SQL is passed through byte-identical (no reformat)."""
     rendered = "SELECT value FROM metrics"
     command, database = _alert_command_with_db(mocker, rendered_sql=rendered)
-    mocker.patch.object(security_manager, "raise_for_access")
+    raise_for_access = mocker.patch.object(security_manager, "raise_for_access")
     mocker.patch("superset.commands.report.alert.apply_rls", return_value=False)
 
     command._execute_query()
 
     assert database.get_df.call_args.kwargs["sql"] == rendered
-    security_manager.raise_for_access.assert_called_once()
-    assert security_manager.raise_for_access.call_args.kwargs["sql"] == rendered
-    assert security_manager.raise_for_access.call_args.kwargs["database"] is database
+    raise_for_access.assert_called_once()
+    assert raise_for_access.call_args.kwargs["sql"] == rendered
+    assert raise_for_access.call_args.kwargs["database"] is database
 
 
 def test_execute_query_applies_rls_to_every_statement(
