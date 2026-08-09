@@ -121,13 +121,28 @@ Superset differently:
 * RLS rules: ``RLSRestApi`` (``superset/row_level_security/api.py``) has no
   equivalent override attribute -- Superset registers the class directly. Its
   ``post`` / ``put`` / ``delete`` / ``bulk_delete`` are monkeypatched in place
-  by ``install()`` below, called from ``PlaidSecurityManager.__init__`` --
-  which Superset's app factory runs during app construction, well before the
-  app accepts its first request, and after ``super().__init__`` has already
-  pulled in Superset's own security wiring. Patching the class attribute is
-  sufficient: Python resolves ``self.post(...)`` from the class's current
+  by ``install()`` below. Importing ``RLSRestApi`` transitively reaches
+  ``superset.db_engine_specs.base``, whose module-scope Marshmallow schemas
+  call Flask-Babel's ``gettext`` at import time -- which raises
+  ``KeyError: 'babel'`` if run before FAB's own ``AppBuilder.init_app``
+  registers Babel on the app (``flask_appbuilder/base.py``: the security
+  manager is constructed at line 201, Babel at line 202). Calling
+  ``install()`` eagerly from ``PlaidSecurityManager.__init__`` -- which runs
+  at that line-201 construction step -- therefore crashed every process that
+  builds the app, web, celery worker, and celerybeat alike (sc-23432). It is
+  instead registered as a Flask ``before_request`` hook
+  (``current_app.before_request(rls_guard.install)``, in
+  ``plaid/security.py``): FAB registers its own
+  ``before_request(self.sm.before_request)`` at ``base.py:207``, strictly
+  after Babel exists, and no request is dispatched until long after
+  ``create_app()`` returns, so by the time any request reaches a route,
+  Babel is present and ``install()`` -- idempotent, see below -- has already
+  patched the class before that request's view function runs. Patching the
+  class attribute (rather than the instance) is what makes this safe to
+  defer at all: Python resolves ``self.post(...)`` from the class's current
   ``__dict__`` at CALL time, not at route-registration time, so ordering
-  relative to ``add_api(RLSRestApi)`` does not matter.
+  relative to ``add_api(RLSRestApi)`` -- which still happens earlier, in
+  ``init_views()`` -- does not matter either.
 """
 
 from __future__ import annotations

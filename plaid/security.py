@@ -10,7 +10,7 @@ from urllib.parse import urljoin
 
 import jwt
 from authlib.integrations.flask_client import token_update
-from flask import session
+from flask import current_app, session
 from flask_appbuilder import Model
 from flask_appbuilder.security.manager import AUTH_OAUTH
 from flask_login import logout_user
@@ -86,21 +86,51 @@ class PlaidSecurityManager(SupersetSecurityManager):
         # app.config['AUTH_ROLES_SYNC_AT_LOGIN'] = True
         super().__init__(appbuilder)
 
-        # sc-23432 Part 4 -- the RLS rules API (`RowLevelSecurityFilter`) has
-        # no override attribute like `role_api` above; `RLSRestApi`'s write
-        # routes are patched in place instead. Here, not at module import
-        # time: `RLSRestApi` pulls in Superset's command/DAO layer, which
-        # this constructor -- running after `super().__init__`, well after
-        # Superset's own app factory has set up its view registry, and still
-        # well before the app accepts its first request -- is a safer point
-        # to depend on than being importable at `plaid.security`'s own
-        # module-load time. See `plaid/rls_guard.py`.
-        rls_guard.install()
-
-        # The actual control for role/group escalation -- see rls_guard's
-        # module docstring "What this protects" section for why route
-        # patching alone (RoleApi above) is not enough on its own.
+        # sc-23432 Part 4 -- install_orm_listeners() only imports FAB's own
+        # `flask_appbuilder.security.sqla.models` (Group, Role) -- it never
+        # touches Superset's command/DAO/db_engine_specs layer, so it is safe
+        # to run right here, unconditionally, in every process that
+        # constructs a security manager (web, celery worker, celerybeat,
+        # CLI). This is the actual control for role/group escalation -- see
+        # rls_guard's module docstring "What this protects" section for why
+        # route patching alone (RoleApi above, and `install()` below) is not
+        # enough on its own.
         rls_guard.install_orm_listeners()
+
+        # rls_guard.install() patches `RLSRestApi` in place, which pulls in
+        # `superset.row_level_security.api` -> ... -> `superset.models.core`
+        # -> `superset.db_engine_specs.base`. That last module's Marshmallow
+        # schemas call Flask-Babel's `gettext` (`__(...)`) at class-body
+        # (i.e. import) time. FAB's own `AppBuilder.init_app` constructs the
+        # security manager -- this `__init__` -- at `base.py:201`, and only
+        # registers Babel on the app two lines later, at `base.py:202`
+        # (`self.bm = BabelManager(self)`, which calls `Babel(current_app,
+        # ...)`). Calling `rls_guard.install()` here, eagerly, imports
+        # `db_engine_specs.base` before Babel exists in `app.extensions`,
+        # raising `KeyError: 'babel'` and taking down every worker at boot
+        # (sc-23432) -- including celerybeat and celery workers, which build
+        # the same app but never serve HTTP requests.
+        #
+        # Defer to a `before_request` hook instead of importing here. FAB
+        # registers its own `app.before_request(self.sm.before_request)` at
+        # `base.py:207` -- strictly after `BabelManager` is constructed --
+        # and no HTTP request is ever dispatched until well after
+        # `create_app()` has returned. So by the time ANY request reaches
+        # this app, Babel is guaranteed present, and `before_request` hooks
+        # always run before the matched view function on EVERY request, not
+        # just the first. `rls_guard.install()` is idempotent (an
+        # `_plaid_rls_guard_installed` flag short-circuits every call after
+        # the first), so registering it here costs one cheap attribute check
+        # per request and closes the window completely: even the very first
+        # request that tries to write a protected RLS rule via
+        # `RLSRestApi.post/put/delete/bulk_delete` cannot reach that method
+        # before this hook has already patched it, because `before_request`
+        # callbacks always complete before Flask dispatches to the view.
+        # Processes that never serve a request (celerybeat, a one-off CLI
+        # command) simply never install the route patch -- correctly, since
+        # there is no route to guard there; `install_orm_listeners()` above
+        # is what protects those processes' own ORM writes.
+        current_app.before_request(rls_guard.install)
 
         if self.auth_type == AUTH_OAUTH:
             self.authoauthview = PlaidAuthOAuthView
