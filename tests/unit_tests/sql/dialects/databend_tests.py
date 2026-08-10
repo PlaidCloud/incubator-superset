@@ -65,6 +65,18 @@ def test_leading_settings_preserved_across_root_types(sql: str) -> None:
     assert sqlglot.parse_one(sql, Databend).sql(dialect=Databend) == sql
 
 
+def test_bare_leading_settings_keyword_is_not_special_cased() -> None:
+    """
+    Only the parenthesized ``SETTINGS (...)`` wrapper is absorbed. A bare leading
+    ``SETTINGS`` keyword with no parentheses is retreated and left to the base
+    parser, which rejects it — this exercises the non-wrapper retreat path.
+    """
+    import sqlglot.errors
+
+    with pytest.raises(sqlglot.errors.ParseError):
+        sqlglot.parse_one("SETTINGS SELECT 1", Databend)
+
+
 def test_leading_settings_via_sqlscript_is_select() -> None:
     from superset.sql.parse import SQLScript
 
