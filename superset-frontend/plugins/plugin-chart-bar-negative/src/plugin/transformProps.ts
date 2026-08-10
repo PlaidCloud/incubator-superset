@@ -71,8 +71,12 @@ export default function transformProps(
     height,
     categories,
     series,
-    positiveColor: positiveColor || '#2e7d32',
-    negativeColor: negativeColor || '#c0392b',
+    positiveColor:
+      // eslint-disable-next-line theme-colors/no-literal-colors
+      positiveColor || '#2e7d32',
+    negativeColor:
+      // eslint-disable-next-line theme-colors/no-literal-colors
+      negativeColor || '#c0392b',
     showLabels: showLabels !== false,
     numberFormat: numberFormat || 'SMART_NUMBER',
     barCategoryLabel: barCategoryLabel || '',
