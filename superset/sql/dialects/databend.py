@@ -34,6 +34,19 @@ from sqlglot.tokens import TokenType
 
 class Databend(ClickHouse):
     class Parser(ClickHouse.Parser):
+        # ClickHouse reserves GLOBAL / SAMPLE / PREWHERE as keywords, but Databend
+        # accepts them as ordinary identifiers (verified against a live Databend:
+        # bare ``SELECT sample FROM t`` runs there, while bare ``union`` is
+        # rejected by Databend too, so it stays reserved). Restoring these keeps
+        # datasets whose columns are named after them parseable — they parsed
+        # under the generic dialect Databend previously fell back to.
+        ID_VAR_TOKENS = {
+            *ClickHouse.Parser.ID_VAR_TOKENS,
+            TokenType.GLOBAL,
+            TokenType.PREWHERE,
+            TokenType.TABLE_SAMPLE,
+        }
+
         def _parse_statement(self) -> exp.Expression | None:
             settings = None
             if self._curr and self._curr.token_type == TokenType.SETTINGS:

@@ -65,6 +65,33 @@ def test_leading_settings_preserved_across_root_types(sql: str) -> None:
     assert sqlglot.parse_one(sql, Databend).sql(dialect=Databend) == sql
 
 
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT sample FROM t",
+        "SELECT a FROM sample",
+        "SELECT global FROM t",
+        "SELECT prewhere FROM t",
+        "SELECT sample, global, prewhere FROM t",
+    ],
+)
+def test_clickhouse_reserved_words_stay_valid_identifiers(sql: str) -> None:
+    """
+    ClickHouse reserves GLOBAL / SAMPLE / PREWHERE, but Databend accepts them as
+    identifiers. Basing the dialect on ClickHouse must not make a dataset whose
+    column is named after one of them unparseable — that would be the very
+    "unqueryable virtual dataset" failure this dialect exists to prevent.
+    """
+    assert sqlglot.parse_one(sql, Databend) is not None
+
+
+def test_union_operator_still_parses() -> None:
+    """Restoring the reserved words above must not disturb the UNION operator."""
+    assert isinstance(
+        sqlglot.parse_one("SELECT 1 UNION ALL SELECT 2", Databend), exp.Union
+    )
+
+
 def test_bare_leading_settings_keyword_is_not_special_cased() -> None:
     """
     Only the parenthesized ``SETTINGS (...)`` wrapper is absorbed. A bare leading
