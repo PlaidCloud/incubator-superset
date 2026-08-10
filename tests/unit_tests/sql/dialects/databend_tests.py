@@ -47,6 +47,24 @@ def test_leading_settings_multiple_values() -> None:
     assert sqlglot.parse_one(sql, Databend).sql(dialect=Databend) == sql
 
 
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SETTINGS (a=1) SELECT 1 UNION ALL SELECT 2",
+        "SETTINGS (a=1) SELECT * FROM (SELECT id FROM u) AS sub",
+        "SETTINGS (a=1) WITH s AS (SELECT 1 AS one) SELECT * FROM s",
+    ],
+)
+def test_leading_settings_preserved_across_root_types(sql: str) -> None:
+    """
+    The wrapper must survive generation whatever the statement root is — not
+    only a bare SELECT. A UNION or a parenthesized subquery is re-emitted from
+    a generator hook other than ``select_sql``; emitting the settings only in
+    ``select_sql`` silently dropped the timeout guard on those.
+    """
+    assert sqlglot.parse_one(sql, Databend).sql(dialect=Databend) == sql
+
+
 def test_leading_settings_via_sqlscript_is_select() -> None:
     from superset.sql.parse import SQLScript
 
@@ -55,6 +73,32 @@ def test_leading_settings_via_sqlscript_is_select() -> None:
 
     assert len(script.statements) == 1
     assert not script.has_mutation()
+
+
+def test_leading_settings_survives_rls_regeneration() -> None:
+    """
+    User-visible path: when RLS is applied, virtual-dataset SQL is re-emitted
+    via ``SQLStatement.format`` (``superset/models/helpers.py``). The leading
+    ``SETTINGS`` must not be dropped there — for a UNION dataset too.
+    """
+    from superset.sql.parse import SQLStatement
+
+    sql = "SETTINGS (max_execute_time_in_seconds=300) SELECT 1 UNION ALL SELECT 2"
+    assert (
+        SQLStatement(sql, "databend")
+        .format()
+        .startswith("SETTINGS (max_execute_time_in_seconds=300)")
+    )
+
+
+def test_leading_settings_transparent_to_table_extraction() -> None:
+    """RLS depends on table extraction; the wrapper must not perturb it."""
+    from superset.sql.parse import SQLStatement
+
+    wrapped = SQLStatement("SETTINGS (a=1) SELECT c FROM myschema.t", "databend")
+    plain = SQLStatement("SELECT c FROM myschema.t", "databend")
+    extracted = {str(table) for table in wrapped.tables}
+    assert extracted == {str(table) for table in plain.tables} == {"myschema.t"}
 
 
 @pytest.mark.parametrize(

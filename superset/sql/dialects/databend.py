@@ -52,7 +52,16 @@ class Databend(ClickHouse):
             return statement
 
     class Generator(ClickHouse.Generator):
-        def select_sql(self, expression: exp.Select) -> str:
-            sql = super().select_sql(expression)
-            settings = expression.args.get("leading_settings")
+        def generate(self, expression: exp.Expression, copy: bool = True) -> str:
+            # Re-emit the absorbed leading ``SETTINGS (...)`` at the statement
+            # root, so it survives regardless of the root's type — a bare
+            # SELECT, a UNION, a parenthesized subquery, or a non-query
+            # statement. ``select_sql`` alone would drop it on anything but a
+            # plain SELECT.
+            settings = (
+                expression.args.get("leading_settings")
+                if isinstance(expression, exp.Expression)
+                else None
+            )
+            sql = super().generate(expression, copy=copy)
             return f"{settings} {sql}" if settings else sql
