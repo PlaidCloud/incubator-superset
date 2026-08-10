@@ -139,6 +139,26 @@ class TestDuplicateDatasetsAreDeterministic:
             "c2 = 2",
         ]
 
+    def test_no_matching_dataset_returns_empty(
+        self,
+        mocker: MagicMock,
+    ) -> None:
+        """
+        A physical table with no dataset carries no RLS: return ``[]`` rather
+        than raise. This is not a fail-open path - a table nothing points at
+        has no rules to apply - and it must stay covered so the empty branch
+        does not regress into an exception.
+        """
+        from superset.sql.parse import Table
+        from superset.utils.rls import get_predicates_for_table
+
+        database = mocker.MagicMock()
+        db = mocker.patch("superset.utils.rls.db")
+        db.session.query().filter().order_by().all.return_value = []
+
+        table = Table("t1", "public", "examples")
+        assert get_predicates_for_table(table, database, "examples") == []
+
 
 class TestCacheKeyDoesNotDegrade:
     def test_predicate_collection_failure_propagates(
