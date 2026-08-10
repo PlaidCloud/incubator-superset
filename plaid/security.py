@@ -2,30 +2,40 @@
 """
 Plaid Security Class for Superset
 """
-import logging
-import uuid
-import time
-import jwt
-from typing import Union, List, Optional, override
 
+import logging
+import time
+import uuid
+from collections.abc import Iterable
+from typing import Any, Optional, TYPE_CHECKING
 from urllib.parse import urljoin
-from flask import session
-from flask_login import logout_user
+
+import jwt
+from authlib.integrations.flask_client import token_update
+from flask import current_app, session
 from flask_appbuilder import Model
 from flask_appbuilder.security.manager import AUTH_OAUTH
-from authlib.integrations.flask_client import token_update
-from requests.exceptions import HTTPError
-
+from flask_login import logout_user
 from plaidcloud.rpc.connection.jsonrpc import SimpleRPC
+from requests.exceptions import HTTPError
+from sqlalchemy import func
+
+from plaid import rls_guard
 from plaid.auth_oidc import PlaidAuthOAuthView
+
 # from plaid.blacklist_api import is_token_blacklisted
 # from plaid.auth_oidc import AuthOIDCView
 # from plaid.blacklist_api import TokenBlacklistApi
-
 from superset.security import SupersetSecurityManager
+from superset.security.manager import SupersetRoleApi
 
-from sqlalchemy import func
-from sqlalchemy.orm.exc import MultipleResultsFound
+if TYPE_CHECKING:
+    from flask_appbuilder import AppBuilder
+    from flask_appbuilder.security.sqla.models import User
+    from sqlalchemy.orm import Query
+
+    from superset.connectors.sqla.models import BaseDatasource
+    from superset.models.core import Database
 
 __author__ = "Garrett Bates"
 __copyright__ = "© Copyright 2018=2026, PlaidCloud, Inc"
@@ -37,13 +47,20 @@ __email__ = "garrett.bates@plaidcloud.com"
 
 log = logging.getLogger(__name__)
 USE_REFRESH_TOKENS = False
-PROJECT_ACCESS = 'project_access'
+PROJECT_ACCESS = "project_access"
 
+
+class _PlaidGuardedRoleApi(rls_guard.PlaidRoleApi, SupersetRoleApi):
+    """`PlaidRoleApi`'s guard methods call `super()` on the allowed path,
+    which MRO resolves to `SupersetRoleApi` / FAB's `RoleApi` -- so a
+    legitimate write (the automation principal, or a role outside the
+    `plaid_rls_` prefix) behaves exactly as upstream, including
+    `SupersetRoleApi.pre_delete`'s permission-clearing override.
+    """
 
 
 class PlaidSecurityManager(SupersetSecurityManager):
-    """Custom security manager class for PlaidCloud integration.
-    """
+    """Custom security manager class for PlaidCloud integration."""
 
     # The admin SPA routes (UsersListView, RolesListView, GroupsListView,
     # ActionLogView, UserRegistrationsView) all gate on the ("read", "security")
@@ -52,11 +69,25 @@ class PlaidSecurityManager(SupersetSecurityManager):
     # so ("read", "security") gets granted to Alpha/Gamma and those roles can
     # reach /users/, /roles/, /list_groups/ etc. directly even though the menu
     # is hidden. Adding "security" here makes the routes Admin-only too.
+    # UserRegistrationsRestAPI is a full ModelRestApi over RegisterUser, so FAB
+    # registers can_add/can_edit/can_delete alongside can_list/can_show. Upstream
+    # guards the "User Registrations" ModelView menu but not the REST API's
+    # view-menu, so Alpha/Gamma can POST a registration with any email and a
+    # chosen registration_hash, then activate it into a real ab_user row via the
+    # unauthenticated /register/activation/<hash> route. Spelled as a literal
+    # rather than UserRegistrationsRestAPI.__name__ because importing that class
+    # here pulls superset.models.core in at config-load time, before init_app,
+    # which raises "App not initialized yet" out of encrypted_field_factory.
     ADMIN_ONLY_VIEW_MENUS = SupersetSecurityManager.ADMIN_ONLY_VIEW_MENUS | {
         "security",
+        "UserRegistrationsRestAPI",
     }
 
-    def __init__(self, appbuilder):
+    # sc-23432 Part 4 -- protects `plaid_rls_*` roles from write access by
+    # anyone but the automation principal. See `plaid/rls_guard.py`.
+    role_api = _PlaidGuardedRoleApi
+
+    def __init__(self, appbuilder: "AppBuilder") -> None:
         # These allowed me to turn this on without adjusting the superset_config.py
         # app = appbuilder.get_app
         # app.config['AUTH_TYPE'] = AUTH_OAUTH
@@ -64,11 +95,63 @@ class PlaidSecurityManager(SupersetSecurityManager):
         # app.config['AUTH_ROLES_SYNC_AT_LOGIN'] = True
         super().__init__(appbuilder)
 
+        # sc-23432 Part 4 -- install_orm_listeners() only imports FAB's own
+        # `flask_appbuilder.security.sqla.models` (Group, Role) -- it never
+        # touches Superset's command/DAO/db_engine_specs layer, so it is safe
+        # to run right here, unconditionally, in every process that
+        # constructs a security manager (web, celery worker, celerybeat,
+        # CLI). This is the actual control for role/group escalation -- see
+        # rls_guard's module docstring "What this protects" section for why
+        # route patching alone (RoleApi above, and `install()` below) is not
+        # enough on its own.
+        rls_guard.install_orm_listeners()
+
+        # rls_guard.install() patches `RLSRestApi` in place, which pulls in
+        # `superset.row_level_security.api` -> ... -> `superset.models.core`
+        # -> `superset.db_engine_specs.base`. That last module's Marshmallow
+        # schemas call Flask-Babel's `gettext` (`__(...)`) at class-body
+        # (i.e. import) time. FAB's own `AppBuilder.init_app` constructs the
+        # security manager -- this `__init__` -- at `base.py:201`, and only
+        # registers Babel on the app two lines later, at `base.py:202`
+        # (`self.bm = BabelManager(self)`, which calls `Babel(current_app,
+        # ...)`). Calling `rls_guard.install()` here, eagerly, imports
+        # `db_engine_specs.base` before Babel exists in `app.extensions`,
+        # raising `KeyError: 'babel'` and taking down every worker at boot
+        # (sc-23432) -- including celerybeat and celery workers, which build
+        # the same app but never serve HTTP requests.
+        #
+        # Defer to a `before_request` hook instead of importing here. FAB
+        # registers its own `app.before_request(self.sm.before_request)` at
+        # `base.py:207` -- strictly after `BabelManager` is constructed --
+        # and no HTTP request is ever dispatched until well after
+        # `create_app()` has returned. So by the time ANY request reaches
+        # this app, Babel is guaranteed present, and `before_request` hooks
+        # always run before the matched view function on EVERY request, not
+        # just the first. `rls_guard.install()` is idempotent (an
+        # `_plaid_rls_guard_installed` flag short-circuits every call after
+        # the first), so registering it here costs one cheap attribute check
+        # per request and closes the window completely: even the very first
+        # request that tries to write a protected RLS rule via
+        # `RLSRestApi.post/put/delete/bulk_delete` cannot reach that method
+        # before this hook has already patched it, because `before_request`
+        # callbacks always complete before Flask dispatches to the view.
+        # Processes that never serve a request (celerybeat, a one-off CLI
+        # command) simply never install the route patch -- correctly, since
+        # there is no route to guard there; `install_orm_listeners()` above
+        # is what protects those processes' own ORM writes.
+        current_app.before_request(rls_guard.install)
+
         if self.auth_type == AUTH_OAUTH:
             self.authoauthview = PlaidAuthOAuthView
 
         @token_update.connect_via(appbuilder)
-        def on_token_update(sender, name, token, refresh_token=None, access_token=None):
+        def on_token_update(
+            sender: Any,
+            name: str,
+            token: dict[str, Any],
+            refresh_token: Optional[str] = None,
+            access_token: Optional[str] = None,
+        ) -> None:
             # if refresh_token:
             #     item = OAuth2Token.find(name=name, refresh_token=refresh_token)
             # elif access_token:
@@ -81,7 +164,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
             # item.refresh_token = token.get('refresh_token')
             # item.expires_at = token['expires_at']
             # item.save()
-            log.info(f'Updated token for {name} - {repr(token)}')
+            log.info("Updated token for %s - %r", name, token)
             self.appbuilder.sm.set_oauth_session(name, token)
 
     # def register_views(self) -> None:
@@ -89,9 +172,14 @@ class PlaidSecurityManager(SupersetSecurityManager):
     #     from plaid.blacklist_api import TokenBlacklistApi
     #     self.appbuilder.add_api(TokenBlacklistApi)
 
-    def oauth_user_info(self, provider, response=None):
+    def oauth_user_info(
+        self, provider: str, response: Optional[dict[str, Any]] = None
+    ) -> Optional[dict[str, Any]]:
         # logging.debug("Oauth2 provider: {0}.".format(provider))
-        if provider == 'plaidkeycloak':
+        if provider == "plaidkeycloak":
+            if response is None:
+                log.error("OAUTH response missing for provider %s", provider)
+                return None
             me = self.appbuilder.sm.oauth_remotes[provider].get("userinfo")
             me.raise_for_status()
             data = me.json()
@@ -106,28 +194,37 @@ class PlaidSecurityManager(SupersetSecurityManager):
             #     role_keys.append('superset-admin')
 
             # This is for using Keycloak roles - have to inspect the token
-            access_token = response.get('access_token')
-            decoded_token = jwt.decode(access_token, options={'verify_signature': False})
-            roles = set(decoded_token.get('realm_access', {}).get('roles', []))
-            log.debug('Decoded token: %s', decoded_token)
-            log.debug('Roles from token: %s', roles)
+            access_token = response["access_token"]
+            decoded_token = jwt.decode(
+                access_token, options={"verify_signature": False}
+            )
+            roles = set(decoded_token.get("realm_access", {}).get("roles", []))
+            log.debug("Decoded token: %s", decoded_token)
+            log.debug("Roles from token: %s", roles)
             role_keys = []
-            if 'dashboard.dashboard.read' in roles:
-                role_keys.append('superset-gamma')
-            if 'dashboard.dashboard.write' in roles:
-                role_keys.append('superset-alpha')
-            if decoded_token.get('is_admin', False):
-                role_keys.append('superset-admin')
+            if "dashboard.dashboard.read" in roles:
+                role_keys.append("superset-gamma")
+            if "dashboard.dashboard.write" in roles:
+                role_keys.append("superset-alpha")
+            if decoded_token.get("is_admin", False):
+                role_keys.append("superset-admin")
             return {
-                "username": data.get("name", data["preferred_username"]), # this matches OIDC implementation
+                "username": data.get(
+                    "name", data["preferred_username"]
+                ),  # this matches OIDC implementation
                 "first_name": data.get("given_name", ""),
                 "last_name": data.get("family_name", ""),
                 "email": data.get("email", ""),
-                "role_keys": role_keys  # These role_keys get mapped to real roles via the AUTH_ROLES_MAPPING config value
+                # These role_keys get mapped to real roles via the
+                # AUTH_ROLES_MAPPING config value
+                "role_keys": role_keys,
             }
 
-    @override
-    def find_user(self, username=None, email=None):
+        return None
+
+    def find_user(
+        self, username: Optional[str] = None, email: Optional[str] = None
+    ) -> Optional["User"]:
         """
         Finds user by username or email
 
@@ -135,38 +232,51 @@ class PlaidSecurityManager(SupersetSecurityManager):
         the email check case-insensitive
         """
         if username:
-            try:
-                if self.auth_username_ci:
-                    return (
-                        self.session.query(self.user_model)
-                        .filter(
-                            func.lower(self.user_model.username) == func.lower(username)
-                        )
-                        .one_or_none()
-                    )
-                else:
-                    return (
-                        self.session.query(self.user_model)
-                        .filter(self.user_model.username == username)
-                        .one_or_none()
-                    )
-            except MultipleResultsFound:
-                log.error("Multiple results found for user %s", username)
-                return None
-        elif email:
-            try:
-                return (
-                    self.session.query(self.user_model)
-                    .filter(
-                        func.lower(self.user_model.email) == func.lower(email)
-                    )
-                    .one_or_none()
+            if self.auth_username_ci:
+                query = self.session.query(self.user_model).filter(
+                    func.lower(self.user_model.username) == func.lower(username)
                 )
-            except MultipleResultsFound:
-                log.error("Multiple results found for user with email %s", email)
-                return None
+            else:
+                query = self.session.query(self.user_model).filter(
+                    self.user_model.username == username
+                )
+            return self._resolve_single_user(query, "username", username)
+        elif email:
+            query = self.session.query(self.user_model).filter(
+                func.lower(self.user_model.email) == func.lower(email)
+            )
+            return self._resolve_single_user(query, "email", email)
 
-    def auth_user_oauth(self, userinfo):
+        return None
+
+    def _resolve_single_user(
+        self, query: "Query[User]", field: str, value: str
+    ) -> Optional["User"]:
+        """
+        Picks one user when a lookup matches more than one row.
+
+        ab_user.email and ab_user.username are case-sensitively unique, so rows
+        differing only in case legally coexist. Prefer an active row, then an
+        exact match, then the lowest id, so a login never fails on the ambiguity
+        and never lands on a deactivated duplicate. Deactivated rows are still
+        returned when they are all there is, leaving the active check to the
+        caller.
+        """
+        users = query.order_by(self.user_model.id).all()
+        if len(users) > 1:
+            log.warning(
+                "Multiple users match %s %s; preferring an active row, then the "
+                "exact-case match, then the lowest id. Matching ids: %s",
+                field,
+                value,
+                [user.id for user in users],
+            )
+        users.sort(
+            key=lambda user: (not user.active, getattr(user, field) != value, user.id)
+        )
+        return users[0] if users else None
+
+    def auth_user_oauth(self, userinfo: dict[str, Any]) -> Optional["User"]:
         """
         Method for authenticating user with OAuth.
         N.B. This is the overridden to use email as the key instead of username
@@ -199,7 +309,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
             return None
 
         # Sync the user's roles
-        if user and len(user.roles) == 0: # self.auth_roles_sync_at_login:
+        if user and len(user.roles) == 0:  # self.auth_roles_sync_at_login:
             user.roles = self._oauth_calculate_user_roles(userinfo)
             log.debug("Calculated new roles for user='%s' as: %s", email, user.roles)
 
@@ -269,19 +379,19 @@ class PlaidSecurityManager(SupersetSecurityManager):
     #     perm = self.get_perms().get(pvm.permission.name)
     #     return bool(perm) and pvm.view_menu.name in perm
 
-
     def get_rpc(self) -> SimpleRPC:
         base_url = f"http://{self.appbuilder.app.config.get('PLAID_RPC')}"
         rpc_url = urljoin(base_url, "json-rpc/")
 
         if self.auth_type == AUTH_OAUTH:
-            rpc_token, secret = session['oauth']
+            rpc_token, secret = session["oauth"]
         else:
-            rpc_token = session['token']['access_token']
+            rpc_token = session["token"]["access_token"]
 
         rpc = SimpleRPC(rpc_token, uri=rpc_url, verify_ssl=False)
         rpc._old_call_rpc = rpc.call_rpc
-        def superset_call_rpc(*args, **kwargs):
+
+        def superset_call_rpc(*args: Any, **kwargs: Any) -> Any:
             try:
                 return rpc._old_call_rpc(*args, **kwargs)
             except HTTPError as e:
@@ -289,15 +399,16 @@ class PlaidSecurityManager(SupersetSecurityManager):
                     logout_user()
                     session.clear()
                     raise Exception(
-                        'There were problems authenticating your access with PlaidCloud. '
-                        'If you see this message, please refresh your browser'
+                        "There were problems authenticating your access with "
+                        "PlaidCloud. If you see this message, please refresh "
+                        "your browser"
                     ) from e
                 raise
 
         rpc.call_rpc = superset_call_rpc
         return rpc
 
-    def store_user_project_access(self):
+    def store_user_project_access(self) -> None:
         try:
             projects = self.get_rpc().analyze.project.projects(keys=["id"])
             project_ids = [str(uuid.UUID(p["id"])) for p in projects]
@@ -306,37 +417,39 @@ class PlaidSecurityManager(SupersetSecurityManager):
             log.error(str(e))
             session[PROJECT_ACCESS] = []  # No access
 
-    def _can_access_project(self, project_id):
+    def _can_access_project(self, project_id: str) -> bool:
         log.info(dict(session))
         if PROJECT_ACCESS not in session:
             return self.is_admin()
         return str(uuid.UUID(project_id)) in session[PROJECT_ACCESS]
 
-    def can_access_database(self, database: Union["Database"]) -> bool:
-        log.info(f"Can access database: {database}")
-        return (
-            self._can_access_project(str(database.uuid))
-            or super().can_access_database(database)
-        )
+    def can_access_database(self, database: "Database") -> bool:
+        log.info("Can access database: %s", database)
+        return self._can_access_project(
+            str(database.uuid)
+        ) or super().can_access_database(database)
 
     def can_access_datasource(self, datasource: "BaseDatasource") -> bool:
-        log.info(f"Checking access to datasource: {datasource}")
-        log.info(f"Checking access to datasource db id: {datasource.database.uuid}")
+        log.info("Checking access to datasource: %s", datasource)
+        log.info("Checking access to datasource db id: %s", datasource.database.uuid)
         if datasource.schema is None:
-            log.info(f"No Schema: {datasource}")
-            # Call the base method if there is no schema since there isn't a plaid schema.
+            log.info("No Schema: %s", datasource)
+            # Call the base method if there is no schema since there isn't a
+            # plaid schema.
             return super().can_access_datasource(datasource)
 
         project_id = str(datasource.database.uuid)
-        return (
-            self._can_access_project(project_id)
-            or super().can_access_datasource(datasource)
+        return self._can_access_project(project_id) or super().can_access_datasource(
+            datasource
         )
 
     def is_owner(self, resource: Model) -> bool:
         from superset.models.slice import Slice  # a Slice is a chart
+
         if isinstance(resource, Slice):
-            return super().is_owner(resource) or any([self.is_owner(dashboard) for dashboard in resource.dashboards])
+            return super().is_owner(resource) or any(
+                self.is_owner(dashboard) for dashboard in resource.dashboards
+            )
 
         return super().is_owner(resource)
 
@@ -350,14 +463,17 @@ class PlaidSecurityManager(SupersetSecurityManager):
     #     log.info(f"Fetched user's projects in {end - start} seconds.")
     #     project_uuids = {str(uuid.UUID(project['id'])) for project in projects}
     #     log.info(f"Project IDs: {project_uuids}")
-    #     return self.get_session.query(Database.id).filter(Database.uuid.in_(project_uuids))
+    #     return self.get_session.query(Database.id).filter(
+    #         Database.uuid.in_(project_uuids)
+    #     )
 
     # Not actually called anywhere any more! Success!
     # def get_project_ids(self):
     #     return [db.id for db in self.get_project_dbs()]
 
-    def _get_project_dbs(self):
+    def _get_project_dbs(self) -> Iterable["Database"]:
         from superset.models.core import Database
+
         if PROJECT_ACCESS not in session:
             if self.is_admin():
                 return self.session.query(Database)
@@ -366,55 +482,66 @@ class PlaidSecurityManager(SupersetSecurityManager):
         return self.session.query(Database).filter(Database.uuid.in_(project_uuids))
 
     def user_view_menu_names(self, permission_name: str) -> set[str]:
-        if permission_name == 'database_access':
+        if permission_name == "database_access":
             project_perms = {db.perm for db in self._get_project_dbs()}
             return project_perms | super().user_view_menu_names(permission_name)
 
         return super().user_view_menu_names(permission_name)
 
     # - Database.perm!
-    # So I think maybe the other thing to do is to override user_view_menu_names, and add accessible projects in if it's queried on "database_access "?
-    # Superset's get_accessible_databases is based on self.user_view_menu_names("database_access"), and it uses DATABASE_PERM_REGEX to extract the id, I think?
-    # According to unpack_database_and_schema, it looks like a schema_permission looks like [database_name].[schema|table] , I think with the square brackets included.
+    # So I think maybe the other thing to do is to override
+    # user_view_menu_names, and add accessible projects in if it's queried on
+    # "database_access "?
+    # Superset's get_accessible_databases is based on
+    # self.user_view_menu_names("database_access"), and it uses
+    # DATABASE_PERM_REGEX to extract the id, I think?
+    # According to unpack_database_and_schema, it looks like a
+    # schema_permission looks like [database_name].[schema|table] , I think
+    # with the square brackets included.
     # unpack_database_and_schema is run on the things erturned by user_view_menu_names
     # so is the regex in get_accessible_databases()
-    #Looks like maybe it's [database_name].[schema|table].id:<id> (where the first id is literal, the second is an id)
+    # Looks like maybe it's [database_name].[schema|table].id:<id> (where the
+    # first id is literal, the second is an id)
     # Actual examples:
- # ('all_database_access',),
- # ('all_query_access',),
- # ('[International Motors (21dc)].(id:1)',),
- # ('[International Motors (21dc)].[anlz21dccece-1043-4c10-9bb5-c512ca4d5393]',),
- # ('[International Motors (21dc)].[anlze395fd34-fedc-4f04-b3fd-c50d8d77c531]',),
- # ('[International Motors (21dc)].[gp_toolkit]',),
- # ('[International Motors (21dc)].[information_schema]',),
- # ('[International Motors (21dc)].[public]',),
- # ('Profile',),
- # ('[International Motors (21dc)].[ParentChildRecord](id:50)',),
- # ('[International Motors (21dc)].[ActivityDriverValueRecord](id:51)',),
- # ('[International Motors (21dc)].[ResourceDriverSplitRecord](id:52)',),
- # ('[International Motors (21dc)].[ResourceDriverValueRecord](id:53)',)
+    # ('all_database_access',),
+    # ('all_query_access',),
+    # ('[International Motors (21dc)].(id:1)',),
+    # ('[International Motors (21dc)].[anlz21dccece-1043-4c10-9bb5-c512ca4d5393]',),
+    # ('[International Motors (21dc)].[anlze395fd34-fedc-4f04-b3fd-c50d8d77c531]',),
+    # ('[International Motors (21dc)].[gp_toolkit]',),
+    # ('[International Motors (21dc)].[information_schema]',),
+    # ('[International Motors (21dc)].[public]',),
+    # ('Profile',),
+    # ('[International Motors (21dc)].[ParentChildRecord](id:50)',),
+    # ('[International Motors (21dc)].[ActivityDriverValueRecord](id:51)',),
+    # ('[International Motors (21dc)].[ResourceDriverSplitRecord](id:52)',),
+    # ('[International Motors (21dc)].[ResourceDriverValueRecord](id:53)',)
 
-
-    # Not actually necessary to override this, since it depends on user_view_menu_names(), and we're overriding that.
+    # Not actually necessary to override this, since it depends on
+    # user_view_menu_names(), and we're overriding that.
     # def get_accessible_databases():
-    #     # Return any databases that would be accessible under superset's security system, and also any
+    #     # Return any databases that would be accessible under superset's
+    #     # security system, and also any
     #     # projects accessible under plaid's security system.
     #     return self.get_project_ids() + super().get_accessible_databases()
 
-
     def get_schemas_accessible_by_user(
-            self, database: "Database", catalog: Optional[str], schemas: List[str], hierarchical: bool = True
-    ) -> List[str]:
-        REPORTING_SCHEMA_PREFIX = 'report'
+        self,
+        database: "Database",
+        catalog: Optional[str],
+        schemas: set[str],
+        hierarchical: bool = True,
+    ) -> set[str]:
+        reporting_schema_prefix = "report"
 
         schema = str(database.uuid)
-        if not schema.startswith(REPORTING_SCHEMA_PREFIX):
-            schema = f'{REPORTING_SCHEMA_PREFIX}{schema}'
+        if not schema.startswith(reporting_schema_prefix):
+            schema = f"{reporting_schema_prefix}{schema}"
 
         if schema in schemas:
-            return [schema]
+            return {schema}
 
-        return []
+        return set()
 
     # I can't see that this has been used anywhere
     # def get_table_ids(self):
@@ -422,10 +549,12 @@ class PlaidSecurityManager(SupersetSecurityManager):
     #     start = time.time()
     #     tables = rpc.analyze.table.published_tables_by_project()
     #     end = time.time()
-    #     table_ids = {str(uuid.UUID(table['id'].replace('analyzetable_', ''))) for table in tables}
+    #     table_ids = {
+    #         str(uuid.UUID(table['id'].replace('analyzetable_', '')))
+    #         for table in tables
+    #     }
     #     log.debug(f"Fetched table IDs in {end - start}: {table_ids}")
     #     return table_ids
-
 
     # def get_perms(self):
     #     """Accesses plaid permission dictionary from config.
@@ -434,7 +563,6 @@ class PlaidSecurityManager(SupersetSecurityManager):
     #         dict: collection of view menus indexed by permission name.
     #     """
     #     return self.appbuilder.app.config.get('PLAID_BASE_PERMISSIONS')
-
 
     # This looks unused
     # def add_user_to_project(self, user, project_id):
@@ -449,7 +577,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
     #             "Appended %s to %s roles list.", role.name, user.username
     #         )
 
-    def set_oauth_session(self, provider, oauth_response):
+    def set_oauth_session(self, provider: str, oauth_response: dict[str, Any]) -> None:
         """
         Set the current session with OAuth token dict
         """
@@ -458,48 +586,65 @@ class PlaidSecurityManager(SupersetSecurityManager):
             session["oauth_token_dict"] = oauth_response
         super().set_oauth_session(provider, oauth_response)
 
-    def has_oauth_token(self):
+    def has_oauth_token(self) -> bool:
         if self.auth_type == AUTH_OAUTH:
-            return 'oauth' in session
+            return "oauth" in session
         # if self.auth_type == AUTH_OID:
         #     return 'token' in session
         return False
 
-
     # N.B. This method is called using FLASK_APP_MUTATOR in the superset-config secret
     #  It makes this call to validate the token in a before_request handler
-    def validate_oauth_token(self):
-        def _internal_validate():
+    def validate_oauth_token(self) -> bool:
+        def _internal_validate() -> bool:
             try:
                 if self.auth_type == AUTH_OAUTH:
-                    if 'oauth' in session:
+                    if "oauth" in session:
                         # Basic validation of token expiry
-                        token, secret = session['oauth']
+                        token, secret = session["oauth"]
                         # if is_token_blacklisted(token):
                         #     return False
                         if token_is_valid(token):
                             return True
 
                         if USE_REFRESH_TOKENS:
-                            # to do the below, it needs custom `set_oauth_session` to save the `oauth_token_dict`
+                            # to do the below, it needs custom
+                            # `set_oauth_session` to save the `oauth_token_dict`
                             provider = session["oauth_provider"]
-                            token_dict = session['oauth_token_dict']
-                            logging.info('Provider %s, Token %s', provider, token_dict)
-                            # this will refresh the token if it is expired (via `token_update` listener)
-                            self.appbuilder.sm.oauth_remotes[provider].token = token_dict
-                            user_resp = self.appbuilder.sm.oauth_remotes[provider].get("userinfo")
+                            token_dict = session["oauth_token_dict"]
+                            logging.info("Provider %s, Token %s", provider, token_dict)
+                            # this will refresh the token if it is expired
+                            # (via `token_update` listener)
+                            self.appbuilder.sm.oauth_remotes[
+                                provider
+                            ].token = token_dict
+                            user_resp = self.appbuilder.sm.oauth_remotes[provider].get(
+                                "userinfo"
+                            )
                             user_resp.raise_for_status()
-                            logging.info('Got user response')
-                            # ToDo - probably should check token now refreshed, or use the introspection
+                            logging.info("Got user response")
+                            # ToDo - probably should check token now
+                            # refreshed, or use the introspection
 
-                            #ToDo - I could not get introspection to work, I was calling from FlaskOAuth2App, but needs to be and OAuth2Session which is the _get_oauth_client() of the Flask thing
-                            # maybe we don't need to introspect anyway, can just check expiry.
+                            # ToDo - I could not get introspection to work, I
+                            # was calling from FlaskOAuth2App, but needs to be
+                            # and OAuth2Session which is the
+                            # _get_oauth_client() of the Flask thing
+                            # maybe we don't need to introspect anyway, can
+                            # just check expiry.
 
                             # # new token now stored in session
                             # token_dict = session['oauth_token_dict']
-                            # logging.info('Provider %s, Revised Token %s', provider, token_dict)
-                            # token_endpoint = self.appbuilder.sm.oauth.plaidkeycloak.access_token_url
-                            # intro_resp = self.appbuilder.sm.oauth_remotes[provider].introspect_token(token_endpoint, token=token_dict)
+                            # logging.info(
+                            #     'Provider %s, Revised Token %s', provider, token_dict
+                            # )
+                            # token_endpoint = (
+                            #     self.appbuilder.sm.oauth.plaidkeycloak
+                            #     .access_token_url
+                            # )
+                            # intro_resp = self.appbuilder.sm.oauth_remotes[
+                            #     provider
+                            # ].introspect_token(token_endpoint, token=token_dict)
                             # intro_resp.raise_for_status()
                             # logging.info('Did introspection')
                             # token_info = intro_resp.json()
@@ -509,7 +654,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
                 return False
 
             except Exception as e:
-                logging.exception('Failed to validate oauth token: %s', e)
+                logging.exception("Failed to validate oauth token: %s", e)
                 return False
 
         result = _internal_validate()
@@ -519,10 +664,10 @@ class PlaidSecurityManager(SupersetSecurityManager):
         return result
 
 
-def token_is_valid(access_token):
+def token_is_valid(access_token: str) -> bool:
     try:
-        decoded_token = jwt.decode(access_token, options={'verify_signature': False})
-        expiration_timestamp = decoded_token['exp']
+        decoded_token = jwt.decode(access_token, options={"verify_signature": False})
+        expiration_timestamp = decoded_token["exp"]
         current_timestamp = time.time()
         return expiration_timestamp > current_timestamp
     except (jwt.exceptions.DecodeError, KeyError):
