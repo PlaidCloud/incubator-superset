@@ -2053,4 +2053,6 @@ class DatabaseRestApi(BaseSupersetModelRestApi):
         schemas_allowed_processed = security_manager.get_schemas_accessible_by_user(
             database, database.get_default_catalog(), schemas_allowed, True
         )
-        return self.response(200, schemas=schemas_allowed_processed)
+        # get_schemas_accessible_by_user returns a set; Flask's JSON provider
+        # cannot serialize a set, so cast to a list before responding.
+        return self.response(200, schemas=list(schemas_allowed_processed))
