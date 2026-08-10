@@ -300,6 +300,13 @@ def test_get_datatype_without_mysqlclient(
     Subclasses like StarRocks and Doris speak the MySQL wire protocol but ship a
     pure Python driver, so ``MySQLdb`` is not necessarily installed.
     """
+    # pymysql is the fallback this test exercises; it's an optional transitive
+    # dependency (pulled in via the `starrocks` extra, which -- like `databend`
+    # -- isn't part of requirements/development.in) and isn't installed by
+    # default. See tests/unit_tests/db_engine_specs/test_datastore.py for the
+    # same pattern with a different optional driver.
+    pytest.importorskip("pymysql")
+
     from superset.db_engine_specs.mysql import MySQLEngineSpec
 
     # ``None`` in ``sys.modules`` makes the import raise ``ImportError``
