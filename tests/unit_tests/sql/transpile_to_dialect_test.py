@@ -253,6 +253,13 @@ def test_or_condition(sql: str, dialect: str, expected: str) -> None:
             "((a > 1 AND b < 2) OR (c = 3))",
         ),
         ("((a > 1 AND b < 2) OR (c = 3))", "mysql", "((a > 1 AND b < 2) OR (c = 3))"),
+        # databend routes through the ClickHouse-based dialect; an RLS predicate
+        # must transpile unchanged (guards the security-sensitive regen path).
+        (
+            "((a > 1 AND b < 2) OR (c = 3))",
+            "databend",
+            "((a > 1 AND b < 2) OR (c = 3))",
+        ),
     ],
 )
 def test_nested_conditions(sql: str, dialect: str, expected: str) -> None:
