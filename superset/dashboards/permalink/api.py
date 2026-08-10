@@ -19,7 +19,7 @@ from datetime import datetime
 from io import BytesIO
 from urllib import parse
 
-from flask import g, request, Response, url_for, send_file
+from flask import g, request, Response, send_file, url_for
 from flask_appbuilder.api import expose, protect, safe
 from marshmallow import ValidationError
 
@@ -34,9 +34,9 @@ from superset.dashboards.permalink.exceptions import DashboardPermalinkInvalidSt
 from superset.dashboards.permalink.schemas import DashboardPermalinkStateSchema
 from superset.extensions import event_logger
 from superset.key_value.exceptions import KeyValueAccessDeniedError
-from superset.views.base_api import BaseSupersetApi, requires_json
 from superset.utils.screenshots import DashboardScreenshot
 from superset.utils.urls import headless_url
+from superset.views.base_api import BaseSupersetApi, requires_json
 
 logger = logging.getLogger(__name__)
 
@@ -276,7 +276,8 @@ class DashboardPermalinkRestApi(BaseSupersetApi):
             dashboard_id, state = value["dashboardId"], value.get("state", {})
             dashboard_url = headless_url(
                 url_for(
-                    "Superset.dashboard", dashboard_id_or_slug=dashboard_id,
+                    "Superset.dashboard",
+                    dashboard_id_or_slug=dashboard_id,
                     permalink_key=key,
                     _external=False,
                 ),
@@ -314,4 +315,3 @@ class DashboardPermalinkRestApi(BaseSupersetApi):
             return self.response(403, message=str(ex))
         except DashboardNotFoundError as ex:
             return self.response(404, message=str(ex))
-
