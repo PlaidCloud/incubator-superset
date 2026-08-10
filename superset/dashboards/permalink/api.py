@@ -294,6 +294,8 @@ class DashboardPermalinkRestApi(BaseSupersetApi):
 
             screenshot = DashboardScreenshot(dashboard_url, None)
             pdf = screenshot.get_pdf(user=g.user)
+            if pdf is None:
+                return self.response(500, message="Failed to generate dashboard PDF")
             buf = BytesIO(pdf)
             buf.seek(0)
 
