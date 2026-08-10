@@ -2,10 +2,12 @@
 """
 Plaid Security Class for Superset
 """
+
 import logging
 import time
 import uuid
-from typing import List, Optional, Union
+from collections.abc import Iterable
+from typing import Any, Optional, TYPE_CHECKING
 from urllib.parse import urljoin
 
 import jwt
@@ -17,7 +19,6 @@ from flask_login import logout_user
 from plaidcloud.rpc.connection.jsonrpc import SimpleRPC
 from requests.exceptions import HTTPError
 from sqlalchemy import func
-from typing_extensions import override
 
 from plaid import rls_guard
 from plaid.auth_oidc import PlaidAuthOAuthView
@@ -27,6 +28,14 @@ from plaid.auth_oidc import PlaidAuthOAuthView
 # from plaid.blacklist_api import TokenBlacklistApi
 from superset.security import SupersetSecurityManager
 from superset.security.manager import SupersetRoleApi
+
+if TYPE_CHECKING:
+    from flask_appbuilder import AppBuilder
+    from flask_appbuilder.security.sqla.models import User
+    from sqlalchemy.orm import Query
+
+    from superset.connectors.sqla.models import BaseDatasource
+    from superset.models.core import Database
 
 __author__ = "Garrett Bates"
 __copyright__ = "© Copyright 2018=2026, PlaidCloud, Inc"
@@ -78,7 +87,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
     # anyone but the automation principal. See `plaid/rls_guard.py`.
     role_api = _PlaidGuardedRoleApi
 
-    def __init__(self, appbuilder):
+    def __init__(self, appbuilder: "AppBuilder") -> None:
         # These allowed me to turn this on without adjusting the superset_config.py
         # app = appbuilder.get_app
         # app.config['AUTH_TYPE'] = AUTH_OAUTH
@@ -136,7 +145,13 @@ class PlaidSecurityManager(SupersetSecurityManager):
             self.authoauthview = PlaidAuthOAuthView
 
         @token_update.connect_via(appbuilder)
-        def on_token_update(sender, name, token, refresh_token=None, access_token=None):
+        def on_token_update(
+            sender: Any,
+            name: str,
+            token: dict[str, Any],
+            refresh_token: Optional[str] = None,
+            access_token: Optional[str] = None,
+        ) -> None:
             # if refresh_token:
             #     item = OAuth2Token.find(name=name, refresh_token=refresh_token)
             # elif access_token:
@@ -149,7 +164,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
             # item.refresh_token = token.get('refresh_token')
             # item.expires_at = token['expires_at']
             # item.save()
-            log.info(f"Updated token for {name} - {repr(token)}")
+            log.info("Updated token for %s - %r", name, token)
             self.appbuilder.sm.set_oauth_session(name, token)
 
     # def register_views(self) -> None:
@@ -157,9 +172,14 @@ class PlaidSecurityManager(SupersetSecurityManager):
     #     from plaid.blacklist_api import TokenBlacklistApi
     #     self.appbuilder.add_api(TokenBlacklistApi)
 
-    def oauth_user_info(self, provider, response=None):
+    def oauth_user_info(
+        self, provider: str, response: Optional[dict[str, Any]] = None
+    ) -> Optional[dict[str, Any]]:
         # logging.debug("Oauth2 provider: {0}.".format(provider))
         if provider == "plaidkeycloak":
+            if response is None:
+                log.error("OAUTH response missing for provider %s", provider)
+                return None
             me = self.appbuilder.sm.oauth_remotes[provider].get("userinfo")
             me.raise_for_status()
             data = me.json()
@@ -174,7 +194,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
             #     role_keys.append('superset-admin')
 
             # This is for using Keycloak roles - have to inspect the token
-            access_token = response.get("access_token")
+            access_token = response["access_token"]
             decoded_token = jwt.decode(
                 access_token, options={"verify_signature": False}
             )
@@ -200,8 +220,11 @@ class PlaidSecurityManager(SupersetSecurityManager):
                 "role_keys": role_keys,
             }
 
-    @override
-    def find_user(self, username=None, email=None):
+        return None
+
+    def find_user(
+        self, username: Optional[str] = None, email: Optional[str] = None
+    ) -> Optional["User"]:
         """
         Finds user by username or email
 
@@ -224,7 +247,11 @@ class PlaidSecurityManager(SupersetSecurityManager):
             )
             return self._resolve_single_user(query, "email", email)
 
-    def _resolve_single_user(self, query, field, value):
+        return None
+
+    def _resolve_single_user(
+        self, query: "Query[User]", field: str, value: str
+    ) -> Optional["User"]:
         """
         Picks one user when a lookup matches more than one row.
 
@@ -249,7 +276,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         )
         return users[0] if users else None
 
-    def auth_user_oauth(self, userinfo):
+    def auth_user_oauth(self, userinfo: dict[str, Any]) -> Optional["User"]:
         """
         Method for authenticating user with OAuth.
         N.B. This is the overridden to use email as the key instead of username
@@ -364,7 +391,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         rpc = SimpleRPC(rpc_token, uri=rpc_url, verify_ssl=False)
         rpc._old_call_rpc = rpc.call_rpc
 
-        def superset_call_rpc(*args, **kwargs):
+        def superset_call_rpc(*args: Any, **kwargs: Any) -> Any:
             try:
                 return rpc._old_call_rpc(*args, **kwargs)
             except HTTPError as e:
@@ -381,7 +408,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         rpc.call_rpc = superset_call_rpc
         return rpc
 
-    def store_user_project_access(self):
+    def store_user_project_access(self) -> None:
         try:
             projects = self.get_rpc().analyze.project.projects(keys=["id"])
             project_ids = [str(uuid.UUID(p["id"])) for p in projects]
@@ -390,23 +417,23 @@ class PlaidSecurityManager(SupersetSecurityManager):
             log.error(str(e))
             session[PROJECT_ACCESS] = []  # No access
 
-    def _can_access_project(self, project_id):
+    def _can_access_project(self, project_id: str) -> bool:
         log.info(dict(session))
         if PROJECT_ACCESS not in session:
             return self.is_admin()
         return str(uuid.UUID(project_id)) in session[PROJECT_ACCESS]
 
-    def can_access_database(self, database: Union["Database"]) -> bool:
-        log.info(f"Can access database: {database}")
+    def can_access_database(self, database: "Database") -> bool:
+        log.info("Can access database: %s", database)
         return self._can_access_project(
             str(database.uuid)
         ) or super().can_access_database(database)
 
     def can_access_datasource(self, datasource: "BaseDatasource") -> bool:
-        log.info(f"Checking access to datasource: {datasource}")
-        log.info(f"Checking access to datasource db id: {datasource.database.uuid}")
+        log.info("Checking access to datasource: %s", datasource)
+        log.info("Checking access to datasource db id: %s", datasource.database.uuid)
         if datasource.schema is None:
-            log.info(f"No Schema: {datasource}")
+            log.info("No Schema: %s", datasource)
             # Call the base method if there is no schema since there isn't a
             # plaid schema.
             return super().can_access_datasource(datasource)
@@ -421,7 +448,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
         if isinstance(resource, Slice):
             return super().is_owner(resource) or any(
-                [self.is_owner(dashboard) for dashboard in resource.dashboards]
+                self.is_owner(dashboard) for dashboard in resource.dashboards
             )
 
         return super().is_owner(resource)
@@ -444,7 +471,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
     # def get_project_ids(self):
     #     return [db.id for db in self.get_project_dbs()]
 
-    def _get_project_dbs(self):
+    def _get_project_dbs(self) -> Iterable["Database"]:
         from superset.models.core import Database
 
         if PROJECT_ACCESS not in session:
@@ -502,19 +529,19 @@ class PlaidSecurityManager(SupersetSecurityManager):
         self,
         database: "Database",
         catalog: Optional[str],
-        schemas: List[str],
+        schemas: set[str],
         hierarchical: bool = True,
-    ) -> List[str]:
-        REPORTING_SCHEMA_PREFIX = "report"
+    ) -> set[str]:
+        reporting_schema_prefix = "report"
 
         schema = str(database.uuid)
-        if not schema.startswith(REPORTING_SCHEMA_PREFIX):
-            schema = f"{REPORTING_SCHEMA_PREFIX}{schema}"
+        if not schema.startswith(reporting_schema_prefix):
+            schema = f"{reporting_schema_prefix}{schema}"
 
         if schema in schemas:
-            return [schema]
+            return {schema}
 
-        return []
+        return set()
 
     # I can't see that this has been used anywhere
     # def get_table_ids(self):
@@ -550,7 +577,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
     #             "Appended %s to %s roles list.", role.name, user.username
     #         )
 
-    def set_oauth_session(self, provider, oauth_response):
+    def set_oauth_session(self, provider: str, oauth_response: dict[str, Any]) -> None:
         """
         Set the current session with OAuth token dict
         """
@@ -559,7 +586,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
             session["oauth_token_dict"] = oauth_response
         super().set_oauth_session(provider, oauth_response)
 
-    def has_oauth_token(self):
+    def has_oauth_token(self) -> bool:
         if self.auth_type == AUTH_OAUTH:
             return "oauth" in session
         # if self.auth_type == AUTH_OID:
@@ -568,8 +595,8 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
     # N.B. This method is called using FLASK_APP_MUTATOR in the superset-config secret
     #  It makes this call to validate the token in a before_request handler
-    def validate_oauth_token(self):
-        def _internal_validate():
+    def validate_oauth_token(self) -> bool:
+        def _internal_validate() -> bool:
             try:
                 if self.auth_type == AUTH_OAUTH:
                     if "oauth" in session:
@@ -637,7 +664,7 @@ class PlaidSecurityManager(SupersetSecurityManager):
         return result
 
 
-def token_is_valid(access_token):
+def token_is_valid(access_token: str) -> bool:
     try:
         decoded_token = jwt.decode(access_token, options={"verify_signature": False})
         expiration_timestamp = decoded_token["exp"]
