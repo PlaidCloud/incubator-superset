@@ -18,7 +18,10 @@
  */
 import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { CategoricalColorNamespace, getNumberFormatter } from '@superset-ui/core';
+import {
+  CategoricalColorNamespace,
+  getNumberFormatter,
+} from '@superset-ui/core';
 import { BubbleTimelineTransformedProps } from './types';
 import { buildLegend, padGridForLegend } from './legend';
 
@@ -67,7 +70,7 @@ export default function PluginChartBubbleTimeline(
     };
 
     const symbolSize = (val: BubbleValue) => {
-      const s = val[2];
+      const [, , s] = val;
       // Area-proportional scaling with a small floor so tiny bubbles stay visible.
       return Math.sqrt(Math.max(s, 0) / maxSize) * maxBubbleSize + 4;
     };

@@ -18,7 +18,10 @@
  */
 import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { CategoricalColorNamespace, getNumberFormatter } from '@superset-ui/core';
+import {
+  CategoricalColorNamespace,
+  getNumberFormatter,
+} from '@superset-ui/core';
 import { BarNegativeTransformedProps } from './types';
 import { buildLegend, padGridForLegend } from './legend';
 
@@ -58,7 +61,9 @@ export default function PluginChartBarNegative(
         .map((_, i) => i)
         .sort((a, b) => series[0].values[a] - series[0].values[b]);
       cats = order.map(i => categories[i]);
-      ser = [{ name: series[0].name, values: order.map(i => series[0].values[i]) }];
+      ser = [
+        { name: series[0].name, values: order.map(i => series[0].values[i]) },
+      ];
     }
 
     const legendNames = ser.map(s => s.name);

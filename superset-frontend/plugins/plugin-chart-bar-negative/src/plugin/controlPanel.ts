@@ -35,7 +35,9 @@ const config: ControlPanelConfig = {
             config: {
               ...sharedControls.entity,
               label: t('Category'),
-              description: t('Column plotted along the (vertical) category axis'),
+              description: t(
+                'Column plotted along the (vertical) category axis',
+              ),
               validators: [],
             },
           },

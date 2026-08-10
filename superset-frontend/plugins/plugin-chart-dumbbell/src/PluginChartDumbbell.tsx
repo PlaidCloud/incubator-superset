@@ -18,7 +18,10 @@
  */
 import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { CategoricalColorNamespace, getNumberFormatter } from '@superset-ui/core';
+import {
+  CategoricalColorNamespace,
+  getNumberFormatter,
+} from '@superset-ui/core';
 import { DumbbellTransformedProps } from './types';
 import { buildLegend, padGridForLegend } from './legend';
 
@@ -73,7 +76,12 @@ export default function PluginChartDumbbell(props: DumbbellTransformedProps) {
       z: lineArrow ? 4 : 2,
       symbol: lineArrow ? ['none', 'arrow'] : ['none', 'none'],
       symbolSize: lineArrow ? Math.max(12, lineWidth * 3) : 0,
-      lineStyle: { color: lineColor, width: lineWidth, cap: 'round', opacity: 1 },
+      lineStyle: {
+        color: lineColor,
+        width: lineWidth,
+        cap: 'round',
+        opacity: 1,
+      },
       data: categories.map((_, i) => ({
         coords: [
           [series[0].values[i], i],

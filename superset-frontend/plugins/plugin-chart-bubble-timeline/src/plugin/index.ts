@@ -22,10 +22,7 @@ import buildQuery from './buildQuery';
 import controlPanel from './controlPanel';
 import transformProps from './transformProps';
 import thumbnail from '../images/thumbnail.png';
-import {
-  BubbleTimelineChartProps,
-  BubbleTimelineFormData,
-} from '../types';
+import { BubbleTimelineChartProps, BubbleTimelineFormData } from '../types';
 
 export default class PluginChartBubbleTimeline extends ChartPlugin<
   BubbleTimelineFormData,

@@ -110,8 +110,7 @@ function polynomial(points: Point[], order: number): RegressionResult {
     y.push(points.reduce((s, [px, py]) => s + py * px ** i, 0));
   }
   const coeffs = solve(A, y);
-  const predict = (x: number) =>
-    coeffs.reduce((s, c, i) => s + c * x ** i, 0);
+  const predict = (x: number) => coeffs.reduce((s, c, i) => s + c * x ** i, 0);
   const terms = coeffs
     .map((c, i) => (i === 0 ? fmt(c) : `${fmt(c)}·x${i > 1 ? `^${i}` : ''}`))
     .reverse()
@@ -132,20 +131,32 @@ export function fitRegression(
   switch (type) {
     case 'exponential': {
       // y = a·e^(b·x)  ->  ln y = ln a + b·x  (needs y > 0)
-      const pts = clean.filter(([, y]) => y > 0).map(([x, y]) => [x, Math.log(y)] as Point);
+      const pts = clean
+        .filter(([, y]) => y > 0)
+        .map(([x, y]) => [x, Math.log(y)] as Point);
       if (pts.length < 2) return null;
       const [lnA, b] = ols(pts);
       const a = Math.exp(lnA);
       const predict = (x: number) => a * Math.exp(b * x);
-      return { predict, r2: rSquared(clean, predict), equation: `y = ${fmt(a)}·e^(${fmt(b)}·x)` };
+      return {
+        predict,
+        r2: rSquared(clean, predict),
+        equation: `y = ${fmt(a)}·e^(${fmt(b)}·x)`,
+      };
     }
     case 'logarithmic': {
       // y = a + b·ln x  (needs x > 0)
-      const pts = clean.filter(([x]) => x > 0).map(([x, y]) => [Math.log(x), y] as Point);
+      const pts = clean
+        .filter(([x]) => x > 0)
+        .map(([x, y]) => [Math.log(x), y] as Point);
       if (pts.length < 2) return null;
       const [a, b] = ols(pts);
       const predict = (x: number) => (x > 0 ? a + b * Math.log(x) : NaN);
-      return { predict, r2: rSquared(clean, predict), equation: `y = ${fmt(a)} + ${fmt(b)}·ln(x)` };
+      return {
+        predict,
+        r2: rSquared(clean, predict),
+        equation: `y = ${fmt(a)} + ${fmt(b)}·ln(x)`,
+      };
     }
     case 'power': {
       // y = a·x^b  ->  ln y = ln a + b·ln x  (needs x,y > 0)
@@ -156,7 +167,11 @@ export function fitRegression(
       const [lnA, b] = ols(pts);
       const a = Math.exp(lnA);
       const predict = (x: number) => (x > 0 ? a * x ** b : NaN);
-      return { predict, r2: rSquared(clean, predict), equation: `y = ${fmt(a)}·x^${fmt(b)}` };
+      return {
+        predict,
+        r2: rSquared(clean, predict),
+        equation: `y = ${fmt(a)}·x^${fmt(b)}`,
+      };
     }
     case 'polynomial':
       return polynomial(clean, order);
@@ -164,7 +179,11 @@ export function fitRegression(
     default: {
       const [a, b] = ols(clean);
       const predict = (x: number) => a + b * x;
-      return { predict, r2: rSquared(clean, predict), equation: `y = ${fmt(a)} + ${fmt(b)}·x` };
+      return {
+        predict,
+        r2: rSquared(clean, predict),
+        equation: `y = ${fmt(a)} + ${fmt(b)}·x`,
+      };
     }
   }
 }
@@ -177,7 +196,8 @@ export function sampleCurve(
   steps = 80,
 ): Point[] {
   const out: Point[] = [];
-  if (!Number.isFinite(xMin) || !Number.isFinite(xMax) || xMax <= xMin) return out;
+  if (!Number.isFinite(xMin) || !Number.isFinite(xMax) || xMax <= xMin)
+    return out;
   const dx = (xMax - xMin) / steps;
   for (let i = 0; i <= steps; i += 1) {
     const x = xMin + i * dx;
