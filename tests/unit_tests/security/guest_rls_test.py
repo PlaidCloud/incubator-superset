@@ -222,7 +222,7 @@ def test_scoped_guest_rule_preserved_through_get_predicates_for_table(
     database = mocker.MagicMock()
     database.get_dialect.return_value = sqlite.dialect()
     db = mocker.patch("superset.utils.rls.db")
-    db.session.query().filter().one_or_none.return_value = mock_pd
+    db.session.query().filter().order_by().all.return_value = [mock_pd]
 
     with (
         patch(
@@ -272,7 +272,7 @@ def test_global_guest_rule_excluded_through_get_predicates_for_table(
     database = mocker.MagicMock()
     database.get_dialect.return_value = sqlite.dialect()
     db = mocker.patch("superset.utils.rls.db")
-    db.session.query().filter().one_or_none.return_value = mock_pd
+    db.session.query().filter().order_by().all.return_value = [mock_pd]
 
     with (
         patch(

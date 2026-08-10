@@ -322,7 +322,7 @@ def test_get_predicates_for_table(mocker: MockerFixture) -> None:
     predicate.compile.return_value = "c1 = 1"
     dataset.get_sqla_row_level_filters.return_value = [predicate]
     db = mocker.patch("superset.utils.rls.db")
-    db.session.query().filter().one_or_none.return_value = dataset
+    db.session.query().filter().order_by().all.return_value = [dataset]
 
     table = Table("t1", "public", "examples")
     assert get_predicates_for_table(table, database, "examples") == ["c1 = 1"]
