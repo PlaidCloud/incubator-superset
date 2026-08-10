@@ -46,7 +46,9 @@ const config: ControlPanelConfig = {
             config: {
               ...sharedControls.entity,
               label: t('Category'),
-              description: t('Column plotted along the (vertical) category axis'),
+              description: t(
+                'Column plotted along the (vertical) category axis',
+              ),
               validators: [],
             },
           },
@@ -89,7 +91,9 @@ const config: ControlPanelConfig = {
             config: {
               type: 'TextControl',
               label: t('Origin color'),
-              description: t('Hex color for the origin marker (blank = scheme)'),
+              description: t(
+                'Hex color for the origin marker (blank = scheme)',
+              ),
               default: '',
               renderTrigger: true,
             },

@@ -18,7 +18,10 @@
  */
 import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { CategoricalColorNamespace, getNumberFormatter } from '@superset-ui/core';
+import {
+  CategoricalColorNamespace,
+  getNumberFormatter,
+} from '@superset-ui/core';
 import { ScatterRegressionTransformedProps } from './types';
 import { fitRegression, sampleCurve } from './regression';
 import { buildLegend, padGridForLegend } from './legend';
@@ -61,9 +64,7 @@ export default function PluginChartScatterRegression(
       type: 'scatter' as const,
       symbolSize: pointSize,
       itemStyle: { color: colorFn(name, sliceId), opacity: 0.8 },
-      data: points
-        .filter(p => p.series === name)
-        .map(p => [p.x, p.y, p.name]),
+      data: points.filter(p => p.series === name).map(p => [p.x, p.y, p.name]),
       emphasis: { focus: 'series' },
     }));
 
