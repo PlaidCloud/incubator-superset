@@ -338,6 +338,14 @@ def test_database_connection(
             "id": 1,
             "impersonate_user": False,
             "is_managed_externally": False,
+            # superset/databases/api.py DatabaseRestApi.show_columns includes
+            # "sqlalchemy_uri" (fork addition, commit 5572cc91a0e, absent
+            # upstream) alongside upstream's fields. Safe to expose: the
+            # stored value never carries a password -- Database.
+            # set_sqlalchemy_uri (superset/models/core.py) explicitly strips
+            # credentials before persisting. This test was never updated for
+            # the fork addition.
+            "sqlalchemy_uri": "gsheets://",
             "uuid": "02feae18-2dd6-4bb4-a9c0-49e9d4f29d58",
         },
     }

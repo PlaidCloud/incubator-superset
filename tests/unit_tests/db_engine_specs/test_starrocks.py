@@ -295,6 +295,13 @@ def test_fetch_data_without_mysqlclient(monkeypatch: pytest.MonkeyPatch) -> None
     installed; ``fetch_data`` used to fail with ``ModuleNotFoundError`` because
     it inherits ``get_datatype`` from the MySQL spec.
     """
+    # pymysql is the fallback this test exercises; it's an optional transitive
+    # dependency (pulled in via the `starrocks` extra, which -- like `databend`
+    # -- isn't part of requirements/development.in) and isn't installed by
+    # default. See tests/unit_tests/db_engine_specs/test_datastore.py for the
+    # same pattern with a different optional driver.
+    pytest.importorskip("pymysql")
+
     from superset.db_engine_specs.starrocks import StarRocksEngineSpec
 
     # ``None`` in ``sys.modules`` makes the import raise ``ImportError``
