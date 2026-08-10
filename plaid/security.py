@@ -19,7 +19,6 @@ from flask_login import logout_user
 from plaidcloud.rpc.connection.jsonrpc import SimpleRPC
 from requests.exceptions import HTTPError
 from sqlalchemy import func
-from typing_extensions import override
 
 from plaid import rls_guard
 from plaid.auth_oidc import PlaidAuthOAuthView
@@ -223,7 +222,6 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
         return None
 
-    @override
     def find_user(
         self, username: Optional[str] = None, email: Optional[str] = None
     ) -> Optional["User"]:
