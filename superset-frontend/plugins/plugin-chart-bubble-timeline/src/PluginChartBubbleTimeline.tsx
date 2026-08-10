@@ -107,6 +107,7 @@ export default function PluginChartBubbleTimeline(
               z: 0,
               style: {
                 text: String(period),
+                // eslint-disable-next-line theme-colors/no-literal-colors
                 fill: '#9aa0a6',
                 opacity: 0.35,
                 fontSize: watermarkSize,
@@ -145,7 +146,10 @@ export default function PluginChartBubbleTimeline(
           playInterval: 1500,
           currentIndex: 0,
           bottom: 4,
-          label: { color: '#666' },
+          label: {
+            // eslint-disable-next-line theme-colors/no-literal-colors
+            color: '#666',
+          },
         },
         color: categories.map((cat, i) => colorFn(cat, sliceId) || i),
         legend: legendOn

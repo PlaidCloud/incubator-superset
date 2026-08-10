@@ -26,7 +26,9 @@ import { ScatterRegressionTransformedProps } from './types';
 import { fitRegression, sampleCurve } from './regression';
 import { buildLegend, padGridForLegend } from './legend';
 
-const REG_COLOR = '#c0392b';
+const REG_COLOR =
+  // eslint-disable-next-line theme-colors/no-literal-colors
+  '#c0392b';
 
 export default function PluginChartScatterRegression(
   props: ScatterRegressionTransformedProps,

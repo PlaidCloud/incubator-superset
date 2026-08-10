@@ -102,7 +102,9 @@ export default function transformProps(
     destinationSymbol: destinationSymbol || 'diamond',
     destinationColor: destinationColor || '',
     lineWidth: Number(lineWidth) || 4,
-    lineColor: lineColor || '#bbbbbb',
+    lineColor:
+      // eslint-disable-next-line theme-colors/no-literal-colors
+      lineColor || '#bbbbbb',
     lineArrow: Boolean(lineArrow),
     showLabels: Boolean(showLabels),
     numberFormat: numberFormat || 'SMART_NUMBER',

@@ -158,6 +158,7 @@ const config: ControlPanelConfig = {
               type: 'TextControl',
               label: t('Connector / arrow color'),
               description: t('Hex color for the connector line and its arrow'),
+              // eslint-disable-next-line theme-colors/no-literal-colors
               default: '#bbbbbb',
               renderTrigger: true,
             },

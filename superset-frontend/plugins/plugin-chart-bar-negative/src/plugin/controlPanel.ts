@@ -156,6 +156,7 @@ const config: ControlPanelConfig = {
               description: t(
                 'Hex color for positive bars when a single metric is used',
               ),
+              // eslint-disable-next-line theme-colors/no-literal-colors
               default: '#2e7d32',
               renderTrigger: true,
             },
@@ -170,6 +171,7 @@ const config: ControlPanelConfig = {
               description: t(
                 'Hex color for negative bars when a single metric is used',
               ),
+              // eslint-disable-next-line theme-colors/no-literal-colors
               default: '#c0392b',
               renderTrigger: true,
             },
