@@ -117,7 +117,10 @@ Superset differently:
   shared ancestor is both correct typing (mypy can see ``post``/``put``/
   ``delete``/``update_role_users``/``datamodel`` are genuinely inherited, not
   merely hoped for) and a truer statement of the contract than an untyped
-  mixin would be.
+  mixin would be. Subclassing costs one thing, and it is not obvious:
+  overriding a FAB API method deletes that method's route unless the
+  override carries the vendor's ``_urls`` forward -- see
+  ``_keeps_vendor_route`` (sc-24868).
 * RLS rules: ``RLSRestApi`` (``superset/row_level_security/api.py``) has no
   equivalent override attribute -- Superset registers the class directly. Its
   ``post`` / ``put`` / ``delete`` / ``bulk_delete`` are monkeypatched in place
@@ -149,7 +152,7 @@ from __future__ import annotations
 
 import functools
 import logging
-from typing import Any, Callable, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING, TypeVar
 
 from flask import current_app, g, Response
 from flask_appbuilder.security.sqla.apis import RoleApi
@@ -160,6 +163,8 @@ if TYPE_CHECKING:
     from sqlalchemy.orm.attributes import Event
 
 logger = logging.getLogger(__name__)
+
+F = TypeVar("F", bound=Callable[..., Any])
 
 # Roles only ever use this exact form (trailing underscore -- a role is never
 # a guard). Rules use this stem with either `_` (Regular) or `guard_`
@@ -237,6 +242,52 @@ def _denied(api: "BaseApi", name: str | None) -> Response:
     return api.response(403, message=DENIAL_MESSAGE.format(name=name))
 
 
+def _keeps_vendor_route(parent: Callable[..., Any]) -> Callable[[F], F]:
+    """Carry the vendor method's FAB route metadata onto an override of it.
+
+    sc-24868: a plain subclass override of a FAB API method silently
+    UNREGISTERS that method's route. ``BaseApi._register_urls`` walks
+    ``dir(self)`` and calls ``add_url_rule`` only for attributes carrying
+    ``_urls`` (which ``@expose`` attaches); an undecorated override shadows
+    the decorated vendor attribute, so the route is never added at all.
+    Live on bf2 that made ``POST``/``PUT``/``DELETE
+    /api/v1/security/roles/`` answer 405 and ``PUT
+    /api/v1/security/roles/<id>/users`` answer 404, breaking the
+    reconciler's role create and its roster write -- while the guard bodies
+    below, being unreachable, never ran.
+
+    Two more attributes have to come along, each silent in a different way
+    (parity for all three is asserted by
+    ``test_override_carries_every_attribute_fab_reads``):
+
+    * ``_permission_name`` (``@permission_name``) -- the permission scan in
+      ``BaseApi.__init__`` reads it to build ``base_permissions``, and
+      ``@protect()``, which still runs inside the vendor method these
+      delegate to, answers 403 to *everyone* for a permission missing from
+      that list. Restoring the route without this trades a 405 for a 403.
+    * ``__doc__`` -- FAB's OpenAPI generation parses the YAML block in the
+      vendor method's docstring; an override's own (prose) docstring would
+      reduce these four operations to a bare tag, silently stripping their
+      request/response schemas from ``/api/v1/_openapi``. The guard adds no
+      parameter and no status code of its own beyond the 403 it shares with
+      every other FAB permission failure, so the vendor's description
+      remains the accurate one. Guard behaviour is documented on the class,
+      not on the routes.
+
+    The whole ``__dict__`` is deliberately NOT copied: ``@safe`` and
+    ``@protect()`` leave a ``__wrapped__`` behind, which would point
+    ``inspect.signature`` at a different function than the override.
+    """
+
+    def decorator(method: F) -> F:
+        method._urls = list(parent._urls)  # type: ignore[attr-defined]
+        method._permission_name = parent._permission_name  # type: ignore[attr-defined]
+        method.__doc__ = parent.__doc__
+        return method
+
+    return decorator
+
+
 class PlaidRoleApi(RoleApi):
     """Guard mixin for the vendor Role API -- see the wiring notes in the
     module docstring and in ``plaid/security.py``. Guards the four writes
@@ -244,8 +295,12 @@ class PlaidRoleApi(RoleApi):
     read/list/permission routes are untouched. Declared as a `RoleApi`
     subclass (not a bare mixin) because it is always combined with
     `SupersetRoleApi` at its point of use -- see the module docstring.
+
+    Every override here MUST carry ``@_keeps_vendor_route`` -- see its
+    docstring; without it the override deletes the very route it guards.
     """
 
+    @_keeps_vendor_route(RoleApi.post)
     def post(self) -> Response:
         from flask import request
 
@@ -254,6 +309,7 @@ class PlaidRoleApi(RoleApi):
             return _denied(self, name)
         return super().post()
 
+    @_keeps_vendor_route(RoleApi.put)
     def put(self, pk: int) -> Response:
         from flask import request
 
@@ -272,6 +328,7 @@ class PlaidRoleApi(RoleApi):
             return _denied(self, protected_name)
         return super().put(pk)
 
+    @_keeps_vendor_route(RoleApi.delete)
     def delete(self, pk: int) -> Response:
         existing = self.datamodel.get(pk)
         name = existing.name if existing else None
@@ -279,12 +336,16 @@ class PlaidRoleApi(RoleApi):
             return _denied(self, name)
         return super().delete(pk)
 
-    def update_role_users(self, pk: int) -> Response:
-        existing = self.datamodel.get(pk)
+    # `role_id`, not `pk`: this route is `/<int:role_id>/users`, and Flask
+    # passes URL converters as keyword arguments -- an override named `pk`
+    # raises TypeError on every call the moment the route is registered again.
+    @_keeps_vendor_route(RoleApi.update_role_users)
+    def update_role_users(self, role_id: int) -> Response:
+        existing = self.datamodel.get(role_id)
         name = existing.name if existing else None
         if is_protected_role_name(name) and not is_automation_principal():
             return _denied(self, name)
-        return super().update_role_users(pk)
+        return super().update_role_users(role_id)
 
 
 GetNamesFn = Callable[..., list[str]]

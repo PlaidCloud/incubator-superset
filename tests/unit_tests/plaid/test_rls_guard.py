@@ -45,7 +45,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-from flask import g
+from flask import Flask, g
 from flask_appbuilder.api import ModelRestApi
 from flask_appbuilder.security.sqla.apis import RoleApi
 from flask_appbuilder.security.sqla.models import Group, Model, Role, User
@@ -340,6 +340,83 @@ def test_role_create_of_reserved_name_is_blocked(app, app_context):
         "message": rls_guard.DENIAL_MESSAGE.format(name="plaid_rls_group-a")
     }
     assert calls == []
+
+
+# --- the overrides must not unregister the routes they guard (sc-24868) --
+#
+# Every test above calls the guard methods directly, so all of them passed
+# while all four routes were missing from the deployed app: FAB's
+# `BaseApi._register_urls` registers only attributes carrying `_urls`, and
+# an undecorated override shadows the vendor's decorated attribute. Live on
+# bf2 that answered 405 to `POST`/`PUT`/`DELETE /api/v1/security/roles/`
+# and 404 to `PUT /api/v1/security/roles/<id>/users` -- the reconciler's
+# role-create and roster-write primitives -- with the guard bodies below
+# never reached at all. These two build a REAL blueprint through FAB and
+# assert on the resulting URL map, so they fail the way the deployment did
+# rather than the way the fix happens to be spelled.
+
+
+def _guarded_blueprint(app):
+    api = _GuardedRoleApi()
+    probe = Flask(__name__)
+    probe.register_blueprint(api.create_blueprint(app.appbuilder))
+    return api, probe
+
+
+@pytest.mark.parametrize(
+    "rule, method",
+    [
+        ("/api/v1/security/roles/", "POST"),
+        ("/api/v1/security/roles/<pk>", "PUT"),
+        ("/api/v1/security/roles/<pk>", "DELETE"),
+        ("/api/v1/security/roles/<int:role_id>/users", "PUT"),
+    ],
+)
+def test_guarded_role_route_is_still_registered(app, app_context, rule, method):
+    _, probe = _guarded_blueprint(app)
+    registered = {
+        (str(r), m) for r in probe.url_map.iter_rules() for m in (r.methods or ())
+    }
+    assert (rule, method) in registered
+
+
+def test_protected_role_is_refused_through_the_real_route(app, app_context):
+    """End-to-end through Flask dispatch rather than a direct call: this is
+    also the only check that the override's parameter name still matches its
+    URL converter (`<int:role_id>`, not `pk`) -- Flask passes converters as
+    keyword arguments, so a mismatch is a TypeError on every request.
+    """
+    api, probe = _guarded_blueprint(app)
+    api.datamodel = SimpleNamespace(
+        get=lambda pk: SimpleNamespace(id=1, name="plaid_rls_group-a")
+    )
+
+    response = probe.test_client().put(
+        "/api/v1/security/roles/1/users", json={"user_ids": [1]}
+    )
+
+    assert response.status_code == 403
+    assert response.get_json() == {
+        "message": rls_guard.DENIAL_MESSAGE.format(name="plaid_rls_group-a")
+    }
+
+
+@pytest.mark.parametrize("method_name", ["post", "put", "delete", "update_role_users"])
+def test_override_carries_every_attribute_fab_reads(method_name):
+    """One contract -- the override is invisible to FAB -- and each of the
+    three attributes fails differently and silently on its own: `_urls`
+    decides whether the route exists at all, `_permission_name` decides
+    whether `@protect()` (running inside the vendor method these delegate
+    to) finds its permission in `base_permissions` or refuses everyone with
+    a 403, and `__doc__` carries the YAML block that gives the operation its
+    OpenAPI schemas.
+    """
+    override = getattr(rls_guard.PlaidRoleApi, method_name)
+    vendor = getattr(RoleApi, method_name)
+
+    assert override._urls == vendor._urls
+    assert override._permission_name == vendor._permission_name
+    assert override.__doc__ == vendor.__doc__
 
 
 # --- RLSRestApi name extraction + wrapping -------------------------------
