@@ -221,8 +221,36 @@ def is_automation_principal() -> bool:
     return username is not None and username == automation_username
 
 
+def _is_authenticated() -> bool:
+    """FAB's global ``before_request`` sets ``g.user = current_user``
+    (``security/manager.py:2179``), so an unauthenticated request reaches a
+    view carrying Flask-Login's ``AnonymousUserMixin``: ``is_authenticated``
+    False, and no ``username`` attribute at all.
+    """
+    return bool(getattr(getattr(g, "user", None), "is_authenticated", False))
+
+
 def _denied(api: "BaseApi", name: str | None) -> Response:
-    """Build the refusal response. Deliberately calls the generic
+    """Build the refusal response.
+
+    An unauthenticated caller gets a bare 401 instead of the named 403
+    (sc-24868 review). Every guard in this module runs BEFORE the vendor's
+    ``@protect()`` -- that decorator sits on the method the guard delegates
+    to, and is only reached on the ALLOWED path -- so an anonymous request
+    lands here, and a 403 quoting the resource name would let a caller with
+    no credentials at all enumerate which role ids are PlaidCloud-generated
+    and read the Keycloak group id embedded in each name, purely from the
+    403-vs-401 split.
+
+    Delegating to ``super()`` for anonymous callers and letting
+    ``@protect()`` answer is NOT the alternative it looks like:
+    ``@protect()`` admits a request outright when ``is_item_public`` finds
+    the Public role holding the permission (``security/manager.py:1457``),
+    so on a workspace that has published role writes the delegation would
+    perform the write this module exists to refuse. Refusing here keeps the
+    guard fail-closed and changes only what the refusal says.
+
+    Deliberately calls the generic
     ``BaseApi.response(code, **kwargs)`` rather than ``response_403()`` --
     FAB 5.0.2's ``response_403`` takes NO ``message`` argument at all
     (``def response_403(self) -> Response``, hardcoded to "Forbidden"; no
@@ -239,6 +267,8 @@ def _denied(api: "BaseApi", name: str | None) -> Response:
         name,
         getattr(getattr(g, "user", None), "username", None),
     )
+    if not _is_authenticated():
+        return api.response_401()
     return api.response(403, message=DENIAL_MESSAGE.format(name=name))
 
 
