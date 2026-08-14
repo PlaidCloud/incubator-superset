@@ -19,11 +19,10 @@ from datetime import datetime
 from io import BytesIO
 from urllib import parse
 
-from flask import request, Response, url_for, send_file
+from flask import g, request, Response, send_file, url_for
 from flask_appbuilder.api import expose, protect, safe
 from marshmallow import ValidationError
 
-from superset import security_manager
 from superset.commands.dashboard.exceptions import (
     DashboardAccessDeniedError,
     DashboardNotFoundError,
@@ -35,10 +34,9 @@ from superset.dashboards.permalink.exceptions import DashboardPermalinkInvalidSt
 from superset.dashboards.permalink.schemas import DashboardPermalinkStateSchema
 from superset.extensions import event_logger
 from superset.key_value.exceptions import KeyValueAccessDeniedError
-from superset.views.base_api import BaseSupersetApi, requires_json
-from superset.utils.core import override_user
 from superset.utils.screenshots import DashboardScreenshot
 from superset.utils.urls import headless_url
+from superset.views.base_api import BaseSupersetApi, requires_json
 
 logger = logging.getLogger(__name__)
 
@@ -278,7 +276,8 @@ class DashboardPermalinkRestApi(BaseSupersetApi):
             dashboard_id, state = value["dashboardId"], value.get("state", {})
             dashboard_url = headless_url(
                 url_for(
-                    "Superset.dashboard", dashboard_id_or_slug=dashboard_id,
+                    "Superset.dashboard",
+                    dashboard_id_or_slug=dashboard_id,
                     permalink_key=key,
                     _external=False,
                 ),
@@ -293,12 +292,12 @@ class DashboardPermalinkRestApi(BaseSupersetApi):
 
             logger.info("Create dashboard PDF for : %s", dashboard_url)
 
-            user = security_manager.find_user("admin")
-            with override_user(user):
-                screenshot = DashboardScreenshot(dashboard_url, None)
-                pdf = screenshot.get_pdf(user=user)
-                buf = BytesIO(pdf)
-                buf.seek(0)
+            screenshot = DashboardScreenshot(dashboard_url, None)
+            pdf = screenshot.get_pdf(user=g.user)
+            if pdf is None:
+                return self.response(500, message="Failed to generate dashboard PDF")
+            buf = BytesIO(pdf)
+            buf.seek(0)
 
             timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
             root = f"dashboard_pdf_{timestamp}"
@@ -318,4 +317,3 @@ class DashboardPermalinkRestApi(BaseSupersetApi):
             return self.response(403, message=str(ex))
         except DashboardNotFoundError as ex:
             return self.response(404, message=str(ex))
-

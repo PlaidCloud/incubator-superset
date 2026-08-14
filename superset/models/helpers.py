@@ -2071,8 +2071,23 @@ class ExploreMixin:  # pylint: disable=too-many-public-methods
                     from_sql = parsed_script.format()
 
             except Exception as ex:
-                # Log the error but don't fail - RLS application is best-effort
+                # RLS application is a security control, not best-effort. Anything
+                # that raises here (an RLS clause sqlglot cannot parse, a duplicate
+                # dataset over one physical table, a failure re-rendering the SQL)
+                # would otherwise leave ``from_sql`` unfiltered and return every row
+                # to a user entitled to a subset. Fail closed.
                 logger.warning("Failed to apply RLS to virtual dataset SQL: %s", ex)
+                raise SupersetSecurityException(
+                    SupersetError(
+                        error_type=SupersetErrorType.DATASOURCE_SECURITY_ACCESS_ERROR,
+                        message=_(
+                            "Row level security could not be applied to this "
+                            "virtual dataset, so the query was blocked. Contact "
+                            "an administrator."
+                        ),
+                        level=ErrorLevel.ERROR,
+                    )
+                ) from ex
 
         cte = self.db_engine_spec.get_cte_query(from_sql)
         from_clause = (

@@ -117,7 +117,10 @@ Superset differently:
   shared ancestor is both correct typing (mypy can see ``post``/``put``/
   ``delete``/``update_role_users``/``datamodel`` are genuinely inherited, not
   merely hoped for) and a truer statement of the contract than an untyped
-  mixin would be.
+  mixin would be. Subclassing costs one thing, and it is not obvious:
+  overriding a FAB API method deletes that method's route unless the
+  override carries the vendor's ``_urls`` forward -- see
+  ``_keeps_vendor_route`` (sc-24868).
 * RLS rules: ``RLSRestApi`` (``superset/row_level_security/api.py``) has no
   equivalent override attribute -- Superset registers the class directly. Its
   ``post`` / ``put`` / ``delete`` / ``bulk_delete`` are monkeypatched in place
@@ -137,19 +140,26 @@ Superset differently:
   after Babel exists, and no request is dispatched until long after
   ``create_app()`` returns, so by the time any request reaches a route,
   Babel is present and ``install()`` -- idempotent, see below -- has already
-  patched the class before that request's view function runs. Patching the
-  class attribute (rather than the instance) is what makes this safe to
-  defer at all: Python resolves ``self.post(...)`` from the class's current
-  ``__dict__`` at CALL time, not at route-registration time, so ordering
-  relative to ``add_api(RLSRestApi)`` -- which still happens earlier, in
-  ``init_views()`` -- does not matter either.
+  patched the class before that request's view function runs.
+
+  ⚠️ Deferring past ``add_api(RLSRestApi)`` is NOT free, and the original
+  version of this paragraph had the reason exactly backwards. It claimed
+  "Python resolves ``self.post(...)`` from the class's current ``__dict__``
+  at CALL time, not at route-registration time, so ordering relative to
+  ``add_api(RLSRestApi)`` does not matter." FAB never calls ``self.post(...)``
+  for a request: ``BaseApi._register_urls`` captures the BOUND METHOD at
+  registration and hands it to ``add_url_rule``, and Flask dispatches out of
+  ``app.view_functions``. So the class patch reached direct calls (every unit
+  test) and nothing else -- the rule guard was inert for every real request
+  from the day it shipped. ``install()`` now also repoints those registered
+  view functions; see ``_rebind_registered_routes``.
 """
 
 from __future__ import annotations
 
 import functools
 import logging
-from typing import Any, Callable, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING, TypeVar
 
 from flask import current_app, g, Response
 from flask_appbuilder.security.sqla.apis import RoleApi
@@ -160,6 +170,8 @@ if TYPE_CHECKING:
     from sqlalchemy.orm.attributes import Event
 
 logger = logging.getLogger(__name__)
+
+F = TypeVar("F", bound=Callable[..., Any])
 
 # Roles only ever use this exact form (trailing underscore -- a role is never
 # a guard). Rules use this stem with either `_` (Regular) or `guard_`
@@ -199,6 +211,47 @@ def _session_is_oauth() -> bool:
     return "oauth" in session
 
 
+def _request_identity() -> Any:
+    """The user this request authenticates as -- resolving a JWT bearer token
+    first, because nothing else has yet.
+
+    sc-24868: every guard in this module runs BEFORE the vendor's
+    ``@protect()``, and ``@protect()`` is the only thing that ever turns a
+    bearer token into an identity. FAB's ``load_user_jwt`` is registered as
+    a ``user_lookup_loader``, so it fires from inside
+    ``verify_jwt_in_request()`` and assigns ``g.user`` there -- its own
+    comment reads "Set flask g.user to JWT user, we can't do it on before
+    request". FAB's ``before_request`` only does ``g.user = current_user``,
+    which for a bearer-token request carrying no session cookie is
+    Flask-Login's anonymous user.
+
+    So reading ``g.user`` directly would refuse the automation principal
+    ITSELF -- plaid authenticates to Superset with an ``Authorization:
+    Bearer`` header and nothing else (``superset_rest`` /
+    ``superset_get_token``, provider ``db``) -- which is the one identity
+    this whole module exists to keep writing. That defect was dormant only
+    because the guards never ran; restoring their routes makes it live.
+
+    ``optional=True`` makes a request with no token a no-op rather than an
+    error, leaving whatever ``before_request`` established (an OAuth or
+    session user, or nobody). A malformed or expired token still raises,
+    and is treated here as no identity at all -- fail closed.
+    """
+    from flask_jwt_extended import verify_jwt_in_request
+
+    try:
+        verify_jwt_in_request(optional=True)
+    except Exception:  # pylint: disable=broad-except
+        # Every failure here means the same thing -- this request carries no
+        # usable identity -- and none of them may become a 500 out of a
+        # guard: a malformed or expired token (still raised under
+        # `optional=True`), or an app with no JWT extension configured
+        # (`KeyError: 'JWT_TOKEN_LOCATION'`). The caller is refused below,
+        # not crashed.
+        logger.debug("rls_guard: no usable bearer identity on this request.")
+    return getattr(g, "user", None)
+
+
 def is_automation_principal() -> bool:
     """True only for the one Superset user plaid's own service calls
     authenticate as -- see the module docstring. Fails CLOSED if
@@ -211,13 +264,41 @@ def is_automation_principal() -> bool:
         return False
     if _session_is_oauth():
         return False
-    user = getattr(g, "user", None)
-    username = getattr(user, "username", None)
+    username = getattr(_request_identity(), "username", None)
     return username is not None and username == automation_username
 
 
+def _is_authenticated() -> bool:
+    """Whether this request carries any identity at all -- via
+    ``_request_identity``, so a bearer token counts, and a caller who holds
+    a valid one is never told a protected resource exists but answered 401.
+    An unauthenticated request reaches a view carrying Flask-Login's
+    ``AnonymousUserMixin``: ``is_authenticated`` False.
+    """
+    return bool(getattr(_request_identity(), "is_authenticated", False))
+
+
 def _denied(api: "BaseApi", name: str | None) -> Response:
-    """Build the refusal response. Deliberately calls the generic
+    """Build the refusal response.
+
+    An unauthenticated caller gets a bare 401 instead of the named 403
+    (sc-24868 review). Every guard in this module runs BEFORE the vendor's
+    ``@protect()`` -- that decorator sits on the method the guard delegates
+    to, and is only reached on the ALLOWED path -- so an anonymous request
+    lands here, and a 403 quoting the resource name would let a caller with
+    no credentials at all enumerate which role ids are PlaidCloud-generated
+    and read the Keycloak group id embedded in each name, purely from the
+    403-vs-401 split.
+
+    Delegating to ``super()`` for anonymous callers and letting
+    ``@protect()`` answer is NOT the alternative it looks like:
+    ``@protect()`` admits a request outright when ``is_item_public`` finds
+    the Public role holding the permission (``security/manager.py:1457``),
+    so on a workspace that has published role writes the delegation would
+    perform the write this module exists to refuse. Refusing here keeps the
+    guard fail-closed and changes only what the refusal says.
+
+    Deliberately calls the generic
     ``BaseApi.response(code, **kwargs)`` rather than ``response_403()`` --
     FAB 5.0.2's ``response_403`` takes NO ``message`` argument at all
     (``def response_403(self) -> Response``, hardcoded to "Forbidden"; no
@@ -234,7 +315,55 @@ def _denied(api: "BaseApi", name: str | None) -> Response:
         name,
         getattr(getattr(g, "user", None), "username", None),
     )
+    if not _is_authenticated():
+        return api.response_401()
     return api.response(403, message=DENIAL_MESSAGE.format(name=name))
+
+
+def _keeps_vendor_route(parent: Callable[..., Any]) -> Callable[[F], F]:
+    """Carry the vendor method's FAB route metadata onto an override of it.
+
+    sc-24868: a plain subclass override of a FAB API method silently
+    UNREGISTERS that method's route. ``BaseApi._register_urls`` walks
+    ``dir(self)`` and calls ``add_url_rule`` only for attributes carrying
+    ``_urls`` (which ``@expose`` attaches); an undecorated override shadows
+    the decorated vendor attribute, so the route is never added at all.
+    Live on bf2 that made ``POST``/``PUT``/``DELETE
+    /api/v1/security/roles/`` answer 405 and ``PUT
+    /api/v1/security/roles/<id>/users`` answer 404, breaking the
+    reconciler's role create and its roster write -- while the guard bodies
+    below, being unreachable, never ran.
+
+    Two more attributes have to come along, each silent in a different way
+    (parity for all three is asserted by
+    ``test_override_carries_every_attribute_fab_reads``):
+
+    * ``_permission_name`` (``@permission_name``) -- the permission scan in
+      ``BaseApi.__init__`` reads it to build ``base_permissions``, and
+      ``@protect()``, which still runs inside the vendor method these
+      delegate to, answers 403 to *everyone* for a permission missing from
+      that list. Restoring the route without this trades a 405 for a 403.
+    * ``__doc__`` -- FAB's OpenAPI generation parses the YAML block in the
+      vendor method's docstring; an override's own (prose) docstring would
+      reduce these four operations to a bare tag, silently stripping their
+      request/response schemas from ``/api/v1/_openapi``. The guard adds no
+      parameter and no status code of its own beyond the 403 it shares with
+      every other FAB permission failure, so the vendor's description
+      remains the accurate one. Guard behaviour is documented on the class,
+      not on the routes.
+
+    The whole ``__dict__`` is deliberately NOT copied: ``@safe`` and
+    ``@protect()`` leave a ``__wrapped__`` behind, which would point
+    ``inspect.signature`` at a different function than the override.
+    """
+
+    def decorator(method: F) -> F:
+        method._urls = list(parent._urls)  # type: ignore[attr-defined]
+        method._permission_name = parent._permission_name  # type: ignore[attr-defined]
+        method.__doc__ = parent.__doc__
+        return method
+
+    return decorator
 
 
 class PlaidRoleApi(RoleApi):
@@ -244,8 +373,12 @@ class PlaidRoleApi(RoleApi):
     read/list/permission routes are untouched. Declared as a `RoleApi`
     subclass (not a bare mixin) because it is always combined with
     `SupersetRoleApi` at its point of use -- see the module docstring.
+
+    Every override here MUST carry ``@_keeps_vendor_route`` -- see its
+    docstring; without it the override deletes the very route it guards.
     """
 
+    @_keeps_vendor_route(RoleApi.post)
     def post(self) -> Response:
         from flask import request
 
@@ -254,6 +387,7 @@ class PlaidRoleApi(RoleApi):
             return _denied(self, name)
         return super().post()
 
+    @_keeps_vendor_route(RoleApi.put)
     def put(self, pk: int) -> Response:
         from flask import request
 
@@ -272,6 +406,7 @@ class PlaidRoleApi(RoleApi):
             return _denied(self, protected_name)
         return super().put(pk)
 
+    @_keeps_vendor_route(RoleApi.delete)
     def delete(self, pk: int) -> Response:
         existing = self.datamodel.get(pk)
         name = existing.name if existing else None
@@ -279,12 +414,16 @@ class PlaidRoleApi(RoleApi):
             return _denied(self, name)
         return super().delete(pk)
 
-    def update_role_users(self, pk: int) -> Response:
-        existing = self.datamodel.get(pk)
+    # `role_id`, not `pk`: this route is `/<int:role_id>/users`, and Flask
+    # passes URL converters as keyword arguments -- an override named `pk`
+    # raises TypeError on every call the moment the route is registered again.
+    @_keeps_vendor_route(RoleApi.update_role_users)
+    def update_role_users(self, role_id: int) -> Response:
+        existing = self.datamodel.get(role_id)
         name = existing.name if existing else None
         if is_protected_role_name(name) and not is_automation_principal():
             return _denied(self, name)
-        return super().update_role_users(pk)
+        return super().update_role_users(role_id)
 
 
 GetNamesFn = Callable[..., list[str]]
@@ -345,9 +484,65 @@ def _bulk_delete_names(api: "BaseApi", **kwargs: Any) -> list[str]:
     return names
 
 
+def _rebind_registered_routes(
+    api_class: type[BaseApi], method_names: tuple[str, ...]
+) -> None:
+    """Point Flask's already-registered view functions at the patched methods.
+
+    sc-24868: without this, `install()` below is INERT for every HTTP
+    request. `install()` deliberately runs on the first request, which is
+    necessarily after `add_api(RLSRestApi)` -- and FAB does not look the
+    handler up on the class at call time. `BaseApi._register_urls` captures
+    the BOUND METHOD once, at registration (`attr = getattr(self,
+    attr_name)` ... `add_url_rule(url, attr_name, route_handler)`), and
+    Flask stores it in `app.view_functions`. Rebinding the class attribute
+    afterwards changes what a direct `api.post(...)` call does -- which is
+    all the unit tests ever did -- and nothing whatsoever about what the
+    route calls. Confirmed live: a `plaid_rls_`-named rule write reached
+    Superset's own schema validation with no denial logged.
+
+    Rebuilding the handler through FAB's own `wrap_route_handler_with_hooks`
+    rather than assigning the bare bound method keeps any `@before_request`
+    hook the vendor class declares -- there are none on `RLSRestApi` today,
+    and silently dropping them later would be its own quiet defect.
+
+    Raises rather than logging if an endpoint is missing: this whole module
+    fails closed, and the failure it exists to prevent is exactly a guard
+    that is present, looks installed, and does nothing.
+    """
+    from flask_appbuilder.hooks import (
+        get_before_request_hooks,
+        wrap_route_handler_with_hooks,
+    )
+
+    instance = next(
+        (v for v in current_app.appbuilder.baseviews if isinstance(v, api_class)), None
+    )
+    if instance is None:
+        raise PlaidRlsGuardError(
+            f"{api_class.__name__} is not registered on this app -- the "
+            "plaid_rls rule guard cannot attach to its routes."
+        )
+
+    hooks = get_before_request_hooks(instance)
+    for name in method_names:
+        endpoint = f"{instance.endpoint}.{name}"
+        if endpoint not in current_app.view_functions:
+            raise PlaidRlsGuardError(
+                f"No registered route for {endpoint} -- the plaid_rls rule "
+                "guard cannot attach to it."
+            )
+        current_app.view_functions[endpoint] = wrap_route_handler_with_hooks(
+            name, getattr(instance, name), hooks
+        )
+
+
 def install() -> None:
-    """Monkeypatch `RLSRestApi`'s four write routes in place. Idempotent --
-    safe to call more than once (e.g. module re-import under a reloader).
+    """Monkeypatch `RLSRestApi`'s four write routes in place, then repoint the
+    routes FAB already registered at the patched methods -- see
+    `_rebind_registered_routes`, without which the patch never runs for an
+    actual request. Idempotent -- safe to call more than once (e.g. module
+    re-import under a reloader).
     """
     from superset.row_level_security.api import RLSRestApi
 
@@ -360,6 +555,7 @@ def install() -> None:
     RLSRestApi.bulk_delete = _guard_rls_rule_write(_bulk_delete_names)(
         RLSRestApi.bulk_delete
     )
+    _rebind_registered_routes(RLSRestApi, ("post", "put", "delete", "bulk_delete"))
     RLSRestApi._plaid_rls_guard_installed = True
     logger.info("plaid_rls write guard installed on RLSRestApi.")
 
