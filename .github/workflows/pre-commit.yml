@@ -40,7 +40,17 @@ jobs:
           echo "HOMEBREW_PREFIX=$HOMEBREW_PREFIX" >>"${GITHUB_ENV}"
           echo "HOMEBREW_CELLAR=$HOMEBREW_CELLAR" >>"${GITHUB_ENV}"
           echo "HOMEBREW_REPOSITORY=$HOMEBREW_REPOSITORY" >>"${GITHUB_ENV}"
-          brew install norwoodj/tap/helm-docs
+          # Install helm-docs from the pinned GitHub release rather than the
+          # Homebrew tap: `brew install norwoodj/tap/helm-docs` fails on the
+          # runner now that Homebrew refuses untrusted third-party taps
+          # non-interactively ("tap is not trusted" -> broken pipe). Keep the
+          # version in sync with the helm-docs hook in .pre-commit-config.yaml.
+          HELM_DOCS_VERSION=1.14.2
+          curl -fsSL -o /tmp/helm-docs.tar.gz \
+            "https://github.com/norwoodj/helm-docs/releases/download/v${HELM_DOCS_VERSION}/helm-docs_${HELM_DOCS_VERSION}_Linux_x86_64.tar.gz"
+          tar -xzf /tmp/helm-docs.tar.gz -C /tmp helm-docs
+          sudo install -m 0755 /tmp/helm-docs /usr/local/bin/helm-docs
+          helm-docs --version
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:

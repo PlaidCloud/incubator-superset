@@ -18,6 +18,7 @@ import logging
 from typing import Any
 
 from flask import current_app as app
+from sqlalchemy import update
 
 from superset.commands.base import BaseCommand
 from superset.daos.theme import ThemeDAO
@@ -37,12 +38,15 @@ class SeedSystemThemesCommand(BaseCommand):
 
         themes_to_seed = []
         if theme_default := app.config.get("THEME_DEFAULT"):
-            themes_to_seed.append(("THEME_DEFAULT", theme_default))
+            themes_to_seed.append(
+                ("THEME_DEFAULT", theme_default, "is_system_default")
+            )
         if theme_dark := app.config.get("THEME_DARK"):
-            themes_to_seed.append(("THEME_DARK", theme_dark))
+            themes_to_seed.append(("THEME_DARK", theme_dark, "is_system_dark"))
 
-        for theme_name, theme_config in themes_to_seed:
+        for theme_name, theme_config, flag_name in themes_to_seed:
             self._upsert_system_theme(theme_name, theme_config)
+            self._claim_system_flag(theme_name, flag_name)
 
     @transaction()
     def _upsert_system_theme(
@@ -101,6 +105,43 @@ class SeedSystemThemesCommand(BaseCommand):
             )
             db.session.add(new_theme)
             logger.debug("Created system theme: %s", theme_name)
+
+    @transaction()
+    def _claim_system_flag(self, theme_name: str, flag_name: str) -> None:
+        """Ensure the named system theme owns the given system role flag.
+
+        The seed runs on every boot, so a system theme (THEME_DEFAULT /
+        THEME_DARK) must hold its role flag (is_system_default /
+        is_system_dark) for light/dark chrome to resolve correctly. A
+        tenant's own non-system theme is left untouched: if a custom theme
+        already holds the flag it is preserved and the system theme does not
+        reclaim it.
+        """
+        flag = getattr(Theme, flag_name)
+
+        custom_holder = (
+            db.session.query(Theme)
+            .filter(flag.is_(True), ~Theme.is_system)
+            .first()
+        )
+        if custom_holder is not None:
+            logger.debug(
+                "Leaving %s with a custom theme; not reclaiming for %s",
+                flag_name,
+                theme_name,
+            )
+            return
+
+        # Move the flag onto the system theme (clear everywhere, then set).
+        db.session.execute(
+            update(Theme).where(flag.is_(True)).values(**{flag_name: False})
+        )
+        db.session.execute(
+            update(Theme)
+            .where(Theme.theme_name == theme_name, Theme.is_system.is_(True))
+            .values(**{flag_name: True})
+        )
+        logger.debug("Claimed %s for system theme %s", flag_name, theme_name)
 
     def validate(self) -> None:
         """Validate that the command can be executed."""

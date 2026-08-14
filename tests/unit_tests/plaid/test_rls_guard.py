@@ -42,11 +42,11 @@ into every other test in the file.
 """
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-from flask import g
-from flask_appbuilder.api import ModelRestApi
+from flask import Flask, g
+from flask_appbuilder.api import BaseApi, expose, ModelRestApi
 from flask_appbuilder.security.sqla.apis import RoleApi
 from flask_appbuilder.security.sqla.models import Group, Model, Role, User
 from sqlalchemy import create_engine
@@ -96,7 +96,7 @@ def test_is_protected_rule_name(name, expected):
 
 def test_automation_principal_matches_configured_username(app, app_context):
     with app.test_request_context():
-        g.user = SimpleNamespace(username="admin")
+        g.user = SimpleNamespace(username="admin", is_authenticated=True)
         assert rls_guard.is_automation_principal() is True
 
 
@@ -104,7 +104,7 @@ def test_automation_principal_rejects_other_username(app, app_context):
     """The exact scenario the guard exists for: a Keycloak-mapped Admin-role
     user is a different `ab_user` row than plaid's own automation login."""
     with app.test_request_context():
-        g.user = SimpleNamespace(username="alice@customer.com")
+        g.user = SimpleNamespace(username="alice@customer.com", is_authenticated=True)
         assert rls_guard.is_automation_principal() is False
 
 
@@ -120,7 +120,7 @@ def test_automation_principal_fails_closed_when_unconfigured(
     module docstring's explicit fail-closed contract."""
     monkeypatch.setitem(app.config, "PLAID_RLS_AUTOMATION_USERNAME", None)
     with app.test_request_context():
-        g.user = SimpleNamespace(username="admin")
+        g.user = SimpleNamespace(username="admin", is_authenticated=True)
         assert rls_guard.is_automation_principal() is False
 
 
@@ -129,7 +129,50 @@ def test_automation_principal_fails_closed_on_empty_string(
 ):
     monkeypatch.setitem(app.config, "PLAID_RLS_AUTOMATION_USERNAME", "")
     with app.test_request_context():
-        g.user = SimpleNamespace(username="admin")
+        g.user = SimpleNamespace(username="admin", is_authenticated=True)
+        assert rls_guard.is_automation_principal() is False
+
+
+def test_bearer_identity_is_resolved_before_the_automation_check(
+    app, app_context, monkeypatch
+):
+    """sc-24868: the guards run before the vendor's `@protect()`, which is the
+    only thing that ever resolves a bearer token into an identity -- FAB's
+    `load_user_jwt` is a `user_lookup_loader`, so it fires from INSIDE
+    `verify_jwt_in_request()` and assigns `g.user` there ("we can't do it on
+    before request", its own comment). Reading `g.user` alone therefore
+    refused plaid's own automation, which authenticates with a bearer token
+    and no session cookie -- the one identity this module exists to keep
+    writing.
+
+    The stand-in below stands in for FAB's loader, not for the assertion:
+    what is under test is that this module resolves the token at all before
+    deciding, which it did not.
+    """
+    import flask_jwt_extended
+
+    def fake_verify(optional=False):
+        assert optional is True, "a request with no token must not be an error"
+        g.user = SimpleNamespace(username="admin", is_authenticated=True)
+
+    monkeypatch.setattr(flask_jwt_extended, "verify_jwt_in_request", fake_verify)
+
+    with app.test_request_context():
+        assert rls_guard.is_automation_principal() is True
+
+
+def test_a_rejected_bearer_token_is_no_identity(app, app_context, monkeypatch):
+    """Malformed/expired still raises under `optional=True`. Fail closed, and
+    do not let the exception escape into the guarded route."""
+    import flask_jwt_extended
+    from flask_jwt_extended.exceptions import JWTDecodeError
+
+    def fake_verify(optional=False):  # noqa: ARG001
+        raise JWTDecodeError("signature verification failed")
+
+    monkeypatch.setattr(flask_jwt_extended, "verify_jwt_in_request", fake_verify)
+
+    with app.test_request_context():
         assert rls_guard.is_automation_principal() is False
 
 
@@ -143,7 +186,7 @@ def test_oauth_session_cannot_satisfy_automation_principal_even_with_matching_us
         from flask import session
 
         session["oauth"] = ("token", "secret")
-        g.user = SimpleNamespace(username="admin")
+        g.user = SimpleNamespace(username="admin", is_authenticated=True)
         assert rls_guard.is_automation_principal() is False
 
 
@@ -230,7 +273,7 @@ def test_role_write_blocked_for_non_automation_user(
     role = SimpleNamespace(id=1, name="plaid_rls_group-a")
     api = _api(role)
     with app.test_request_context(), _patch_upstream() as calls:
-        g.user = SimpleNamespace(username="alice@customer.com")
+        g.user = SimpleNamespace(username="alice@customer.com", is_authenticated=True)
         result = getattr(api, method_name)(*args)
 
     assert result.status_code == 403
@@ -251,7 +294,7 @@ def test_role_write_allowed_for_automation_user(app, app_context, method_name, a
     role = SimpleNamespace(id=1, name="plaid_rls_group-a")
     api = _api(role)
     with app.test_request_context(), _patch_upstream() as calls:
-        g.user = SimpleNamespace(username="admin")
+        g.user = SimpleNamespace(username="admin", is_authenticated=True)
         getattr(api, method_name)(*args)
 
     assert len(calls) == 1
@@ -263,7 +306,7 @@ def test_role_write_allowed_for_unprotected_role(app, app_context):
     role = SimpleNamespace(id=1, name="CONTRACTS")
     api = _api(role)
     with app.test_request_context(), _patch_upstream() as calls:
-        g.user = SimpleNamespace(username="alice@customer.com")
+        g.user = SimpleNamespace(username="alice@customer.com", is_authenticated=True)
         api.delete(1)
 
     assert calls == [("delete", 1)]
@@ -278,7 +321,7 @@ def test_role_delete_blocked_when_role_missing_name_lookup_still_guards(
     pins that the guard does not itself crash on a missing row."""
     api = _api(role=None)
     with app.test_request_context(), _patch_upstream() as calls:
-        g.user = SimpleNamespace(username="alice@customer.com")
+        g.user = SimpleNamespace(username="alice@customer.com", is_authenticated=True)
         result = api.delete(999)
 
     assert result == "deleted"
@@ -295,7 +338,7 @@ def test_role_rename_into_reserved_prefix_is_blocked(app, app_context):
         app.test_request_context(json={"name": "plaid_rls_group-a"}, method="PUT"),
         _patch_upstream() as calls,
     ):
-        g.user = SimpleNamespace(username="alice@customer.com")
+        g.user = SimpleNamespace(username="alice@customer.com", is_authenticated=True)
         result = api.put(1)
 
     assert result.status_code == 403
@@ -316,7 +359,7 @@ def test_role_rename_of_protected_role_is_blocked_even_to_unprotected_name(
         app.test_request_context(json={"name": "not_protected_anymore"}, method="PUT"),
         _patch_upstream() as calls,
     ):
-        g.user = SimpleNamespace(username="alice@customer.com")
+        g.user = SimpleNamespace(username="alice@customer.com", is_authenticated=True)
         result = api.put(1)
 
     assert result.status_code == 403
@@ -332,7 +375,7 @@ def test_role_create_of_reserved_name_is_blocked(app, app_context):
         app.test_request_context(json={"name": "plaid_rls_group-a"}, method="POST"),
         _patch_upstream() as calls,
     ):
-        g.user = SimpleNamespace(username="alice@customer.com")
+        g.user = SimpleNamespace(username="alice@customer.com", is_authenticated=True)
         result = api.post()
 
     assert result.status_code == 403
@@ -342,18 +385,124 @@ def test_role_create_of_reserved_name_is_blocked(app, app_context):
     assert calls == []
 
 
+# --- the overrides must not unregister the routes they guard (sc-24868) --
+#
+# Every test above calls the guard methods directly, so all of them passed
+# while all four routes were missing from the deployed app: FAB's
+# `BaseApi._register_urls` registers only attributes carrying `_urls`, and
+# an undecorated override shadows the vendor's decorated attribute. Live on
+# bf2 that answered 405 to `POST`/`PUT`/`DELETE /api/v1/security/roles/`
+# and 404 to `PUT /api/v1/security/roles/<id>/users` -- the reconciler's
+# role-create and roster-write primitives -- with the guard bodies below
+# never reached at all. These two build a REAL blueprint through FAB and
+# assert on the resulting URL map, so they fail the way the deployment did
+# rather than the way the fix happens to be spelled.
+
+
+def _guarded_blueprint(app):
+    api = _GuardedRoleApi()
+    probe = Flask(__name__)
+    probe.register_blueprint(api.create_blueprint(app.appbuilder))
+    return api, probe
+
+
+@pytest.mark.parametrize(
+    "rule, method",
+    [
+        ("/api/v1/security/roles/", "POST"),
+        ("/api/v1/security/roles/<pk>", "PUT"),
+        ("/api/v1/security/roles/<pk>", "DELETE"),
+        ("/api/v1/security/roles/<int:role_id>/users", "PUT"),
+    ],
+)
+def test_guarded_role_route_is_still_registered(app, app_context, rule, method):
+    _, probe = _guarded_blueprint(app)
+    registered = {
+        (str(r), m) for r in probe.url_map.iter_rules() for m in (r.methods or ())
+    }
+    assert (rule, method) in registered
+
+
+def _refuse_roster_write(app, caller):
+    """PUT a protected role's roster through real Flask dispatch as `caller`
+    (None = unauthenticated, i.e. no `g.user` at all).
+    """
+    api, probe = _guarded_blueprint(app)
+    api.datamodel = SimpleNamespace(
+        get=lambda pk: SimpleNamespace(id=1, name="plaid_rls_group-a")
+    )
+    if caller is not None:
+        probe.before_request(lambda: setattr(g, "user", caller))
+
+    return probe.test_client().put(
+        "/api/v1/security/roles/1/users", json={"user_ids": [1]}
+    )
+
+
+def test_protected_role_is_refused_through_the_real_route(app, app_context):
+    """End-to-end through Flask dispatch rather than a direct call: this is
+    also the only check that the override's parameter name still matches its
+    URL converter (`<int:role_id>`, not `pk`) -- Flask passes converters as
+    keyword arguments, so a mismatch is a TypeError on every request.
+    """
+    response = _refuse_roster_write(
+        app, SimpleNamespace(username="alice@customer.com", is_authenticated=True)
+    )
+
+    assert response.status_code == 403
+    assert response.get_json() == {
+        "message": rls_guard.DENIAL_MESSAGE.format(name="plaid_rls_group-a")
+    }
+
+
+def test_unauthenticated_refusal_does_not_name_the_protected_resource(app, app_context):
+    """These guards run before the vendor's `@protect()` (which sits on the
+    method they delegate to), so an anonymous request reaches them. A named
+    403 would let a caller with no credentials enumerate which role ids are
+    PlaidCloud-generated -- and read the Keycloak group id inside each name
+    -- from the 403-vs-401 split alone. The write must still be refused: the
+    401 comes from this guard, not from `@protect()`, which is never reached.
+    """
+    response = _refuse_roster_write(app, caller=None)
+
+    assert response.status_code == 401
+    assert "plaid_rls_group-a" not in response.get_data(as_text=True)
+
+
+@pytest.mark.parametrize("method_name", ["post", "put", "delete", "update_role_users"])
+def test_override_carries_every_attribute_fab_reads(method_name):
+    """One contract -- the override is invisible to FAB -- and each of the
+    three attributes fails differently and silently on its own: `_urls`
+    decides whether the route exists at all, `_permission_name` decides
+    whether `@protect()` (running inside the vendor method these delegate
+    to) finds its permission in `base_permissions` or refuses everyone with
+    a 403, and `__doc__` carries the YAML block that gives the operation its
+    OpenAPI schemas.
+    """
+    override = getattr(rls_guard.PlaidRoleApi, method_name)
+    vendor = getattr(RoleApi, method_name)
+
+    assert override._urls == vendor._urls
+    assert override._permission_name == vendor._permission_name
+    assert override.__doc__ == vendor.__doc__
+
+
 # --- RLSRestApi name extraction + wrapping -------------------------------
 
 
+class _FakeRlsApi(ModelRestApi):
+    """Only `datamodel` is stubbed. `response` / `response_401` are FAB's own,
+    bound off a real `BaseApi`, because the guard's refusal path is exactly
+    where a hand-rolled response mock has already hidden a real bug once --
+    see `_denied`'s docstring on `response_403(message=...)`.
+    """
+
+    def __init__(self, rows_by_id):  # pylint: disable=super-init-not-called
+        self.datamodel = SimpleNamespace(get=rows_by_id.get)
+
+
 def _fake_rls_api(rows_by_id):
-    api = SimpleNamespace()
-    api.datamodel = SimpleNamespace(get=lambda pk: rows_by_id.get(pk))
-    api.response = MagicMock(
-        side_effect=lambda code, **kw: SimpleNamespace(
-            status_code=code, get_json=lambda: kw
-        )
-    )
-    return api
+    return _FakeRlsApi(rows_by_id)
 
 
 def test_bulk_delete_names_collects_every_targeted_rule():
@@ -386,13 +535,36 @@ def test_guard_rls_rule_write_blocks_when_any_targeted_name_is_protected(
 
     api = _fake_rls_api({})
     with app.test_request_context():
-        g.user = SimpleNamespace(username="alice@customer.com")
+        g.user = SimpleNamespace(username="alice@customer.com", is_authenticated=True)
         result = method(api, 1, 2)
 
     assert result.status_code == 403
     assert result.get_json() == {
         "message": rls_guard.DENIAL_MESSAGE.format(name="plaid_rls_p1_aaaa")
     }
+    assert calls == []
+
+
+def test_guard_rls_rule_write_does_not_name_the_rule_to_an_anonymous_caller(
+    app, app_context
+):
+    """The rule routes have always been registered -- `install()` wraps them
+    with `functools.wraps`, which carries `_urls` -- so this half of the
+    disclosure predates the role-route fix rather than arriving with it.
+    """
+    calls = []
+
+    @rls_guard._guard_rls_rule_write(lambda api, *a, **k: ["plaid_rls_p1_aaaa"])
+    def method(self, *a, **k):
+        calls.append((a, k))
+        return "ok"
+
+    api = _fake_rls_api({})
+    with app.test_request_context():
+        result = method(api, 1)
+
+    assert result.status_code == 401
+    assert "plaid_rls_p1_aaaa" not in result.get_data(as_text=True)
     assert calls == []
 
 
@@ -406,7 +578,7 @@ def test_guard_rls_rule_write_allows_when_automation_principal(app, app_context)
 
     api = _fake_rls_api({})
     with app.test_request_context():
-        g.user = SimpleNamespace(username="admin")
+        g.user = SimpleNamespace(username="admin", is_authenticated=True)
         result = method(api, 1)
 
     assert result == "ok"
@@ -425,7 +597,7 @@ def test_guard_rls_rule_write_allows_unprotected_names(app, app_context):
 
     api = _fake_rls_api({})
     with app.test_request_context():
-        g.user = SimpleNamespace(username="alice@customer.com")
+        g.user = SimpleNamespace(username="alice@customer.com", is_authenticated=True)
         result = method(api)
 
     assert result == "ok"
@@ -457,6 +629,13 @@ def test_install_is_idempotent(monkeypatch):
 
     fake_module.RLSRestApi = FakeRLSRestApi
     monkeypatch.setitem(sys.modules, "superset.row_level_security.api", fake_module)
+    # This stand-in has no FAB registration at all, so it cannot exercise the
+    # rebind half -- which is exactly how the rule guard's inertness stayed
+    # invisible. That half has its own test, against a really-registered API:
+    # `test_guard_reaches_http_dispatch_only_once_the_route_is_rebound`.
+    monkeypatch.setattr(
+        rls_guard, "_rebind_registered_routes", lambda api_class, names: None
+    )
 
     rls_guard.install()
     once_post = FakeRLSRestApi.post
@@ -464,6 +643,62 @@ def test_install_is_idempotent(monkeypatch):
     twice_post = FakeRLSRestApi.post
 
     assert once_post is twice_post
+
+
+def test_guard_reaches_http_dispatch_only_once_the_route_is_rebound(app, app_context):
+    """The rule guard was inert for every real request from the day it
+    shipped, and every other test in this file would still have passed: they
+    call the guarded method directly, while FAB dispatches out of
+    `app.view_functions` using the bound method it captured at `add_api`
+    time -- necessarily before `install()`, which runs on the first request,
+    has patched anything.
+
+    A real `BaseApi` on a real blueprint through real Flask dispatch, with
+    no `@protect()` in the way: the question here is only whether the patch
+    reaches the route, not what the vendor does afterwards.
+    """
+    seen = []
+
+    class _RuleApi(BaseApi):
+        resource_name = "sc24868rules"
+
+        @expose("/", methods=["POST"])
+        def post(self):
+            return self.response(200, guarded=False)
+
+    api = _RuleApi()
+    probe = Flask(__name__)
+    probe.register_blueprint(api.create_blueprint(app.appbuilder))
+    probe.appbuilder = SimpleNamespace(baseviews=[api])
+
+    _RuleApi.post = rls_guard._guard_rls_rule_write(
+        lambda api, *a, **k: seen.append("guard ran") or ["plaid_rls_x"]
+    )(_RuleApi.post)
+
+    assert probe.test_client().post("/api/v1/sc24868rules/").status_code == 200
+    assert seen == [], (
+        "a class patch after registration must not be assumed to dispatch"
+    )
+
+    with probe.app_context():
+        rls_guard._rebind_registered_routes(_RuleApi, ("post",))
+
+    assert probe.test_client().post("/api/v1/sc24868rules/").status_code == 401
+    assert seen == ["guard ran"]
+
+
+def test_rebinding_an_unregistered_api_fails_closed(app, app_context):
+    """A guard that is present, looks installed, and silently does nothing is
+    the exact failure this module exists to avoid."""
+
+    class _Unregistered(BaseApi):
+        resource_name = "sc24868unregistered"
+
+    probe = Flask(__name__)
+    probe.appbuilder = SimpleNamespace(baseviews=[])
+
+    with probe.app_context(), pytest.raises(rls_guard.PlaidRlsGuardError):
+        rls_guard._rebind_registered_routes(_Unregistered, ("post",))
 
 
 # --- ORM-level guard: proves the reported bypass is actually closed ------
@@ -520,7 +755,7 @@ def test_role_update_role_users_shape_is_blocked_for_non_automation_user(
 ):
     """RoleApi.update_role_users: `role.user = [...]`."""
     with app.test_request_context():
-        g.user = SimpleNamespace(username="attacker")
+        g.user = SimpleNamespace(username="attacker", is_authenticated=True)
         role = _role(orm_session, "plaid_rls_group-a")
         attacker = _user(orm_session, "attacker")
 
@@ -534,7 +769,7 @@ def test_role_update_role_groups_shape_is_blocked(app, app_context, orm_session)
     """RoleApi.update_role_groups: `role.groups = [...]` -- the FIRST
     reported bypass. Fires via the Group.roles backref."""
     with app.test_request_context():
-        g.user = SimpleNamespace(username="attacker")
+        g.user = SimpleNamespace(username="attacker", is_authenticated=True)
         role = _role(orm_session, "plaid_rls_group-a")
         attacker_group = _group(orm_session, "attacker-group")
 
@@ -550,7 +785,7 @@ def test_group_api_post_shape_is_blocked(app, app_context, orm_session):
     SECOND reported bypass, and the exact scenario the review asked to be
     reproduced as a test."""
     with app.test_request_context():
-        g.user = SimpleNamespace(username="attacker")
+        g.user = SimpleNamespace(username="attacker", is_authenticated=True)
         role = _role(orm_session, "plaid_rls_group-a")
         attacker = _user(orm_session, "attacker")
         new_group = Group(name="attacker-made-group")
@@ -573,7 +808,7 @@ def test_user_api_put_roles_shape_is_blocked(app, app_context, orm_session):
     """UserApi.put with `roles`: `user.roles = [...]` -- the THIRD reported
     bypass. Fires via the Role.user backref."""
     with app.test_request_context():
-        g.user = SimpleNamespace(username="attacker")
+        g.user = SimpleNamespace(username="attacker", is_authenticated=True)
         role = _role(orm_session, "plaid_rls_group-a")
         attacker = _user(orm_session, "attacker")
 
@@ -595,11 +830,11 @@ def test_user_api_put_groups_shape_is_blocked_when_group_holds_protected_role(
         holder_group = _group(orm_session, "holder-group")
         # Grant the group's role as the automation principal first, so only
         # the user-membership step below is under test.
-        g.user = SimpleNamespace(username="admin")
+        g.user = SimpleNamespace(username="admin", is_authenticated=True)
         holder_group.roles = [role]
         orm_session.commit()
 
-        g.user = SimpleNamespace(username="attacker")
+        g.user = SimpleNamespace(username="attacker", is_authenticated=True)
         attacker = _user(orm_session, "attacker")
         with pytest.raises(rls_guard.PlaidRlsGuardError):
             attacker.groups = [holder_group]
@@ -614,7 +849,7 @@ def test_unprotected_role_is_unaffected_by_any_of_the_four_paths(
     """The guard must not become a blanket lock on all role/group
     administration -- only `plaid_rls_*`-prefixed resources."""
     with app.test_request_context():
-        g.user = SimpleNamespace(username="attacker")
+        g.user = SimpleNamespace(username="attacker", is_authenticated=True)
         ordinary_role = _role(orm_session, "CONTRACTS")
         attacker = _user(orm_session, "attacker")
         ordinary_group = _group(orm_session, "sales-team")
@@ -629,7 +864,7 @@ def test_unprotected_role_is_unaffected_by_any_of_the_four_paths(
 
 def test_automation_principal_can_still_grant_every_path(app, app_context, orm_session):
     with app.test_request_context():
-        g.user = SimpleNamespace(username="admin")
+        g.user = SimpleNamespace(username="admin", is_authenticated=True)
         role = _role(orm_session, "plaid_rls_group-a")
         member = _user(orm_session, "legit-member")
         role.user = [member]
@@ -647,7 +882,7 @@ def test_install_orm_listeners_is_idempotent(app, app_context, orm_session):
         # No duplicate-listener double-raise / double-log; a single veto
         # still refuses exactly once (no assertion error from being called
         # twice with conflicting internal state).
-        g.user = SimpleNamespace(username="attacker")
+        g.user = SimpleNamespace(username="attacker", is_authenticated=True)
         role = _role(orm_session, "plaid_rls_group-a")
         attacker = _user(orm_session, "attacker")
         with pytest.raises(rls_guard.PlaidRlsGuardError):

@@ -87,7 +87,13 @@ def get_predicates_for_table(
             SqlaTable.catalog.is_(None),
         )
 
-    dataset = (
+    # Several datasets can point at one physical table: the physical uniqueness
+    # constraint is only (database_id, schema, table_name), and Postgres treats
+    # NULL schemas as distinct, so duplicates are permitted. ``one_or_none()``
+    # raised ``MultipleResultsFound`` here, which callers swallowed into a silently
+    # unfiltered query. Collect the predicates from every matching dataset instead
+    # so the result is deterministic and no rule is dropped.
+    datasets = (
         db.session.query(SqlaTable)
         .filter(
             and_(
@@ -97,9 +103,10 @@ def get_predicates_for_table(
                 SqlaTable.table_name == table.table,
             )
         )
-        .one_or_none()
+        .order_by(SqlaTable.id)
+        .all()
     )
-    if not dataset:
+    if not datasets:
         return []
 
     # Exclude global (unscoped) guest RLS to prevent double application in
@@ -119,6 +126,7 @@ def get_predicates_for_table(
                 compile_kwargs={"literal_binds": True},
             )
         )
+        for dataset in datasets
         for predicate in dataset.get_sqla_row_level_filters(
             include_global_guest_rls=False
         )
@@ -145,26 +153,27 @@ def collect_rls_predicates_for_sql(
     """
     from superset.sql.parse import SQLScript
 
-    try:
-        parsed_script = SQLScript(sql, engine=database.db_engine_spec.engine)
-        tables = {
-            table.qualify(catalog=catalog, schema=schema)
-            for statement in parsed_script.statements
-            for table in statement.tables
+    # Deliberately not wrapped in try/except. Returning ``[]`` on failure produced
+    # the same cache key as a user with no RLS at all, so a restricted user whose
+    # predicate collection failed could hit an unrestricted user's cached rows -
+    # short-circuiting the query, and with it every RLS check downstream. Let the
+    # failure propagate so the request fails closed instead of being served from
+    # someone else's cache entry.
+    parsed_script = SQLScript(sql, engine=database.db_engine_spec.engine)
+    tables = {
+        table.qualify(catalog=catalog, schema=schema)
+        for statement in parsed_script.statements
+        for table in statement.tables
+    }
+    default_catalog = database.get_default_catalog()
+    return sorted(
+        {
+            predicate
+            for table in tables
+            for predicate in get_predicates_for_table(
+                table,
+                database,
+                default_catalog,
+            )
         }
-        default_catalog = database.get_default_catalog()
-        return sorted(
-            {
-                predicate
-                for table in tables
-                for predicate in get_predicates_for_table(
-                    table,
-                    database,
-                    default_catalog,
-                )
-            }
-        )
-    except Exception:
-        # If we can't parse the SQL, return empty list
-        # This ensures RLS application failure doesn't break caching
-        return []
+    )

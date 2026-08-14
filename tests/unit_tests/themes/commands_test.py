@@ -207,6 +207,51 @@ class TestSeedSystemThemesCommand:
         assert mock_session.add.call_count == 2  # Both themes should be added
         # Note: commit is handled by @transaction() decorator, not directly called
 
+    @with_config(
+        {
+            "THEME_DEFAULT": None,
+            "THEME_DARK": {"algorithm": "dark", "token": {}},
+        }
+    )
+    @patch("superset.commands.theme.seed.db")
+    def test_claims_system_dark_flag_when_unheld(self, mock_db, app):
+        """Dark system theme claims is_system_dark when no custom theme holds it"""
+        # Arrange: no existing system theme and no custom (non-system) flag holder
+        mock_session = Mock()
+        mock_db.session = mock_session
+        mock_session.query.return_value.filter.return_value.first.return_value = None
+
+        # Act
+        SeedSystemThemesCommand().run()
+
+        # Assert: clear-then-set moves the flag onto THEME_DARK (two execute calls)
+        assert mock_session.execute.call_count == 2
+
+    @with_config(
+        {
+            "THEME_DEFAULT": None,
+            "THEME_DARK": {"algorithm": "dark", "token": {}},
+        }
+    )
+    @patch("superset.commands.theme.seed.db")
+    def test_preserves_custom_dark_flag(self, mock_db, app):
+        """A tenant's non-system theme holding is_system_dark is not overridden"""
+        # Arrange: upsert finds no existing system theme; the guard finds a
+        # custom (non-system) theme already holding the flag
+        mock_session = Mock()
+        mock_db.session = mock_session
+        custom_theme = Mock(spec=Theme)
+        mock_session.query.return_value.filter.return_value.first.side_effect = [
+            None,  # _upsert_system_theme: no existing THEME_DARK row
+            custom_theme,  # _claim_system_flag: a custom theme holds the flag
+        ]
+
+        # Act
+        SeedSystemThemesCommand().run()
+
+        # Assert: guard hit, so the flag is left where it is
+        mock_session.execute.assert_not_called()
+
     def test_validate(self):
         """Test validate method (should be no-op)"""
         # Arrange
