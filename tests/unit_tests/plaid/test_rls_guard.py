@@ -133,6 +133,49 @@ def test_automation_principal_fails_closed_on_empty_string(
         assert rls_guard.is_automation_principal() is False
 
 
+def test_bearer_identity_is_resolved_before_the_automation_check(
+    app, app_context, monkeypatch
+):
+    """sc-24868: the guards run before the vendor's `@protect()`, which is the
+    only thing that ever resolves a bearer token into an identity -- FAB's
+    `load_user_jwt` is a `user_lookup_loader`, so it fires from INSIDE
+    `verify_jwt_in_request()` and assigns `g.user` there ("we can't do it on
+    before request", its own comment). Reading `g.user` alone therefore
+    refused plaid's own automation, which authenticates with a bearer token
+    and no session cookie -- the one identity this module exists to keep
+    writing.
+
+    The stand-in below stands in for FAB's loader, not for the assertion:
+    what is under test is that this module resolves the token at all before
+    deciding, which it did not.
+    """
+    import flask_jwt_extended
+
+    def fake_verify(optional=False):
+        assert optional is True, "a request with no token must not be an error"
+        g.user = SimpleNamespace(username="admin", is_authenticated=True)
+
+    monkeypatch.setattr(flask_jwt_extended, "verify_jwt_in_request", fake_verify)
+
+    with app.test_request_context():
+        assert rls_guard.is_automation_principal() is True
+
+
+def test_a_rejected_bearer_token_is_no_identity(app, app_context, monkeypatch):
+    """Malformed/expired still raises under `optional=True`. Fail closed, and
+    do not let the exception escape into the guarded route."""
+    import flask_jwt_extended
+    from flask_jwt_extended.exceptions import JWTDecodeError
+
+    def fake_verify(optional=False):  # noqa: ARG001
+        raise JWTDecodeError("signature verification failed")
+
+    monkeypatch.setattr(flask_jwt_extended, "verify_jwt_in_request", fake_verify)
+
+    with app.test_request_context():
+        assert rls_guard.is_automation_principal() is False
+
+
 def test_oauth_session_cannot_satisfy_automation_principal_even_with_matching_username(
     app, app_context
 ):

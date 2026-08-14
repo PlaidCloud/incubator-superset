@@ -211,6 +211,47 @@ def _session_is_oauth() -> bool:
     return "oauth" in session
 
 
+def _request_identity() -> Any:
+    """The user this request authenticates as -- resolving a JWT bearer token
+    first, because nothing else has yet.
+
+    sc-24868: every guard in this module runs BEFORE the vendor's
+    ``@protect()``, and ``@protect()`` is the only thing that ever turns a
+    bearer token into an identity. FAB's ``load_user_jwt`` is registered as
+    a ``user_lookup_loader``, so it fires from inside
+    ``verify_jwt_in_request()`` and assigns ``g.user`` there -- its own
+    comment reads "Set flask g.user to JWT user, we can't do it on before
+    request". FAB's ``before_request`` only does ``g.user = current_user``,
+    which for a bearer-token request carrying no session cookie is
+    Flask-Login's anonymous user.
+
+    So reading ``g.user`` directly would refuse the automation principal
+    ITSELF -- plaid authenticates to Superset with an ``Authorization:
+    Bearer`` header and nothing else (``superset_rest`` /
+    ``superset_get_token``, provider ``db``) -- which is the one identity
+    this whole module exists to keep writing. That defect was dormant only
+    because the guards never ran; restoring their routes makes it live.
+
+    ``optional=True`` makes a request with no token a no-op rather than an
+    error, leaving whatever ``before_request`` established (an OAuth or
+    session user, or nobody). A malformed or expired token still raises,
+    and is treated here as no identity at all -- fail closed.
+    """
+    from flask_jwt_extended import verify_jwt_in_request
+
+    try:
+        verify_jwt_in_request(optional=True)
+    except Exception:  # pylint: disable=broad-except
+        # Every failure here means the same thing -- this request carries no
+        # usable identity -- and none of them may become a 500 out of a
+        # guard: a malformed or expired token (still raised under
+        # `optional=True`), or an app with no JWT extension configured
+        # (`KeyError: 'JWT_TOKEN_LOCATION'`). The caller is refused below,
+        # not crashed.
+        logger.debug("rls_guard: no usable bearer identity on this request.")
+    return getattr(g, "user", None)
+
+
 def is_automation_principal() -> bool:
     """True only for the one Superset user plaid's own service calls
     authenticate as -- see the module docstring. Fails CLOSED if
@@ -223,18 +264,18 @@ def is_automation_principal() -> bool:
         return False
     if _session_is_oauth():
         return False
-    user = getattr(g, "user", None)
-    username = getattr(user, "username", None)
+    username = getattr(_request_identity(), "username", None)
     return username is not None and username == automation_username
 
 
 def _is_authenticated() -> bool:
-    """FAB's global ``before_request`` sets ``g.user = current_user``
-    (``security/manager.py:2179``), so an unauthenticated request reaches a
-    view carrying Flask-Login's ``AnonymousUserMixin``: ``is_authenticated``
-    False, and no ``username`` attribute at all.
+    """Whether this request carries any identity at all -- via
+    ``_request_identity``, so a bearer token counts, and a caller who holds
+    a valid one is never told a protected resource exists but answered 401.
+    An unauthenticated request reaches a view carrying Flask-Login's
+    ``AnonymousUserMixin``: ``is_authenticated`` False.
     """
-    return bool(getattr(getattr(g, "user", None), "is_authenticated", False))
+    return bool(getattr(_request_identity(), "is_authenticated", False))
 
 
 def _denied(api: "BaseApi", name: str | None) -> Response:
