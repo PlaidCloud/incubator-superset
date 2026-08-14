@@ -140,12 +140,19 @@ Superset differently:
   after Babel exists, and no request is dispatched until long after
   ``create_app()`` returns, so by the time any request reaches a route,
   Babel is present and ``install()`` -- idempotent, see below -- has already
-  patched the class before that request's view function runs. Patching the
-  class attribute (rather than the instance) is what makes this safe to
-  defer at all: Python resolves ``self.post(...)`` from the class's current
-  ``__dict__`` at CALL time, not at route-registration time, so ordering
-  relative to ``add_api(RLSRestApi)`` -- which still happens earlier, in
-  ``init_views()`` -- does not matter either.
+  patched the class before that request's view function runs.
+
+  ⚠️ Deferring past ``add_api(RLSRestApi)`` is NOT free, and the original
+  version of this paragraph had the reason exactly backwards. It claimed
+  "Python resolves ``self.post(...)`` from the class's current ``__dict__``
+  at CALL time, not at route-registration time, so ordering relative to
+  ``add_api(RLSRestApi)`` does not matter." FAB never calls ``self.post(...)``
+  for a request: ``BaseApi._register_urls`` captures the BOUND METHOD at
+  registration and hands it to ``add_url_rule``, and Flask dispatches out of
+  ``app.view_functions``. So the class patch reached direct calls (every unit
+  test) and nothing else -- the rule guard was inert for every real request
+  from the day it shipped. ``install()`` now also repoints those registered
+  view functions; see ``_rebind_registered_routes``.
 """
 
 from __future__ import annotations
@@ -436,9 +443,65 @@ def _bulk_delete_names(api: "BaseApi", **kwargs: Any) -> list[str]:
     return names
 
 
+def _rebind_registered_routes(
+    api_class: type[BaseApi], method_names: tuple[str, ...]
+) -> None:
+    """Point Flask's already-registered view functions at the patched methods.
+
+    sc-24868: without this, `install()` below is INERT for every HTTP
+    request. `install()` deliberately runs on the first request, which is
+    necessarily after `add_api(RLSRestApi)` -- and FAB does not look the
+    handler up on the class at call time. `BaseApi._register_urls` captures
+    the BOUND METHOD once, at registration (`attr = getattr(self,
+    attr_name)` ... `add_url_rule(url, attr_name, route_handler)`), and
+    Flask stores it in `app.view_functions`. Rebinding the class attribute
+    afterwards changes what a direct `api.post(...)` call does -- which is
+    all the unit tests ever did -- and nothing whatsoever about what the
+    route calls. Confirmed live: a `plaid_rls_`-named rule write reached
+    Superset's own schema validation with no denial logged.
+
+    Rebuilding the handler through FAB's own `wrap_route_handler_with_hooks`
+    rather than assigning the bare bound method keeps any `@before_request`
+    hook the vendor class declares -- there are none on `RLSRestApi` today,
+    and silently dropping them later would be its own quiet defect.
+
+    Raises rather than logging if an endpoint is missing: this whole module
+    fails closed, and the failure it exists to prevent is exactly a guard
+    that is present, looks installed, and does nothing.
+    """
+    from flask_appbuilder.hooks import (
+        get_before_request_hooks,
+        wrap_route_handler_with_hooks,
+    )
+
+    instance = next(
+        (v for v in current_app.appbuilder.baseviews if isinstance(v, api_class)), None
+    )
+    if instance is None:
+        raise PlaidRlsGuardError(
+            f"{api_class.__name__} is not registered on this app -- the "
+            "plaid_rls rule guard cannot attach to its routes."
+        )
+
+    hooks = get_before_request_hooks(instance)
+    for name in method_names:
+        endpoint = f"{instance.endpoint}.{name}"
+        if endpoint not in current_app.view_functions:
+            raise PlaidRlsGuardError(
+                f"No registered route for {endpoint} -- the plaid_rls rule "
+                "guard cannot attach to it."
+            )
+        current_app.view_functions[endpoint] = wrap_route_handler_with_hooks(
+            name, getattr(instance, name), hooks
+        )
+
+
 def install() -> None:
-    """Monkeypatch `RLSRestApi`'s four write routes in place. Idempotent --
-    safe to call more than once (e.g. module re-import under a reloader).
+    """Monkeypatch `RLSRestApi`'s four write routes in place, then repoint the
+    routes FAB already registered at the patched methods -- see
+    `_rebind_registered_routes`, without which the patch never runs for an
+    actual request. Idempotent -- safe to call more than once (e.g. module
+    re-import under a reloader).
     """
     from superset.row_level_security.api import RLSRestApi
 
@@ -451,6 +514,7 @@ def install() -> None:
     RLSRestApi.bulk_delete = _guard_rls_rule_write(_bulk_delete_names)(
         RLSRestApi.bulk_delete
     )
+    _rebind_registered_routes(RLSRestApi, ("post", "put", "delete", "bulk_delete"))
     RLSRestApi._plaid_rls_guard_installed = True
     logger.info("plaid_rls write guard installed on RLSRestApi.")
 

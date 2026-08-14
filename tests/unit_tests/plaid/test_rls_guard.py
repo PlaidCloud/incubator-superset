@@ -46,7 +46,7 @@ from unittest.mock import patch
 
 import pytest
 from flask import Flask, g
-from flask_appbuilder.api import ModelRestApi
+from flask_appbuilder.api import BaseApi, expose, ModelRestApi
 from flask_appbuilder.security.sqla.apis import RoleApi
 from flask_appbuilder.security.sqla.models import Group, Model, Role, User
 from sqlalchemy import create_engine
@@ -586,6 +586,13 @@ def test_install_is_idempotent(monkeypatch):
 
     fake_module.RLSRestApi = FakeRLSRestApi
     monkeypatch.setitem(sys.modules, "superset.row_level_security.api", fake_module)
+    # This stand-in has no FAB registration at all, so it cannot exercise the
+    # rebind half -- which is exactly how the rule guard's inertness stayed
+    # invisible. That half has its own test, against a really-registered API:
+    # `test_guard_reaches_http_dispatch_only_once_the_route_is_rebound`.
+    monkeypatch.setattr(
+        rls_guard, "_rebind_registered_routes", lambda api_class, names: None
+    )
 
     rls_guard.install()
     once_post = FakeRLSRestApi.post
@@ -593,6 +600,62 @@ def test_install_is_idempotent(monkeypatch):
     twice_post = FakeRLSRestApi.post
 
     assert once_post is twice_post
+
+
+def test_guard_reaches_http_dispatch_only_once_the_route_is_rebound(app, app_context):
+    """The rule guard was inert for every real request from the day it
+    shipped, and every other test in this file would still have passed: they
+    call the guarded method directly, while FAB dispatches out of
+    `app.view_functions` using the bound method it captured at `add_api`
+    time -- necessarily before `install()`, which runs on the first request,
+    has patched anything.
+
+    A real `BaseApi` on a real blueprint through real Flask dispatch, with
+    no `@protect()` in the way: the question here is only whether the patch
+    reaches the route, not what the vendor does afterwards.
+    """
+    seen = []
+
+    class _RuleApi(BaseApi):
+        resource_name = "sc24868rules"
+
+        @expose("/", methods=["POST"])
+        def post(self):
+            return self.response(200, guarded=False)
+
+    api = _RuleApi()
+    probe = Flask(__name__)
+    probe.register_blueprint(api.create_blueprint(app.appbuilder))
+    probe.appbuilder = SimpleNamespace(baseviews=[api])
+
+    _RuleApi.post = rls_guard._guard_rls_rule_write(
+        lambda api, *a, **k: seen.append("guard ran") or ["plaid_rls_x"]
+    )(_RuleApi.post)
+
+    assert probe.test_client().post("/api/v1/sc24868rules/").status_code == 200
+    assert seen == [], (
+        "a class patch after registration must not be assumed to dispatch"
+    )
+
+    with probe.app_context():
+        rls_guard._rebind_registered_routes(_RuleApi, ("post",))
+
+    assert probe.test_client().post("/api/v1/sc24868rules/").status_code == 401
+    assert seen == ["guard ran"]
+
+
+def test_rebinding_an_unregistered_api_fails_closed(app, app_context):
+    """A guard that is present, looks installed, and silently does nothing is
+    the exact failure this module exists to avoid."""
+
+    class _Unregistered(BaseApi):
+        resource_name = "sc24868unregistered"
+
+    probe = Flask(__name__)
+    probe.appbuilder = SimpleNamespace(baseviews=[])
+
+    with probe.app_context(), pytest.raises(rls_guard.PlaidRlsGuardError):
+        rls_guard._rebind_registered_routes(_Unregistered, ("post",))
 
 
 # --- ORM-level guard: proves the reported bypass is actually closed ------
