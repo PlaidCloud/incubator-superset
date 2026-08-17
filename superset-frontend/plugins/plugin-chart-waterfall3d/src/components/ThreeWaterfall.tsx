@@ -479,9 +479,7 @@ export default function ThreeWaterfall(props: Waterfall3DTransformedProps) {
         color: isKey ? textColor : withAlpha(textColor, 0.75),
         bold: isKey,
         worldScale: LBL,
-        ...(isKey
-          ? { bg: pillBg, border: withAlpha(textColor, 0.4) }
-          : {}),
+        ...(isKey ? { bg: pillBg, border: withAlpha(textColor, 0.4) } : {}),
       });
       sp.position.set(i * SPACING, -0.55 * LBL, -0.4);
       scene.add(sp);
