@@ -17,8 +17,11 @@
  * under the License.
  */
 /* eslint-disable theme-colors/no-literal-colors */
-// WebGL renderer: colors are raw three.js hex/rgba, not antd theme tokens.
+// WebGL renderer: bar colors are raw three.js hex/rgba, not antd theme tokens.
+// The scene chrome (background, panels, grid, label text) does read antd tokens
+// so the chart follows the light / dark theme like every other viz.
 import { useEffect, useRef } from 'react';
+import { useTheme } from '@apache-superset/core/theme';
 // eslint-disable-next-line no-restricted-syntax
 import * as THREE from 'three';
 import { Waterfall3DTransformedProps, BarType } from '../types';
@@ -139,6 +142,13 @@ export default function ThreeWaterfall(props: Waterfall3DTransformedProps) {
     tipByCell,
   } = props;
 
+  const theme = useTheme();
+  // Falls back to the theme's text color when the user left the control unset,
+  // so labels stay readable on both a light and a dark background.
+  const textColor = labelColor || theme.colorText;
+  // Chip fill behind the step / lane labels.
+  const pillBg = theme.colorBgElevated;
+
   // Re-alpha a `rgba(r,g,b,a)` string (used to derive softer / border variants).
   const withAlpha = (rgba: string, a: number) =>
     rgba.replace(/rgba?\(([^)]+)\)/, (_, body) => {
@@ -174,7 +184,7 @@ export default function ThreeWaterfall(props: Waterfall3DTransformedProps) {
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    const BG = 0xffffff;
+    const BG = theme.colorBgContainer;
     scene.background = new THREE.Color(BG);
 
     // ── Scale value → world Y ───────────────────────────────────────────────
@@ -200,7 +210,7 @@ export default function ThreeWaterfall(props: Waterfall3DTransformedProps) {
     const sph = {
       theta: 0.7,
       phi: 1.0,
-      r: Math.max(xSpan, 14) * 0.82 + 9,
+      r: Math.max(xSpan, zSpan, 14) * 0.82 + 9,
     };
     const posCamera = () => {
       camera.position.set(
@@ -238,8 +248,8 @@ export default function ThreeWaterfall(props: Waterfall3DTransformedProps) {
     const yTop = AXIS_H * 1.04; // wall height (value range maps to AXIS_H)
     const ticks = niceTicks(minVal, maxVal);
 
-    const PANEL = 0xf4f7fb;
-    const GRID = 0xd3dbe8;
+    const PANEL = theme.colorBgLayout;
+    const GRID = theme.colorBorder;
     const panelMat = (side: number) =>
       new THREE.MeshBasicMaterial({
         color: PANEL,
@@ -314,7 +324,7 @@ export default function ThreeWaterfall(props: Waterfall3DTransformedProps) {
       if (y < -1e-3 || y > yTop + 1e-3) return;
       const lbl = makeLabelSprite(fmt(v), {
         size: 11,
-        color: withAlpha(labelColor, 0.85),
+        color: withAlpha(textColor, 0.85),
         worldScale: LBL,
       });
       lbl.position.set(gx0 - 0.6 * LBL, y, gz0);
@@ -323,7 +333,7 @@ export default function ThreeWaterfall(props: Waterfall3DTransformedProps) {
     // Y axis title
     const yTitle = makeLabelSprite(axisLabels.y, {
       size: 13,
-      color: labelColor,
+      color: textColor,
       bold: true,
       worldScale: LBL,
     });
@@ -408,7 +418,7 @@ export default function ThreeWaterfall(props: Waterfall3DTransformedProps) {
             color: col,
             bold,
             worldScale: LBL,
-            bg: 'rgba(255,255,255,0.92)',
+            bg: pillBg,
             border: col.replace(/,1\)$/, ',0.45)'),
           });
           const yLab = bar.value >= 0 ? hi + 0.34 * LBL : lo - 0.34 * LBL;
@@ -446,11 +456,11 @@ export default function ThreeWaterfall(props: Waterfall3DTransformedProps) {
       // Lane (depth category) label at the front of each lane.
       const laneLbl = makeLabelSprite(lane.cat, {
         size: 12,
-        color: labelColor,
+        color: textColor,
         bold: true,
         worldScale: LBL,
-        bg: 'rgba(255,255,255,0.92)',
-        border: withAlpha(labelColor, 0.4),
+        bg: pillBg,
+        border: withAlpha(textColor, 0.4),
       });
       laneLbl.position.set(xSpan + 1.6 * LBL, 0.2, z);
       scene.add(laneLbl);
@@ -466,11 +476,11 @@ export default function ThreeWaterfall(props: Waterfall3DTransformedProps) {
       if (!isKey && i % 3 !== 0) return;
       const sp = makeLabelSprite(step, {
         size: isKey ? 12 : 10,
-        color: isKey ? labelColor : withAlpha(labelColor, 0.75),
+        color: isKey ? textColor : withAlpha(textColor, 0.75),
         bold: isKey,
         worldScale: LBL,
         ...(isKey
-          ? { bg: 'rgba(255,255,255,0.92)', border: withAlpha(labelColor, 0.4) }
+          ? { bg: pillBg, border: withAlpha(textColor, 0.4) }
           : {}),
       });
       sp.position.set(i * SPACING, -0.55 * LBL, -0.4);
@@ -643,7 +653,9 @@ export default function ThreeWaterfall(props: Waterfall3DTransformedProps) {
     autoRotate,
     fmt,
     axisLabels,
-    labelColor,
+    textColor,
+    pillBg,
+    theme,
     minVal,
     maxVal,
     tipColumnLabel,
