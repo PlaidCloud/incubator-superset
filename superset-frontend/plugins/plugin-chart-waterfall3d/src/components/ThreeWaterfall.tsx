@@ -164,7 +164,7 @@ export default function ThreeWaterfall(props: Waterfall3DTransformedProps) {
 
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     } catch (e) {
       // No WebGL (e.g. headless thumbnail) — show a graceful message.
       mount.innerHTML =
@@ -184,8 +184,11 @@ export default function ThreeWaterfall(props: Waterfall3DTransformedProps) {
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    const BG = theme.colorBgContainer;
-    scene.background = new THREE.Color(BG);
+    // Left transparent on purpose: painting a background means guessing the
+    // colour of whatever the chart is dropped into, and any mismatch reads as a
+    // solid block sitting on the dashboard. Inheriting the container is right in
+    // every theme, and matches how the echarts-gl charts already behave.
+    scene.background = null;
 
     // ── Scale value → world Y ───────────────────────────────────────────────
     const range = maxVal - minVal || 1;
