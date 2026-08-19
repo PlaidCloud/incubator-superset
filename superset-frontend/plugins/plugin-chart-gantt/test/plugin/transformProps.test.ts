@@ -57,14 +57,14 @@ const buildChartProps = (formDataOverrides = {}, data = DATA) =>
   });
 
 describe('PluginChartGantt transformProps', () => {
-  it('passes width and height through untouched', () => {
+  test('passes width and height through untouched', () => {
     const transformed = transformProps(buildChartProps()) as any;
 
     expect(transformed.width).toBe(800);
     expect(transformed.height).toBe(600);
   });
 
-  it('returns the contract the chart component consumes', () => {
+  test('returns the contract the chart component consumes', () => {
     const transformed = transformProps(buildChartProps()) as any;
 
     // Keys rather than a snapshot: echartOptions alone is ~180 lines and would
@@ -94,26 +94,26 @@ describe('PluginChartGantt transformProps', () => {
     );
   });
 
-  it('renders one y-axis category per task, bulleted', () => {
+  test('renders one y-axis category per task, bulleted', () => {
     const { categories } = transformProps(buildChartProps()) as any;
 
     // One row per task, not one per category_column value.
     expect(categories).toEqual(['\u2022 Task 1', '\u2022 Task 2']);
   });
 
-  it('turns every row into a task', () => {
+  test('turns every row into a task', () => {
     const { flattenedTasks } = transformProps(buildChartProps()) as any;
 
     expect(flattenedTasks).toHaveLength(DATA.length);
   });
 
-  it('defaults the today marker on', () => {
+  test('defaults the today marker on', () => {
     const transformed = transformProps(buildChartProps()) as any;
 
     expect(transformed.showTodayMarker).toBe(true);
   });
 
-  it('lets the form data turn the today marker off', () => {
+  test('lets the form data turn the today marker off', () => {
     const transformed = transformProps(
       buildChartProps({ showTodayMarker: false }),
     ) as any;
@@ -121,7 +121,7 @@ describe('PluginChartGantt transformProps', () => {
     expect(transformed.showTodayMarker).toBe(false);
   });
 
-  it('produces no tasks or categories when the query came back empty', () => {
+  test('produces no tasks or categories when the query came back empty', () => {
     const transformed = transformProps(buildChartProps({}, [])) as any;
 
     expect(transformed.flattenedTasks).toEqual([]);

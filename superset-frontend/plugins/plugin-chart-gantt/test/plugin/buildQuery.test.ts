@@ -25,7 +25,7 @@ describe('PluginChartGantt buildQuery', () => {
     viz_type: 'my_chart',
   };
 
-  it('collects the configured task columns, in declaration order', () => {
+  test('collects the configured task columns, in declaration order', () => {
     const [query] = buildQuery({
       ...baseFormData,
       task_id_column: 'id',
@@ -48,7 +48,7 @@ describe('PluginChartGantt buildQuery', () => {
     ]);
   });
 
-  it('omits columns that were left unconfigured', () => {
+  test('omits columns that were left unconfigured', () => {
     const [query] = buildQuery({
       ...baseFormData,
       task_column: 'task',
@@ -59,7 +59,7 @@ describe('PluginChartGantt buildQuery', () => {
     expect(query.columns).toEqual(['task', 'starts', 'ends']);
   });
 
-  it('never groups, since the chart needs one row per task', () => {
+  test('never groups, since the chart needs one row per task', () => {
     const [query] = buildQuery({
       ...baseFormData,
       task_column: 'task',
@@ -69,7 +69,7 @@ describe('PluginChartGantt buildQuery', () => {
     expect(query.groupby).toEqual([]);
   });
 
-  it('asks for nothing when no columns are configured', () => {
+  test('asks for nothing when no columns are configured', () => {
     const [query] = buildQuery(baseFormData).queries;
 
     expect(query.columns).toEqual([]);

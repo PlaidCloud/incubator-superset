@@ -37,7 +37,7 @@ const buildChartProps = (formDataOverrides = {}, data = DATA) =>
   });
 
 describe('SupersetPluginDashboardFilters transformProps', () => {
-  it('passes width, height and query data through', () => {
+  test('passes width, height and query data through', () => {
     const transformed = transformProps(buildChartProps()) as any;
 
     expect(transformed.width).toBe(800);
@@ -45,7 +45,7 @@ describe('SupersetPluginDashboardFilters transformProps', () => {
     expect(transformed.data).toEqual(DATA);
   });
 
-  it('returns the contract the filter component consumes', () => {
+  test('returns the contract the filter component consumes', () => {
     const transformed = transformProps(buildChartProps()) as any;
 
     expect(Object.keys(transformed).sort()).toEqual(
@@ -62,14 +62,14 @@ describe('SupersetPluginDashboardFilters transformProps', () => {
     );
   });
 
-  it('starts with cross-filter emission off and an empty filter state', () => {
+  test('starts with cross-filter emission off and an empty filter state', () => {
     const transformed = transformProps(buildChartProps()) as any;
 
     expect(transformed.emitCrossFilters).toBe(false);
     expect(transformed.filterState).toEqual({});
   });
 
-  it('forwards the column and multi-select control values', () => {
+  test('forwards the column and multi-select control values', () => {
     const transformed = transformProps(
       buildChartProps({ col: 'name', allowMultiple: true }),
     ) as any;
@@ -78,7 +78,7 @@ describe('SupersetPluginDashboardFilters transformProps', () => {
     expect(transformed.allowMultiple).toBe(true);
   });
 
-  it('returns no data when the query came back empty', () => {
+  test('returns no data when the query came back empty', () => {
     const transformed = transformProps(buildChartProps({}, [])) as any;
 
     expect(transformed.data).toEqual([]);
