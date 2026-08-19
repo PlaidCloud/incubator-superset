@@ -1,0 +1,11 @@
+# build output
+esm
+lib
+*.tsbuildinfo
+
+# dependencies
+node_modules/
+
+# logs and coverage
+coverage/
+*.log

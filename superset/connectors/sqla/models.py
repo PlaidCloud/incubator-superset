@@ -495,7 +495,22 @@ class BaseDatasource(
             # pull out all required metrics from the form_data
             for metric_param in METRIC_FORM_DATA_PARAMS:
                 for metric in utils.as_list(form_data.get(metric_param) or []):
-                    metric_names.add(utils.get_metric_name(metric, self.verbose_map))
+                    # a chart may carry a pseudo-metric that isn't resolvable to a
+                    # name — e.g. a layout-only row heading with no expressionType.
+                    # Skip it instead of failing the whole dashboard's datasets.
+                    try:
+                        metric_names.add(
+                            utils.get_metric_name(metric, self.verbose_map)
+                        )
+                    except ValueError:
+                        logger.warning(
+                            "Skipping unresolvable metric in '%s' on chart "
+                            "'%s' (id=%s)",
+                            metric_param,
+                            slc.slice_name,
+                            slc.id,
+                        )
+                        continue
                     if utils.is_adhoc_metric(metric):
                         column_ = metric.get("column") or {}
                         if column_name := column_.get("column_name"):
