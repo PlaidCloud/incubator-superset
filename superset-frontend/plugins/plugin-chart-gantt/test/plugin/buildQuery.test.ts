@@ -19,16 +19,59 @@
 import buildQuery from '../../src/plugin/buildQuery';
 
 describe('PluginChartGantt buildQuery', () => {
-  const formData = {
+  const baseFormData = {
     datasource: '5__table',
     granularity_sqla: 'ds',
-    series: 'foo',
     viz_type: 'my_chart',
   };
 
-  it('should build groupby with series in form data', () => {
-    const queryContext = buildQuery(formData);
-    const [query] = queryContext.queries;
-    expect(query.columns).toEqual(['foo']);
+  it('collects the configured task columns, in declaration order', () => {
+    const [query] = buildQuery({
+      ...baseFormData,
+      task_id_column: 'id',
+      task_column: 'task',
+      category_column: 'team',
+      parent_column: 'parent',
+      start_time_column: 'starts',
+      end_time_column: 'ends',
+      progress_column: 'pct',
+    }).queries;
+
+    expect(query.columns).toEqual([
+      'id',
+      'task',
+      'team',
+      'parent',
+      'starts',
+      'ends',
+      'pct',
+    ]);
+  });
+
+  it('omits columns that were left unconfigured', () => {
+    const [query] = buildQuery({
+      ...baseFormData,
+      task_column: 'task',
+      start_time_column: 'starts',
+      end_time_column: 'ends',
+    }).queries;
+
+    expect(query.columns).toEqual(['task', 'starts', 'ends']);
+  });
+
+  it('never groups, since the chart needs one row per task', () => {
+    const [query] = buildQuery({
+      ...baseFormData,
+      task_column: 'task',
+      category_column: 'team',
+    }).queries;
+
+    expect(query.groupby).toEqual([]);
+  });
+
+  it('asks for nothing when no columns are configured', () => {
+    const [query] = buildQuery(baseFormData).queries;
+
+    expect(query.columns).toEqual([]);
   });
 });
