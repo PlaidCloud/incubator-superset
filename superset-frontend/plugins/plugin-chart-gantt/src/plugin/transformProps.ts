@@ -61,18 +61,10 @@ function flattenTasks(
     const visible = isAncestorExpanded(task);
     const expanded = expandedState[task.id] ?? task.expanded ?? true;
 
-    // Post-increment semantics: the row takes the current index and only then
-    // does the counter move on, so hidden rows never consume an index.
-    let assignedIndex = -1;
-    if (visible) {
-      assignedIndex = displayIndex;
-      displayIndex += 1;
-    }
-
     result.push({
       ...task,
       visible,
-      displayIndex: assignedIndex,
+      displayIndex: visible ? displayIndex++ : -1,
       expanded,
     });
 
@@ -114,12 +106,7 @@ function renderGanttItem(
   const isGroup = api.value(DIM_IS_GROUP) as number;
   const expanded = api.value(DIM_EXPANDED) as number;
 
-  const rectShape = clipRectByRect(params, {
-    x,
-    y,
-    width: barLength,
-    height: barHeight,
-  });
+  const rectShape = clipRectByRect(params, { x, y, width: barLength, height: barHeight });
 
   // Indent text based on level
   const indent = level * 15;
@@ -127,17 +114,17 @@ function renderGanttItem(
   // Create expand/collapse icon for groups
   const expandIcon = isGroup
     ? {
-        type: 'text',
-        style: {
-          text: expanded ? '▼' : '▶',
-          x: x + 5,
-          y: y + barHeight / 2,
-          textVerticalAlign: 'middle',
-          textAlign: 'left',
-          fill: '#fff',
-          fontSize: 10,
-        },
-      }
+      type: 'text',
+      style: {
+        text: expanded ? '▼' : '▶',
+        x: x + 5,
+        y: y + barHeight / 2,
+        textVerticalAlign: 'middle',
+        textAlign: 'left',
+        fill: '#fff',
+        fontSize: 10,
+      },
+    }
     : null;
 
   return {
@@ -176,12 +163,7 @@ function clipRectByRect(
   params: { coordSys: { x: number; y: number; width: number; height: number } },
   rect: { x: number; y: number; width: number; height: number },
 ) {
-  const {
-    x: coordX,
-    y: coordY,
-    width: coordWidth,
-    height: coordHeight,
-  } = params.coordSys;
+  const { x: coordX, y: coordY, width: coordWidth, height: coordHeight } = params.coordSys;
   const x = Math.max(rect.x, coordX);
   const x2 = Math.min(rect.x + rect.width, coordX + coordWidth);
   const y = Math.max(rect.y, coordY);
@@ -195,9 +177,7 @@ function clipRectByRect(
 /**
  * Generate category labels with indentation for hierarchy
  */
-function generateCategoryLabels(
-  flattenedTasks: FlattenedGanttTask[],
-): string[] {
+function generateCategoryLabels(flattenedTasks: FlattenedGanttTask[]): string[] {
   return flattenedTasks
     .filter(t => t.visible)
     .map(task => {
@@ -211,12 +191,12 @@ function getTooltipValues(
   params: CallbackDataParams | CallbackDataParams[],
 ): (number | string)[] {
   const item = Array.isArray(params) ? params[0] : params;
-  return Array.isArray(item?.value) ? (item.value as (number | string)[]) : [];
+  return Array.isArray(item?.value)
+    ? (item.value as (number | string)[])
+    : [];
 }
 
-export default function transformProps(
-  chartProps: ChartProps,
-): PluginChartGanttProps {
+export default function transformProps(chartProps: ChartProps): PluginChartGanttProps {
   const { width, height, formData, hooks, queriesData } = chartProps;
   const {
     title = 'Gantt Chart',
@@ -242,21 +222,12 @@ export default function transformProps(
   const rawData = (queriesData?.[0]?.data || []) as Record<string, unknown>[];
 
   // Get color scheme from formData
-  const colorScheme =
-    formData.colorScheme || formData.color_scheme || 'supersetColors';
+  const colorScheme = formData.colorScheme || formData.color_scheme || 'supersetColors';
   const schemeRegistry = getCategoricalSchemeRegistry();
   const colorSchemeObj = schemeRegistry.get(colorScheme);
   const colorPalette = colorSchemeObj?.colors || [
-    '#5470c6',
-    '#91cc75',
-    '#fac858',
-    '#ee6666',
-    '#73c0de',
-    '#3ba272',
-    '#fc8452',
-    '#9a60b4',
-    '#ea7ccc',
-    '#6e7079',
+    '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de',
+    '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc', '#6e7079',
   ];
 
   // Transform raw query data into GanttTask[] format
@@ -267,37 +238,23 @@ export default function transformProps(
   // First pass: create all tasks (without colors - will be assigned after level computation)
   rawData.forEach((row, index) => {
     // Get the original task_id from data (e.g., 1, 2, 3...)
-    const originalTaskId =
-      taskIdColumn &&
-      row[taskIdColumn] !== undefined &&
-      row[taskIdColumn] !== null &&
-      row[taskIdColumn] !== ''
-        ? String(row[taskIdColumn])
-        : null;
+    const originalTaskId = taskIdColumn && row[taskIdColumn] !== undefined && row[taskIdColumn] !== null && row[taskIdColumn] !== ''
+      ? String(row[taskIdColumn])
+      : null;
 
-    const taskName = taskColumn
-      ? String(row[taskColumn] ?? `Task ${index + 1}`)
-      : `Task ${index + 1}`;
+    const taskName = taskColumn ? String(row[taskColumn] ?? `Task ${index + 1}`) : `Task ${index + 1}`;
 
     // Get parent_task_id - this references the original task_id of the parent
-    const parentTaskId =
-      parentColumn &&
-      row[parentColumn] !== undefined &&
-      row[parentColumn] !== null &&
-      row[parentColumn] !== ''
-        ? String(row[parentColumn])
-        : null;
+    const parentTaskId = parentColumn && row[parentColumn] !== undefined && row[parentColumn] !== null && row[parentColumn] !== ''
+      ? String(row[parentColumn])
+      : null;
 
     const startTime = startTimeColumn ? row[startTimeColumn] : null;
     const endTime = endTimeColumn ? row[endTimeColumn] : null;
 
     // Get progress value and handle possible formats (0-1 or 0-100)
     let progress = 0;
-    if (
-      progressColumn &&
-      row[progressColumn] !== undefined &&
-      row[progressColumn] !== null
-    ) {
+    if (progressColumn && row[progressColumn] !== undefined && row[progressColumn] !== null) {
       const val = Number(row[progressColumn]);
       if (!isNaN(val)) {
         progress = val;
@@ -315,12 +272,8 @@ export default function transformProps(
       expanded: true,
       categoryIndex: index,
       taskName,
-      startTime: startTime
-        ? new Date(startTime as string | number | Date).getTime()
-        : Date.now(),
-      endTime: endTime
-        ? new Date(endTime as string | number | Date).getTime()
-        : Date.now() + 86400000,
+      startTime: startTime ? new Date(startTime as string | number | Date).getTime() : Date.now(),
+      endTime: endTime ? new Date(endTime as string | number | Date).getTime() : Date.now() + 86400000,
       progress,
       color: '', // Will be assigned after level computation
       children: [],
@@ -391,24 +344,21 @@ export default function transformProps(
           .map(childId => internalIdToTaskMap.get(childId)?.progress || 0)
           .filter(p => !isNaN(p));
         if (childProgress.length > 0) {
-          task.progress =
-            childProgress.reduce((a, b) => a + b, 0) / childProgress.length;
+          task.progress = childProgress.reduce((a, b) => a + b, 0) / childProgress.length;
         }
       }
     }
   });
 
   // Get expanded state from hooks or initialize based on defaultExpandLevel
-  const expandedState: Record<string, boolean> =
-    (hooks?.setControlValue as unknown as Record<string, boolean>) || {};
+  const expandedState: Record<string, boolean> = (hooks?.setControlValue as unknown as Record<string, boolean>) || {};
 
   // Initialize expanded state based on defaultExpandLevel if not set
   const initialExpandedState: Record<string, boolean> = {};
   tasks.forEach(task => {
     if (task.isGroup) {
       if (expandedState[task.id] === undefined) {
-        initialExpandedState[task.id] =
-          task.level < (defaultExpandLevel as number);
+        initialExpandedState[task.id] = task.level < (defaultExpandLevel as number);
       } else {
         initialExpandedState[task.id] = expandedState[task.id];
       }
@@ -451,8 +401,7 @@ export default function transformProps(
         const endDate = new Date(end as number).toLocaleDateString();
         const type = isGroup ? 'Group' : 'Task';
         const levelLabel = `Level ${level}`;
-        const progressLabel =
-          progress !== undefined ? `<br/>Progress: ${progress}%` : '';
+        const progressLabel = progress !== undefined ? `<br/>Progress: ${progress}%` : '';
         return `<strong>${name}</strong><br/>Type: ${type}<br/>Level: ${levelLabel}<br/>Start: ${startDate}<br/>End: ${endDate}${progressLabel}`;
       },
     },
@@ -462,49 +411,49 @@ export default function transformProps(
     },
     dataZoom: zoomable
       ? [
-          {
-            type: 'slider',
-            xAxisIndex: 0,
-            filterMode: 'weakFilter',
-            height: 20,
-            bottom: 0,
-            start: 0,
-            end: 100,
-            handleSize: '80%',
-            showDetail: false,
-          },
-          {
-            type: 'inside',
-            xAxisIndex: 0,
-            filterMode: 'weakFilter',
-            start: 0,
-            end: 100,
-            zoomOnMouseWheel: false,
-            moveOnMouseMove: true,
-          },
-          {
-            type: 'slider',
-            yAxisIndex: 0,
-            zoomLock: true,
-            width: 10,
-            right: 10,
-            top: 70,
-            bottom: 30,
-            start: 0,
-            end: 100,
-            handleSize: 0,
-            showDetail: false,
-          },
-          {
-            type: 'inside',
-            yAxisIndex: 0,
-            start: 0,
-            end: 100,
-            zoomOnMouseWheel: false,
-            moveOnMouseMove: true,
-            moveOnMouseWheel: true,
-          },
-        ]
+        {
+          type: 'slider',
+          xAxisIndex: 0,
+          filterMode: 'weakFilter',
+          height: 20,
+          bottom: 0,
+          start: 0,
+          end: 100,
+          handleSize: '80%',
+          showDetail: false,
+        },
+        {
+          type: 'inside',
+          xAxisIndex: 0,
+          filterMode: 'weakFilter',
+          start: 0,
+          end: 100,
+          zoomOnMouseWheel: false,
+          moveOnMouseMove: true,
+        },
+        {
+          type: 'slider',
+          yAxisIndex: 0,
+          zoomLock: true,
+          width: 10,
+          right: 10,
+          top: 70,
+          bottom: 30,
+          start: 0,
+          end: 100,
+          handleSize: 0,
+          showDetail: false,
+        },
+        {
+          type: 'inside',
+          yAxisIndex: 0,
+          start: 0,
+          end: 100,
+          zoomOnMouseWheel: false,
+          moveOnMouseMove: true,
+          moveOnMouseWheel: true,
+        },
+      ]
       : [],
     grid: {
       show: true,
@@ -577,12 +526,10 @@ export default function transformProps(
     expandedState: initialExpandedState,
     showYAxisLabels: formData.showYAxisLabels,
     showBarLabels: formData.showBarLabels,
-    timeRangePreset:
-      timeRangePreset as PluginChartGanttProps['timeRangePreset'],
+    timeRangePreset: timeRangePreset as PluginChartGanttProps['timeRangePreset'],
     customStartDate: customStartDate as string,
     customEndDate: customEndDate as string,
-    timeGranularity:
-      timeGranularity as PluginChartGanttProps['timeGranularity'],
+    timeGranularity: timeGranularity as PluginChartGanttProps['timeGranularity'],
     taskFilter: taskFilter as string,
     showProgress: showProgress as boolean,
     showTodayMarker: formData.showTodayMarker ?? true,

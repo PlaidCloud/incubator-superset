@@ -102,7 +102,7 @@ export default function SupersetPluginDashboardFilters(
       ].map(v => ({ label: String(v), value: String(v) }));
       setDataMask({
         filterState: {
-          ...filterState,
+          ...(filterState ?? {}),
           selectState: {
             options: uniq,
           },

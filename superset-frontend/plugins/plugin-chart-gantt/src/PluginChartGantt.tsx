@@ -505,7 +505,7 @@ function renderGanttItem(
   const isHighlighted = api.value(DIM_IS_HIGHLIGHTED) as number;
   const showProgress = api.value(DIM_SHOW_PROGRESS) as number;
 
-  const { coordSys } = params as any;
+  const coordSys = (params as any).coordSys;
   const gridLeft = coordSys.x;
   const gridRight = gridLeft + coordSys.width;
 
@@ -542,21 +542,21 @@ function renderGanttItem(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const expandIcon: any = isGroup
     ? {
-        type: 'text',
-        style: {
-          text: expanded ? '−' : '+',
-          x: iconX,
-          y: y + barHeight / 2,
-          textVerticalAlign: 'middle',
-          textAlign: 'center',
-          // eslint-disable-next-line theme-colors/no-literal-colors
-          fill: 'rgba(255, 255, 255, 0.85)',
-          fontSize: 12,
-          fontWeight: 'bold',
-        },
-        // Hide icon if bar segment is too small
-        ignore: barVisibleWidth < 20,
-      }
+      type: 'text',
+      style: {
+        text: expanded ? '−' : '+',
+        x: iconX,
+        y: y + barHeight / 2,
+        textVerticalAlign: 'middle',
+        textAlign: 'center',
+        // eslint-disable-next-line theme-colors/no-literal-colors
+        fill: 'rgba(255, 255, 255, 0.85)',
+        fontSize: 12,
+        fontWeight: 'bold',
+      },
+      // Hide icon if bar segment is too small
+      ignore: barVisibleWidth < 20,
+    }
     : null;
 
   // Calculate contrasting text color based on bar color brightness
@@ -568,9 +568,7 @@ function renderGanttItem(
     const b = parseInt(hex.substring(4, 6), 16);
     const brightness = (r * 299 + g * 587 + b * 114) / 1000;
     // eslint-disable-next-line theme-colors/no-literal-colors
-    return brightness > 150
-      ? 'rgba(0, 0, 0, 0.85)'
-      : 'rgba(255, 255, 255, 0.95)';
+    return brightness > 150 ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.95)';
   };
 
   const textColor = getTextColor(color);
@@ -711,10 +709,7 @@ function buildEchartsOptions(
         const endDate = new Date(end as number).toLocaleDateString();
         const type = isGroup ? 'Group' : 'Task';
         const levelLabel = `Level ${level}`;
-        const progressLabel =
-          progress !== undefined
-            ? `<br/>Progress: ${Math.round(progress)}%`
-            : '';
+        const progressLabel = progress !== undefined ? `<br/>Progress: ${Math.round(progress)}%` : '';
         return `<strong>${name}</strong><br/>Type: ${type}<br/>Level: ${levelLabel}<br/>Start: ${startDate}<br/>End: ${endDate}${progressLabel}`;
       },
     },
@@ -724,70 +719,70 @@ function buildEchartsOptions(
     },
     dataZoom: zoomable
       ? [
-          {
-            type: 'slider',
-            xAxisIndex: 0,
-            filterMode: 'weakFilter',
-            height: 20,
-            bottom: 0,
-            start: zoomStart ?? 0,
-            end:
-              zoomEnd ??
-              (totalSpanDays > 0
-                ? timeGranularity === 'day'
-                  ? Math.min((7 / totalSpanDays) * 100, 100)
-                  : timeGranularity === 'week'
-                    ? Math.min((35 / totalSpanDays) * 100, 100)
-                    : 100
-                : 10),
-            handleSize: '80%',
-            showDetail: false,
-            // Allow zooming down to 1 unit of granularity
-            minValueSpan: timeAxisConfig.minInterval,
-          },
-          {
-            type: 'inside',
-            xAxisIndex: 0,
-            filterMode: 'weakFilter',
-            start: zoomStart ?? 0,
-            end:
-              zoomEnd ??
-              (totalSpanDays > 0
-                ? timeGranularity === 'day'
-                  ? Math.min((7 / totalSpanDays) * 100, 100)
-                  : timeGranularity === 'week'
-                    ? Math.min((35 / totalSpanDays) * 100, 100)
-                    : 100
-                : 10),
-            zoomOnMouseWheel: true,
-            moveOnMouseMove: true,
-            moveOnMouseWheel: true,
-            // Allow zooming down to 1 unit of granularity
-            minValueSpan: timeAxisConfig.minInterval,
-          },
-          {
-            type: 'slider',
-            yAxisIndex: 0,
-            zoomLock: true,
-            width: 10,
-            right: 10,
-            top: 110,
-            bottom: 30,
-            start: 0,
-            end: 100,
-            handleSize: 0,
-            showDetail: false,
-          },
-          {
-            type: 'inside',
-            yAxisIndex: 0,
-            start: 0,
-            end: 100,
-            zoomOnMouseWheel: false,
-            moveOnMouseMove: true,
-            moveOnMouseWheel: true,
-          },
-        ]
+        {
+          type: 'slider',
+          xAxisIndex: 0,
+          filterMode: 'weakFilter',
+          height: 20,
+          bottom: 0,
+          start: zoomStart ?? 0,
+          end: zoomEnd ?? (
+            totalSpanDays > 0
+              ? (timeGranularity === 'day'
+                ? Math.min((7 / totalSpanDays) * 100, 100)
+                : timeGranularity === 'week'
+                  ? Math.min((35 / totalSpanDays) * 100, 100)
+                  : 100)
+              : 10
+          ),
+          handleSize: '80%',
+          showDetail: false,
+          // Allow zooming down to 1 unit of granularity
+          minValueSpan: timeAxisConfig.minInterval,
+        },
+        {
+          type: 'inside',
+          xAxisIndex: 0,
+          filterMode: 'weakFilter',
+          start: zoomStart ?? 0,
+          end: zoomEnd ?? (
+            totalSpanDays > 0
+              ? (timeGranularity === 'day'
+                ? Math.min((7 / totalSpanDays) * 100, 100)
+                : timeGranularity === 'week'
+                  ? Math.min((35 / totalSpanDays) * 100, 100)
+                  : 100)
+              : 10
+          ),
+          zoomOnMouseWheel: true,
+          moveOnMouseMove: true,
+          moveOnMouseWheel: true,
+          // Allow zooming down to 1 unit of granularity
+          minValueSpan: timeAxisConfig.minInterval,
+        },
+        {
+          type: 'slider',
+          yAxisIndex: 0,
+          zoomLock: true,
+          width: 10,
+          right: 10,
+          top: 110,
+          bottom: 30,
+          start: 0,
+          end: 100,
+          handleSize: 0,
+          showDetail: false,
+        },
+        {
+          type: 'inside',
+          yAxisIndex: 0,
+          start: 0,
+          end: 100,
+          zoomOnMouseWheel: false,
+          moveOnMouseMove: true,
+          moveOnMouseWheel: true,
+        },
+      ]
       : [],
     grid: {
       show: true,
@@ -853,34 +848,34 @@ function buildEchartsOptions(
         data: seriesData,
         markLine: showTodayMarker
           ? {
-              silent: true,
-              symbol: 'none',
-              animation: false,
-              lineStyle: {
-                // eslint-disable-next-line theme-colors/no-literal-colors
-                color: '#ff6b6b',
-                width: 2,
-                type: 'solid',
+            silent: true,
+            symbol: 'none',
+            animation: false,
+            lineStyle: {
+              // eslint-disable-next-line theme-colors/no-literal-colors
+              color: '#ff6b6b',
+              width: 2,
+              type: 'solid',
+            },
+            label: {
+              show: true,
+              position: 'end',
+              formatter: 'Today',
+              // eslint-disable-next-line theme-colors/no-literal-colors
+              color: '#ff6b6b',
+              fontWeight: 'bold',
+              fontSize: 11,
+              padding: [2, 6],
+              // eslint-disable-next-line theme-colors/no-literal-colors
+              backgroundColor: 'rgba(255, 107, 107, 0.1)',
+              borderRadius: 3,
+            },
+            data: [
+              {
+                xAxis: Date.now(),
               },
-              label: {
-                show: true,
-                position: 'end',
-                formatter: 'Today',
-                // eslint-disable-next-line theme-colors/no-literal-colors
-                color: '#ff6b6b',
-                fontWeight: 'bold',
-                fontSize: 11,
-                padding: [2, 6],
-                // eslint-disable-next-line theme-colors/no-literal-colors
-                backgroundColor: 'rgba(255, 107, 107, 0.1)',
-                borderRadius: 3,
-              },
-              data: [
-                {
-                  xAxis: Date.now(),
-                },
-              ],
-            }
+            ],
+          }
           : undefined,
       },
     ],
