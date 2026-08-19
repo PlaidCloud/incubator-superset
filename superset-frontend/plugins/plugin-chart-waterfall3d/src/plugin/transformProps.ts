@@ -169,7 +169,9 @@ export default function transformProps(
       total: toHex(totalColor),
       subtotal: toHex(subtotalColor),
     },
-    labelColor: toRgba(labelColor, 'rgba(20,40,100,1)'),
+    // Empty means "unset" — the renderer then falls back to the theme's text
+    // color, which a hard-coded default could not do.
+    labelColor: toRgba(labelColor, ''),
     showValue: Boolean(showValue),
     boldMode: String(boldMode),
     showLegend: Boolean(showLegend),
