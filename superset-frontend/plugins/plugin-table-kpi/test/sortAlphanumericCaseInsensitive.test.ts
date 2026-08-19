@@ -36,7 +36,7 @@ describe('sortAlphanumericCaseInsensitive', () => {
   const sortValues = (values: any[]) =>
     [...values].sort((a, b) => sortAlphanumericCaseInsensitive(a, b));
 
-  it('orders strings case-insensitively', () => {
+  test('orders strings case-insensitively', () => {
     const sorted = sortValues(testData).filter(v => typeof v === 'string');
 
     expect(sorted).toEqual([
@@ -49,7 +49,7 @@ describe('sortAlphanumericCaseInsensitive', () => {
     ]);
   });
 
-  it('keeps the strings contiguous, wherever the non-strings land', () => {
+  test('keeps the strings contiguous, wherever the non-strings land', () => {
     const sorted = sortValues(testData);
     const stringIndexes = sorted
       .map((v, i) => (typeof v === 'string' ? i : -1))
@@ -70,7 +70,7 @@ describe('sortAlphanumericCaseInsensitive', () => {
     );
   });
 
-  it('keeps every input value', () => {
+  test('keeps every input value', () => {
     expect(sortValues(testData)).toHaveLength(testData.length);
   });
 });
@@ -86,7 +86,7 @@ const testDataMulti = [
 ];
 
 describe('sortAlphanumericCaseInsensitiveMulti', () => {
-  it('Sort rows by multiple columns', () => {
+  test('Sort rows by multiple columns', () => {
     const sorted = [...testDataMulti].sort((a, b) => {
       // Primary sort by colA
       const colASort = sortAlphanumericCaseInsensitive(a.colA, b.colA);

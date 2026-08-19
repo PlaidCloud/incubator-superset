@@ -45,7 +45,7 @@ const buildChartProps = (formDataOverrides = {}, data = DATA) =>
   });
 
 describe('PluginChartMarimekko transformProps', () => {
-  it('passes width, height and query data through', () => {
+  test('passes width, height and query data through', () => {
     const transformed = transformProps(buildChartProps()) as any;
 
     expect(transformed.width).toBe(800);
@@ -53,7 +53,7 @@ describe('PluginChartMarimekko transformProps', () => {
     expect(transformed.data).toEqual(DATA);
   });
 
-  it('returns the contract the chart component consumes', () => {
+  test('returns the contract the chart component consumes', () => {
     const transformed = transformProps(buildChartProps()) as any;
 
     expect(Object.keys(transformed).sort()).toEqual(
@@ -82,7 +82,7 @@ describe('PluginChartMarimekko transformProps', () => {
     );
   });
 
-  it('forwards the control values it is given', () => {
+  test('forwards the control values it is given', () => {
     const transformed = transformProps(buildChartProps()) as any;
 
     expect(transformed.boldText).toBe(true);
@@ -90,7 +90,7 @@ describe('PluginChartMarimekko transformProps', () => {
     expect(transformed.headerText).toBe('my text');
   });
 
-  it('applies defaults for the controls left unset', () => {
+  test('applies defaults for the controls left unset', () => {
     const transformed = transformProps(buildChartProps()) as any;
 
     expect(transformed.tooltipNumberFormat).toBe('SMART_NUMBER');
@@ -102,7 +102,7 @@ describe('PluginChartMarimekko transformProps', () => {
     expect(transformed.yAxisLabel).toBe('');
   });
 
-  it('lets the form data override those defaults', () => {
+  test('lets the form data override those defaults', () => {
     const transformed = transformProps(
       buildChartProps({
         showLegend: true,
@@ -120,7 +120,7 @@ describe('PluginChartMarimekko transformProps', () => {
     expect(transformed.tooltipNumberFormat).toBe(',.2f');
   });
 
-  it('returns no data when the query came back empty', () => {
+  test('returns no data when the query came back empty', () => {
     const transformed = transformProps(buildChartProps({}, [])) as any;
 
     expect(transformed.data).toEqual([]);

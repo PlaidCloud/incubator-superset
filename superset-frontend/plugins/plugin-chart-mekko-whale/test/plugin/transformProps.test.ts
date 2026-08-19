@@ -39,14 +39,14 @@ const buildChartProps = (formDataOverrides = {}, data = DATA) =>
   });
 
 describe('PluginChartMekkoWhale transformProps', () => {
-  it('passes width and height through untouched', () => {
+  test('passes width and height through untouched', () => {
     const transformed = transformProps(buildChartProps()) as any;
 
     expect(transformed.width).toBe(800);
     expect(transformed.height).toBe(600);
   });
 
-  it('returns the contract the chart component consumes', () => {
+  test('returns the contract the chart component consumes', () => {
     const transformed = transformProps(buildChartProps()) as any;
 
     expect(Object.keys(transformed).sort()).toEqual(
@@ -75,7 +75,7 @@ describe('PluginChartMekkoWhale transformProps', () => {
     );
   });
 
-  it('labels the axes from the metrics, falling back when unnamed', () => {
+  test('labels the axes from the metrics, falling back when unnamed', () => {
     const transformed = transformProps(buildChartProps()) as any;
 
     // No second metric is configured, so the x axis falls back to "Revenue".
@@ -83,7 +83,7 @@ describe('PluginChartMekkoWhale transformProps', () => {
     expect(transformed.yAxisLabel).toBe('Cumulative sum__num');
   });
 
-  it('totals the metric across the records', () => {
+  test('totals the metric across the records', () => {
     const transformed = transformProps(buildChartProps()) as any;
 
     expect(transformed.totalProfit).toBe(1);
@@ -91,7 +91,7 @@ describe('PluginChartMekkoWhale transformProps', () => {
     expect(transformed.yMin).toBe(0);
   });
 
-  it('shapes each record into a positioned segment', () => {
+  test('shapes each record into a positioned segment', () => {
     const transformed = transformProps(buildChartProps()) as any;
 
     expect(transformed.data).toHaveLength(1);
@@ -102,7 +102,7 @@ describe('PluginChartMekkoWhale transformProps', () => {
     );
   });
 
-  it('returns no segments when the query came back empty', () => {
+  test('returns no segments when the query came back empty', () => {
     const transformed = transformProps(buildChartProps({}, [])) as any;
 
     expect(transformed.data).toEqual([]);
