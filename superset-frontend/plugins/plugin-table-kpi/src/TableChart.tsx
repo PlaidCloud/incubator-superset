@@ -90,7 +90,9 @@ const ACTION_KEYS = {
  * Return sortType based on data type
  */
 // eslint-disable-next-line prettier/prettier
-function getSortTypeByDataType(dataType: GenericDataType): 'datetime' | 'alphanumeric' | 'basic' {
+function getSortTypeByDataType(
+  dataType: GenericDataType,
+): 'datetime' | 'alphanumeric' | 'basic' {
   if (dataType === GenericDataType.Temporal) {
     return 'datetime';
   }
@@ -326,7 +328,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
   );
 
   const getCrossFilterDataMask = (key: string, value: DataRecordValue) => {
-    const updatedFilters = { ...(filters || {}) };
+    const updatedFilters = { ...filters };
 
     // Check if this value is already selected for this column
     if (filters && isActiveFilterValue(key, value)) {
@@ -962,6 +964,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
                   <div
                     className="dt-truncate-cell"
                     style={columnWidth ? { width: columnWidth } : undefined}
+                    // eslint-disable-next-line react/no-danger
                     dangerouslySetInnerHTML={html}
                   />
                 </StyledCell>
@@ -1059,7 +1062,8 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           </th>
         ),
         // eslint-disable-next-line prettier/prettier
-        footer: totals ? () =>
+        footer: totals
+          ? () =>
               i === 0 ? (
                 <th key={`footer-summary-${i}`}>
                   <div

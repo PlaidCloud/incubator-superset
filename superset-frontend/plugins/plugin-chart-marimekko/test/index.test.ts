@@ -27,7 +27,7 @@ import { PluginChartMarimekko } from '../src';
  * properly transform the data and/or any resulting props).
  */
 describe('plugin-chart-marimekko', () => {
-  it('exists', () => {
+  test('exists', () => {
     expect(PluginChartMarimekko).toBeDefined();
   });
 });

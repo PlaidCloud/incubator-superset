@@ -43,7 +43,7 @@ describe('PluginChartMarimekko transformProps', () => {
     ],
   });
 
-  it('should transform chart props for viz', () => {
+  test('should transform chart props for viz', () => {
     expect(transformProps(chartProps)).toEqual({
       width: 800,
       height: 600,

@@ -134,7 +134,7 @@ export default function Login() {
     SupersetClient.postForm(loginEndpoint, values, '');
   };
 
-  if (true && authType === AuthType.AuthOauth && providers.length === 1) {
+  if (authType === AuthType.AuthOauth && providers.length === 1) {
     // allow immediate login by only provider
     useEffect(() => {
       const provider = providers[0] as OAuthProvider;

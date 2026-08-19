@@ -197,7 +197,9 @@ export function getDistributionAnalytics() {
  * Converts the mock data to CSV format
  * @returns CSV string representation of the whale chart data
  */
-export function convertToCSV(data: WhaleChartDataRecord[] = whaleChartMockData): string {
+export function convertToCSV(
+  data: WhaleChartDataRecord[] = whaleChartMockData,
+): string {
   // Define the headers
   const headers = [
     'customerName',
@@ -206,12 +208,12 @@ export function convertToCSV(data: WhaleChartDataRecord[] = whaleChartMockData):
     'orderCount',
     'marketingCost',
     'customerLifetime',
-    'returnRate'
+    'returnRate',
   ];
-  
+
   // Create the header row
-  let csvContent = headers.join(',') + '\n';
-  
+  let csvContent = `${headers.join(',')}\n`;
+
   // Add each data row
   data.forEach(record => {
     const row = [
@@ -221,11 +223,11 @@ export function convertToCSV(data: WhaleChartDataRecord[] = whaleChartMockData):
       record.orderCount,
       record.marketingCost,
       record.customerLifetime,
-      record.returnRate
+      record.returnRate,
     ];
-    csvContent += row.join(',') + '\n';
+    csvContent += `${row.join(',')}\n`;
   });
-  
+
   return csvContent;
 }
 

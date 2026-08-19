@@ -85,12 +85,10 @@ const config: ControlPanelConfig = {
                   'group by). Falls back to the metric if unset.',
               ),
               mapStateToProps: state => ({
-                choices: [
-                  ...(state.datasource?.columns || []).map(col => [
-                    col.column_name,
-                    col.column_name,
-                  ]),
-                ],
+                choices: (state.datasource?.columns || []).map(col => [
+                  col.column_name,
+                  col.column_name,
+                ]),
                 default: state.form_data?.stepColumn || '',
               }),
               clearable: true,
@@ -130,12 +128,10 @@ const config: ControlPanelConfig = {
                   'functionally dependent on the step/series).',
               ),
               mapStateToProps: state => ({
-                choices: [
-                  ...(state.datasource?.columns || []).map(col => [
-                    col.column_name,
-                    col.column_name,
-                  ]),
-                ],
+                choices: (state.datasource?.columns || []).map(col => [
+                  col.column_name,
+                  col.column_name,
+                ]),
               }),
               clearable: true,
               resetOnHide: false,

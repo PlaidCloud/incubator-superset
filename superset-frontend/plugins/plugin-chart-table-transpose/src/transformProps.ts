@@ -169,7 +169,7 @@ const processComparisonDataRecords = memoizeOne(
           const comparisonValue = origCol.isMetric
             ? originalItem?.[`${origCol.key}__${comparisonSuffix}`] || 0
             : originalItem[`%${origCol.key.slice(1)}__${comparisonSuffix}`] ||
-            0;
+              0;
           const { valueDifference, percentDifferenceNum } =
             calculateDifferences(
               originalValue as number,
@@ -201,7 +201,11 @@ const isRowHeadingMetric = (metric: unknown) => {
   if (!metric || typeof metric !== 'object') {
     return false;
   }
-  const { emptyRowHeading, isEmpty: isEmptyRow, column } = metric as {
+  const {
+    emptyRowHeading,
+    isEmpty: isEmptyRow,
+    column,
+  } = metric as {
     emptyRowHeading?: boolean;
     isEmpty?: boolean;
     column?: { column_name?: string };
@@ -213,11 +217,9 @@ const isRowHeadingMetric = (metric: unknown) => {
   );
 };
 
-function processColumns(props: TableChartProps): [
-  string[],
-  string[],
-  DataColumnMeta[],
-] {
+function processColumns(
+  props: TableChartProps,
+): [string[], string[], DataColumnMeta[]] {
   const {
     datasource: { columnFormats, currencyFormats, verboseMap },
     rawFormData: formData,
@@ -304,9 +306,9 @@ function processColumns(props: TableChartProps): [
       } else if (isMetric || (isNumber && (numberFormat || currency))) {
         formatter = currency
           ? new CurrencyFormatter({
-            d3Format: numberFormat,
-            currency,
-          })
+              d3Format: numberFormat,
+              currency,
+            })
           : getNumberFormatter(numberFormat);
       }
       return {
@@ -321,7 +323,7 @@ function processColumns(props: TableChartProps): [
       };
     });
   return [metrics, percentMetrics, columns];
-};
+}
 
 const getComparisonColConfig = (
   label: string,
@@ -357,9 +359,9 @@ const getComparisonColFormatter = (
     const numberFormat = currentColNumberFormat || savedFormat;
     formatter = currency
       ? new CurrencyFormatter({
-        d3Format: numberFormat,
-        currency,
-      })
+          d3Format: numberFormat,
+          currency,
+        })
       : getNumberFormatter(numberFormat);
   }
   return formatter;
@@ -370,84 +372,82 @@ const processComparisonColumns = (
   props: TableChartProps,
   comparisonSuffix: string,
 ) =>
-  columns
-    .map(col => {
-      const {
-        datasource: { columnFormats, currencyFormats },
-        rawFormData: { column_config: columnConfig = {} },
-      } = props;
-      const savedFormat = columnFormats?.[col.key];
-      const savedCurrency = currencyFormats?.[col.key];
-      if (
-        (col.isMetric || col.isPercentMetric) &&
-        !col.key.includes(comparisonSuffix) &&
-        col.isNumeric
-      ) {
-        return [
-          {
-            ...col,
-            label: t('Main'),
-            key: `${t('Main')} ${col.key}`,
-            config: getComparisonColConfig(t('Main'), col.key, columnConfig),
-            formatter: getComparisonColFormatter(
-              t('Main'),
-              col,
-              columnConfig,
-              savedFormat,
-              savedCurrency,
-            ),
-          },
-          {
-            ...col,
-            label: `#`,
-            key: `# ${col.key}`,
-            config: getComparisonColConfig(`#`, col.key, columnConfig),
-            formatter: getComparisonColFormatter(
-              `#`,
-              col,
-              columnConfig,
-              savedFormat,
-              savedCurrency,
-            ),
-          },
-          {
-            ...col,
-            label: `△`,
-            key: `△ ${col.key}`,
-            config: getComparisonColConfig(`△`, col.key, columnConfig),
-            formatter: getComparisonColFormatter(
-              `△`,
-              col,
-              columnConfig,
-              savedFormat,
-              savedCurrency,
-            ),
-          },
-          {
-            ...col,
-            label: `%`,
-            key: `% ${col.key}`,
-            config: getComparisonColConfig(`%`, col.key, columnConfig),
-            formatter: getComparisonColFormatter(
-              `%`,
-              col,
-              columnConfig,
-              savedFormat,
-              savedCurrency,
-            ),
-          },
-        ];
-      }
-      if (
-        !col.isMetric &&
-        !col.isPercentMetric &&
-        !col.key.includes(comparisonSuffix)
-      ) {
-        return [col];
-      }
-      return [];
-    })
-    .flat();
+  columns.flatMap(col => {
+    const {
+      datasource: { columnFormats, currencyFormats },
+      rawFormData: { column_config: columnConfig = {} },
+    } = props;
+    const savedFormat = columnFormats?.[col.key];
+    const savedCurrency = currencyFormats?.[col.key];
+    if (
+      (col.isMetric || col.isPercentMetric) &&
+      !col.key.includes(comparisonSuffix) &&
+      col.isNumeric
+    ) {
+      return [
+        {
+          ...col,
+          label: t('Main'),
+          key: `${t('Main')} ${col.key}`,
+          config: getComparisonColConfig(t('Main'), col.key, columnConfig),
+          formatter: getComparisonColFormatter(
+            t('Main'),
+            col,
+            columnConfig,
+            savedFormat,
+            savedCurrency,
+          ),
+        },
+        {
+          ...col,
+          label: `#`,
+          key: `# ${col.key}`,
+          config: getComparisonColConfig(`#`, col.key, columnConfig),
+          formatter: getComparisonColFormatter(
+            `#`,
+            col,
+            columnConfig,
+            savedFormat,
+            savedCurrency,
+          ),
+        },
+        {
+          ...col,
+          label: `△`,
+          key: `△ ${col.key}`,
+          config: getComparisonColConfig(`△`, col.key, columnConfig),
+          formatter: getComparisonColFormatter(
+            `△`,
+            col,
+            columnConfig,
+            savedFormat,
+            savedCurrency,
+          ),
+        },
+        {
+          ...col,
+          label: `%`,
+          key: `% ${col.key}`,
+          config: getComparisonColConfig(`%`, col.key, columnConfig),
+          formatter: getComparisonColFormatter(
+            `%`,
+            col,
+            columnConfig,
+            savedFormat,
+            savedCurrency,
+          ),
+        },
+      ];
+    }
+    if (
+      !col.isMetric &&
+      !col.isPercentMetric &&
+      !col.key.includes(comparisonSuffix)
+    ) {
+      return [col];
+    }
+    return [];
+  });
 
 /**
  * Automatically set page size based on number of cells.
@@ -483,7 +483,6 @@ function createFormatter(config: {
     });
   }
 
-
   if (config.smallNumberFormat && config.numberFormat) {
     const regularFormatter = getNumberFormatter(config.numberFormat);
     const smallFormatter = getNumberFormatter(config.smallNumberFormat);
@@ -517,7 +516,10 @@ function transposeData(
   transposedColumns: DataColumnMeta[];
 } {
   // If there's no data to transpose or no metrics/headings defined for rows, return empty
-  if ((!data.length || !originalDataColumns.length) && !formDataMetricsInOrder.length) {
+  if (
+    (!data.length || !originalDataColumns.length) &&
+    !formDataMetricsInOrder.length
+  ) {
     return { transposedData: [], transposedColumns: [] };
   }
 
@@ -539,28 +541,36 @@ function transposeData(
     }
   });
 
-  const filteredDataForDynamicColumnHeaders = data.length > 0 ? data.filter(
-    originalDataRow =>
-      headerKeyForOriginalData &&
-      originalDataRow[headerKeyForOriginalData] !== undefined) : [];
+  const filteredDataForDynamicColumnHeaders =
+    data.length > 0
+      ? data.filter(
+          originalDataRow =>
+            headerKeyForOriginalData &&
+            originalDataRow[headerKeyForOriginalData] !== undefined,
+        )
+      : [];
 
-  let dynamicColumnHeaders = filteredDataForDynamicColumnHeaders.length > 0 ?
-    filteredDataForDynamicColumnHeaders.map((originalDataRow) => {
-      const label = headerKeyForOriginalData
-        ? String(originalDataRow[headerKeyForOriginalData])
-        : '';
-      return {
-        key: label,  // Use label as key instead of `col_${index}`
-        label: label,
-        dataType: GenericDataType.Numeric, // Changed to Numeric since these will contain metric values
-        isMetric: false,
-        isPercentMetric: false,
-        isNumeric: true, // Changed to true since these columns will contain numeric values
-        // We'll assign formatters dynamically per cell based on the metric
-      };
-    }) : []; // Filter out undefined values
+  let dynamicColumnHeaders =
+    filteredDataForDynamicColumnHeaders.length > 0
+      ? filteredDataForDynamicColumnHeaders.map(originalDataRow => {
+          const label = headerKeyForOriginalData
+            ? String(originalDataRow[headerKeyForOriginalData])
+            : '';
+          return {
+            key: label, // Use label as key instead of `col_${index}`
+            label: label,
+            dataType: GenericDataType.Numeric, // Changed to Numeric since these will contain metric values
+            isMetric: false,
+            isPercentMetric: false,
+            isNumeric: true, // Changed to true since these columns will contain numeric values
+            // We'll assign formatters dynamically per cell based on the metric
+          };
+        })
+      : []; // Filter out undefined values
 
-  let dynamicColumnHeadersSortOrder: number[] = dynamicColumnHeaders.map((header, index) => index);
+  let dynamicColumnHeadersSortOrder: number[] = dynamicColumnHeaders.map(
+    (header, index) => index,
+  );
   if (column_sort_order !== 'none') {
     const indexedHeaders = dynamicColumnHeaders.map((header, index) => ({
       header,
@@ -578,7 +588,9 @@ function transposeData(
     });
 
     dynamicColumnHeaders = sortedIndexedHeaders.map(item => item.header);
-    dynamicColumnHeadersSortOrder = sortedIndexedHeaders.map(item => item.originalIndex);
+    dynamicColumnHeadersSortOrder = sortedIndexedHeaders.map(
+      item => item.originalIndex,
+    );
   }
 
   const transposedColumnHeaders: DataColumnMeta[] = [
@@ -591,30 +603,34 @@ function transposeData(
       isNumeric: false,
       config: {
         disableSortBy: true,
-      }
+      },
     },
     // Always add the "Total" column header for row totals
-    ...(showAllSegments && allSegmentsPosition === 'start' ? [
-      {
-        key: 'rowTotal',
-        label: allSegmentsTransposedColumnName,
-        dataType: GenericDataType.Numeric,
-        isMetric: false,
-        isPercentMetric: false,
-        isNumeric: true,
-      },
-    ] : []),
+    ...(showAllSegments && allSegmentsPosition === 'start'
+      ? [
+          {
+            key: 'rowTotal',
+            label: allSegmentsTransposedColumnName,
+            dataType: GenericDataType.Numeric,
+            isMetric: false,
+            isPercentMetric: false,
+            isNumeric: true,
+          },
+        ]
+      : []),
     ...dynamicColumnHeaders,
-    ...(showAllSegments && allSegmentsPosition === 'end' ? [
-      {
-        key: 'rowTotal',
-        label: allSegmentsTransposedColumnName,
-        dataType: GenericDataType.Numeric,
-        isMetric: false,
-        isPercentMetric: false,
-        isNumeric: true,
-      },
-    ] : []),
+    ...(showAllSegments && allSegmentsPosition === 'end'
+      ? [
+          {
+            key: 'rowTotal',
+            label: allSegmentsTransposedColumnName,
+            dataType: GenericDataType.Numeric,
+            isMetric: false,
+            isPercentMetric: false,
+            isNumeric: true,
+          },
+        ]
+      : []),
   ];
 
   if (dynamicColumnHeaders.length === 0) {
@@ -625,7 +641,12 @@ function transposeData(
         newRow[col.key] = row[col.key];
         // Assign formatter if available
         const rowConfigForMetric = rowConfig?.[col.key];
-        if (rowConfigForMetric && (rowConfigForMetric.d3NumberFormat || rowConfigForMetric.d3SmallNumberFormat || rowConfigForMetric.currencyFormat)) {
+        if (
+          rowConfigForMetric &&
+          (rowConfigForMetric.d3NumberFormat ||
+            rowConfigForMetric.d3SmallNumberFormat ||
+            rowConfigForMetric.currencyFormat)
+        ) {
           const formatter = createFormatter({
             numberFormat: rowConfigForMetric.d3NumberFormat,
             smallNumberFormat: rowConfigForMetric.d3SmallNumberFormat,
@@ -679,7 +700,12 @@ function transposeData(
           newRow.rowTotal = originalRow[itemIdentifier];
         });
         const rowConfigForMetric = rowConfig?.[itemIdentifier];
-        if (rowConfigForMetric && (rowConfigForMetric.d3NumberFormat || rowConfigForMetric.d3SmallNumberFormat || rowConfigForMetric.currencyFormat)) {
+        if (
+          rowConfigForMetric &&
+          (rowConfigForMetric.d3NumberFormat ||
+            rowConfigForMetric.d3SmallNumberFormat ||
+            rowConfigForMetric.currencyFormat)
+        ) {
           const formatter = createFormatter({
             numberFormat: rowConfigForMetric.d3NumberFormat,
             smallNumberFormat: rowConfigForMetric.d3SmallNumberFormat,
@@ -695,7 +721,6 @@ function transposeData(
       transposedData: newRows,
       transposedColumns: transposedColumnHeaders,
     };
-
   }
 
   const transposedDataRows: DataRecord[] = [];
@@ -730,7 +755,8 @@ function transposeData(
       newRow.__isHeading = true;
       newRow.metric = metricOrHeadingItem.emptyRowHeadingText || '';
 
-      const headingRowConfig = rowConfig?.[metricOrHeadingItem.emptyRowHeadingText || ''];
+      const headingRowConfig =
+        rowConfig?.[metricOrHeadingItem.emptyRowHeadingText || ''];
       if (headingRowConfig?.rowColor) {
         newRow.__rowColor__ = headingRowConfig.rowColor;
       }
@@ -765,7 +791,12 @@ function transposeData(
         }
 
         // Create a custom formatter if row config has number formatting
-        if (rowConfigForMetric && (rowConfigForMetric.d3NumberFormat || rowConfigForMetric.d3SmallNumberFormat || rowConfigForMetric.currencyFormat)) {
+        if (
+          rowConfigForMetric &&
+          (rowConfigForMetric.d3NumberFormat ||
+            rowConfigForMetric.d3SmallNumberFormat ||
+            rowConfigForMetric.currencyFormat)
+        ) {
           const formatter = createFormatter({
             numberFormat: rowConfigForMetric.d3NumberFormat,
             smallNumberFormat: rowConfigForMetric.d3SmallNumberFormat,
@@ -793,13 +824,21 @@ function transposeData(
             currentRowHasNumeric = true;
             // Also sum for column totals
             if (showTotals) {
-              columnSums[headerCol.key] = (columnSums[headerCol.key] || 0) + cellValue;
+              columnSums[headerCol.key] =
+                (columnSums[headerCol.key] || 0) + cellValue;
             }
           }
         });
       } else {
-        const metricLabelFallback = typeof metricOrHeadingItem === 'string' ? metricOrHeadingItem : metricOrHeadingItem?.label;
-        const fallbackColumn = originalDataColumns.find(col => col.label === metricLabelFallback || col.key === metricLabelFallback);
+        const metricLabelFallback =
+          typeof metricOrHeadingItem === 'string'
+            ? metricOrHeadingItem
+            : metricOrHeadingItem?.label;
+        const fallbackColumn = originalDataColumns.find(
+          col =>
+            col.label === metricLabelFallback ||
+            col.key === metricLabelFallback,
+        );
         if (fallbackColumn) {
           displayLabel = fallbackColumn.label || metricLabelFallback;
           const originalDataKey = fallbackColumn.key;
@@ -821,7 +860,8 @@ function transposeData(
               currentRowHasNumeric = true;
               // Also sum for column totals
               if (showTotals) {
-                columnSums[headerCol.key] = (columnSums[headerCol.key] || 0) + cellValue;
+                columnSums[headerCol.key] =
+                  (columnSums[headerCol.key] || 0) + cellValue;
               }
             }
           });
@@ -839,7 +879,8 @@ function transposeData(
         }
       }
       // This part is for non-heading rows or successfully found fallback metrics
-      if (!newRow.metric) { // Ensure metric label is set if not already by fallback
+      if (!newRow.metric) {
+        // Ensure metric label is set if not already by fallback
         newRow.metric = displayLabel;
       }
       newRow.__isHeading = false;
@@ -904,7 +945,7 @@ const transformProps = (
     ownState: serverPaginationData,
     hooks: {
       onAddFilter: onChangeFilter,
-      setDataMask = () => { },
+      setDataMask = () => {},
       onContextMenu,
     },
     emitCrossFilters,
@@ -983,8 +1024,8 @@ const transformProps = (
     // Transform data
     const relevantColumns = selectedColumns
       ? originalColumns.filter(col =>
-        selectedColumns.some(scol => scol?.column?.includes(col.key)),
-      )
+          selectedColumns.some(scol => scol?.column?.includes(col.key)),
+        )
       : originalColumns;
 
     return originalData?.map(originalItem => {
@@ -998,11 +1039,11 @@ const transformProps = (
           const originalValue = originalItem[origCol.key] || 0;
           const comparisonValue = origCol.isMetric
             ? originalItem?.[
-            `${origCol.key}__${ensureIsArray(timeOffsets)[0]}`
-            ] || 0
+                `${origCol.key}__${ensureIsArray(timeOffsets)[0]}`
+              ] || 0
             : originalItem[
-            `%${origCol.key.slice(1)}__${ensureIsArray(timeOffsets)[0]}`
-            ] || 0;
+                `%${origCol.key.slice(1)}__${ensureIsArray(timeOffsets)[0]}`
+              ] || 0;
           const { percentDifferenceNum } = calculateDifferences(
             originalValue as number,
             comparisonValue as number,
@@ -1124,7 +1165,12 @@ const transformProps = (
   let passedTotals = totals;
 
   // Apply sorting for non-transpose mode (before transpose)
-  if (!enable_pivot && sortOrder !== "none" && queryMode === QueryMode.Aggregate && timeseries_limit_metric) {
+  if (
+    !enable_pivot &&
+    sortOrder !== 'none' &&
+    queryMode === QueryMode.Aggregate &&
+    timeseries_limit_metric
+  ) {
     // Find the metric column to sort by
     const sortMetricLabel = getMetricLabel(timeseries_limit_metric);
     const sortColumn = passedColumns.find(col => col.key === sortMetricLabel);
@@ -1140,7 +1186,7 @@ const transformProps = (
         if (bValue == null) return -1;
 
         // Sort based on sortDesc
-        return sortOrder === "desc"
+        return sortOrder === 'desc'
           ? (bValue as number) - (aValue as number)
           : (aValue as number) - (bValue as number);
       });
@@ -1158,34 +1204,35 @@ const transformProps = (
       show_all_segments,
       all_segments_position,
       column_sort_order,
-      all_segments_transposed_column_name
+      all_segments_transposed_column_name,
     );
     passedData = transposedData;
     passedColumns = transposedColumns;
 
     // Apply sorting for transpose mode (after transpose)
-    if (sortOrder !== "none") {
-
+    if (sortOrder !== 'none') {
       // In transpose mode, find the metric row that corresponds to the sort metric
-      const sortableRows = passedData.filter(row =>
-        !row.__isHeading && !row.__is_summary__
+      const sortableRows = passedData.filter(
+        row => !row.__isHeading && !row.__is_summary__,
       );
 
       // If we found the metric row, sort all non-heading/non-summary rows by rowTotal
       if (sortableRows.length > 0) {
-        const headingRowsIndex: { index: number, row: DataRecord }[] = [];
+        const headingRowsIndex: { index: number; row: DataRecord }[] = [];
         passedData.filter((row, index) => {
           if (row.__isHeading) {
             headingRowsIndex.push({
               index,
-              row
+              row,
             });
             return true;
           }
           return false;
         });
         const summaryRows = passedData.filter(row => row.__is_summary__);
-        const dataRows = passedData.filter(row => !row.__isHeading && !row.__is_summary__);
+        const dataRows = passedData.filter(
+          row => !row.__isHeading && !row.__is_summary__,
+        );
 
         const sortedDataRows = [...dataRows].sort((a, b) => {
           // Sort by rowTotal (which represents the total across all segments)
@@ -1198,7 +1245,7 @@ const transformProps = (
           if (bValue == null) return -1;
 
           // Sort based on sortDesc
-          return sortOrder === "desc"
+          return sortOrder === 'desc'
             ? (bValue as number) - (aValue as number)
             : (aValue as number) - (bValue as number);
         });
@@ -1207,11 +1254,17 @@ const transformProps = (
         const sortedData: DataRecord[] = [];
         for (let i = 0; i < passedData.length; i++) {
           // prioritize heading rows, then data rows, then summary rows for same index
-          if (headingRowsIndex[headingSummaryIndexPointer] && i === headingRowsIndex[headingSummaryIndexPointer].index) {
+          if (
+            headingRowsIndex[headingSummaryIndexPointer] &&
+            i === headingRowsIndex[headingSummaryIndexPointer].index
+          ) {
             sortedData.push(headingRowsIndex[headingSummaryIndexPointer].row);
             headingSummaryIndexPointer++;
-          }
-          else if (sortedDataRows[i - headingRowsIndex.length] && i >= headingRowsIndex.length && i < headingRowsIndex.length + sortedDataRows.length) {
+          } else if (
+            sortedDataRows[i - headingRowsIndex.length] &&
+            i >= headingRowsIndex.length &&
+            i < headingRowsIndex.length + sortedDataRows.length
+          ) {
             sortedData.push(sortedDataRows[i - headingRowsIndex.length]);
           }
         }
@@ -1232,7 +1285,10 @@ const transformProps = (
 
     // Find and remove the summary row if present
     let summaryRowIdx = transposedData.findIndex(row => row.__is_summary__);
-    let summaryRow = summaryRowIdx !== -1 ? transposedData.splice(summaryRowIdx, 1)[0] : undefined;
+    let summaryRow =
+      summaryRowIdx !== -1
+        ? transposedData.splice(summaryRowIdx, 1)[0]
+        : undefined;
 
     // Insert summary row at the desired position
     if (summaryRow) {

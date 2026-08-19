@@ -33,7 +33,7 @@ const testData = [
 ];
 
 describe('sortAlphanumericCaseInsensitive', () => {
-  it('Sort values', () => {
+  test('Sort values', () => {
     const sorted = [...testData].sort((a, b) =>
       sortAlphanumericCaseInsensitive(a, b),
     );
@@ -64,7 +64,7 @@ const testDataMulti = [
 ];
 
 describe('sortAlphanumericCaseInsensitiveMulti', () => {
-  it('Sort rows by multiple columns', () => {
+  test('Sort rows by multiple columns', () => {
     const sorted = [...testDataMulti].sort((a, b) => {
       // Primary sort by colA
       const colASort = sortAlphanumericCaseInsensitive(a.colA, b.colA);
