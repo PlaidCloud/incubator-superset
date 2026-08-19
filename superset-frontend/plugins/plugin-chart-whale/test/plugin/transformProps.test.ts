@@ -20,35 +20,96 @@ import { ChartProps } from '@superset-ui/core';
 import { supersetTheme } from '@apache-superset/core/theme';
 import transformProps from '../../src/plugin/transformProps';
 
-describe('SupersetPluginChartWhale transformProps', () => {
-  const formData = {
-    colorScheme: 'bnbColors',
-    datasource: '3__table',
-    granularity_sqla: 'ds',
-    metric: 'sum__num',
-    series: 'name',
-    boldText: true,
-    headerFontSize: 'xs',
-    headerText: 'my text',
-  };
-  const chartProps = new ChartProps({
-    formData,
+const buildChartProps = (formDataOverrides = {}, data = DATA) =>
+  new ChartProps({
+    formData: {
+      colorScheme: 'bnbColors',
+      datasource: '3__table',
+      metrics: ['sum__num'],
+      columns: 'name',
+      ...formDataOverrides,
+    },
     width: 800,
     height: 600,
     theme: supersetTheme,
-    queriesData: [{
-      data: [{ name: 'Hulk', sum__num: 1 }],
-    }],
+    queriesData: [{ data, coltypes: [] }],
   }) as any;
 
-  it('should transform chart props for viz', () => {
-    expect(transformProps(chartProps)).toEqual({
-      width: 800,
-      height: 600,
-      boldText: true,
-      headerFontSize: 'xs',
-      headerText: 'my text',
-      data: [{ name: 'Hulk', sum__num: 1 }],
+// Deliberately unsorted so the ordering behaviour is actually exercised.
+const DATA = [
+  { name: 'Thor', sum__num: 20 },
+  { name: 'Hulk', sum__num: 50 },
+  { name: 'Loki', sum__num: 30 },
+];
+
+describe('SupersetPluginChartWhale transformProps', () => {
+  it('passes width and height through untouched', () => {
+    const transformed = transformProps(buildChartProps());
+
+    expect(transformed.width).toBe(800);
+    expect(transformed.height).toBe(600);
+  });
+
+  it('returns the contract the chart component consumes', () => {
+    const transformed = transformProps(buildChartProps());
+
+    // Asserting the keys rather than a full snapshot: the echartOptions payload
+    // is large and volatile, and pinning it would make this test fail on every
+    // cosmetic change without telling us anything useful.
+    expect(Object.keys(transformed).sort()).toEqual(
+      [
+        'data',
+        'echartOptions',
+        'emitCrossFilters',
+        'formData',
+        'groupby',
+        'height',
+        'labelMap',
+        'onContextMenu',
+        'refs',
+        'selectedValues',
+        'setDataMask',
+        'width',
+      ].sort(),
+    );
+  });
+
+  it('sorts records by metric descending', () => {
+    const { data } = transformProps(buildChartProps());
+
+    expect(data.map((d: any) => d.name)).toEqual(['Hulk', 'Loki', 'Thor']);
+  });
+
+  it('accumulates the metric and derives its percentages', () => {
+    const { data } = transformProps(buildChartProps());
+
+    // Total is 100, which makes the expected percentages readable by hand.
+    expect(data.map((d: any) => d.cumulativeMetric)).toEqual([50, 80, 100]);
+    expect(data.map((d: any) => d.metricPct)).toEqual([50, 30, 20]);
+    expect(data.map((d: any) => d.cumulativeMetricPct)).toEqual([50, 80, 100]);
+  });
+
+  it('spreads entity percentiles evenly across the records', () => {
+    const { data } = transformProps(buildChartProps());
+
+    expect(data.map((d: any) => Math.round(d.entityPercentile))).toEqual([
+      33, 67, 100,
+    ]);
+  });
+
+  it('builds a label map keyed by the groupby column', () => {
+    const { labelMap } = transformProps(buildChartProps());
+
+    expect(labelMap).toEqual({
+      Thor: ['Thor'],
+      Hulk: ['Hulk'],
+      Loki: ['Loki'],
     });
+  });
+
+  it('returns no data when the query came back empty', () => {
+    const { data } = transformProps(buildChartProps({}, []));
+
+    expect(data).toEqual([]);
   });
 });
