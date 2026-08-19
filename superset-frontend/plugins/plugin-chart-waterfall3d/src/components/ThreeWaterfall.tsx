@@ -65,22 +65,15 @@ function roundRect(
 function makeLabelSprite(
   text: string,
   opts: {
+    color: string;
     size?: number;
-    color?: string;
     bold?: boolean;
     worldScale?: number;
     bg?: string; // pill fill — turns the label into a chip
     border?: string; // pill stroke
-  } = {},
+  },
 ): THREE.Sprite {
-  const {
-    size = 13,
-    color = 'rgba(30,50,100,0.9)',
-    bold = false,
-    worldScale = 1,
-    bg,
-    border,
-  } = opts;
+  const { size = 13, color, bold = false, worldScale = 1, bg, border } = opts;
   const DPR = 2;
   const PADX = bg ? 16 : 12;
   const PADY = bg ? 11 : 7;
@@ -408,14 +401,18 @@ export default function ThreeWaterfall(props: Waterfall3DTransformedProps) {
             (boldMode === 'both' && isKey) ||
             (boldMode === 'total' && bar.type === 'total') ||
             (boldMode === 'subtotal' && bar.type === 'subtotal');
+          // Subtotal keeps its own purple: the bar types need four visually
+          // distinct categories and the theme has no purple token, so colorInfo
+          // would collide with the blue already used for totals.
           const col =
             bar.type === 'positive'
-              ? 'rgba(21,128,61,1)'
+              ? theme.colorSuccess
               : bar.type === 'negative'
-                ? 'rgba(185,28,28,1)'
+                ? theme.colorError
                 : bar.type === 'subtotal'
-                  ? 'rgba(91,33,182,1)'
-                  : 'rgba(30,64,175,1)';
+                  ? // eslint-disable-next-line theme-colors/no-literal-colors
+                    'rgba(91,33,182,1)'
+                  : theme.colorPrimary;
           const sp = makeLabelSprite(fmt(bar.value), {
             size: 12,
             color: col,
@@ -494,13 +491,13 @@ export default function ThreeWaterfall(props: Waterfall3DTransformedProps) {
       position: 'absolute',
       pointerEvents: 'none',
       display: 'none',
-      background: 'rgba(255,255,255,0.97)',
-      border: '1px solid rgba(60,100,200,0.18)',
+      background: theme.colorBgElevated,
+      border: `1px solid ${theme.colorBorder}`,
       borderRadius: '10px',
       padding: '10px 14px',
-      color: '#1a2a4a',
+      color: theme.colorText,
       font: "12px 'Segoe UI', system-ui, Arial",
-      boxShadow: '0 8px 28px rgba(60,100,200,0.16)',
+      boxShadow: theme.boxShadowSecondary,
       zIndex: '10',
       minWidth: '160px',
     } as CSSStyleDeclaration);
@@ -570,7 +567,7 @@ export default function ThreeWaterfall(props: Waterfall3DTransformedProps) {
         const { lane, bar } = m.userData as any;
         const tipRow =
           tipColumnLabel && tipByCell[`${lane} ${bar.step}`]
-            ? `<div style="color:rgba(80,100,140,0.7)">${tipColumnLabel}: ${tipByCell[`${lane} ${bar.step}`]}</div>`
+            ? `<div style="color:${theme.colorTextSecondary}">${tipColumnLabel}: ${tipByCell[`${lane} ${bar.step}`]}</div>`
             : '';
         const kind =
           bar.type === 'total'
@@ -580,11 +577,7 @@ export default function ThreeWaterfall(props: Waterfall3DTransformedProps) {
               : bar.type === 'positive'
                 ? 'Increase'
                 : 'Decrease';
-        tip.innerHTML =
-          `<div style="font-weight:700;color:#2255bb;margin-bottom:6px">${lane} · ${bar.step}</div>` +
-          tipRow +
-          `<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:rgba(80,100,140,0.7)">${kind}</span><b>${fmt(bar.value)}</b></div>` +
-          `<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:rgba(80,100,140,0.7)">Running total</span><b>${fmt(bar.running)}</b></div>`;
+        tip.innerHTML = `<div style="font-weight:700;color:${theme.colorPrimary};margin-bottom:6px">${lane} · ${bar.step}</div>${tipRow}<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:${theme.colorTextSecondary}">${kind}</span><b>${fmt(bar.value)}</b></div><div style="display:flex;justify-content:space-between;gap:18px"><span style="color:${theme.colorTextSecondary}">Running total</span><b>${fmt(bar.running)}</b></div>`;
         tip.style.display = 'block';
         tip.style.left = `${e.clientX - rect.left + 16}px`;
         tip.style.top = `${e.clientY - rect.top - 8}px`;
