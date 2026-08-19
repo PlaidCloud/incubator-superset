@@ -17,8 +17,6 @@
 # pylint: disable=too-many-lines
 from __future__ import annotations
 
-from uuid import uuid4
-
 import builtins
 import logging
 from collections import defaultdict
@@ -26,6 +24,7 @@ from collections.abc import Hashable
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any, Callable, cast, Optional, Union
+from uuid import uuid4
 
 import pandas as pd
 import sqlalchemy as sa
