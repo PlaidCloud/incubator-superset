@@ -20,6 +20,13 @@ import { ChartProps } from '@superset-ui/core';
 import { supersetTheme } from '@apache-superset/core/theme';
 import transformProps from '../../src/plugin/transformProps';
 
+// Deliberately unsorted so the ordering behaviour is actually exercised.
+const DATA = [
+  { name: 'Thor', sum__num: 20 },
+  { name: 'Hulk', sum__num: 50 },
+  { name: 'Loki', sum__num: 30 },
+];
+
 const buildChartProps = (formDataOverrides = {}, data = DATA) =>
   new ChartProps({
     formData: {
@@ -35,22 +42,15 @@ const buildChartProps = (formDataOverrides = {}, data = DATA) =>
     queriesData: [{ data, coltypes: [] }],
   }) as any;
 
-// Deliberately unsorted so the ordering behaviour is actually exercised.
-const DATA = [
-  { name: 'Thor', sum__num: 20 },
-  { name: 'Hulk', sum__num: 50 },
-  { name: 'Loki', sum__num: 30 },
-];
-
 describe('SupersetPluginChartWhale transformProps', () => {
-  it('passes width and height through untouched', () => {
+  test('passes width and height through untouched', () => {
     const transformed = transformProps(buildChartProps());
 
     expect(transformed.width).toBe(800);
     expect(transformed.height).toBe(600);
   });
 
-  it('returns the contract the chart component consumes', () => {
+  test('returns the contract the chart component consumes', () => {
     const transformed = transformProps(buildChartProps());
 
     // Asserting the keys rather than a full snapshot: the echartOptions payload
@@ -74,13 +74,13 @@ describe('SupersetPluginChartWhale transformProps', () => {
     );
   });
 
-  it('sorts records by metric descending', () => {
+  test('sorts records by metric descending', () => {
     const { data } = transformProps(buildChartProps());
 
     expect(data.map((d: any) => d.name)).toEqual(['Hulk', 'Loki', 'Thor']);
   });
 
-  it('accumulates the metric and derives its percentages', () => {
+  test('accumulates the metric and derives its percentages', () => {
     const { data } = transformProps(buildChartProps());
 
     // Total is 100, which makes the expected percentages readable by hand.
@@ -89,7 +89,7 @@ describe('SupersetPluginChartWhale transformProps', () => {
     expect(data.map((d: any) => d.cumulativeMetricPct)).toEqual([50, 80, 100]);
   });
 
-  it('spreads entity percentiles evenly across the records', () => {
+  test('spreads entity percentiles evenly across the records', () => {
     const { data } = transformProps(buildChartProps());
 
     expect(data.map((d: any) => Math.round(d.entityPercentile))).toEqual([
@@ -97,7 +97,7 @@ describe('SupersetPluginChartWhale transformProps', () => {
     ]);
   });
 
-  it('builds a label map keyed by the groupby column', () => {
+  test('builds a label map keyed by the groupby column', () => {
     const { labelMap } = transformProps(buildChartProps());
 
     expect(labelMap).toEqual({
@@ -107,7 +107,7 @@ describe('SupersetPluginChartWhale transformProps', () => {
     });
   });
 
-  it('returns no data when the query came back empty', () => {
+  test('returns no data when the query came back empty', () => {
     const { data } = transformProps(buildChartProps({}, []));
 
     expect(data).toEqual([]);
