@@ -1033,15 +1033,18 @@ const transformProps = (
       relevantColumns.forEach(origCol => {
         if (
           (origCol.isMetric || origCol.isPercentMetric) &&
+          // eslint-disable-next-line no-use-before-define -- timeOffsets is declared later in this module; the closure only runs after it exists
           !origCol.key.includes(ensureIsArray(timeOffsets)[0]) &&
           origCol.isNumeric
         ) {
           const originalValue = originalItem[origCol.key] || 0;
           const comparisonValue = origCol.isMetric
             ? originalItem?.[
+                // eslint-disable-next-line no-use-before-define -- timeOffsets is declared later in this module; the closure only runs after it exists
                 `${origCol.key}__${ensureIsArray(timeOffsets)[0]}`
               ] || 0
             : originalItem[
+                // eslint-disable-next-line no-use-before-define -- timeOffsets is declared later in this module; the closure only runs after it exists
                 `%${origCol.key.slice(1)}__${ensureIsArray(timeOffsets)[0]}`
               ] || 0;
           const { percentDifferenceNum } = calculateDifferences(

@@ -49,9 +49,9 @@ const PARETO_REFERENCE_LINE_NAME = '80/20 Pareto Reference';
  * Get chart colors from theme or use defaults
  */
 function getChartColors(
-  positiveColor?: { r: number; g: number; b: number },
-  neutralColor?: { r: number; g: number; b: number },
-  negativeColor?: { r: number; g: number; b: number },
+  positiveColor?: { r: number; g: number; b: number; },
+  neutralColor?: { r: number; g: number; b: number; },
+  negativeColor?: { r: number; g: number; b: number; },
   colorScale?: any,
   useManualColors: boolean = true,
 ): ChartColors {
@@ -152,8 +152,7 @@ function multiMetricTransform(
             ...item,
             [`${metricLabel}_cumulativeMetric`]: metricItem.cumulativeMetric,
             [`${metricLabel}_metricPct`]: metricItem.metricPct,
-            [`${metricLabel}_cumulativeMetricPct`]:
-              metricItem.cumulativeMetricPct,
+            [`${metricLabel}_cumulativeMetricPct`]: metricItem.cumulativeMetricPct,
           };
         }
         return item;
@@ -209,16 +208,15 @@ function createYAxisOptions(
   processedData?: ProcessedDataRecord[],
 ) {
   // Get formatter based on format string selected in the control panel
-  const formatter =
-    chartType === WhaleChartType.Whale
-      ? '{value}%'
-      : (value: number) => {
-          // Use the getNumberFormatter utility for consistent formatting
-          if (yAxisFormat) {
-            return getNumberFormatter(yAxisFormat)(value);
-          }
-          return getNumberFormatter()(value);
-        };
+  const formatter = chartType === WhaleChartType.Whale
+    ? '{value}%'
+    : (value: number) => {
+      // Use the getNumberFormatter utility for consistent formatting
+      if (yAxisFormat) {
+        return getNumberFormatter(yAxisFormat)(value);
+      }
+      return getNumberFormatter()(value);
+    };
 
   // Primary Y axis (percentage - right side)
   const primaryAxis = {
@@ -242,16 +240,10 @@ function createYAxisOptions(
   // For whale chart, add a second Y axis on the left side showing absolute values
   const axes = [primaryAxis];
 
-  if (
-    chartType === WhaleChartType.Whale &&
-    processedData &&
-    processedData.length > 0
-  ) {
+  if (chartType === WhaleChartType.Whale && processedData && processedData.length > 0) {
     // Find the total metric value (100%) to use as max value
-    const totalMetricValue =
-      processedData.length > 0
-        ? processedData[processedData.length - 1].cumulativeMetric
-        : 0;
+    const totalMetricValue = processedData.length > 0 ?
+      processedData[processedData.length - 1].cumulativeMetric : 0;
 
     const secondaryAxis = {
       type: 'value',
@@ -265,8 +257,7 @@ function createYAxisOptions(
       splitNumber: 5,
       interval: totalMetricValue ? totalMetricValue / 5 : undefined,
       axisLabel: {
-        formatter: (value: number) =>
-          getNumberFormatter(yAxisFormat || 'SMART_NUMBER')(value),
+        formatter: (value: number) => getNumberFormatter(yAxisFormat || 'SMART_NUMBER')(value),
         color: themeColors?.text?.label,
       },
       splitLine: {
@@ -300,12 +291,8 @@ function createWhaleChartSeries(
 
     // Determine data keys based on metric index
     const isFirstMetric = i === 0;
-    const dataKey = isFirstMetric
-      ? 'cumulativeMetricPct'
-      : `${metricLabel}_cumulativeMetricPct`;
-    const absoluteDataKey = isFirstMetric
-      ? 'cumulativeMetric'
-      : `${metricLabel}_cumulativeMetric`;
+    const dataKey = isFirstMetric ? 'cumulativeMetricPct' : `${metricLabel}_cumulativeMetricPct`;
+    const absoluteDataKey = isFirstMetric ? 'cumulativeMetric' : `${metricLabel}_cumulativeMetric`;
 
     // Combine all data points into a single array for gradient coloring
     const allData: any[] = [];
@@ -315,6 +302,7 @@ function createWhaleChartSeries(
 
     // First pass to collect all data points and determine min/max
     for (const item of processedData) {
+
       // Skip items without a valid entity name
       if (!item[columns]) {
         continue;
@@ -330,14 +318,9 @@ function createWhaleChartSeries(
 
       const dataPoint = {
         name: String(item[columns] || ''),
-        value: [
-          item.entityPercentile,
-          isFirstMetric ? item.cumulativeMetricPct : item[dataKey] || 0,
-        ],
+        value: [item.entityPercentile, isFirstMetric ? item.cumulativeMetricPct : (item[dataKey] || 0)],
         absoluteValue: item[metricLabel],
-        cumulativeTotal: isFirstMetric
-          ? item.cumulativeMetric
-          : item[absoluteDataKey] || 0,
+        cumulativeTotal: isFirstMetric ? item.cumulativeMetric : (item[absoluteDataKey] || 0),
         originalValue: value,
       };
 
@@ -351,7 +334,7 @@ function createWhaleChartSeries(
         if (lastPositivePercentile === 1) {
           return [
             { offset: 0, color: colors.positive },
-            { offset: 1, color: colors.positive },
+            { offset: 1, color: colors.positive }
           ];
         }
 
@@ -359,18 +342,17 @@ function createWhaleChartSeries(
         if (firstNegativePercentile === 0) {
           return [
             { offset: 0, color: colors.negative },
-            { offset: 1, color: colors.negative },
+            { offset: 1, color: colors.negative }
           ];
         }
 
         // Mixed values case - handle ordering issues
         if (lastPositivePercentile > firstNegativePercentile) {
-          const midpoint =
-            (lastPositivePercentile + firstNegativePercentile) / 2;
+          const midpoint = (lastPositivePercentile + firstNegativePercentile) / 2;
           return [
             { offset: 0, color: colors.positive },
             { offset: midpoint, color: colors.neutral },
-            { offset: 1, color: colors.negative },
+            { offset: 1, color: colors.negative }
           ];
         }
 
@@ -379,7 +361,7 @@ function createWhaleChartSeries(
           { offset: 0, color: colors.positive },
           { offset: lastPositivePercentile, color: colors.neutral },
           { offset: firstNegativePercentile, color: colors.neutral },
-          { offset: 1, color: colors.negative },
+          { offset: 1, color: colors.negative }
         ];
       })();
 
@@ -403,9 +385,9 @@ function createWhaleChartSeries(
             y2: 0,
             colorStops: [
               { offset: 0, color: colorStops[0].color },
-              { offset: 1, color: colorStops[colorStops.length - 1].color },
-            ],
-          },
+              { offset: 1, color: colorStops[colorStops.length - 1].color }
+            ]
+          }
         },
         areaStyle: {
           opacity: 0.8,
@@ -416,7 +398,7 @@ function createWhaleChartSeries(
             x2: 1,
             y2: 0,
             colorStops,
-          },
+          }
         },
         data: allData,
         legendHoverLink: true,
@@ -467,8 +449,7 @@ function createBarChartSeries(
     const metricLabel = getMetricLabel(metric);
     // Use the metric's position in the metrics array to pick a color from the scheme
     const metricColorIndex = index % (colorScale?.colors?.length || 1);
-    const metricColor =
-      colorScale?.colors?.[metricColorIndex] || colorScale(metricLabel);
+    const metricColor = colorScale?.colors?.[metricColorIndex] || colorScale(metricLabel);
 
     series.push({
       name: metricLabel,
@@ -485,9 +466,10 @@ function createBarChartSeries(
               return colors.positive;
             } else if (value < 0) {
               return colors.negative;
+            } else {
+              // For zero values, use neutral color
+              return colors.neutral;
             }
-            // For zero values, use neutral color
-            return colors.neutral;
           }
           // Use the metric's color as fallback
           return metricColor;
@@ -556,22 +538,18 @@ function createTooltip(
 
       const firstParam = params[0];
       const entityName = firstParam.data?.name ?? 'N/A';
-      const { dataIndex } = firstParam;
+      const dataIndex = firstParam.dataIndex;
 
       // Quick access to data record if available
-      const record =
-        typeof dataIndex === 'number' && dataIndex < processedData.length
-          ? processedData[dataIndex]
-          : null;
+      const record = typeof dataIndex === 'number' && dataIndex < processedData.length
+        ? processedData[dataIndex]
+        : null;
 
       // Create rows array with initial capacity to avoid resizing
       const rows: string[][] = [
-        [
-          'Rank',
-          typeof dataIndex === 'number' && (!isWhaleChart || entityName !== '')
-            ? `${dataIndex + 1}`
-            : 'N/A',
-        ],
+        ['Rank', typeof dataIndex === 'number' && (!isWhaleChart || entityName !== '')
+          ? `${dataIndex + 1}`
+          : 'N/A']
       ];
 
       // Add percentile row for whale chart type
@@ -581,7 +559,7 @@ function createTooltip(
 
       // Process series parameters more efficiently
       for (const param of params) {
-        const { seriesName } = param;
+        const seriesName = param.seriesName;
 
         // Skip Pareto reference line
         if (isWhaleChart && seriesName === PARETO_REFERENCE_LINE_NAME) {
@@ -598,11 +576,9 @@ function createTooltip(
           if (record) {
             const absoluteValue = record[seriesName];
             if (absoluteValue !== undefined && absoluteValue !== null) {
-              valueText = `${percentFormatted} (${
-                typeof absoluteValue === 'number'
-                  ? valueFormatter(absoluteValue)
-                  : String(absoluteValue)
-              })`;
+              valueText = `${percentFormatted} (${typeof absoluteValue === 'number'
+                ? valueFormatter(absoluteValue)
+                : String(absoluteValue)})`;
             }
           }
 
@@ -616,16 +592,15 @@ function createTooltip(
               cumulativeTotalLabel,
               typeof cumulativeTotal === 'number'
                 ? valueFormatter(cumulativeTotal)
-                : String(cumulativeTotal),
+                : String(cumulativeTotal)
             ]);
           }
         } else {
           // For bar chart, use number formatter from control panel
           const value = param.value[1];
-          rows.push([
-            seriesName,
-            typeof value === 'number' ? valueFormatter(value) : String(value),
-          ]);
+          rows.push([seriesName, typeof value === 'number'
+            ? valueFormatter(value)
+            : String(value)]);
         }
       }
 
@@ -637,7 +612,7 @@ function createTooltip(
           if (value !== undefined && value !== null) {
             rows.push([
               metricLabel,
-              typeof value === 'number' ? valueFormatter(value) : String(value),
+              typeof value === 'number' ? valueFormatter(value) : String(value)
             ]);
           }
         }
@@ -820,9 +795,7 @@ export default function transformProps(
   let processedData: ProcessedDataRecord[] = [];
 
   // Get primary metrics that need full transformation (sorting, cumulative values).
-  const primaryMetricLabels = metrics.map((m: QueryFormMetric) =>
-    getMetricLabel(m),
-  );
+  const primaryMetricLabels = metrics.map((m: QueryFormMetric) => getMetricLabel(m));
 
   // Transform data using only primary metrics for the main calculations.
   // Raw values for tooltipOnlyMetrics are carried through via `...item` in `transformSingleMetric`
@@ -849,7 +822,7 @@ export default function transformProps(
   const groupbyLabels = groupby.map(getColumnLabel);
   const coltypeMapping = getColtypesMapping(queriesData[0]);
   const labelMap = createLabelMap(data, groupbyLabels, coltypeMapping);
-  const { setDataMask = () => {}, onContextMenu } = hooks;
+  const { setDataMask = () => { }, onContextMenu } = hooks;
   const selectedValues = processSelectedValues(filterState, processedData);
 
   return {

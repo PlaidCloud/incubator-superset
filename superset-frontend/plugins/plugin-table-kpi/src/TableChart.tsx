@@ -669,6 +669,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     const headers: any = [];
     let currentColumnIndex = 0;
 
+    // eslint-disable-next-line no-use-before-define -- groupHeaderColumns is declared later in this module; the closure only runs after it exists
     Object.entries(groupHeaderColumns || {}).forEach(([key, value]) => {
       // Calculate the number of placeholder columns needed before the current header
       const startPosition = value[0];
