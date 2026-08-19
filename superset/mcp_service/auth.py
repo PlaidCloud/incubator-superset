@@ -36,6 +36,8 @@ from flask import g
 from flask_appbuilder.security.sqla.models import Group, User
 
 if TYPE_CHECKING:
+    from sqlalchemy.orm import Query
+
     from superset.connectors.sqla.models import SqlaTable
     from superset.mcp_service.chart.chart_utils import DatasetValidationResult
 
@@ -129,6 +131,40 @@ def check_tool_permission(func: Callable[..., Any]) -> bool:
         return False
 
 
+def _resolve_single_user(query: "Query[User]", field: str, value: str) -> User | None:
+    """
+    Pick one user when a lookup matches more than one row.
+
+    ``ab_user.email`` and ``ab_user.username`` are case-sensitively unique, so
+    rows differing only in case can legally coexist on any tenant that predates
+    the ``UNIQUE (lower(email))`` index. Prefer an active row, then the
+    exact-case match, then the lowest id, so authentication resolves
+    deterministically instead of returning whatever the database hands back
+    first. Mirrors ``plaid.security.PlaidSecurityManager._resolve_single_user``.
+
+    Args:
+        query: The filtered user query to resolve.
+        field: The column the lookup filtered on, for exact-match preference.
+        value: The value looked up, compared against ``field`` for exactness.
+
+    Returns:
+        The single best-matching user, or None when nothing matched.
+    """
+    users = query.order_by(User.id).all()
+    if len(users) > 1:
+        logger.warning(
+            "Multiple users match %s %s; preferring an active row, then the "
+            "exact-case match, then the lowest id. Matching ids: %s",
+            field,
+            value,
+            [user.id for user in users],
+        )
+    users.sort(
+        key=lambda user: (not user.active, getattr(user, field) != value, user.id)
+    )
+    return users[0] if users else None
+
+
 def load_user_with_relationships(
     username: str | None = None, email: str | None = None
 ) -> User | None:
@@ -156,6 +192,8 @@ def load_user_with_relationships(
     if not username and not email:
         raise ValueError("Either username or email must be provided")
 
+    from flask import current_app
+    from sqlalchemy import func
     from sqlalchemy.orm import joinedload
 
     from superset.extensions import db
@@ -166,11 +204,80 @@ def load_user_with_relationships(
     )
 
     if username:
-        query = query.filter(User.username == username)
+        field, value = "username", username
+        if current_app.config.get("AUTH_USERNAME_CI", True):
+            query = query.filter(func.lower(User.username) == func.lower(username))
+        else:
+            query = query.filter(User.username == username)
     else:
-        query = query.filter(User.email == email)
+        field, value = "email", str(email)
+        query = query.filter(func.lower(User.email) == func.lower(email))
 
-    return query.first()
+    return _resolve_single_user(query, field, value)
+
+
+def _resolve_user_from_jwt_context(app: Any) -> User | None:
+    """
+    Resolve the current user from the MCP SDK's per-request JWT context.
+
+    Uses FastMCP's ``get_access_token()`` which returns the JWT AccessToken
+    for the current async task via a ContextVar -- safe across concurrent
+    requests, unlike ``g.user`` which can be stale.
+
+    The username is extracted from token claims using a configurable resolver
+    (``MCP_USER_RESOLVER`` config) or the default ``default_user_resolver()``.
+    Deployments whose Superset usernames do not match any JWT claim (PlaidCloud
+    keys identity on the ``email`` claim) should point ``MCP_USER_RESOLVER`` at
+    a resolver that returns the claim their user rows are keyed on.
+
+    Backported from apache/superset#38747, which is absent from 6.1.0.
+
+    Args:
+        app: The Flask application whose config supplies ``MCP_USER_RESOLVER``.
+
+    Returns:
+        User object with relationships loaded, or None if no JWT context
+        (i.e. no token present -- caller should fall through to next source).
+
+    Raises:
+        ValueError: If JWT resolves a username that doesn't exist in the DB
+            (fail closed -- do NOT fall through to weaker auth sources).
+    """
+    try:
+        from fastmcp.server.dependencies import get_access_token
+    except ImportError:
+        logger.debug("fastmcp.server.dependencies not available, skipping JWT context")
+        return None
+
+    access_token = get_access_token()
+    if access_token is None:
+        return None
+
+    from superset.mcp_service.mcp_config import default_user_resolver
+
+    resolver = app.config.get("MCP_USER_RESOLVER", default_user_resolver)
+    username = resolver(app, access_token)
+
+    if not username:
+        # Fail closed: JWT is present but identity cannot be determined.
+        # Do NOT fall through to weaker auth sources.
+        raise ValueError(
+            "JWT context present but no username could be extracted from claims"
+        )
+
+    # Try username lookup first, then email fallback for OIDC email claims
+    user = load_user_with_relationships(username)
+    if not user and "@" in username:
+        user = load_user_with_relationships(email=username)
+    if not user:
+        # Fail closed: JWT says this user should exist but they don't.
+        # Do NOT fall through to MCP_DEV_USERNAME or stale g.user.
+        raise ValueError(
+            f"JWT authenticated user '{username}' not found in Superset database. "
+            f"Ensure the user exists before granting MCP access."
+        )
+
+    return user
 
 
 def get_user_from_request() -> User:
@@ -178,8 +285,13 @@ def get_user_from_request() -> User:
     Get the current user for the MCP tool request.
 
     Priority order:
-    1. g.user if already set (by Preset workspace middleware)
+    1. JWT auth context (per-request ContextVar from the MCP SDK) -- safest
     2. MCP_DEV_USERNAME from configuration (for development/testing)
+    3. g.user fallback (for external middleware that sets it fresh per
+       request, e.g. Preset's WorkspaceContextMiddleware)
+
+    This ordering prevents a stale ``g.user`` from a previous tool call from
+    being used in deployments where no middleware refreshes it per request.
 
     Returns:
         User object with roles and groups eagerly loaded
@@ -189,44 +301,42 @@ def get_user_from_request() -> User:
     """
     from flask import current_app
 
-    # First check if user is already set by Preset workspace middleware
+    if (jwt_user := _resolve_user_from_jwt_context(current_app)) is not None:
+        return jwt_user
+
+    if username := current_app.config.get("MCP_DEV_USERNAME"):
+        user = load_user_with_relationships(username)
+        if not user:
+            raise ValueError(
+                f"User '{username}' not found. "
+                f"Please create admin user with: superset fab create-admin"
+            )
+        return user
+
     if hasattr(g, "user") and g.user:
         return g.user
 
-    # Fall back to configured username for development/single-user deployments
-    username = current_app.config.get("MCP_DEV_USERNAME")
-
-    if not username:
-        auth_enabled = current_app.config.get("MCP_AUTH_ENABLED", False)
-        jwt_configured = bool(
-            current_app.config.get("MCP_JWKS_URI")
-            or current_app.config.get("MCP_JWT_PUBLIC_KEY")
-            or current_app.config.get("MCP_JWT_SECRET")
-        )
-        details = []
-        details.append(
-            f"g.user was not set by JWT middleware "
-            f"(MCP_AUTH_ENABLED={auth_enabled}, "
-            f"JWT keys configured={jwt_configured})"
-        )
-        details.append("MCP_DEV_USERNAME is not configured")
-        raise ValueError(
-            "No authenticated user found. Tried:\n"
-            + "\n".join(f"  - {d}" for d in details)
-            + "\n\nEither pass a valid JWT bearer token or configure "
-            "MCP_DEV_USERNAME for development."
-        )
-
-    # Use helper function to load user with all required relationships
-    user = load_user_with_relationships(username)
-
-    if not user:
-        raise ValueError(
-            f"User '{username}' not found. "
-            f"Please create admin user with: superset fab create-admin"
-        )
-
-    return user
+    # No auth source available. Keep the configuration diagnostics in the
+    # server logs only -- the message returned to the (unauthenticated) client
+    # must not reveal which auth mechanisms are configured.
+    auth_enabled = current_app.config.get("MCP_AUTH_ENABLED", False)
+    jwt_configured = bool(
+        current_app.config.get("MCP_JWKS_URI")
+        or current_app.config.get("MCP_JWT_PUBLIC_KEY")
+        or current_app.config.get("MCP_JWT_SECRET")
+    )
+    details = [
+        f"No JWT access token in MCP request context "
+        f"(MCP_AUTH_ENABLED={auth_enabled}, "
+        f"JWT keys configured={jwt_configured})",
+        "MCP_DEV_USERNAME is not configured",
+        "g.user was not set by external middleware",
+    ]
+    logger.warning(
+        "MCP request could not be authenticated. Tried: %s",
+        "; ".join(details),
+    )
+    raise ValueError("Authentication required. No valid credentials provided.")
 
 
 def has_dataset_access(dataset: "SqlaTable") -> bool:
