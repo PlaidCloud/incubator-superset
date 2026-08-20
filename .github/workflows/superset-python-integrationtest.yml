@@ -16,6 +16,7 @@ concurrency:
 jobs:
   test-mysql:
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     env:
       PYTHONPATH: ${{ github.workspace }}
       SUPERSET_CONFIG: tests.integration_tests.superset_test_config
@@ -105,6 +106,7 @@ jobs:
           retention-days: 7
   test-postgres:
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     strategy:
       matrix:
         python-version: ["current", "previous", "next"]
@@ -167,6 +169,7 @@ jobs:
 
   test-sqlite:
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     env:
       PYTHONPATH: ${{ github.workspace }}
       SUPERSET_CONFIG: tests.integration_tests.superset_test_config
