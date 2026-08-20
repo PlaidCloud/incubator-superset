@@ -27,7 +27,7 @@ import { SupersetPluginChartWhale } from '../src';
  * properly transform the data and/or any resulting props).
  */
 describe('superset-plugin-chart-whale', () => {
-  it('exists', () => {
+  test('exists', () => {
     expect(SupersetPluginChartWhale).toBeDefined();
   });
 });

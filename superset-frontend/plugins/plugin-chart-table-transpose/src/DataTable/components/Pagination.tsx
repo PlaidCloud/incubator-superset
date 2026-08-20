@@ -49,13 +49,13 @@ export function generatePageItems(
     throw new Error(`Must allow odd number of page items`);
   }
   if (total < width) {
-    return [...new Array(total).keys()];
+    return Array.from({ length: total }, (_, i) => i);
   }
   const left = Math.max(
     0,
     Math.min(total - width, current - Math.floor(width / 2)),
   );
-  const items: (string | number)[] = new Array(width);
+  const items: (string | number)[] = Array.from({ length: width });
   for (let i = 0; i < width; i += 1) {
     items[i] = i + left;
   }

@@ -27,7 +27,7 @@ import { PluginChartGantt } from '../src';
  * properly transform the data and/or any resulting props).
  */
 describe('plugin-chart-gantt', () => {
-  it('exists', () => {
+  test('exists', () => {
     expect(PluginChartGantt).toBeDefined();
   });
 });

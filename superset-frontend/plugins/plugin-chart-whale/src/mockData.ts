@@ -230,7 +230,7 @@ export function convertToCSV(
   ];
 
   // Create the header row
-  let csvContent = headers.join(',') + '\n';
+  let csvContent = `${headers.join(',')}\n`;
 
   // Add each data row
   data.forEach(record => {
@@ -243,7 +243,7 @@ export function convertToCSV(
       record.customerLifetime,
       record.returnRate,
     ];
-    csvContent += row.join(',') + '\n';
+    csvContent += `${row.join(',')}\n`;
   });
 
   return csvContent;
