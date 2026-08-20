@@ -20,37 +20,109 @@ import { ChartProps } from '@superset-ui/core';
 import { supersetTheme } from '@apache-superset/core/theme';
 import transformProps from '../../src/plugin/transformProps';
 
-describe('PluginChartMarimekko transformProps', () => {
-  const formData = {
-    colorScheme: 'bnbColors',
-    datasource: '3__table',
-    granularity_sqla: 'ds',
-    metric: 'sum__num',
-    series: 'name',
-    boldText: true,
-    headerFontSize: 'xs',
-    headerText: 'my text',
-  };
-  const chartProps = new ChartProps({
-    formData,
-    width: 800,
-    height: 600,
-    theme: supersetTheme,
-    queriesData: [
-      {
-        data: [{ name: 'Hulk', sum__num: 1 }],
-      },
-    ],
-  });
+const DATA = [
+  { name: 'Hulk', sum__num: 1 },
+  { name: 'Thor', sum__num: 3 },
+];
 
-  test('should transform chart props for viz', () => {
-    expect(transformProps(chartProps)).toEqual({
-      width: 800,
-      height: 600,
+const buildChartProps = (formDataOverrides = {}, data = DATA) =>
+  new ChartProps({
+    formData: {
+      colorScheme: 'bnbColors',
+      datasource: '3__table',
+      granularity_sqla: 'ds',
+      metric: 'sum__num',
+      series: 'name',
       boldText: true,
       headerFontSize: 'xs',
       headerText: 'my text',
-      data: [{ name: 'Hulk', sum__num: 1 }],
-    });
+      ...formDataOverrides,
+    },
+    width: 800,
+    height: 600,
+    theme: supersetTheme,
+    queriesData: [{ data }],
+  });
+
+describe('PluginChartMarimekko transformProps', () => {
+  test('passes width, height and query data through', () => {
+    const transformed = transformProps(buildChartProps()) as any;
+
+    expect(transformed.width).toBe(800);
+    expect(transformed.height).toBe(600);
+    expect(transformed.data).toEqual(DATA);
+  });
+
+  test('returns the contract the chart component consumes', () => {
+    const transformed = transformProps(buildChartProps()) as any;
+
+    expect(Object.keys(transformed).sort()).toEqual(
+      [
+        'boldText',
+        'data',
+        'headerFontSize',
+        'headerText',
+        'height',
+        'heightKey',
+        'labelColor',
+        'showLabels',
+        'showLegend',
+        'showPercentage',
+        'sortByColumn',
+        'sortOrder',
+        'title',
+        'tooltipIncludeColumn',
+        'tooltipNumberFormat',
+        'tooltipShowPercentage',
+        'width',
+        'widthKey',
+        'xAxisLabel',
+        'yAxisLabel',
+      ].sort(),
+    );
+  });
+
+  test('forwards the control values it is given', () => {
+    const transformed = transformProps(buildChartProps()) as any;
+
+    expect(transformed.boldText).toBe(true);
+    expect(transformed.headerFontSize).toBe('xs');
+    expect(transformed.headerText).toBe('my text');
+  });
+
+  test('applies defaults for the controls left unset', () => {
+    const transformed = transformProps(buildChartProps()) as any;
+
+    expect(transformed.tooltipNumberFormat).toBe('SMART_NUMBER');
+    expect(transformed.showLabels).toBe(true);
+    expect(transformed.tooltipIncludeColumn).toBe(true);
+    expect(transformed.tooltipShowPercentage).toBe(true);
+    expect(transformed.showLegend).toBe(false);
+    expect(transformed.xAxisLabel).toBe('');
+    expect(transformed.yAxisLabel).toBe('');
+  });
+
+  test('lets the form data override those defaults', () => {
+    const transformed = transformProps(
+      buildChartProps({
+        showLegend: true,
+        showLabels: false,
+        xAxisLabel: 'Revenue',
+        yAxisLabel: 'Margin',
+        tooltipNumberFormat: ',.2f',
+      }),
+    ) as any;
+
+    expect(transformed.showLegend).toBe(true);
+    expect(transformed.showLabels).toBe(false);
+    expect(transformed.xAxisLabel).toBe('Revenue');
+    expect(transformed.yAxisLabel).toBe('Margin');
+    expect(transformed.tooltipNumberFormat).toBe(',.2f');
+  });
+
+  test('returns no data when the query came back empty', () => {
+    const transformed = transformProps(buildChartProps({}, [])) as any;
+
+    expect(transformed.data).toEqual([]);
   });
 });
