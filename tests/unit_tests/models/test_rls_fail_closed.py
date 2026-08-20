@@ -180,3 +180,69 @@ class TestCacheKeyDoesNotDegrade:
 
         with pytest.raises(ValueError, match="unparseable"):
             collect_rls_predicates_for_sql("SELECT 1", database, "examples", "public")
+
+
+class TestVirtualDatasetCacheKeyRendersTemplate:
+    """
+    The cache-key path must render Jinja before parsing, like the execution path.
+
+    ``get_from_clause()`` calls ``get_rendered_sql()`` before handing SQL to
+    ``SQLScript``. ``get_extra_cache_keys()`` passed ``self.sql`` raw, so a
+    virtual dataset whose SQL opens with ``{% set %}`` reached sqlglot as
+    template text and raised, taking every chart on that dataset down with it.
+    Reproduced on the Demo tenant: dataset ``v_TimeBillingForKPI`` returned
+    ``422 Error parsing near '{%' at line 1:2``, blanking 11 dashboards.
+    """
+
+    JINJA_SQL = (
+        "{% set terms = filter_values('ServiceCodeLabelName') or [] %}\n"
+        "SELECT hours FROM public.time_billing"
+    )
+
+    @staticmethod
+    def _table() -> MagicMock:
+        import jinja2
+
+        from superset.connectors.sqla.models import SqlaTable
+
+        table = MagicMock(spec=SqlaTable)
+        table.get_extra_cache_keys = SqlaTable.get_extra_cache_keys.__get__(table)
+        table.get_rendered_sql = ExploreMixin.get_rendered_sql.__get__(table)
+        table.is_virtual = True
+        table.sql = TestVirtualDatasetCacheKeyRendersTemplate.JINJA_SQL
+        table.catalog = None
+        table.schema = "public"
+        table.has_extra_cache_key_calls.return_value = False
+        table.database.get_default_schema.return_value = "public"
+        table.db_engine_spec.engine = "postgresql"
+        table.database.db_engine_spec.engine = "postgresql"
+        table.database.get_default_catalog.return_value = None
+
+        processor = MagicMock()
+        processor.process_template = lambda sql: jinja2.Template(sql).render(
+            filter_values=lambda *args, **kwargs: []
+        )
+        table.get_template_processor.return_value = processor
+        return table
+
+    @patch("superset.utils.rls.get_predicates_for_table", return_value=[])
+    def test_jinja_virtual_dataset_yields_cache_keys_instead_of_raising(
+        self,
+        mock_get_predicates: MagicMock,
+    ) -> None:
+        table = self._table()
+
+        keys = table.get_extra_cache_keys({"extras": {}})
+
+        assert keys == []
+
+    @patch("superset.utils.rls.get_predicates_for_table", return_value=["dept = 'x'"])
+    def test_rls_predicate_still_reaches_the_cache_key(
+        self,
+        mock_get_predicates: MagicMock,
+    ) -> None:
+        table = self._table()
+
+        keys = table.get_extra_cache_keys({"extras": {}})
+
+        assert keys == ["dept = 'x'"]
