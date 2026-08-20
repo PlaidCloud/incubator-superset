@@ -21,6 +21,7 @@ Backported from apache/superset#38747, which is absent from 6.1.0, plus
 coverage for the deterministic user lookup that JWT auth now depends on.
 """
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -324,13 +325,13 @@ def test_default_resolver_preferred_username_takes_priority() -> None:
 class _FakeQuery:
     """Stand-in for a SQLAlchemy Query over a fixed set of rows."""
 
-    def __init__(self, rows: list) -> None:
+    def __init__(self, rows: list[Any]) -> None:
         self.rows = rows
 
     def order_by(self, *args: object) -> "_FakeQuery":
         return _FakeQuery(sorted(self.rows, key=lambda row: row.id))
 
-    def all(self) -> list:
+    def all(self) -> list[Any]:
         return list(self.rows)
 
 
@@ -386,6 +387,8 @@ def test_resolve_single_user_is_deterministic_regardless_of_row_order() -> None:
     reverse = _resolve_single_user(
         _FakeQuery(list(reversed(rows))), "email", "a@example.com"
     )
+    assert forward is not None
+    assert reverse is not None
     assert forward.id == reverse.id == 1
 
 
