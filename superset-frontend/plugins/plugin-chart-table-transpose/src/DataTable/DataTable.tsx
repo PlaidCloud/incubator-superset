@@ -144,7 +144,9 @@ export default typedMemo(function DataTable<D extends object>({
   const wrapperRef = userWrapperRef || defaultWrapperRef;
   const paginationData = JSON.stringify(serverPaginationData);
 
-  const [currentSortBy, setCurrentSortBy] = useState<Array<{ id: string, desc: boolean }>>([]);
+  const [currentSortBy, setCurrentSortBy] = useState<
+    Array<{ id: string; desc: boolean }>
+  >([]);
 
   const defaultGetTableSize = useCallback(() => {
     if (wrapperRef.current) {
@@ -186,9 +188,10 @@ export default typedMemo(function DataTable<D extends object>({
   // Now create processedData using the sortBy state
   const processedData = useMemo(() => {
     // Check if we have transposed data (contains __isHeading or __is_summary__)
-    const hasTransposedData = data.some(row =>
-      ('__isHeading' in row && row.__isHeading) ||
-      ('__is_summary__' in row && row.__is_summary__)
+    const hasTransposedData = data.some(
+      row =>
+        ('__isHeading' in row && row.__isHeading) ||
+        ('__is_summary__' in row && row.__is_summary__),
     );
 
     // If not transposed data, return original data for normal React Table sorting
@@ -212,7 +215,7 @@ export default typedMemo(function DataTable<D extends object>({
     });
 
     // Apply sorting manually to sortableRows
-    let sortedRows = [...sortableRows];
+    const sortedRows = [...sortableRows];
 
     if (currentSortBy && currentSortBy.length > 0) {
       sortedRows.sort((a, b) => {
@@ -223,9 +226,12 @@ export default typedMemo(function DataTable<D extends object>({
           // Find the column definition to get its sortType
           const column = columns.find(
             col => col.id === id || col.accessor === id,
-          ) as Column<D> & { label: string, key: string };
+          ) as Column<D> & { label: string; key: string };
           const sortType = column?.sortType;
-          const columnLabel = column.key === "rowTotal" ? allSegementsTransposeColumnName : column.label;
+          const columnLabel =
+            column.key === 'rowTotal'
+              ? allSegementsTransposeColumnName
+              : column.label;
 
           const aVal = a.row[columnLabel as keyof D];
           const bVal = b.row[columnLabel as keyof D];
@@ -277,7 +283,7 @@ export default typedMemo(function DataTable<D extends object>({
         // Use sorted sortable rows
         if (sortableIndex < sortedRows.length) {
           result.push(sortedRows[sortableIndex].row);
-          sortableIndex++;
+          sortableIndex += 1;
         }
       }
     });
@@ -300,7 +306,13 @@ export default typedMemo(function DataTable<D extends object>({
     wrapStickyTable,
     setColumnOrder,
     allColumns,
-    state: { pageIndex, pageSize, globalFilter: filterValue, sticky = {}, sortBy },
+    state: {
+      pageIndex,
+      pageSize,
+      globalFilter: filterValue,
+      sticky = {},
+      sortBy,
+    },
   } = useTable<D>(
     {
       columns,
@@ -311,9 +323,10 @@ export default typedMemo(function DataTable<D extends object>({
       sortTypes,
       autoResetSortBy: !isEqual(columnNames, previousColumnNames),
       // Only use manual sorting for transposed data
-      manualSortBy: data.some(row =>
-        ('__isHeading' in row && row.__isHeading) ||
-        ('__is_summary__' in row && row.__is_summary__)
+      manualSortBy: data.some(
+        row =>
+          ('__isHeading' in row && row.__isHeading) ||
+          ('__is_summary__' in row && row.__is_summary__),
       ),
       ...moreUseTableOptions,
     },
@@ -322,13 +335,16 @@ export default typedMemo(function DataTable<D extends object>({
 
   // Only update currentSortBy for transposed data
   useEffect(() => {
-    const hasTransposedData = data.some(row =>
-      ('__isHeading' in row && row.__isHeading) ||
-      ('__is_summary__' in row && row.__is_summary__)
+    const hasTransposedData = data.some(
+      row =>
+        ('__isHeading' in row && row.__isHeading) ||
+        ('__is_summary__' in row && row.__is_summary__),
     );
 
     if (hasTransposedData && sortBy && !isEqual(sortBy, currentSortBy)) {
-      setCurrentSortBy(sortBy.map(({ id, desc }) => ({ id, desc: desc ?? false })));
+      setCurrentSortBy(
+        sortBy.map(({ id, desc }) => ({ id, desc: desc ?? false })),
+      );
     }
   }, [sortBy, currentSortBy, data]);
 
@@ -437,7 +453,9 @@ export default typedMemo(function DataTable<D extends object>({
             return (
               <tr key={rowKey || `row-${rowIndex}`} {...rowProps} role="row">
                 {row.cells.map((cell, cellIndex) =>
-                  cell.render('Cell', { key: cell.column.id || `cell-${cellIndex}` }),
+                  cell.render('Cell', {
+                    key: cell.column.id || `cell-${cellIndex}`,
+                  }),
                 )}
               </tr>
             );

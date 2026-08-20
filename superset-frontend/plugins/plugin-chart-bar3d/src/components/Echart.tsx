@@ -26,6 +26,7 @@ import {
   Ref,
 } from 'react';
 import { styled } from '@apache-superset/core/theme';
+import { t } from '@apache-superset/core/translation';
 import { EChartsType, init } from 'echarts';
 import { EchartsHandler, EchartsProps, EchartsStylesProps } from '../types';
 
@@ -113,8 +114,9 @@ function Echart(
   if (!hasWebgl) {
     return (
       <Fallback height={height} width={width}>
-        This chart needs WebGL, which the browser did not provide. Closing other
-        3D charts or tabs and reloading usually frees one up.
+        {t(
+          'This chart needs WebGL, which the browser did not provide. Closing other 3D charts or tabs and reloading usually frees one up.',
+        )}
       </Fallback>
     );
   }

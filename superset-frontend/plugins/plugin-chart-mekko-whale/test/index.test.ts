@@ -27,7 +27,7 @@ import { PluginChartMekkoWhale } from '../src';
  * properly transform the data and/or any resulting props).
  */
 describe('plugin-chart-mekko-whale', () => {
-  it('exists', () => {
+  test('exists', () => {
     expect(PluginChartMekkoWhale).toBeDefined();
   });
 });

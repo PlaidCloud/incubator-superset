@@ -344,11 +344,34 @@ def create_default_mcp_auth_factory(app: Flask) -> Optional[Any]:
 
 
 def default_user_resolver(app: Any, access_token: Any) -> Optional[str]:
-    """Extract username from JWT token claims."""
-    if hasattr(access_token, "subject"):
-        return access_token.subject
-    if hasattr(access_token, "client_id"):
-        return access_token.client_id
+    """Extract username from JWT token claims.
+
+    Checks the ``claims`` dict first (FastMCP's AccessToken format),
+    then falls back to legacy attribute access for backward compatibility.
+
+    Backported from apache/superset#38747. Deployments whose Superset user rows
+    are not keyed on any of these claims should override this via
+    ``MCP_USER_RESOLVER``.
+    """
+    # FastMCP AccessToken stores JWT claims in a dict
+    claims = getattr(access_token, "claims", None)
+    if isinstance(claims, dict) and claims:
+        # Prefer human-readable username claims over opaque `sub`
+        # (OIDC `sub` is often a stable opaque ID, not a Superset username)
+        username = (
+            claims.get("preferred_username")
+            or claims.get("username")
+            or claims.get("email")
+            or claims.get("sub")
+        )
+        if username:
+            return str(username)
+
+    # Legacy attribute access for backward compatibility
+    if getattr(access_token, "subject", None):
+        return str(access_token.subject)
+    if getattr(access_token, "client_id", None):
+        return str(access_token.client_id)
     if hasattr(access_token, "payload") and isinstance(access_token.payload, dict):
         return (
             access_token.payload.get("sub")

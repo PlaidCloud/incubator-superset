@@ -26,7 +26,7 @@ describe('PluginChartMarimekko buildQuery', () => {
     viz_type: 'my_chart',
   };
 
-  it('should build groupby with series in form data', () => {
+  test('should build groupby with series in form data', () => {
     const queryContext = buildQuery(formData);
     const [query] = queryContext.queries;
     expect(query.columns).toEqual(['foo']);

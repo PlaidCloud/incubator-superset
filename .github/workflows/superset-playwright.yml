@@ -27,6 +27,7 @@ jobs:
   # This workflow contains only experimental tests that run in shadow mode
   playwright-tests-experimental:
     runs-on: ubuntu-22.04
+    timeout-minutes: 60
     continue-on-error: true
     permissions:
       contents: read

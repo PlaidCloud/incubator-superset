@@ -49,12 +49,10 @@ const config: ControlPanelConfig = {
                 'Column to use for ordering the waterfall series with columns not in the chart',
               ),
               mapStateToProps: state => ({
-                choices: [
-                  ...(state.datasource?.columns || []).map(col => [
-                    col.column_name,
-                    col.column_name,
-                  ]),
-                ],
+                choices: (state.datasource?.columns || []).map(col => [
+                  col.column_name,
+                  col.column_name,
+                ]),
                 default: state.form_data?.x_axis || '',
               }),
               clearable: false,
@@ -89,12 +87,10 @@ const config: ControlPanelConfig = {
               label: t('Tooltip Column'),
               description: t('Column to use for tooltip content'),
               mapStateToProps: state => ({
-                choices: [
-                  ...(state.datasource?.columns || []).map(col => [
-                    col.column_name,
-                    col.column_name,
-                  ]),
-                ],
+                choices: (state.datasource?.columns || []).map(col => [
+                  col.column_name,
+                  col.column_name,
+                ]),
               }),
               clearable: true,
               resetOnHide: false,
