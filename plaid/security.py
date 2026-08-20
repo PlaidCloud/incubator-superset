@@ -510,14 +510,21 @@ class PlaidSecurityManager(SupersetSecurityManager):
             callers fail closed instead of assuming access.
         """
         if has_request_context() and PROJECT_ACCESS in session:
-            return list(session[PROJECT_ACCESS])
+            ids = list(session[PROJECT_ACCESS])
+            log.debug("Project access resolved from session (%d projects)", len(ids))
+            return ids
 
         if has_app_context():
             cached = g.get(_PROJECT_ACCESS_G_ATTR, _UNSET)
             if cached is not _UNSET:
+                log.debug("Project access resolved from the per-call cache")
                 return cached
 
         project_ids = self._fetch_project_access_ids()
+        log.debug(
+            "Project access resolved from PlaidCloud: %s",
+            "unavailable" if project_ids is None else f"{len(project_ids)} projects",
+        )
         if has_app_context():
             setattr(g, _PROJECT_ACCESS_G_ATTR, project_ids)
         return project_ids
