@@ -328,8 +328,13 @@ export default typedMemo(function DataTable<D extends object>({
                       table,
                     });
 
+                // `flexRender` hands back `columnDef.cell` untouched when it
+                // is not a component, and a plain string or number is legal
+                // there in the v8 types. This plugin only ever passes a
+                // function, so this is unreachable today; it is here so a
+                // non-element `cell` still lands inside a td instead of
+                // becoming a bare child of `tr`.
                 if (!isValidElement(rendered)) {
-                  // A renderer that returns a bare value still needs a cell.
                   return <td key={cell.id}>{rendered}</td>;
                 }
 
@@ -350,17 +355,30 @@ export default typedMemo(function DataTable<D extends object>({
         <tfoot>
           {table.getFooterGroups().map(footerGroup => (
             <tr key={footerGroup.id} role="row">
-              {footerGroup.headers.map(header => (
-                <td key={header.id}>
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(header.column.columnDef.footer, {
-                        column: header.column,
-                        header,
-                        table,
-                      })}
-                </td>
-              ))}
+              {footerGroup.headers.map(header => {
+                // Same shape as the body: the footer renderer already returns
+                // a cell of its own (a `th` on the summary column, a `td` on
+                // the rest), so wrapping it produced a cell inside a cell on
+                // every totals row. A column with no footer still needs an
+                // empty cell to keep the row aligned with the header.
+                if (header.isPlaceholder || !header.column.columnDef.footer) {
+                  return <td key={header.id} />;
+                }
+
+                const rendered = flexRender(header.column.columnDef.footer, {
+                  column: header.column,
+                  header,
+                  table,
+                });
+
+                if (!isValidElement(rendered)) {
+                  return <td key={header.id}>{rendered}</td>;
+                }
+
+                return cloneElement(rendered as ReactElement, {
+                  key: header.id,
+                });
+              })}
             </tr>
           ))}
         </tfoot>
