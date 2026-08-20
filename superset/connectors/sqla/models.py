@@ -2024,8 +2024,12 @@ class SqlaTable(
         # For virtual datasets, include RLS predicates in the cache key
         if self.is_virtual and self.sql:
             default_schema = self.database.get_default_schema(self.catalog)
+            # Render the template before parsing, as ``get_from_clause()`` does.
+            # Jinja is a supported feature of virtual datasets and raw ``{% %}``
+            # is not valid SQL, so handing it to the parser raises and takes
+            # every chart on the dataset down with it.
             rls_predicates = collect_rls_predicates_for_sql(
-                self.sql,
+                self.get_rendered_sql(self.get_template_processor()),
                 self.database,
                 self.catalog,
                 self.schema or default_schema or "",
