@@ -19,11 +19,14 @@
 import {
   useRef,
   ReactNode,
+  ReactElement,
   HTMLProps,
   MutableRefObject,
   CSSProperties,
   DragEvent,
   useState,
+  cloneElement,
+  isValidElement,
 } from 'react';
 
 import {
@@ -251,29 +254,42 @@ export default typedMemo(function DataTable<D extends object>({
         {rows && rows.length > 0 ? (
           rows.map(row => (
             <tr role="row" key={row.id}>
-              {row.getVisibleCells().map((cell, idx) => (
-                <td
-                  key={cell.id}
-                  style={
-                    idx === 0
-                      ? { paddingLeft: `${row.depth * 20}px` }
-                      : undefined
-                  }
-                >
-                  {/* group row, group column */}
-                  {cell.getIsGrouped() ? (
-                    <div style={{ display: 'flex' }}>
-                      <div
-                        onClick={row.getToggleExpandedHandler()}
-                        style={{ cursor: 'pointer', marginRight: '8px' }}
-                      >
-                        {row.getIsExpanded() ? '▼' : '▶'}
+              {row.getVisibleCells().map((cell, idx) => {
+                // Indent only the first cell, by the row's grouping depth.
+                const indent =
+                  idx === 0
+                    ? { paddingLeft: `${row.depth * 20}px` }
+                    : undefined;
+
+                // group row, group column: renders a div, so it needs a td
+                if (cell.getIsGrouped()) {
+                  return (
+                    <td key={cell.id} style={indent}>
+                      <div style={{ display: 'flex' }}>
+                        <div
+                          onClick={row.getToggleExpandedHandler()}
+                          style={{ cursor: 'pointer', marginRight: '8px' }}
+                        >
+                          {row.getIsExpanded() ? '▼' : '▶'}
+                        </div>
+                        {cell.getValue()}
                       </div>
-                      {cell.getValue()}
-                    </div>
-                  ) : cell.getIsPlaceholder() ? null : cell.getIsAggregated() ? ( // non-group column on a group row → show nothing
-                    // aggregated child values → show aggregated output
-                    flexRender(
+                    </td>
+                  );
+                }
+
+                // non-group column on a group row → show nothing, but keep the
+                // cell so the row still lines up with its header
+                if (cell.getIsPlaceholder()) {
+                  return <td key={cell.id} style={indent} />;
+                }
+
+                // aggregated child values → aggregated output; normal leaf cell
+                // otherwise. Both go through the column's own renderer, which is
+                // already a `styled.td` - wrapping it here would nest one td
+                // inside another, so the indent is merged onto it instead.
+                const rendered = cell.getIsAggregated()
+                  ? flexRender(
                       cell.column.columnDef.aggregatedCell ??
                         cell.column.columnDef.cell,
                       {
@@ -283,17 +299,30 @@ export default typedMemo(function DataTable<D extends object>({
                         table,
                       },
                     )
-                  ) : (
-                    // normal leaf cell
-                    flexRender(cell.column.columnDef.cell, {
+                  : flexRender(cell.column.columnDef.cell, {
                       getValue: cell.getValue,
                       row,
                       column: cell.column,
                       table,
-                    })
-                  )}
-                </td>
-              ))}
+                    });
+
+                if (!isValidElement(rendered)) {
+                  // A renderer that returns a bare value still needs a cell.
+                  return (
+                    <td key={cell.id} style={indent}>
+                      {rendered}
+                    </td>
+                  );
+                }
+
+                const element = rendered as ReactElement<{
+                  style?: CSSProperties;
+                }>;
+                return cloneElement(element, {
+                  key: cell.id,
+                  style: { ...element.props.style, ...indent },
+                });
+              })}
             </tr>
           ))
         ) : (
