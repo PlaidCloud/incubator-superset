@@ -300,7 +300,7 @@ export default function EchartsWaterfall(
             },
             data: [...series.data].reverse(),
             label: {
-              ...(series.label || {}),
+              ...series.label,
               position: series.name === 'Decrease' ? 'left' : 'right',
               offset: series.name === 'Decrease' ? [0, -0.45] : [0, 0],
             },
@@ -315,7 +315,9 @@ export default function EchartsWaterfall(
                 params.labelRect &&
                 params.rect
               ) {
-                const xAxis0 = chartRef.current.getEchartInstance().convertToPixel({ xAxisIndex: 0 }, 0);
+                const xAxis0 = chartRef.current
+                  .getEchartInstance()
+                  .convertToPixel({ xAxisIndex: 0 }, 0);
                 const labelRectX = params.labelRect.x;
                 const isOverlap = labelRectX < xAxis0;
                 const labelGap = theme.sizeUnit * 2;

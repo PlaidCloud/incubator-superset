@@ -355,7 +355,7 @@ export function useSticky(getTableSize?: GetTableSize): {
       if (!width || !height) {
         setStickyState();
       }
-    }, [width, height, setStickyState]);
+    }, [width, height]);
 
     if (!width || !height) {
       return null;

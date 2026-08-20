@@ -19,6 +19,7 @@ concurrency:
 jobs:
   unit-tests:
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     strategy:
       matrix:
         python-version: ["previous", "current", "next"]

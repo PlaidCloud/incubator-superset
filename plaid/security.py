@@ -1,4 +1,20 @@
 # coding=utf-8
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
 """
 Plaid Security Class for Superset
 """
@@ -12,7 +28,7 @@ from urllib.parse import urljoin
 
 import jwt
 from authlib.integrations.flask_client import token_update
-from flask import current_app, session
+from flask import current_app, g, has_app_context, has_request_context, session
 from flask_appbuilder import Model
 from flask_appbuilder.security.manager import AUTH_OAUTH
 from flask_login import logout_user
@@ -48,6 +64,17 @@ __email__ = "garrett.bates@plaidcloud.com"
 log = logging.getLogger(__name__)
 USE_REFRESH_TOKENS = False
 PROJECT_ACCESS = "project_access"
+# Attribute memoising the RPC answer on ``g`` for contexts with no session.
+_PROJECT_ACCESS_G_ATTR = "plaid_project_access_ids"
+_UNSET = object()
+
+
+class PlaidCredentialUnavailableError(Exception):
+    """Raised when no PlaidCloud credential exists for the current principal.
+
+    Background work has neither a Flask session nor an MCP request, so it
+    carries no user credential and cannot call PlaidCloud on their behalf.
+    """
 
 
 class _PlaidGuardedRoleApi(rls_guard.PlaidRoleApi, SupersetRoleApi):
@@ -383,10 +410,11 @@ class PlaidSecurityManager(SupersetSecurityManager):
         base_url = f"http://{self.appbuilder.app.config.get('PLAID_RPC')}"
         rpc_url = urljoin(base_url, "json-rpc/")
 
-        if self.auth_type == AUTH_OAUTH:
-            rpc_token, secret = session["oauth"]
-        else:
-            rpc_token = session["token"]["access_token"]
+        rpc_token = self._rpc_token()
+        if not rpc_token:
+            raise PlaidCredentialUnavailableError(
+                "No PlaidCloud credential available in this context"
+            )
 
         rpc = SimpleRPC(rpc_token, uri=rpc_url, verify_ssl=False)
         rpc._old_call_rpc = rpc.call_rpc
@@ -396,8 +424,9 @@ class PlaidSecurityManager(SupersetSecurityManager):
                 return rpc._old_call_rpc(*args, **kwargs)
             except HTTPError as e:
                 if e.response.status_code == 401:
-                    logout_user()
-                    session.clear()
+                    if has_request_context():
+                        logout_user()
+                        session.clear()
                     raise Exception(
                         "There were problems authenticating your access with "
                         "PlaidCloud. If you see this message, please refresh "
@@ -408,32 +437,115 @@ class PlaidSecurityManager(SupersetSecurityManager):
         rpc.call_rpc = superset_call_rpc
         return rpc
 
-    def store_user_project_access(self) -> None:
+    def _rpc_token(self) -> Optional[str]:
+        """The current principal's PlaidCloud credential, from wherever this
+        context keeps one.
+
+        A browser request carries it in the Flask session. An MCP tool call has
+        no session, so fall back to the token behind the MCP request.
+
+        Returns:
+            The bearer token to call PlaidCloud with, or None if this context
+            has no credential for the current principal.
+        """
+        if has_request_context():
+            try:
+                if self.auth_type == AUTH_OAUTH:
+                    return session["oauth"][0]
+                return session["token"]["access_token"]
+            except (KeyError, IndexError, TypeError):
+                pass
+
+        return self._mcp_access_token()
+
+    @staticmethod
+    def _mcp_access_token() -> Optional[str]:
+        """The upstream Keycloak access token behind the current MCP request.
+
+        FastMCP hands MCP clients a reference token of its own and keeps the
+        real Keycloak token server-side, re-validating it on every request, so
+        ``get_access_token()`` returns the upstream token — the same credential
+        a browser session would hold.
+
+        Returns:
+            The upstream access token, or None outside an MCP request.
+        """
+        try:
+            from fastmcp.server.dependencies import get_access_token
+        except ImportError:
+            return None
+
+        try:
+            access_token = get_access_token()
+        except Exception:  # pragma: no cover - no MCP request in scope
+            return None
+
+        return getattr(access_token, "token", None) if access_token else None
+
+    def _fetch_project_access_ids(self) -> Optional[list[str]]:
+        """Ask PlaidCloud which projects the current principal may see.
+
+        Returns:
+            The project UUIDs, or None when the call could not be made or
+            failed — the caller then has no answer and must fail closed.
+        """
         try:
             projects = self.get_rpc().analyze.project.projects(keys=["id"])
-            project_ids = [str(uuid.UUID(p["id"])) for p in projects]
-            session[PROJECT_ACCESS] = project_ids
+            return [str(uuid.UUID(p["id"])) for p in projects]
         except Exception as e:
-            log.error(str(e))
-            session[PROJECT_ACCESS] = []  # No access
+            log.error("Could not fetch PlaidCloud project access: %s", e)
+            return None
+
+    def _project_access_ids(self) -> Optional[list[str]]:
+        """Project UUIDs the current principal may see.
+
+        PlaidCloud is authoritative for project access, so this is ultimately
+        an RPC answer. A browser login caches it in the Flask session at login;
+        contexts with no session — MCP tool calls, background work — have to
+        ask, so the answer is memoised on ``g`` for the life of the request or
+        tool call rather than fetched once per access check.
+
+        Returns:
+            The project UUIDs, or None when no answer could be obtained, so
+            callers fail closed instead of assuming access.
+        """
+        if has_request_context() and PROJECT_ACCESS in session:
+            ids = list(session[PROJECT_ACCESS])
+            log.debug("Project access resolved from session (%d projects)", len(ids))
+            return ids
+
+        if has_app_context():
+            cached = g.get(_PROJECT_ACCESS_G_ATTR, _UNSET)
+            if cached is not _UNSET:
+                log.debug("Project access resolved from the per-call cache")
+                return cached
+
+        project_ids = self._fetch_project_access_ids()
+        log.debug(
+            "Project access resolved from PlaidCloud: %s",
+            "unavailable" if project_ids is None else f"{len(project_ids)} projects",
+        )
+        if has_app_context():
+            setattr(g, _PROJECT_ACCESS_G_ATTR, project_ids)
+        return project_ids
+
+    def store_user_project_access(self) -> None:
+        project_ids = self._fetch_project_access_ids()
+        session[PROJECT_ACCESS] = project_ids if project_ids is not None else []
 
     def _can_access_project(self, project_id: str) -> bool:
-        log.info(dict(session))
-        if PROJECT_ACCESS not in session:
+        project_ids = self._project_access_ids()
+        if project_ids is None:
             return self.is_admin()
-        return str(uuid.UUID(project_id)) in session[PROJECT_ACCESS]
+        return str(uuid.UUID(project_id)) in project_ids
 
     def can_access_database(self, database: "Database") -> bool:
-        log.info("Can access database: %s", database)
         return self._can_access_project(
             str(database.uuid)
         ) or super().can_access_database(database)
 
     def can_access_datasource(self, datasource: "BaseDatasource") -> bool:
-        log.info("Checking access to datasource: %s", datasource)
-        log.info("Checking access to datasource db id: %s", datasource.database.uuid)
         if datasource.schema is None:
-            log.info("No Schema: %s", datasource)
             # Call the base method if there is no schema since there isn't a
             # plaid schema.
             return super().can_access_datasource(datasource)
@@ -474,12 +586,12 @@ class PlaidSecurityManager(SupersetSecurityManager):
     def _get_project_dbs(self) -> Iterable["Database"]:
         from superset.models.core import Database
 
-        if PROJECT_ACCESS not in session:
+        project_ids = self._project_access_ids()
+        if project_ids is None:
             if self.is_admin():
                 return self.session.query(Database)
             return []
-        project_uuids = set(session[PROJECT_ACCESS])
-        return self.session.query(Database).filter(Database.uuid.in_(project_uuids))
+        return self.session.query(Database).filter(Database.uuid.in_(set(project_ids)))
 
     def user_view_menu_names(self, permission_name: str) -> set[str]:
         if permission_name == "database_access":

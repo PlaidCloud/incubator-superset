@@ -20,35 +20,67 @@ import { ChartProps } from '@superset-ui/core';
 import { supersetTheme } from '@apache-superset/core/theme';
 import transformProps from '../../src/plugin/transformProps';
 
-describe('SupersetPluginDashboardFilters transformProps', () => {
-  const formData = {
-    colorScheme: 'bnbColors',
-    datasource: '3__table',
-    granularity_sqla: 'ds',
-    metric: 'sum__num',
-    series: 'name',
-    boldText: true,
-    headerFontSize: 'xs',
-    headerText: 'my text',
-  };
-  const chartProps = new ChartProps({
-    formData,
+const DATA = [{ name: 'Hulk', sum__num: 1 }];
+
+const buildChartProps = (formDataOverrides = {}, data = DATA) =>
+  new ChartProps({
+    formData: {
+      colorScheme: 'bnbColors',
+      datasource: '3__table',
+      granularity_sqla: 'ds',
+      ...formDataOverrides,
+    },
     width: 800,
     height: 600,
     theme: supersetTheme,
-    queriesData: [{
-      data: [{ name: 'Hulk', sum__num: 1 }],
-    }],
+    queriesData: [{ data }],
   });
 
-  it('should transform chart props for viz', () => {
-    expect(transformProps(chartProps)).toEqual({
-      width: 800,
-      height: 600,
-      boldText: true,
-      headerFontSize: 'xs',
-      headerText: 'my text',
-      data: [{ name: 'Hulk', sum__num: 1 }],
-    });
+describe('SupersetPluginDashboardFilters transformProps', () => {
+  test('passes width, height and query data through', () => {
+    const transformed = transformProps(buildChartProps()) as any;
+
+    expect(transformed.width).toBe(800);
+    expect(transformed.height).toBe(600);
+    expect(transformed.data).toEqual(DATA);
+  });
+
+  test('returns the contract the filter component consumes', () => {
+    const transformed = transformProps(buildChartProps()) as any;
+
+    expect(Object.keys(transformed).sort()).toEqual(
+      [
+        'allowMultiple',
+        'col',
+        'data',
+        'emitCrossFilters',
+        'filterState',
+        'height',
+        'setDataMask',
+        'width',
+      ].sort(),
+    );
+  });
+
+  test('starts with cross-filter emission off and an empty filter state', () => {
+    const transformed = transformProps(buildChartProps()) as any;
+
+    expect(transformed.emitCrossFilters).toBe(false);
+    expect(transformed.filterState).toEqual({});
+  });
+
+  test('forwards the column and multi-select control values', () => {
+    const transformed = transformProps(
+      buildChartProps({ col: 'name', allowMultiple: true }),
+    ) as any;
+
+    expect(transformed.col).toBe('name');
+    expect(transformed.allowMultiple).toBe(true);
+  });
+
+  test('returns no data when the query came back empty', () => {
+    const transformed = transformProps(buildChartProps({}, [])) as any;
+
+    expect(transformed.data).toEqual([]);
   });
 });

@@ -27,7 +27,7 @@ import { SupersetPluginDashboardFilters } from '../src';
  * properly transform the data and/or any resulting props).
  */
 describe('superset-plugin-dashboard-filters', () => {
-  it('exists', () => {
+  test('exists', () => {
     expect(SupersetPluginDashboardFilters).toBeDefined();
   });
 });

@@ -296,7 +296,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
   ]);
   const [hideComparisonKeys, setHideComparisonKeys] = useState<string[]>([]);
   const [collapsedRows, setCollapsedRows] = useState<Set<string>>(
-    new Set(ensureIsArray(collapsed_rows))
+    new Set(ensureIsArray(collapsed_rows)),
   );
 
   const buildHierarchy = useCallback(() => {
@@ -412,7 +412,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
   );
 
   const getCrossFilterDataMask = (key: string, value: DataRecordValue) => {
-    let updatedFilters = { ...(filters || {}) };
+    let updatedFilters = { ...filters };
     if (filters && isActiveFilterValue(key, value)) {
       updatedFilters = {};
     } else {
@@ -448,21 +448,21 @@ export default function TableChart<D extends DataRecord = DataRecord>(
             groupBy.length === 0
               ? []
               : groupBy.map(col => {
-                const val = ensureIsArray(updatedFilters?.[col]);
-                if (!val.length)
+                  const val = ensureIsArray(updatedFilters?.[col]);
+                  if (!val.length)
+                    return {
+                      col,
+                      op: 'IS NULL' as const,
+                    };
                   return {
                     col,
-                    op: 'IS NULL' as const,
+                    op: 'IN' as const,
+                    val: val.map(el =>
+                      el instanceof Date ? el.getTime() : el!,
+                    ),
+                    grain: col === DTTM_ALIAS ? timeGrain : undefined,
                   };
-                return {
-                  col,
-                  op: 'IN' as const,
-                  val: val.map(el =>
-                    el instanceof Date ? el.getTime() : el!,
-                  ),
-                  grain: col === DTTM_ALIAS ? timeGrain : undefined,
-                };
-              }),
+                }),
         },
         filterState: {
           label: labelElements.join(', '),
@@ -532,46 +532,46 @@ export default function TableChart<D extends DataRecord = DataRecord>(
   const handleContextMenu =
     onContextMenu && !isRawRecords
       ? (
-        value: D,
-        cellPoint: {
-          key: string;
-          value: DataRecordValue;
-          isMetric?: boolean;
-        },
-        clientX: number,
-        clientY: number,
-      ) => {
-        const drillToDetailFilters: BinaryQueryObjectFilterClause[] = [];
-        filteredColumnsMeta.forEach(col => {
-          if (!col.isMetric) {
-            const dataRecordValue = value[col.key];
-            drillToDetailFilters.push({
-              col: col.key,
-              op: '==',
-              val: dataRecordValue as string | number | boolean,
-              formattedVal: formatColumnValue(col, dataRecordValue)[1],
-            });
-          }
-        });
-        onContextMenu(clientX, clientY, {
-          drillToDetail: drillToDetailFilters,
-          crossFilter: cellPoint.isMetric
-            ? undefined
-            : getCrossFilterDataMask(cellPoint.key, cellPoint.value),
-          drillBy: cellPoint.isMetric
-            ? undefined
-            : {
-              filters: [
-                {
-                  col: cellPoint.key,
-                  op: '==',
-                  val: cellPoint.value as string | number | boolean,
+          value: D,
+          cellPoint: {
+            key: string;
+            value: DataRecordValue;
+            isMetric?: boolean;
+          },
+          clientX: number,
+          clientY: number,
+        ) => {
+          const drillToDetailFilters: BinaryQueryObjectFilterClause[] = [];
+          filteredColumnsMeta.forEach(col => {
+            if (!col.isMetric) {
+              const dataRecordValue = value[col.key];
+              drillToDetailFilters.push({
+                col: col.key,
+                op: '==',
+                val: dataRecordValue as string | number | boolean,
+                formattedVal: formatColumnValue(col, dataRecordValue)[1],
+              });
+            }
+          });
+          onContextMenu(clientX, clientY, {
+            drillToDetail: drillToDetailFilters,
+            crossFilter: cellPoint.isMetric
+              ? undefined
+              : getCrossFilterDataMask(cellPoint.key, cellPoint.value),
+            drillBy: cellPoint.isMetric
+              ? undefined
+              : {
+                  filters: [
+                    {
+                      col: cellPoint.key,
+                      op: '==',
+                      val: cellPoint.value as string | number | boolean,
+                    },
+                  ],
+                  groupbyFieldName: 'groupby',
                 },
-              ],
-              groupbyFieldName: 'groupby',
-            },
-        });
-      }
+          });
+        }
       : undefined;
 
   const getHeaderColumns = (
@@ -691,6 +691,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     const headers: any = [];
     let currentColumnIndex = 0;
 
+    // eslint-disable-next-line no-use-before-define -- groupHeaderColumns is declared later in this module; the closure only runs after it exists
     Object.entries(groupHeaderColumns || {}).forEach(([key, value]) => {
       // Calculate the number of placeholder columns needed before the current header
       const startPosition = value[0];
@@ -858,11 +859,11 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           // Only use rowFormatter if it's a valid formatter type and not the first column
           const effectiveFormatter =
             shouldApplyFormatter &&
-              (typeof rowFormatter === 'function' ||
-                (typeof rowFormatter === 'object' &&
-                  rowFormatter !== null &&
-                  !Array.isArray(rowFormatter) &&
-                  !(rowFormatter instanceof Date)))
+            (typeof rowFormatter === 'function' ||
+              (typeof rowFormatter === 'object' &&
+                rowFormatter !== null &&
+                !Array.isArray(rowFormatter) &&
+                !(rowFormatter instanceof Date)))
               ? rowFormatter
               : shouldApplyFormatter
                 ? column.formatter
@@ -895,17 +896,41 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           const hasChildren = hierarchy.get(metric)?.children.length || 0;
           const isCollapsed = collapsedRows.has(metric);
           const canCollapse = rowConfig?.[metric]?.canCollapse !== false;
-          const showCollapseIcon = isFirstColumn && hasChildren > 0 && canCollapse;
+          const showCollapseIcon =
+            isFirstColumn && hasChildren > 0 && canCollapse;
           const isAllSegmentsColumn = column.key === 'rowTotal'; // All Segments column;
-          const isRowTotal = isAllSegmentsColumn && value === row.original.rowTotal;
-          const isBoldText = (isFirstColumn && rowConfig?.[row.original.metric as string]?.boldText) || false;
-          const isItalicText = (isFirstColumn && rowConfig?.[row.original.metric as string]?.italicText) || false;
-          const indent = (isFirstColumn && rowConfig?.[row.original.metric as string]?.indent) || 0;
-          const fontSize = (isFirstColumn && rowConfig?.[row.original.metric as string]?.fontSize) || null;
-          const isSummaryRowFirstColumn = (row.original.__is_summary__ || false) && i === 0;
-          const rowTextAlign = (isFirstColumn && rowConfig?.[row.original.metric as string]?.horizontalAlign) || null;
-          const textColor = (isFirstColumn && rowConfig?.[row.original.metric as string]?.textColor) || null;
-          const isUnderlineText = (isFirstColumn && rowConfig?.[row.original.metric as string]?.underlineText) || false;
+          const isRowTotal =
+            isAllSegmentsColumn && value === row.original.rowTotal;
+          const isBoldText =
+            (isFirstColumn &&
+              rowConfig?.[row.original.metric as string]?.boldText) ||
+            false;
+          const isItalicText =
+            (isFirstColumn &&
+              rowConfig?.[row.original.metric as string]?.italicText) ||
+            false;
+          const indent =
+            (isFirstColumn &&
+              rowConfig?.[row.original.metric as string]?.indent) ||
+            0;
+          const fontSize =
+            (isFirstColumn &&
+              rowConfig?.[row.original.metric as string]?.fontSize) ||
+            null;
+          const isSummaryRowFirstColumn =
+            (row.original.__is_summary__ || false) && i === 0;
+          const rowTextAlign =
+            (isFirstColumn &&
+              rowConfig?.[row.original.metric as string]?.horizontalAlign) ||
+            null;
+          const textColor =
+            (isFirstColumn &&
+              rowConfig?.[row.original.metric as string]?.textColor) ||
+            null;
+          const isUnderlineText =
+            (isFirstColumn &&
+              rowConfig?.[row.original.metric as string]?.underlineText) ||
+            false;
 
           const parent = hierarchy.get(metric)?.parent;
 
@@ -962,33 +987,43 @@ export default function TableChart<D extends DataRecord = DataRecord>(
                 ? backgroundColor
                 : undefined;
 
-            const baseIndent = typeof indent === 'string' ? parseInt(indent, 10) : (indent || 0);
+          const baseIndent =
+            typeof indent === 'string' ? parseInt(indent, 10) : indent || 0;
 
-            // Calculate total padding by traversing all ancestors
-            let ancestorPadding = 0;
-            let currentParent = parent;
-            while (currentParent) {
-              const parentNode = hierarchy.get(currentParent);
-              if (parentNode && rowConfig?.[currentParent]?.canCollapse !== false) {
-                ancestorPadding += 25; // Add padding for each collapsible ancestor
-              }
-              currentParent = parentNode?.parent || null;
+          // Calculate total padding by traversing all ancestors
+          let ancestorPadding = 0;
+          let currentParent = parent;
+          while (currentParent) {
+            const parentNode = hierarchy.get(currentParent);
+            if (
+              parentNode &&
+              rowConfig?.[currentParent]?.canCollapse !== false
+            ) {
+              ancestorPadding += 25; // Add padding for each collapsible ancestor
             }
+            currentParent = parentNode?.parent || null;
+          }
 
-            const paddingLeft = baseIndent + (i === 0 ? ancestorPadding : 0);
+          const paddingLeft = baseIndent + (i === 0 ? ancestorPadding : 0);
 
-            const StyledCell = styled.td`
-            text-align: ${columnTextAlign || rowTextAlign || sharedStyle.textAlign};
+          const StyledCell = styled.td`
+            text-align: ${columnTextAlign ||
+            rowTextAlign ||
+            sharedStyle.textAlign};
             white-space: ${value instanceof Date ? 'nowrap' : undefined};
             position: relative;
             background: ${cellBackgroundColor};
             color: ${textColor || 'inherit'};
-            ${isBoldText || isRowTotal || isSummaryRowFirstColumn ? 'font-weight: bold;' : ''}
+            ${isBoldText || isRowTotal || isSummaryRowFirstColumn
+              ? 'font-weight: bold;'
+              : ''}
             ${isItalicText ? 'font-style: italic;' : ''}
             ${isUnderlineText ? 'text-decoration: underline;' : ''} 
-            ${paddingLeft > 0 && i === 0 ? `padding-left: ${paddingLeft}px !important;` : ''}
+            ${paddingLeft > 0 && i === 0
+              ? `padding-left: ${paddingLeft}px !important;`
+              : ''}
             ${fontSize ? `font-size: ${fontSize}px !important;` : ''}
-            `;
+          `;
 
           const cellBarStyles = css`
             position: absolute;
@@ -998,25 +1033,25 @@ export default function TableChart<D extends DataRecord = DataRecord>(
             ${valueRange &&
             `
                 width: ${`${cellWidth({
-              value: value as number,
-              valueRange,
-              alignPositiveNegative,
-            })}%`};
+                  value: value as number,
+                  valueRange,
+                  alignPositiveNegative,
+                })}%`};
                 left: ${`${cellOffset({
-              value: value as number,
-              valueRange,
-              alignPositiveNegative,
-            })}%`};
+                  value: value as number,
+                  valueRange,
+                  alignPositiveNegative,
+                })}%`};
                 background-color: ${cellBackground({
-              value: value as number,
-              colorPositiveNegative,
-            })};
+                  value: value as number,
+                  colorPositiveNegative,
+                })};
               `}
           `;
 
           let arrowStyles = css`
             color: ${basicColorFormatters &&
-              basicColorFormatters[row.index][originKey]?.arrowColor ===
+            basicColorFormatters[row.index][originKey]?.arrowColor ===
               ColorSchemeEnum.Green
               ? theme.colorSuccess
               : theme.colorError};
@@ -1044,11 +1079,11 @@ export default function TableChart<D extends DataRecord = DataRecord>(
             onClick:
               emitCrossFilters && !valueRange && !isMetric
                 ? () => {
-                  // allow selecting text in a cell
-                  if (!getSelectedText()) {
-                    toggleFilter(key, value);
+                    // allow selecting text in a cell
+                    if (!getSelectedText()) {
+                      toggleFilter(key, value);
+                    }
                   }
-                }
                 : undefined,
             onContextMenu: (e: MouseEvent) => {
               if (handleContextMenu) {
@@ -1078,6 +1113,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
                   <div
                     className="dt-truncate-cell"
                     style={columnWidth ? { width: columnWidth } : undefined}
+                    // eslint-disable-next-line react/no-danger
                     dangerouslySetInnerHTML={html}
                   />
                 </StyledCell>
@@ -1092,7 +1128,12 @@ export default function TableChart<D extends DataRecord = DataRecord>(
             <StyledCell {...cellProps}>
               {valueRange && !isEmptyRow && (
                 <div
-                  className={cx('cell-bar', typeof value === 'number' && value < 0 ? 'negative' : 'positive')}
+                  className={cx(
+                    'cell-bar',
+                    typeof value === 'number' && value < 0
+                      ? 'negative'
+                      : 'positive',
+                  )}
                   css={cellBarStyles}
                   role="presentation"
                 />
@@ -1112,15 +1153,21 @@ export default function TableChart<D extends DataRecord = DataRecord>(
                           color: ${theme.colorPrimary};
                         }
                       `}
-                      onClick={(e) => {
+                      onClick={e => {
                         e.stopPropagation();
                         toggleCollapse(metric);
                       }}
                     >
-                      {isCollapsed ? <PlusSquareOutlined /> : <MinusSquareOutlined />}
+                      {isCollapsed ? (
+                        <PlusSquareOutlined />
+                      ) : (
+                        <MinusSquareOutlined />
+                      )}
                     </span>
                   )}
-                  {!isEmptyRow && arrow && <span css={arrowStyles}>{arrow}</span>}
+                  {!isEmptyRow && arrow && (
+                    <span css={arrowStyles}>{arrow}</span>
+                  )}
                   {text}
                 </div>
               ) : (
@@ -1135,15 +1182,21 @@ export default function TableChart<D extends DataRecord = DataRecord>(
                           color: ${theme.colorPrimary};
                         }
                       `}
-                      onClick={(e) => {
+                      onClick={e => {
                         e.stopPropagation();
                         toggleCollapse(metric);
                       }}
                     >
-                      {isCollapsed ? <PlusSquareOutlined /> : <MinusSquareOutlined />}
+                      {isCollapsed ? (
+                        <PlusSquareOutlined />
+                      ) : (
+                        <MinusSquareOutlined />
+                      )}
                     </span>
                   )}
-                  {!isEmptyRow && arrow && <span css={arrowStyles}>{arrow}</span>}
+                  {!isEmptyRow && arrow && (
+                    <span css={arrowStyles}>{arrow}</span>
+                  )}
                   {text}
                 </>
               )}

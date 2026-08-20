@@ -27,7 +27,7 @@ import { ProviderWrapper } from './testHelpers';
 
 describe('plugin-chart-table', () => {
   describe('transformProps', () => {
-    it('should parse pageLength to pageSize', () => {
+    test('should parse pageLength to pageSize', () => {
       expect(transformProps(testData.basic).pageSize).toBe(20);
       expect(
         transformProps({
@@ -43,13 +43,13 @@ describe('plugin-chart-table', () => {
       ).toBe(0);
     });
 
-    it('should memoize data records', () => {
+    test('should memoize data records', () => {
       expect(transformProps(testData.basic).data).toBe(
         transformProps(testData.basic).data,
       );
     });
 
-    it('should memoize columns meta', () => {
+    test('should memoize columns meta', () => {
       expect(transformProps(testData.basic).columns).toBe(
         transformProps({
           ...testData.basic,
@@ -58,14 +58,14 @@ describe('plugin-chart-table', () => {
       );
     });
 
-    it('should format timestamp', () => {
+    test('should format timestamp', () => {
       // eslint-disable-next-line no-underscore-dangle
       const parsedDate = transformProps(testData.basic).data[0]
         .__timestamp as DateWithFormatter;
       expect(String(parsedDate)).toBe('2020-01-01 12:34:56');
       expect(parsedDate.getTime()).toBe(1577882096000);
     });
-    it('should process comparison columns when time_compare and comparison_type are set', () => {
+    test('should process comparison columns when time_compare and comparison_type are set', () => {
       const transformedProps = transformProps(testData.comparison);
 
       // Check if comparison columns are processed
@@ -84,7 +84,7 @@ describe('plugin-chart-table', () => {
       expect(comparisonColumns.some(col => col.label === '%')).toBe(true);
     });
 
-    it('should not process comparison columns when time_compare is empty', () => {
+    test('should not process comparison columns when time_compare is empty', () => {
       const propsWithoutTimeCompare = {
         ...testData.comparison,
         rawFormData: {
@@ -107,7 +107,7 @@ describe('plugin-chart-table', () => {
       expect(comparisonColumns.length).toBe(0);
     });
 
-    it('should correctly apply column configuration for comparison columns', () => {
+    test('should correctly apply column configuration for comparison columns', () => {
       const transformedProps = transformProps(testData.comparisonWithConfig);
 
       const comparisonColumns = transformedProps.columns.filter(
@@ -145,7 +145,7 @@ describe('plugin-chart-table', () => {
       expect(percentMetricConfig?.config).toEqual({ d3NumberFormat: '.3f' });
     });
 
-    it('should correctly format comparison columns using getComparisonColFormatter', () => {
+    test('should correctly format comparison columns using getComparisonColFormatter', () => {
       const transformedProps = transformProps(testData.comparisonWithConfig);
       const comparisonColumns = transformedProps.columns.filter(
         col =>
@@ -176,7 +176,7 @@ describe('plugin-chart-table', () => {
       expect(formattedPercentMetric).toBe('0.123');
     });
 
-    it('should set originalLabel for comparison columns when time_compare and comparison_type are set', () => {
+    test('should set originalLabel for comparison columns when time_compare and comparison_type are set', () => {
       const transformedProps = transformProps(testData.comparison);
 
       // Check if comparison columns are processed
@@ -247,7 +247,7 @@ describe('plugin-chart-table', () => {
   });
 
   describe('TableChart', () => {
-    it('render basic data', () => {
+    test('render basic data', () => {
       render(
         <ThemeProvider theme={supersetTheme}>
           <TableChart {...transformProps(testData.basic)} sticky={false} />,
@@ -268,7 +268,7 @@ describe('plugin-chart-table', () => {
       expect(cells[8]).toHaveTextContent('N/A');
     });
 
-    it('render advanced data', () => {
+    test('render advanced data', () => {
       render(
         <ThemeProvider theme={supersetTheme}>
           <TableChart {...transformProps(testData.advanced)} sticky={false} />,
@@ -285,7 +285,7 @@ describe('plugin-chart-table', () => {
       expect(cells[4]).toHaveTextContent('2.47k');
     });
 
-    it('render advanced data with currencies', () => {
+    test('render advanced data with currencies', () => {
       render(
         ProviderWrapper({
           children: (
@@ -305,7 +305,7 @@ describe('plugin-chart-table', () => {
       expect(cells[4]).toHaveTextContent('$ 2.47k');
     });
 
-    it('render data with a bigint value in a raw record mode', () => {
+    test('render data with a bigint value in a raw record mode', () => {
       render(
         ProviderWrapper({
           children: (
@@ -326,7 +326,7 @@ describe('plugin-chart-table', () => {
       expect(cells[3]).toHaveTextContent('1234567890123456789');
     });
 
-    it('render raw data', () => {
+    test('render raw data', () => {
       const props = transformProps({
         ...testData.raw,
         rawFormData: { ...testData.raw.rawFormData },
@@ -343,7 +343,7 @@ describe('plugin-chart-table', () => {
       expect(cells[1]).toHaveTextContent('0');
     });
 
-    it('render raw data with currencies', () => {
+    test('render raw data with currencies', () => {
       const props = transformProps({
         ...testData.raw,
         rawFormData: {
@@ -368,7 +368,7 @@ describe('plugin-chart-table', () => {
       expect(cells[2]).toHaveTextContent('$ 0');
     });
 
-    it('render small formatted data with currencies', () => {
+    test('render small formatted data with currencies', () => {
       const props = transformProps({
         ...testData.raw,
         rawFormData: {
@@ -410,7 +410,7 @@ describe('plugin-chart-table', () => {
       expect(cells[2]).toHaveTextContent('$ 0.61');
     });
 
-    it('render empty data', () => {
+    test('render empty data', () => {
       render(
         <ThemeProvider theme={supersetTheme}>
           <TableChart {...transformProps(testData.empty)} sticky={false} />,
@@ -419,7 +419,7 @@ describe('plugin-chart-table', () => {
       expect(screen.getByText('No records found')).toBeInTheDocument();
     });
 
-    it('render color with column color formatter', () => {
+    test('render color with column color formatter', () => {
       render(
         ProviderWrapper({
           children: (
@@ -449,7 +449,7 @@ describe('plugin-chart-table', () => {
       expect(getComputedStyle(screen.getByTitle('2467')).background).toBe('');
     });
 
-    it('render cell without color', () => {
+    test('render cell without color', () => {
       const dataWithEmptyCell = testData.advanced.queriesData[0];
       dataWithEmptyCell.data.push({
         __timestamp: null,
@@ -490,7 +490,7 @@ describe('plugin-chart-table', () => {
       );
       expect(getComputedStyle(screen.getByText('N/A')).background).toBe('');
     });
-    it('should display originalLabel in grouped headers', () => {
+    test('should display originalLabel in grouped headers', () => {
       render(
         <ThemeProvider theme={supersetTheme}>
           <TableChart {...transformProps(testData.comparison)} sticky={false} />
@@ -503,7 +503,7 @@ describe('plugin-chart-table', () => {
     });
   });
 
-  it('render cell bars properly, and only when it is toggled on in both regular and percent metrics', () => {
+  test('render cell bars properly, and only when it is toggled on in both regular and percent metrics', () => {
     const props = transformProps({
       ...testData.raw,
       rawFormData: { ...testData.raw.rawFormData },
