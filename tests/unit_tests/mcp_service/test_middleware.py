@@ -22,7 +22,7 @@ Unit tests for MCP service middleware.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastmcp.exceptions import ToolError
+from fastmcp.exceptions import ToolError, ValidationError as FastMCPValidationError
 
 from superset.mcp_service.middleware import (
     create_response_size_guard_middleware,
@@ -441,3 +441,45 @@ class TestMiddlewareIntegration:
 
         result = await middleware.on_call_tool(context, call_next)
         assert result == response
+
+
+class TestGlobalErrorHandlerValidation:
+    """FastMCP's own ValidationError must reach the validation branch."""
+
+    @pytest.mark.asyncio
+    async def test_fastmcp_validation_error_routes_to_validation_branch(self) -> None:
+        """
+        Regression for apache/superset#42578: FastMCP raises its own
+        ``fastmcp.exceptions.ValidationError`` for malformed tool arguments.
+        It subclasses neither ``ToolError`` nor pydantic's ``ValidationError``
+        -- the only two the handler checks -- so it fell through to the generic
+        "Internal error ... contact support" branch, reporting a
+        client-recoverable 400-class error as an opaque 500 and hiding the one
+        message that would let the caller fix its own call.
+        """
+        from superset.mcp_service.middleware import GlobalErrorHandlerMiddleware
+
+        middleware = GlobalErrorHandlerMiddleware()
+
+        context = MagicMock()
+        context.message.name = "get_chart_data"
+        context.method = "tools/call"
+
+        call_next = AsyncMock(
+            side_effect=FastMCPValidationError(
+                "1 validation error for call[get_chart_data]: request: "
+                "Value error, At least one of 'identifier' or "
+                "'form_data_key' must be provided."
+            )
+        )
+
+        with (
+            patch("superset.mcp_service.middleware.get_user_id", return_value=1),
+            patch("superset.mcp_service.middleware.event_logger"),
+            patch("superset.mcp_service.middleware.logger"),
+            pytest.raises(ToolError, match="Validation error in get_chart_data") as exc,
+        ):
+            await middleware.on_message(context, call_next)
+
+        assert "Internal error" not in str(exc.value)
+        assert "form_data_key" in str(exc.value)
