@@ -15,8 +15,11 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import uuid
 from types import SimpleNamespace
+from unittest.mock import patch
 
+import flask
 import pytest
 from flask_appbuilder.security.sqla.models import User
 from sqlalchemy.orm.exc import MultipleResultsFound
@@ -27,7 +30,7 @@ from sqlalchemy.orm.exc import MultipleResultsFound
 # collection error that aborts the whole unit-test run.
 pytest.importorskip("plaidcloud.rpc.connection.jsonrpc")
 
-from plaid.security import PlaidSecurityManager  # noqa: E402
+from plaid.security import PlaidSecurityManager, PROJECT_ACCESS  # noqa: E402
 from superset.security import SupersetSecurityManager  # noqa: E402
 
 
@@ -321,3 +324,79 @@ def test_upstream_grants_user_registrations_api_to_alpha_and_gamma(permission_na
 
     assert manager._is_alpha_pvm(permission_view)
     assert manager._is_gamma_pvm(permission_view)
+
+
+class TestProjectAccessResolution:
+    """Project access must resolve without a Flask session.
+
+    PlaidCloud is authoritative for which databases a user may see, and the
+    answer used to live only in the Flask session, populated at login. Any
+    caller without a session -- an MCP tool call, a background task -- either
+    crashed on the session proxy or silently saw no projects at all.
+    """
+
+    @staticmethod
+    def _manager() -> PlaidSecurityManager:
+        return PlaidSecurityManager.__new__(PlaidSecurityManager)
+
+    def test_session_answer_wins_when_a_request_is_active(self, app) -> None:
+        """A browser request keeps using the value cached at login."""
+        sm = self._manager()
+        with app.test_request_context():
+            flask.session[PROJECT_ACCESS] = ["11111111-1111-1111-1111-111111111111"]
+            with patch.object(sm, "_fetch_project_access_ids") as fetch:
+                assert sm._project_access_ids() == [
+                    "11111111-1111-1111-1111-111111111111"
+                ]
+            fetch.assert_not_called()
+
+    def test_falls_back_to_rpc_without_a_session(self, app) -> None:
+        """An app context alone resolves via PlaidCloud instead of raising."""
+        sm = self._manager()
+        with app.app_context():
+            with patch.object(
+                sm, "_fetch_project_access_ids", return_value=["abc"]
+            ) as fetch:
+                assert sm._project_access_ids() == ["abc"]
+                fetch.assert_called_once()
+
+    def test_rpc_answer_is_memoised_for_the_call(self, app) -> None:
+        """Access checks run per object, so the RPC must not run per check."""
+        sm = self._manager()
+        with app.app_context():
+            with patch.object(
+                sm, "_fetch_project_access_ids", return_value=["abc"]
+            ) as fetch:
+                sm._project_access_ids()
+                sm._project_access_ids()
+                sm._project_access_ids()
+                assert fetch.call_count == 1
+
+    def test_unresolvable_access_fails_closed(self, app) -> None:
+        """No answer must not read as "allowed" for a non-admin."""
+        sm = self._manager()
+        with app.app_context():
+            with (
+                patch.object(sm, "_fetch_project_access_ids", return_value=None),
+                patch.object(sm, "is_admin", return_value=False),
+            ):
+                assert sm._can_access_project(str(uuid.uuid4())) is False
+
+    def test_unresolvable_access_still_allows_admin(self, app) -> None:
+        """Preserves the previous behaviour when the answer is unknown."""
+        sm = self._manager()
+        with app.app_context():
+            with (
+                patch.object(sm, "_fetch_project_access_ids", return_value=None),
+                patch.object(sm, "is_admin", return_value=True),
+            ):
+                assert sm._can_access_project(str(uuid.uuid4())) is True
+
+    def test_mcp_token_used_when_there_is_no_session(self, app) -> None:
+        """The MCP request's upstream Keycloak token is a valid credential."""
+        sm = self._manager()
+        with app.app_context():
+            with patch.object(
+                PlaidSecurityManager, "_mcp_access_token", return_value="mcp-token"
+            ):
+                assert sm._rpc_token() == "mcp-token"
