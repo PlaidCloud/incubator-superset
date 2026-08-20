@@ -43,7 +43,9 @@ import {
   flexRender,
   getGroupedRowModel,
 } from '@tanstack/react-table';
+import { css } from '@apache-superset/core/theme';
 import { typedMemo } from '@superset-ui/core';
+
 import GlobalFilter, { GlobalFilterProps } from './components/GlobalFilter';
 import SelectPageSize, {
   SelectPageSizeProps,
@@ -51,6 +53,19 @@ import SelectPageSize, {
 } from './components/SelectPageSize';
 import SimplePagination from './components/Pagination';
 import { PAGE_SIZE_OPTIONS } from '../consts';
+
+/**
+ * Grouped rows are indented by depth. The indent cannot be passed to the cell
+ * itself: `flexRender` builds an element for the column's renderer component,
+ * so a `style` handed to it never reaches the `td` in the DOM. Carrying the
+ * depth on the row and letting CSS reach the first cell keeps the indent
+ * without reintroducing a wrapper `td`.
+ */
+const rowIndent = css`
+  tbody tr[data-depth] > *:first-of-type {
+    padding-left: var(--dt-row-indent, 0);
+  }
+`;
 
 export interface DataTableProps<D extends object> {
   columns: (ColumnDef<D> & { name: string })[];
@@ -224,7 +239,7 @@ export default typedMemo(function DataTable<D extends object>({
   };
 
   const renderTable = () => (
-    <table className={tableClassName}>
+    <table className={tableClassName} css={rowIndent}>
       <thead>
         {renderGroupingHeaders ? renderGroupingHeaders() : null}
         {table.getHeaderGroups().map(headerGroup => (
@@ -253,18 +268,25 @@ export default typedMemo(function DataTable<D extends object>({
       <tbody>
         {rows && rows.length > 0 ? (
           rows.map(row => (
-            <tr role="row" key={row.id}>
-              {row.getVisibleCells().map((cell, idx) => {
-                // Indent only the first cell, by the row's grouping depth.
-                const indent =
-                  idx === 0
-                    ? { paddingLeft: `${row.depth * 20}px` }
-                    : undefined;
-
+            <tr
+              role="row"
+              key={row.id}
+              // The indent rides on the row and is applied by `rowIndent`;
+              // see the note there for why it cannot ride on the cell.
+              data-depth={row.depth || undefined}
+              style={
+                row.depth
+                  ? ({
+                      '--dt-row-indent': `${row.depth * 20}px`,
+                    } as CSSProperties)
+                  : undefined
+              }
+            >
+              {row.getVisibleCells().map(cell => {
                 // group row, group column: renders a div, so it needs a td
                 if (cell.getIsGrouped()) {
                   return (
-                    <td key={cell.id} style={indent}>
+                    <td key={cell.id}>
                       <div style={{ display: 'flex' }}>
                         <div
                           onClick={row.getToggleExpandedHandler()}
@@ -281,13 +303,13 @@ export default typedMemo(function DataTable<D extends object>({
                 // non-group column on a group row → show nothing, but keep the
                 // cell so the row still lines up with its header
                 if (cell.getIsPlaceholder()) {
-                  return <td key={cell.id} style={indent} />;
+                  return <td key={cell.id} />;
                 }
 
                 // aggregated child values → aggregated output; normal leaf cell
-                // otherwise. Both go through the column's own renderer, which is
-                // already a `styled.td` - wrapping it here would nest one td
-                // inside another, so the indent is merged onto it instead.
+                // otherwise. Both go through the column's own renderer, which
+                // is already a `styled.td`, so returning it as-is is what keeps
+                // one td per cell instead of two.
                 const rendered = cell.getIsAggregated()
                   ? flexRender(
                       cell.column.columnDef.aggregatedCell ??
@@ -308,20 +330,10 @@ export default typedMemo(function DataTable<D extends object>({
 
                 if (!isValidElement(rendered)) {
                   // A renderer that returns a bare value still needs a cell.
-                  return (
-                    <td key={cell.id} style={indent}>
-                      {rendered}
-                    </td>
-                  );
+                  return <td key={cell.id}>{rendered}</td>;
                 }
 
-                const element = rendered as ReactElement<{
-                  style?: CSSProperties;
-                }>;
-                return cloneElement(element, {
-                  key: cell.id,
-                  style: { ...element.props.style, ...indent },
-                });
+                return cloneElement(rendered as ReactElement, { key: cell.id });
               })}
             </tr>
           ))
