@@ -98,9 +98,13 @@ export default styled.div`
      *
      * This replaces the cell's own padding rather than adding to it, so depth 1
      * is exactly 20px, not 20px + 0.3rem.
+     *
+     * No \`var()\` fallback: \`data-depth\` and \`--dt-row-indent\` are set under the
+     * same condition in \`DataTable.tsx\`, so the selector cannot match a row that
+     * lacks the property, and a fallback would read as load-bearing.
      */
     tbody tr[data-depth] > *:first-child {
-      padding-left: var(--dt-row-indent, 0);
+      padding-left: var(--dt-row-indent);
     }
 
     /* Bootstrap-like bordered table styles */

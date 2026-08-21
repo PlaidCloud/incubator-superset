@@ -507,63 +507,75 @@ describe('plugin-chart-table', () => {
     });
   });
 
+  const cellBarProps = (mutate: (props: any) => void) => {
+    const props = transformProps({
+      ...testData.raw,
+      rawFormData: { ...testData.raw.rawFormData },
+    });
+    mutate(props);
+    return props;
+  };
+
+  test('renders cell bars for metric and percent-metric columns, and only when toggled on', () => {
+    // Split out of the test below, which `test.failing` inverts wholesale: the
+    // cell-bar behaviour is the real subject and was being lost along with the
+    // class-hash assertion that broke. Scoped to each render's own container,
+    // because the original queried `document` and accumulated earlier renders.
+    const renderWith = (mutate: (props: any) => void) =>
+      render(
+        ProviderWrapper({
+          children: <TableChart {...cellBarProps(mutate)} sticky={false} />,
+        }),
+      ).container;
+
+    const asMetric = renderWith(p => {
+      p.columns[0].isMetric = true;
+    });
+    expect(asMetric.querySelectorAll('div.cell-bar').length).toBeGreaterThan(0);
+    asMetric
+      .querySelectorAll('div.cell-bar')
+      .forEach(cell => expect(cell).toHaveClass('positive'));
+
+    const asPercentMetric = renderWith(p => {
+      p.columns[0].isPercentMetric = true;
+    });
+    expect(
+      asPercentMetric.querySelectorAll('div.cell-bar').length,
+    ).toBeGreaterThan(0);
+    asPercentMetric
+      .querySelectorAll('div.cell-bar')
+      .forEach(cell => expect(cell).toHaveClass('positive'));
+
+    const toggledOff = renderWith(p => {
+      p.columns[0].isMetric = true;
+      p.showCellBars = false;
+    });
+    expect(toggledOff.querySelectorAll('div.cell-bar')).toHaveLength(0);
+  });
+
   // Asserts an emotion class hash that fork drift invalidated: the cells carry
   // `test-7m1686`, not `test-c7w8t3`. Repairable by swapping the string, but a
-  // hash is the wrong assertion — tracked as sc-25404.
+  // hash is the wrong assertion — tracked as sc-25404. Only the hash is pinned
+  // here; the cell-bar behaviour it used to carry lives in the test above.
   test.failing(
-    'render cell bars properly, and only when it is toggled on in both regular and percent metrics',
+    'pins the cell class hash asserted with cell bars toggled off (sc-25404)',
     () => {
-      const props = transformProps({
-        ...testData.raw,
-        rawFormData: { ...testData.raw.rawFormData },
-      });
-
-      props.columns[0].isMetric = true;
-
-      render(
+      const { container } = render(
         ProviderWrapper({
-          children: <TableChart {...props} sticky={false} />,
+          children: (
+            <TableChart
+              {...cellBarProps(p => {
+                p.columns[0].isMetric = true;
+                p.showCellBars = false;
+              })}
+              sticky={false}
+            />
+          ),
         }),
       );
-      let cells = document.querySelectorAll('div.cell-bar');
-      cells.forEach(cell => {
-        expect(cell).toHaveClass('positive');
-      });
-      props.columns[0].isMetric = false;
-      props.columns[0].isPercentMetric = true;
 
-      render(
-        ProviderWrapper({
-          children: <TableChart {...props} sticky={false} />,
-        }),
-      );
-      cells = document.querySelectorAll('div.cell-bar');
-      cells.forEach(cell => {
-        expect(cell).toHaveClass('positive');
-      });
-
-      props.showCellBars = false;
-
-      render(
-        ProviderWrapper({
-          children: <TableChart {...props} sticky={false} />,
-        }),
-      );
-      cells = document.querySelectorAll('td');
-
-      cells.forEach(cell => {
-        expect(cell).toHaveClass('test-c7w8t3');
-      });
-
-      props.columns[0].isPercentMetric = false;
-      props.columns[0].isMetric = true;
-
-      render(
-        ProviderWrapper({
-          children: <TableChart {...props} sticky={false} />,
-        }),
-      );
-      cells = document.querySelectorAll('td');
+      const cells = container.querySelectorAll('td');
+      expect(cells.length).toBeGreaterThan(0);
       cells.forEach(cell => {
         expect(cell).toHaveClass('test-c7w8t3');
       });
