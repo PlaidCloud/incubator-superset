@@ -285,10 +285,10 @@ describe('plugin-chart-table', () => {
       expect(cells[4]).toHaveTextContent('2.47k');
     });
 
-    // `th[1]` is the inner header cell: DataTable still wraps each header in
-    // a `th` that is already a `th`. Tracked as sc-25372; kept failing rather
-    // than adapted so the defect stays visible.
-    test.failing('render advanced data with currencies', () => {
+    // `th[1]` is the second column. It only reads that way because the header
+    // no longer nests (sc-25372); while it did, `th[1]` was column 0's inner
+    // header and this asserted 'name'.
+    test('render advanced data with currencies', () => {
       render(
         ProviderWrapper({
           children: (
@@ -308,8 +308,7 @@ describe('plugin-chart-table', () => {
       expect(cells[4]).toHaveTextContent('$ 2.47k');
     });
 
-    // Same nested-header defect as above — sc-25372.
-    test.failing('render data with a bigint value in a raw record mode', () => {
+    test('render data with a bigint value in a raw record mode', () => {
       render(
         ProviderWrapper({
           children: (
@@ -593,10 +592,8 @@ describe('plugin-chart-table', () => {
     );
 
     expect(container.querySelector('tfoot')).toBeInTheDocument();
-    // `th th` is deliberately not asserted: the header still nests, tracked
-    // as sc-25372. Widen this selector once that lands.
     expect(
-      [...container.querySelectorAll('td td, td th, th td')].map(
+      [...container.querySelectorAll('td td, td th, th td, th th')].map(
         el => `${el.parentElement?.tagName}>${el.tagName}`,
       ),
     ).toEqual([]);
@@ -638,6 +635,33 @@ describe('plugin-chart-table', () => {
         [...tr.childNodes].every(n => n.nodeType === Node.ELEMENT_NODE),
       ).toBe(true);
     });
+  });
+
+  test('the header row keeps one element cell per column (sc-25372)', () => {
+    // Same shape assertion as the body gate, and for the same reason: nesting
+    // is only half the defect. Unwrapping a cell that carries behaviour the
+    // inner element does not can make the cell vanish instead, which a
+    // nesting-only assertion passes. The invariant that catches both is that
+    // the header row and a body row describe the same number of columns.
+    const { container } = render(
+      ProviderWrapper({
+        children: (
+          <TableChart {...transformProps(testData.basic)} sticky={false} />
+        ),
+      }),
+    );
+
+    const headerCells = container.querySelectorAll('thead tr:last-of-type > *');
+    const bodyCells = container.querySelectorAll('tbody tr:first-of-type > *');
+
+    expect(bodyCells.length).toBeGreaterThan(0);
+    expect(headerCells).toHaveLength(bodyCells.length);
+
+    // `> *` counts elements; `childNodes` counts text too. Equal lengths is
+    // what rules out a renderer's bare string landing straight in the `tr`.
+    const headerNodes =
+      container.querySelector('thead tr:last-of-type')?.childNodes ?? [];
+    expect([...headerNodes]).toHaveLength(headerCells.length);
   });
 
   test('the grouped-row indent rule ships in the stylesheet (sc-25312)', () => {
