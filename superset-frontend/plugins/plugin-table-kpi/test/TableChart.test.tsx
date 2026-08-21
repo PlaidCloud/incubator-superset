@@ -506,37 +506,62 @@ describe('plugin-chart-table', () => {
     });
   });
 
-  const cellBarProps = (mutate: (props: any) => void) => {
+  // `testData.basic`, and the column is looked up by key rather than by index.
+  // Both matter, because `valueRange` is gated on
+  // `(isMetric || isRawRecords || isPercentMetric)` (TableChart.tsx):
+  //   - under `testData.raw`, `isRawRecords` alone satisfies it, so setting
+  //     `isMetric` changes nothing;
+  //   - under `testData.advanced`, `sum__num` is already a metric and
+  //     `%pct_nice` already a percent metric, so bars appear from columns the
+  //     test never touches - and its `columns[0]` is `name`, which is not
+  //     numeric and produces no bar either way.
+  // `basic` is the only fixture with a numeric, non-metric column and
+  // `isRawRecords` false, so here the flag is what decides.
+  const cellBarProps = (mutate: (column: any, props: any) => void) => {
     const props = transformProps({
-      ...testData.raw,
-      rawFormData: { ...testData.raw.rawFormData },
+      ...testData.basic,
+      rawFormData: { ...testData.basic.rawFormData },
     });
-    mutate(props);
+    const column = props.columns.find((c: any) => c.key === 'sum__num');
+    expect(column).toBeDefined();
+    // `transformProps` hands back the *same* column objects on every call
+    // (verified: identity holds across two calls), so a flag set by one case
+    // leaks into the next and makes the following mutation inert. Reset before
+    // mutating so each case stands on its own.
+    column.isMetric = false;
+    column.isPercentMetric = false;
+    mutate(column, props);
     return props;
   };
 
   test('renders cell bars for metric and percent-metric columns, and only when toggled on', () => {
-    // Split out of the test below, which `test.failing` inverts wholesale: the
-    // cell-bar behaviour is the real subject and was being lost along with the
-    // class-hash assertion that broke. Scoped to each render's own container,
-    // because the original queried `document` and accumulated earlier renders.
-    const renderWith = (mutate: (props: any) => void) =>
+    // Scoped to each render's own container: the original queried `document`
+    // and accumulated earlier renders. The emotion class hash this test used to
+    // pin is gone (sc-25404) - it changed whenever `StyledCell` changed and
+    // never expressed the behaviour, which is the cell bars themselves.
+    const renderWith = (mutate: (column: any, props: any) => void) =>
       render(
         ProviderWrapper({
           children: <TableChart {...cellBarProps(mutate)} sticky={false} />,
         }),
       ).container;
 
-    const asMetric = renderWith(p => {
-      p.columns[0].isMetric = true;
+    // Baseline first: neither flag set, so nothing satisfies the gate. Without
+    // this the three cases below cannot tell "the flag turned bars on" from
+    // "bars were on anyway".
+    const neither = renderWith(() => {});
+    expect(neither.querySelectorAll('div.cell-bar')).toHaveLength(0);
+
+    const asMetric = renderWith(column => {
+      column.isMetric = true;
     });
     expect(asMetric.querySelectorAll('div.cell-bar').length).toBeGreaterThan(0);
     asMetric
       .querySelectorAll('div.cell-bar')
       .forEach(cell => expect(cell).toHaveClass('positive'));
 
-    const asPercentMetric = renderWith(p => {
-      p.columns[0].isPercentMetric = true;
+    const asPercentMetric = renderWith(column => {
+      column.isPercentMetric = true;
     });
     expect(
       asPercentMetric.querySelectorAll('div.cell-bar').length,
@@ -545,41 +570,12 @@ describe('plugin-chart-table', () => {
       .querySelectorAll('div.cell-bar')
       .forEach(cell => expect(cell).toHaveClass('positive'));
 
-    const toggledOff = renderWith(p => {
-      p.columns[0].isMetric = true;
-      p.showCellBars = false;
+    const toggledOff = renderWith((column, props) => {
+      column.isMetric = true;
+      props.showCellBars = false;
     });
     expect(toggledOff.querySelectorAll('div.cell-bar')).toHaveLength(0);
   });
-
-  // Asserts an emotion class hash that fork drift invalidated: the cells carry
-  // `test-7m1686`, not `test-c7w8t3`. Repairable by swapping the string, but a
-  // hash is the wrong assertion — tracked as sc-25404. Only the hash is pinned
-  // here; the cell-bar behaviour it used to carry lives in the test above.
-  test.failing(
-    'pins the cell class hash asserted with cell bars toggled off (sc-25404)',
-    () => {
-      const { container } = render(
-        ProviderWrapper({
-          children: (
-            <TableChart
-              {...cellBarProps(p => {
-                p.columns[0].isMetric = true;
-                p.showCellBars = false;
-              })}
-              sticky={false}
-            />
-          ),
-        }),
-      );
-
-      const cells = container.querySelectorAll('td');
-      expect(cells.length).toBeGreaterThan(0);
-      cells.forEach(cell => {
-        expect(cell).toHaveClass('test-c7w8t3');
-      });
-    },
-  );
 
   // `row_grouping` puts the table in aggregate mode: group rows are depth 0 and
   // render immediately, and on a group row every non-grouping column is
