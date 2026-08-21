@@ -589,4 +589,42 @@ describe('plugin-chart-table', () => {
       ),
     ).toEqual([]);
   });
+
+  test('every body row keeps one element cell per column, grouped rows included (sc-25312)', () => {
+    // Asserting *shape* rather than nesting, because a cell that disappears
+    // entirely passes a nesting-only assertion. `row_grouping` puts the table in
+    // aggregate mode: group rows are depth 0 and render immediately, and on a
+    // group row every non-grouping column is aggregated - the one branch no
+    // other fixture reaches.
+    const grouped = {
+      ...testData.basic,
+      rawFormData: {
+        ...testData.basic.rawFormData,
+        row_grouping: ['name'],
+      },
+    };
+
+    const { container } = render(
+      ProviderWrapper({
+        children: <TableChart {...transformProps(grouped)} sticky={false} />,
+      }),
+    );
+
+    // Direct children only: the header still nests `th` inside `th`
+    // (sc-25372), so a descendant selector counts every column twice.
+    const headerCount = container.querySelectorAll(
+      'thead tr:last-of-type > th',
+    ).length;
+    expect(headerCount).toBeGreaterThan(0);
+
+    const rows = [...container.querySelectorAll('tbody tr')];
+    expect(rows.length).toBeGreaterThan(0);
+
+    rows.forEach(tr => {
+      expect(tr.children).toHaveLength(headerCount);
+      expect(
+        [...tr.childNodes].every(n => n.nodeType === Node.ELEMENT_NODE),
+      ).toBe(true);
+    });
+  });
 });

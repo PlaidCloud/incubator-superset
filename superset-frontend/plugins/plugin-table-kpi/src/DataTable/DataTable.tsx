@@ -306,27 +306,34 @@ export default typedMemo(function DataTable<D extends object>({
                   return <td key={cell.id} />;
                 }
 
-                // aggregated child values → aggregated output; normal leaf cell
-                // otherwise. Both go through the column's own renderer, which
-                // is already a `styled.td`, so returning it as-is is what keeps
-                // one td per cell instead of two.
-                const rendered = cell.getIsAggregated()
-                  ? flexRender(
-                      cell.column.columnDef.aggregatedCell ??
-                        cell.column.columnDef.cell,
-                      {
+                // aggregated value on a group row → needs a cell of its own.
+                // table-core supplies a default `aggregatedCell` on every
+                // column (`ColumnGrouping.getDefaultColumnDef`, a plain
+                // `toString`), so this never reaches the column's `styled.td`
+                // and a `?? columnDef.cell` fallback would never fire. Without
+                // the wrapper the renderer's string lands directly in the `tr`.
+                if (cell.getIsAggregated()) {
+                  return (
+                    <td key={cell.id}>
+                      {flexRender(cell.column.columnDef.aggregatedCell, {
                         getValue: cell.getValue,
                         row,
                         column: cell.column,
                         table,
-                      },
-                    )
-                  : flexRender(cell.column.columnDef.cell, {
-                      getValue: cell.getValue,
-                      row,
-                      column: cell.column,
-                      table,
-                    });
+                      })}
+                    </td>
+                  );
+                }
+
+                // normal leaf cell → the column's own renderer, which is
+                // already a `styled.td`, so returning it as-is is what keeps
+                // one td per cell instead of two.
+                const rendered = flexRender(cell.column.columnDef.cell, {
+                  getValue: cell.getValue,
+                  row,
+                  column: cell.column,
+                  table,
+                });
 
                 // `flexRender` hands back `columnDef.cell` untouched when it
                 // is not a component, and a plain string or number is legal
