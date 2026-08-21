@@ -2007,6 +2007,20 @@ class SqlaTable(
         For virtual datasets, RLS predicates are included in the cache key to ensure
         users with different RLS rules get different cached results.
 
+        The SQL is rendered before it is parsed - as ``get_from_clause()`` does on
+        the execution path - and with ``self.template_params_dict`` as context, as
+        ``get_virtual_table_metadata()`` does. Jinja is a supported feature of
+        virtual datasets and raw ``{% %}`` is not valid SQL, so an unrendered
+        template reaches sqlglot as text and raises, taking every chart on the
+        dataset down with it.
+
+        Context this path cannot supply - ``{{ from_dttm }}``, ``{{ row_limit }}``
+        and the rest of the execution-time kwargs - deliberately survives the render
+        as an unresolved tag and dies at the parser. Do not wrap that parse in a
+        ``try/except``: returning ``[]`` would give a restricted user the cache key
+        of an unrestricted one, which is the hazard ``superset/utils/rls.py``
+        documents at length.
+
         :param query_obj: query object to analyze
         :return: The extra cache keys
         """
@@ -2025,12 +2039,13 @@ class SqlaTable(
         if self.is_virtual and self.sql:
             default_schema = self.database.get_default_schema(self.catalog)
             rls_predicates = collect_rls_predicates_for_sql(
-                self.sql,
+                self.get_rendered_sql(
+                    self.get_template_processor(**self.template_params_dict)
+                ),
                 self.database,
                 self.catalog,
                 self.schema or default_schema or "",
             )
-            # Add each predicate as a separate cache key component
             extra_cache_keys.extend(rls_predicates)
 
         return list(set(extra_cache_keys))

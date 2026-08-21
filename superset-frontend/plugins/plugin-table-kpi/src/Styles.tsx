@@ -83,6 +83,30 @@ export default styled.div`
       padding: 0.3rem;
     }
 
+    /*
+     * Grouped rows are indented by depth. The indent cannot be passed to the
+     * cell itself: \`flexRender\` builds an element for the column's renderer
+     * component, so a \`style\` handed to it never reaches the \`td\` in the DOM.
+     * Carrying the depth on the row and letting CSS reach the first cell keeps
+     * the indent without reintroducing a wrapper \`td\`.
+     *
+     * It lives here rather than on a \`css\` prop because \`styled\` works in
+     * every toolchain this package is built with; the \`css\` prop needs
+     * Emotion's jsx factory, which only swc installs here, so under Babel
+     * (Jest, and \`lib\`/\`esm\`) the rule would silently not exist. Keeping the
+     * \`table\` a real \`table\` also leaves \`useSticky\`'s element check intact.
+     *
+     * This replaces the cell's own padding rather than adding to it, so depth 1
+     * is exactly 20px, not 20px + 0.3rem.
+     *
+     * No \`var()\` fallback: \`data-depth\` and \`--dt-row-indent\` are set under the
+     * same condition in \`DataTable.tsx\`, so the selector cannot match a row that
+     * lacks the property, and a fallback would read as load-bearing.
+     */
+    tbody tr[data-depth] > *:first-child {
+      padding-left: var(--dt-row-indent);
+    }
+
     /* Bootstrap-like bordered table styles */
     table.table-bordered {
       border: 1px solid ${theme.colorSplit};
