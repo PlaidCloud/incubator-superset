@@ -19,7 +19,6 @@
 import {
   useRef,
   ReactNode,
-  ReactElement,
   HTMLProps,
   MutableRefObject,
   CSSProperties,
@@ -43,7 +42,6 @@ import {
   flexRender,
   getGroupedRowModel,
 } from '@tanstack/react-table';
-import { css } from '@apache-superset/core/theme';
 import { typedMemo } from '@superset-ui/core';
 
 import GlobalFilter, { GlobalFilterProps } from './components/GlobalFilter';
@@ -53,19 +51,6 @@ import SelectPageSize, {
 } from './components/SelectPageSize';
 import SimplePagination from './components/Pagination';
 import { PAGE_SIZE_OPTIONS } from '../consts';
-
-/**
- * Grouped rows are indented by depth. The indent cannot be passed to the cell
- * itself: `flexRender` builds an element for the column's renderer component,
- * so a `style` handed to it never reaches the `td` in the DOM. Carrying the
- * depth on the row and letting CSS reach the first cell keeps the indent
- * without reintroducing a wrapper `td`.
- */
-const rowIndent = css`
-  tbody tr[data-depth] > *:first-of-type {
-    padding-left: var(--dt-row-indent, 0);
-  }
-`;
 
 export interface DataTableProps<D extends object> {
   columns: (ColumnDef<D> & { name: string })[];
@@ -239,7 +224,7 @@ export default typedMemo(function DataTable<D extends object>({
   };
 
   const renderTable = () => (
-    <table className={tableClassName} css={rowIndent}>
+    <table className={tableClassName}>
       <thead>
         {renderGroupingHeaders ? renderGroupingHeaders() : null}
         {table.getHeaderGroups().map(headerGroup => (
@@ -271,7 +256,7 @@ export default typedMemo(function DataTable<D extends object>({
             <tr
               role="row"
               key={row.id}
-              // The indent rides on the row and is applied by `rowIndent`;
+              // The indent rides on the row and is applied by `Styles.tsx`;
               // see the note there for why it cannot ride on the cell.
               data-depth={row.depth || undefined}
               style={
@@ -345,7 +330,7 @@ export default typedMemo(function DataTable<D extends object>({
                   return <td key={cell.id}>{rendered}</td>;
                 }
 
-                return cloneElement(rendered as ReactElement, { key: cell.id });
+                return cloneElement(rendered, { key: cell.id });
               })}
             </tr>
           ))
@@ -382,7 +367,7 @@ export default typedMemo(function DataTable<D extends object>({
                   return <td key={header.id}>{rendered}</td>;
                 }
 
-                return cloneElement(rendered as ReactElement, {
+                return cloneElement(rendered, {
                   key: header.id,
                 });
               })}

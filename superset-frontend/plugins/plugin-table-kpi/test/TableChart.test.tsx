@@ -627,4 +627,33 @@ describe('plugin-chart-table', () => {
       ).toBe(true);
     });
   });
+
+  test('the grouped-row indent rule ships in the stylesheet (sc-25312)', () => {
+    // The indent moved from JS to CSS, so the only thing that can regress
+    // silently is the rule not being emitted at all. It has to live somewhere
+    // `styled` handles: the `css` prop needs Emotion's jsx factory, which this
+    // repo installs through swc only - `babel.config.js` has no `importSource`
+    // and there is no `@emotion/babel-preset-css-prop`, so under Jest the prop
+    // is inert and the rule never reaches the document.
+    render(
+      ProviderWrapper({
+        children: (
+          <TableChart {...transformProps(testData.basic)} sticky={false} />
+        ),
+      }),
+    );
+
+    const cssText = [...document.querySelectorAll('style')]
+      .flatMap(el => {
+        try {
+          return [...(el.sheet?.cssRules ?? [])].map(r => r.cssText);
+        } catch {
+          return [el.textContent ?? ''];
+        }
+      })
+      .join('\n');
+
+    expect(cssText).toMatch(/tr\[data-depth\][^{]*first-child/);
+    expect(cssText).toMatch(/--dt-row-indent/);
+  });
 });
