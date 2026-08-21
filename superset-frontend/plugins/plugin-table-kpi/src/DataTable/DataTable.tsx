@@ -24,6 +24,8 @@ import {
   CSSProperties,
   DragEvent,
   useState,
+  cloneElement,
+  isValidElement,
 } from 'react';
 
 import {
@@ -41,6 +43,7 @@ import {
   getGroupedRowModel,
 } from '@tanstack/react-table';
 import { typedMemo } from '@superset-ui/core';
+
 import GlobalFilter, { GlobalFilterProps } from './components/GlobalFilter';
 import SelectPageSize, {
   SelectPageSizeProps,
@@ -250,50 +253,85 @@ export default typedMemo(function DataTable<D extends object>({
       <tbody>
         {rows && rows.length > 0 ? (
           rows.map(row => (
-            <tr role="row" key={row.id}>
-              {row.getVisibleCells().map((cell, idx) => (
-                <td
-                  key={cell.id}
-                  style={
-                    idx === 0
-                      ? { paddingLeft: `${row.depth * 20}px` }
-                      : undefined
-                  }
-                >
-                  {/* group row, group column */}
-                  {cell.getIsGrouped() ? (
-                    <div style={{ display: 'flex' }}>
-                      <div
-                        onClick={row.getToggleExpandedHandler()}
-                        style={{ cursor: 'pointer', marginRight: '8px' }}
-                      >
-                        {row.getIsExpanded() ? '▼' : '▶'}
+            <tr
+              role="row"
+              key={row.id}
+              // The indent rides on the row and is applied by `Styles.tsx`;
+              // see the note there for why it cannot ride on the cell.
+              data-depth={row.depth || undefined}
+              style={
+                row.depth
+                  ? ({
+                      '--dt-row-indent': `${row.depth * 20}px`,
+                    } as CSSProperties)
+                  : undefined
+              }
+            >
+              {row.getVisibleCells().map(cell => {
+                // group row, group column: renders a div, so it needs a td
+                if (cell.getIsGrouped()) {
+                  return (
+                    <td key={cell.id}>
+                      <div style={{ display: 'flex' }}>
+                        <div
+                          onClick={row.getToggleExpandedHandler()}
+                          style={{ cursor: 'pointer', marginRight: '8px' }}
+                        >
+                          {row.getIsExpanded() ? '▼' : '▶'}
+                        </div>
+                        {cell.getValue()}
                       </div>
-                      {cell.getValue()}
-                    </div>
-                  ) : cell.getIsPlaceholder() ? null : cell.getIsAggregated() ? ( // non-group column on a group row → show nothing
-                    // aggregated child values → show aggregated output
-                    flexRender(
-                      cell.column.columnDef.aggregatedCell ??
-                        cell.column.columnDef.cell,
-                      {
+                    </td>
+                  );
+                }
+
+                // non-group column on a group row → show nothing, but keep the
+                // cell so the row still lines up with its header
+                if (cell.getIsPlaceholder()) {
+                  return <td key={cell.id} />;
+                }
+
+                // aggregated value on a group row → needs a cell of its own.
+                // table-core supplies a default `aggregatedCell` on every
+                // column (`ColumnGrouping.getDefaultColumnDef`, a plain
+                // `toString`), so this never reaches the column's `styled.td`
+                // and a `?? columnDef.cell` fallback would never fire. Without
+                // the wrapper the renderer's string lands directly in the `tr`.
+                if (cell.getIsAggregated()) {
+                  return (
+                    <td key={cell.id}>
+                      {flexRender(cell.column.columnDef.aggregatedCell, {
                         getValue: cell.getValue,
                         row,
                         column: cell.column,
                         table,
-                      },
-                    )
-                  ) : (
-                    // normal leaf cell
-                    flexRender(cell.column.columnDef.cell, {
-                      getValue: cell.getValue,
-                      row,
-                      column: cell.column,
-                      table,
-                    })
-                  )}
-                </td>
-              ))}
+                      })}
+                    </td>
+                  );
+                }
+
+                // normal leaf cell → the column's own renderer, which is
+                // already a `styled.td`, so returning it as-is is what keeps
+                // one td per cell instead of two.
+                const rendered = flexRender(cell.column.columnDef.cell, {
+                  getValue: cell.getValue,
+                  row,
+                  column: cell.column,
+                  table,
+                });
+
+                // `flexRender` hands back `columnDef.cell` untouched when it
+                // is not a component, and a plain string or number is legal
+                // there in the v8 types. This plugin only ever passes a
+                // function, so this is unreachable today; it is here so a
+                // non-element `cell` still lands inside a td instead of
+                // becoming a bare child of `tr`.
+                if (!isValidElement(rendered)) {
+                  return <td key={cell.id}>{rendered}</td>;
+                }
+
+                return cloneElement(rendered, { key: cell.id });
+              })}
             </tr>
           ))
         ) : (
@@ -309,17 +347,30 @@ export default typedMemo(function DataTable<D extends object>({
         <tfoot>
           {table.getFooterGroups().map(footerGroup => (
             <tr key={footerGroup.id} role="row">
-              {footerGroup.headers.map(header => (
-                <td key={header.id}>
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(header.column.columnDef.footer, {
-                        column: header.column,
-                        header,
-                        table,
-                      })}
-                </td>
-              ))}
+              {footerGroup.headers.map(header => {
+                // Same shape as the body: the footer renderer already returns
+                // a cell of its own (a `th` on the summary column, a `td` on
+                // the rest), so wrapping it produced a cell inside a cell on
+                // every totals row. A column with no footer still needs an
+                // empty cell to keep the row aligned with the header.
+                if (header.isPlaceholder || !header.column.columnDef.footer) {
+                  return <td key={header.id} />;
+                }
+
+                const rendered = flexRender(header.column.columnDef.footer, {
+                  column: header.column,
+                  header,
+                  table,
+                });
+
+                if (!isValidElement(rendered)) {
+                  return <td key={header.id}>{rendered}</td>;
+                }
+
+                return cloneElement(rendered, {
+                  key: header.id,
+                });
+              })}
             </tr>
           ))}
         </tfoot>

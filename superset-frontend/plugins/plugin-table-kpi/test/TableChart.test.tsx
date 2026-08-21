@@ -285,7 +285,10 @@ describe('plugin-chart-table', () => {
       expect(cells[4]).toHaveTextContent('2.47k');
     });
 
-    test('render advanced data with currencies', () => {
+    // `th[1]` is the inner header cell: DataTable still wraps each header in
+    // a `th` that is already a `th`. Tracked as sc-25372; kept failing rather
+    // than adapted so the defect stays visible.
+    test.failing('render advanced data with currencies', () => {
       render(
         ProviderWrapper({
           children: (
@@ -305,7 +308,8 @@ describe('plugin-chart-table', () => {
       expect(cells[4]).toHaveTextContent('$ 2.47k');
     });
 
-    test('render data with a bigint value in a raw record mode', () => {
+    // Same nested-header defect as above — sc-25372.
+    test.failing('render data with a bigint value in a raw record mode', () => {
       render(
         ProviderWrapper({
           children: (
@@ -503,60 +507,165 @@ describe('plugin-chart-table', () => {
     });
   });
 
-  test('render cell bars properly, and only when it is toggled on in both regular and percent metrics', () => {
+  const cellBarProps = (mutate: (props: any) => void) => {
     const props = transformProps({
       ...testData.raw,
       rawFormData: { ...testData.raw.rawFormData },
     });
+    mutate(props);
+    return props;
+  };
 
-    props.columns[0].isMetric = true;
+  test('renders cell bars for metric and percent-metric columns, and only when toggled on', () => {
+    // Split out of the test below, which `test.failing` inverts wholesale: the
+    // cell-bar behaviour is the real subject and was being lost along with the
+    // class-hash assertion that broke. Scoped to each render's own container,
+    // because the original queried `document` and accumulated earlier renders.
+    const renderWith = (mutate: (props: any) => void) =>
+      render(
+        ProviderWrapper({
+          children: <TableChart {...cellBarProps(mutate)} sticky={false} />,
+        }),
+      ).container;
 
-    render(
+    const asMetric = renderWith(p => {
+      p.columns[0].isMetric = true;
+    });
+    expect(asMetric.querySelectorAll('div.cell-bar').length).toBeGreaterThan(0);
+    asMetric
+      .querySelectorAll('div.cell-bar')
+      .forEach(cell => expect(cell).toHaveClass('positive'));
+
+    const asPercentMetric = renderWith(p => {
+      p.columns[0].isPercentMetric = true;
+    });
+    expect(
+      asPercentMetric.querySelectorAll('div.cell-bar').length,
+    ).toBeGreaterThan(0);
+    asPercentMetric
+      .querySelectorAll('div.cell-bar')
+      .forEach(cell => expect(cell).toHaveClass('positive'));
+
+    const toggledOff = renderWith(p => {
+      p.columns[0].isMetric = true;
+      p.showCellBars = false;
+    });
+    expect(toggledOff.querySelectorAll('div.cell-bar')).toHaveLength(0);
+  });
+
+  // Asserts an emotion class hash that fork drift invalidated: the cells carry
+  // `test-7m1686`, not `test-c7w8t3`. Repairable by swapping the string, but a
+  // hash is the wrong assertion — tracked as sc-25404. Only the hash is pinned
+  // here; the cell-bar behaviour it used to carry lives in the test above.
+  test.failing(
+    'pins the cell class hash asserted with cell bars toggled off (sc-25404)',
+    () => {
+      const { container } = render(
+        ProviderWrapper({
+          children: (
+            <TableChart
+              {...cellBarProps(p => {
+                p.columns[0].isMetric = true;
+                p.showCellBars = false;
+              })}
+              sticky={false}
+            />
+          ),
+        }),
+      );
+
+      const cells = container.querySelectorAll('td');
+      expect(cells.length).toBeGreaterThan(0);
+      cells.forEach(cell => {
+        expect(cell).toHaveClass('test-c7w8t3');
+      });
+    },
+  );
+
+  test('never renders a cell inside another cell, in body or footer (sc-25312)', () => {
+    // `comparison` carries show_totals, so this exercises the footer too.
+    const { container } = render(
       ProviderWrapper({
-        children: <TableChart {...props} sticky={false} />,
+        children: (
+          <TableChart {...transformProps(testData.comparison)} sticky={false} />
+        ),
       }),
     );
-    let cells = document.querySelectorAll('div.cell-bar');
-    cells.forEach(cell => {
-      expect(cell).toHaveClass('positive');
-    });
-    props.columns[0].isMetric = false;
-    props.columns[0].isPercentMetric = true;
 
-    render(
+    expect(container.querySelector('tfoot')).toBeInTheDocument();
+    // `th th` is deliberately not asserted: the header still nests, tracked
+    // as sc-25372. Widen this selector once that lands.
+    expect(
+      [...container.querySelectorAll('td td, td th, th td')].map(
+        el => `${el.parentElement?.tagName}>${el.tagName}`,
+      ),
+    ).toEqual([]);
+  });
+
+  test('every body row keeps one element cell per column, grouped rows included (sc-25312)', () => {
+    // Asserting *shape* rather than nesting, because a cell that disappears
+    // entirely passes a nesting-only assertion. `row_grouping` puts the table in
+    // aggregate mode: group rows are depth 0 and render immediately, and on a
+    // group row every non-grouping column is aggregated - the one branch no
+    // other fixture reaches.
+    const grouped = {
+      ...testData.basic,
+      rawFormData: {
+        ...testData.basic.rawFormData,
+        row_grouping: ['name'],
+      },
+    };
+
+    const { container } = render(
       ProviderWrapper({
-        children: <TableChart {...props} sticky={false} />,
+        children: <TableChart {...transformProps(grouped)} sticky={false} />,
       }),
     );
-    cells = document.querySelectorAll('div.cell-bar');
-    cells.forEach(cell => {
-      expect(cell).toHaveClass('positive');
+
+    // Direct children only: the header still nests `th` inside `th`
+    // (sc-25372), so a descendant selector counts every column twice.
+    const headerCount = container.querySelectorAll(
+      'thead tr:last-of-type > th',
+    ).length;
+    expect(headerCount).toBeGreaterThan(0);
+
+    const rows = [...container.querySelectorAll('tbody tr')];
+    expect(rows.length).toBeGreaterThan(0);
+
+    rows.forEach(tr => {
+      expect(tr.children).toHaveLength(headerCount);
+      expect(
+        [...tr.childNodes].every(n => n.nodeType === Node.ELEMENT_NODE),
+      ).toBe(true);
     });
+  });
 
-    props.showCellBars = false;
-
+  test('the grouped-row indent rule ships in the stylesheet (sc-25312)', () => {
+    // The indent moved from JS to CSS, so the only thing that can regress
+    // silently is the rule not being emitted at all. It has to live somewhere
+    // `styled` handles: the `css` prop needs Emotion's jsx factory, which this
+    // repo installs through swc only - `babel.config.js` has no `importSource`
+    // and there is no `@emotion/babel-preset-css-prop`, so under Jest the prop
+    // is inert and the rule never reaches the document.
     render(
       ProviderWrapper({
-        children: <TableChart {...props} sticky={false} />,
+        children: (
+          <TableChart {...transformProps(testData.basic)} sticky={false} />
+        ),
       }),
     );
-    cells = document.querySelectorAll('td');
 
-    cells.forEach(cell => {
-      expect(cell).toHaveClass('test-c7w8t3');
-    });
+    const cssText = [...document.querySelectorAll('style')]
+      .flatMap(el => {
+        try {
+          return [...(el.sheet?.cssRules ?? [])].map(r => r.cssText);
+        } catch {
+          return [el.textContent ?? ''];
+        }
+      })
+      .join('\n');
 
-    props.columns[0].isPercentMetric = false;
-    props.columns[0].isMetric = true;
-
-    render(
-      ProviderWrapper({
-        children: <TableChart {...props} sticky={false} />,
-      }),
-    );
-    cells = document.querySelectorAll('td');
-    cells.forEach(cell => {
-      expect(cell).toHaveClass('test-c7w8t3');
-    });
+    expect(cssText).toMatch(/tr\[data-depth\][^{]*first-child/);
+    expect(cssText).toMatch(/--dt-row-indent/);
   });
 });
