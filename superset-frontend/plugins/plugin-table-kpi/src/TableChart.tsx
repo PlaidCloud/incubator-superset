@@ -1008,9 +1008,14 @@ export default function TableChart<D extends DataRecord = DataRecord>(
             </StyledCell>
           );
         },
-        header: ({ column: col }) => (
+        header: ({ column: col, header }) => (
           <th
             id={`header-${column.key}`}
+            // Carried by this `th` rather than by a wrapper one (sc-25372).
+            // Only emitted when it says something: `colSpan` defaults to 1,
+            // and this plugin renders a single header group - grouped headers
+            // come from `renderGroupingHeaders`, a row of their own.
+            {...(header.colSpan > 1 && { colSpan: header.colSpan })}
             title={t('Shift + Click to sort by multiple columns')}
             className={[className, col.getIsSorted() ? 'is-sorted' : ''].join(
               ' ',
