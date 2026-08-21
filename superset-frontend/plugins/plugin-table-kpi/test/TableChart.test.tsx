@@ -17,7 +17,7 @@
  * under the License.
  */
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { ThemeProvider, supersetTheme } from '@apache-superset/core/theme';
 import TableChart from '../src/TableChart';
 import transformProps from '../src/transformProps';
@@ -581,6 +581,18 @@ describe('plugin-chart-table', () => {
     },
   );
 
+  // `row_grouping` puts the table in aggregate mode: group rows are depth 0 and
+  // render immediately, and on a group row every non-grouping column is
+  // aggregated - the one branch no other fixture reaches. Expanding a group is
+  // what reaches depth > 0 and the placeholder branch.
+  const groupedFixture = () => ({
+    ...testData.basic,
+    rawFormData: {
+      ...testData.basic.rawFormData,
+      row_grouping: ['name'],
+    },
+  });
+
   test('never renders a cell inside another cell, in body or footer (sc-25312)', () => {
     // `comparison` carries show_totals, so this exercises the footer too.
     const { container } = render(
@@ -605,17 +617,11 @@ describe('plugin-chart-table', () => {
     // aggregate mode: group rows are depth 0 and render immediately, and on a
     // group row every non-grouping column is aggregated - the one branch no
     // other fixture reaches.
-    const grouped = {
-      ...testData.basic,
-      rawFormData: {
-        ...testData.basic.rawFormData,
-        row_grouping: ['name'],
-      },
-    };
-
     const { container } = render(
       ProviderWrapper({
-        children: <TableChart {...transformProps(grouped)} sticky={false} />,
+        children: (
+          <TableChart {...transformProps(groupedFixture())} sticky={false} />
+        ),
       }),
     );
 
@@ -662,6 +668,56 @@ describe('plugin-chart-table', () => {
     const headerNodes =
       container.querySelector('thead tr:last-of-type')?.childNodes ?? [];
     expect([...headerNodes]).toHaveLength(headerCells.length);
+  });
+
+  test('row_grouping actually groups: the expander glyph is rendered (sc-25372)', () => {
+    // The discriminator. `testData.basic` has three rows and three distinct
+    // `name` values, so a row count is identical grouped or not - if
+    // `row_grouping` ever stopped flowing through, every grouped assertion
+    // below would quietly degrade into a leaf-row check. Only the expander
+    // says grouping applied.
+    const { container } = render(
+      ProviderWrapper({
+        children: (
+          <TableChart {...transformProps(groupedFixture())} sticky={false} />
+        ),
+      }),
+    );
+
+    expect(container).toHaveTextContent('▶');
+  });
+
+  test('expanding a group indents its sub-rows and keeps the row shape (sc-25372)', () => {
+    // Closes the other half of the indent: the stylesheet test proves the rule
+    // is emitted, this proves a row can match it. `expandedGroups` starts empty,
+    // so without a click nothing in the suite ever reaches `depth > 0` - which
+    // also leaves the placeholder branch unexercised, since the grouping column
+    // only becomes a placeholder on a sub-row.
+    const { container } = render(
+      ProviderWrapper({
+        children: (
+          <TableChart {...transformProps(groupedFixture())} sticky={false} />
+        ),
+      }),
+    );
+
+    expect(container.querySelectorAll('tbody tr[data-depth]')).toHaveLength(0);
+
+    const [expander] = screen.getAllByText('▶');
+    fireEvent.click(expander);
+
+    const subRows = container.querySelectorAll('tbody tr[data-depth]');
+    expect(subRows.length).toBeGreaterThan(0);
+    subRows.forEach(tr => {
+      expect(tr.getAttribute('style')).toContain('--dt-row-indent: 20px');
+    });
+
+    // The shape invariant has to survive expansion too: on a sub-row the
+    // grouping column renders through the placeholder branch.
+    const headerCells = container.querySelectorAll('thead tr:last-of-type > *');
+    container.querySelectorAll('tbody tr').forEach(tr => {
+      expect(tr.children).toHaveLength(headerCells.length);
+    });
   });
 
   test('the grouped-row indent rule ships in the stylesheet (sc-25312)', () => {
