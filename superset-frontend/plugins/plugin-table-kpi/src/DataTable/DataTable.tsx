@@ -228,25 +228,42 @@ export default typedMemo(function DataTable<D extends object>({
       <thead>
         {renderGroupingHeaders ? renderGroupingHeaders() : null}
         {table.getHeaderGroups().map(headerGroup => (
-          <tr key={headerGroup.id}>
-            {headerGroup.headers.map(header => (
-              <th
-                key={header.id}
-                colSpan={header.colSpan}
-                onDragStart={onDragStart}
-                onDrop={onDrop}
-                onDragOver={e => e.preventDefault()}
-                onDragEnter={e => e.preventDefault()}
-              >
-                {header.isPlaceholder
-                  ? null
-                  : flexRender(header.column.columnDef.header, {
-                      column: header.column,
-                      header,
-                      table,
-                    })}
-              </th>
-            ))}
+          // The drag handlers belong on the row, not on each cell. The
+          // column's own `header` renderer is already a `th`, so there is no
+          // wrapper left to hang them on, and handing them to `flexRender`
+          // would not work either: it builds the *renderer component's*
+          // element, so DOM props given to it never reach the `th`. Both
+          // handlers read `e.target` and drag events bubble, so the row sees
+          // exactly what the cell saw - which is already how this works, since
+          // the wrapper never carried `data-column-name` either.
+          <tr
+            key={headerGroup.id}
+            onDragStart={onDragStart}
+            onDrop={onDrop}
+            onDragOver={e => e.preventDefault()}
+            onDragEnter={e => e.preventDefault()}
+          >
+            {headerGroup.headers.map(header => {
+              // A placeholder renders nothing, but the row still needs a cell
+              // so it stays aligned with the body.
+              if (header.isPlaceholder) {
+                return <th key={header.id} colSpan={header.colSpan} />;
+              }
+
+              const rendered = flexRender(header.column.columnDef.header, {
+                column: header.column,
+                header,
+                table,
+              });
+
+              // Same guard as the body: a non-component `header` is legal in
+              // the v8 types, and this plugin never passes one.
+              if (!isValidElement(rendered)) {
+                return <th key={header.id}>{rendered}</th>;
+              }
+
+              return cloneElement(rendered, { key: header.id });
+            })}
           </tr>
         ))}
       </thead>
