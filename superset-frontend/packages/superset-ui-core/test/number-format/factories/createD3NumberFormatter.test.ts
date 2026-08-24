@@ -35,6 +35,27 @@ describe('createD3NumberFormatter(config)', () => {
         expect(formatter.format(100)).toEqual('100.00');
       });
     });
+    describe('if it is an SI formatString', () => {
+      test('renders billions with B instead of the SI giga prefix G', () => {
+        const formatter = createD3NumberFormatter({ formatString: '.3s' });
+        expect(formatter.format(6_340_000_000)).toEqual('6.34B');
+      });
+      test('keeps currency prefix and negative parentheses intact', () => {
+        const formatter = createD3NumberFormatter({ formatString: '($.3s' });
+        expect(formatter.format(-6_340_000_000)).toEqual('($6.34B)');
+        expect(formatter.format(6_340_000_000)).toEqual('$6.34B');
+      });
+      test('leaves other SI prefixes untouched', () => {
+        const formatter = createD3NumberFormatter({ formatString: '.3s' });
+        expect(formatter.format(6_340)).toEqual('6.34k');
+        expect(formatter.format(6_340_000)).toEqual('6.34M');
+        expect(formatter.format(6_340_000_000_000)).toEqual('6.34T');
+      });
+      test('does not touch non-SI format strings', () => {
+        const formatter = createD3NumberFormatter({ formatString: '.2f' });
+        expect(formatter.format(6_340_000_000)).toEqual('6340000000.00');
+      });
+    });
     describe('if it is invalid d3 formatString', () => {
       test('The format function displays error message', () => {
         const formatter = createD3NumberFormatter({
