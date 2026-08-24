@@ -16,7 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { formatLocale, FormatLocaleDefinition } from 'd3-format';
+import {
+  formatLocale,
+  formatSpecifier,
+  FormatLocaleDefinition,
+} from 'd3-format';
 import { isRequired } from '../../utils';
 import NumberFormatter from '../NumberFormatter';
 import { NumberFormatFunction } from '../types';
@@ -39,7 +43,17 @@ export default function createD3NumberFormatter(config: {
   let isInvalid = false;
 
   try {
-    formatFunc = formatLocale(locale ?? DEFAULT_D3_FORMAT).format(formatString);
+    const d3Format = formatLocale(locale ?? DEFAULT_D3_FORMAT).format(
+      formatString,
+    );
+    // With the SI type, d3 labels 1e9 with the giga prefix. People read
+    // financial figures as billions, so swap G for B the same way the
+    // smart_number formatter does. The SI prefix always directly follows
+    // the last digit, so the replacement cannot touch currency symbols.
+    formatFunc =
+      formatSpecifier(formatString).type === 's'
+        ? value => d3Format(value).replace(/(\d)G/, '$1B')
+        : d3Format;
   } catch (error) {
     formatFunc = value => `${value} (Invalid format: ${formatString})`;
     isInvalid = true;

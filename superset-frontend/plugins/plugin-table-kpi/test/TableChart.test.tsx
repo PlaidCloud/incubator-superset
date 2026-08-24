@@ -17,7 +17,7 @@
  * under the License.
  */
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { ThemeProvider, supersetTheme } from '@apache-superset/core/theme';
 import TableChart from '../src/TableChart';
 import transformProps from '../src/transformProps';
@@ -285,10 +285,10 @@ describe('plugin-chart-table', () => {
       expect(cells[4]).toHaveTextContent('2.47k');
     });
 
-    // `th[1]` is the inner header cell: DataTable still wraps each header in
-    // a `th` that is already a `th`. Tracked as sc-25372; kept failing rather
-    // than adapted so the defect stays visible.
-    test.failing('render advanced data with currencies', () => {
+    // `th[1]` is the second column. It only reads that way because the header
+    // no longer nests (sc-25372); while it did, `th[1]` was column 0's inner
+    // header and this asserted 'name'.
+    test('render advanced data with currencies', () => {
       render(
         ProviderWrapper({
           children: (
@@ -308,8 +308,7 @@ describe('plugin-chart-table', () => {
       expect(cells[4]).toHaveTextContent('$ 2.47k');
     });
 
-    // Same nested-header defect as above — sc-25372.
-    test.failing('render data with a bigint value in a raw record mode', () => {
+    test('render data with a bigint value in a raw record mode', () => {
       render(
         ProviderWrapper({
           children: (
@@ -507,37 +506,62 @@ describe('plugin-chart-table', () => {
     });
   });
 
-  const cellBarProps = (mutate: (props: any) => void) => {
+  // `testData.basic`, and the column is looked up by key rather than by index.
+  // Both matter, because `valueRange` is gated on
+  // `(isMetric || isRawRecords || isPercentMetric)` (TableChart.tsx):
+  //   - under `testData.raw`, `isRawRecords` alone satisfies it, so setting
+  //     `isMetric` changes nothing;
+  //   - under `testData.advanced`, `sum__num` is already a metric and
+  //     `%pct_nice` already a percent metric, so bars appear from columns the
+  //     test never touches - and its `columns[0]` is `name`, which is not
+  //     numeric and produces no bar either way.
+  // `basic` is the only fixture with a numeric, non-metric column and
+  // `isRawRecords` false, so here the flag is what decides.
+  const cellBarProps = (mutate: (column: any, props: any) => void) => {
     const props = transformProps({
-      ...testData.raw,
-      rawFormData: { ...testData.raw.rawFormData },
+      ...testData.basic,
+      rawFormData: { ...testData.basic.rawFormData },
     });
-    mutate(props);
+    const column = props.columns.find((c: any) => c.key === 'sum__num');
+    expect(column).toBeDefined();
+    // `transformProps` hands back the *same* column objects on every call
+    // (verified: identity holds across two calls), so a flag set by one case
+    // leaks into the next and makes the following mutation inert. Reset before
+    // mutating so each case stands on its own.
+    column.isMetric = false;
+    column.isPercentMetric = false;
+    mutate(column, props);
     return props;
   };
 
   test('renders cell bars for metric and percent-metric columns, and only when toggled on', () => {
-    // Split out of the test below, which `test.failing` inverts wholesale: the
-    // cell-bar behaviour is the real subject and was being lost along with the
-    // class-hash assertion that broke. Scoped to each render's own container,
-    // because the original queried `document` and accumulated earlier renders.
-    const renderWith = (mutate: (props: any) => void) =>
+    // Scoped to each render's own container: the original queried `document`
+    // and accumulated earlier renders. The emotion class hash this test used to
+    // pin is gone (sc-25404) - it changed whenever `StyledCell` changed and
+    // never expressed the behaviour, which is the cell bars themselves.
+    const renderWith = (mutate: (column: any, props: any) => void) =>
       render(
         ProviderWrapper({
           children: <TableChart {...cellBarProps(mutate)} sticky={false} />,
         }),
       ).container;
 
-    const asMetric = renderWith(p => {
-      p.columns[0].isMetric = true;
+    // Baseline first: neither flag set, so nothing satisfies the gate. Without
+    // this the three cases below cannot tell "the flag turned bars on" from
+    // "bars were on anyway".
+    const neither = renderWith(() => {});
+    expect(neither.querySelectorAll('div.cell-bar')).toHaveLength(0);
+
+    const asMetric = renderWith(column => {
+      column.isMetric = true;
     });
     expect(asMetric.querySelectorAll('div.cell-bar').length).toBeGreaterThan(0);
     asMetric
       .querySelectorAll('div.cell-bar')
       .forEach(cell => expect(cell).toHaveClass('positive'));
 
-    const asPercentMetric = renderWith(p => {
-      p.columns[0].isPercentMetric = true;
+    const asPercentMetric = renderWith(column => {
+      column.isPercentMetric = true;
     });
     expect(
       asPercentMetric.querySelectorAll('div.cell-bar').length,
@@ -546,41 +570,24 @@ describe('plugin-chart-table', () => {
       .querySelectorAll('div.cell-bar')
       .forEach(cell => expect(cell).toHaveClass('positive'));
 
-    const toggledOff = renderWith(p => {
-      p.columns[0].isMetric = true;
-      p.showCellBars = false;
+    const toggledOff = renderWith((column, props) => {
+      column.isMetric = true;
+      props.showCellBars = false;
     });
     expect(toggledOff.querySelectorAll('div.cell-bar')).toHaveLength(0);
   });
 
-  // Asserts an emotion class hash that fork drift invalidated: the cells carry
-  // `test-7m1686`, not `test-c7w8t3`. Repairable by swapping the string, but a
-  // hash is the wrong assertion — tracked as sc-25404. Only the hash is pinned
-  // here; the cell-bar behaviour it used to carry lives in the test above.
-  test.failing(
-    'pins the cell class hash asserted with cell bars toggled off (sc-25404)',
-    () => {
-      const { container } = render(
-        ProviderWrapper({
-          children: (
-            <TableChart
-              {...cellBarProps(p => {
-                p.columns[0].isMetric = true;
-                p.showCellBars = false;
-              })}
-              sticky={false}
-            />
-          ),
-        }),
-      );
-
-      const cells = container.querySelectorAll('td');
-      expect(cells.length).toBeGreaterThan(0);
-      cells.forEach(cell => {
-        expect(cell).toHaveClass('test-c7w8t3');
-      });
+  // `row_grouping` puts the table in aggregate mode: group rows are depth 0 and
+  // render immediately, and on a group row every non-grouping column is
+  // aggregated - the one branch no other fixture reaches. Expanding a group is
+  // what reaches depth > 0 and the placeholder branch.
+  const groupedFixture = () => ({
+    ...testData.basic,
+    rawFormData: {
+      ...testData.basic.rawFormData,
+      row_grouping: ['name'],
     },
-  );
+  });
 
   test('never renders a cell inside another cell, in body or footer (sc-25312)', () => {
     // `comparison` carries show_totals, so this exercises the footer too.
@@ -593,10 +600,8 @@ describe('plugin-chart-table', () => {
     );
 
     expect(container.querySelector('tfoot')).toBeInTheDocument();
-    // `th th` is deliberately not asserted: the header still nests, tracked
-    // as sc-25372. Widen this selector once that lands.
     expect(
-      [...container.querySelectorAll('td td, td th, th td')].map(
+      [...container.querySelectorAll('td td, td th, th td, th th')].map(
         el => `${el.parentElement?.tagName}>${el.tagName}`,
       ),
     ).toEqual([]);
@@ -608,17 +613,11 @@ describe('plugin-chart-table', () => {
     // aggregate mode: group rows are depth 0 and render immediately, and on a
     // group row every non-grouping column is aggregated - the one branch no
     // other fixture reaches.
-    const grouped = {
-      ...testData.basic,
-      rawFormData: {
-        ...testData.basic.rawFormData,
-        row_grouping: ['name'],
-      },
-    };
-
     const { container } = render(
       ProviderWrapper({
-        children: <TableChart {...transformProps(grouped)} sticky={false} />,
+        children: (
+          <TableChart {...transformProps(groupedFixture())} sticky={false} />
+        ),
       }),
     );
 
@@ -637,6 +636,83 @@ describe('plugin-chart-table', () => {
       expect(
         [...tr.childNodes].every(n => n.nodeType === Node.ELEMENT_NODE),
       ).toBe(true);
+    });
+  });
+
+  test('the header row keeps one element cell per column (sc-25372)', () => {
+    // Same shape assertion as the body gate, and for the same reason: nesting
+    // is only half the defect. Unwrapping a cell that carries behaviour the
+    // inner element does not can make the cell vanish instead, which a
+    // nesting-only assertion passes. The invariant that catches both is that
+    // the header row and a body row describe the same number of columns.
+    const { container } = render(
+      ProviderWrapper({
+        children: (
+          <TableChart {...transformProps(testData.basic)} sticky={false} />
+        ),
+      }),
+    );
+
+    const headerCells = container.querySelectorAll('thead tr:last-of-type > *');
+    const bodyCells = container.querySelectorAll('tbody tr:first-of-type > *');
+
+    expect(bodyCells.length).toBeGreaterThan(0);
+    expect(headerCells).toHaveLength(bodyCells.length);
+
+    // `> *` counts elements; `childNodes` counts text too. Equal lengths is
+    // what rules out a renderer's bare string landing straight in the `tr`.
+    const headerNodes =
+      container.querySelector('thead tr:last-of-type')?.childNodes ?? [];
+    expect([...headerNodes]).toHaveLength(headerCells.length);
+  });
+
+  test('row_grouping actually groups: the expander glyph is rendered (sc-25372)', () => {
+    // The discriminator. `testData.basic` has three rows and three distinct
+    // `name` values, so a row count is identical grouped or not - if
+    // `row_grouping` ever stopped flowing through, every grouped assertion
+    // below would quietly degrade into a leaf-row check. Only the expander
+    // says grouping applied.
+    const { container } = render(
+      ProviderWrapper({
+        children: (
+          <TableChart {...transformProps(groupedFixture())} sticky={false} />
+        ),
+      }),
+    );
+
+    expect(container).toHaveTextContent('▶');
+  });
+
+  test('expanding a group indents its sub-rows and keeps the row shape (sc-25372)', () => {
+    // Closes the other half of the indent: the stylesheet test proves the rule
+    // is emitted, this proves a row can match it. `expandedGroups` starts empty,
+    // so without a click nothing in the suite ever reaches `depth > 0` - which
+    // also leaves the placeholder branch unexercised, since the grouping column
+    // only becomes a placeholder on a sub-row.
+    const { container } = render(
+      ProviderWrapper({
+        children: (
+          <TableChart {...transformProps(groupedFixture())} sticky={false} />
+        ),
+      }),
+    );
+
+    expect(container.querySelectorAll('tbody tr[data-depth]')).toHaveLength(0);
+
+    const [expander] = screen.getAllByText('▶');
+    fireEvent.click(expander);
+
+    const subRows = container.querySelectorAll('tbody tr[data-depth]');
+    expect(subRows.length).toBeGreaterThan(0);
+    subRows.forEach(tr => {
+      expect(tr.getAttribute('style')).toContain('--dt-row-indent: 20px');
+    });
+
+    // The shape invariant has to survive expansion too: on a sub-row the
+    // grouping column renders through the placeholder branch.
+    const headerCells = container.querySelectorAll('thead tr:last-of-type > *');
+    container.querySelectorAll('tbody tr').forEach(tr => {
+      expect(tr.children).toHaveLength(headerCells.length);
     });
   });
 

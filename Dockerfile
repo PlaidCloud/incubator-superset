@@ -235,10 +235,12 @@ RUN --mount=type=cache,target=${SUPERSET_HOME}/.cache/uv \
 RUN --mount=type=cache,target=${SUPERSET_HOME}/.cache/uv \
     uv pip install -e .
 # Install extras needed at runtime by the deployed image: fastmcp (for
-# `superset mcp run`) and prophet (Predictive Analytics forecasting). Lean is
-# inherited by the ci and showtime stages, so the deployed image gets them too.
+# `superset mcp run`), prophet (Predictive Analytics forecasting), and
+# databricks (databricks-sqlalchemy driver for lakehouse reporting databases).
+# Lean is inherited by the ci and showtime stages, so the deployed image gets
+# them too.
 RUN --mount=type=cache,target=${SUPERSET_HOME}/.cache/uv \
-    uv pip install .[fastmcp,prophet]
+    uv pip install .[fastmcp,prophet,databricks]
 RUN python -m compileall /app/superset
 
 USER superset
