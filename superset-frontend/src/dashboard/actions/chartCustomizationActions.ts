@@ -40,6 +40,7 @@ import {
   SET_IN_SCOPE_STATUS_OF_FILTERS,
 } from './nativeFilters';
 import { SaveFilterChangesType } from '../components/nativeFilters/FiltersConfigModal/types';
+import { isChartCustomizationId } from '../components/nativeFilters/FiltersConfigModal/utils';
 
 const createUpdateChartCustomizationsApi = (id: number) =>
   makeApi<
@@ -133,9 +134,16 @@ export function saveChartCustomization(
         },
       );
 
+      // SET_NATIVE_FILTERS_CONFIG_COMPLETE replaces the whole filters map, so
+      // the payload must carry the native filters too — sending only the
+      // customizations orphans every rendered native filter (sc-25710)
+      const preservedFilters = Object.values(
+        getState().nativeFilters?.filters ?? {},
+      ).filter(item => !isChartCustomizationId(item.id));
+
       dispatch({
         type: SET_NATIVE_FILTERS_CONFIG_COMPLETE,
-        filterChanges: mergedResult,
+        filterChanges: [...preservedFilters, ...mergedResult],
       });
 
       dispatch(
