@@ -35,6 +35,7 @@ import {
   nativeFiltersConfigChanged,
 } from './dashboardInfo';
 import { SaveFilterChangesType } from '../components/nativeFilters/FiltersConfigModal/types';
+import { isChartCustomizationId } from '../components/nativeFilters/FiltersConfigModal/utils';
 
 export const SET_NATIVE_FILTERS_CONFIG_BEGIN =
   'SET_NATIVE_FILTERS_CONFIG_BEGIN';
@@ -89,9 +90,18 @@ export const setFilterConfiguration =
     });
     try {
       const response = await updateFilters(filterChanges);
+
+      // SET_NATIVE_FILTERS_CONFIG_COMPLETE replaces the whole filters map, so
+      // the payload must carry the chart customizations too — sending only the
+      // saved native filters orphans every customization entry the
+      // hover-highlight path still looks up by id (sibling of sc-25710)
+      const preservedCustomizations = Object.values(oldFilters ?? {}).filter(
+        item => isChartCustomizationId(item.id),
+      );
+
       dispatch({
         type: SET_NATIVE_FILTERS_CONFIG_COMPLETE,
-        filterChanges: response.result,
+        filterChanges: [...preservedCustomizations, ...response.result],
       });
       dispatch(nativeFiltersConfigChanged(response.result));
       dispatch(setDataMaskForFilterChangesComplete(filterChanges, oldFilters));
