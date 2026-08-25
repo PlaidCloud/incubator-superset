@@ -57,14 +57,23 @@ const useFilterFocusHighlightStyles = (chartId: number) => {
   const highlightedChartCustomizationId = (nativeFilters as any)
     ?.hoveredChartCustomizationId;
 
-  if (!highlightedFilterId && !highlightedChartCustomizationId) {
+  // the highlighted id may no longer resolve to an entry in the filters map
+  // (e.g. the map was rebuilt while the id was held) — treat it as nothing
+  // highlighted instead of dimming or crashing the charts
+  const highlightedFilter = highlightedFilterId
+    ? (nativeFilters.filters[highlightedFilterId as string] as
+        | Filter
+        | undefined)
+    : undefined;
+
+  if (!highlightedFilter && !highlightedChartCustomizationId) {
     return EMPTY;
   }
 
-  if (highlightedFilterId) {
+  if (highlightedFilter) {
     const relatedCharts = getRelatedCharts(
       highlightedFilterId as string,
-      nativeFilters.filters[highlightedFilterId as string] as Filter,
+      highlightedFilter,
       slices,
     );
 

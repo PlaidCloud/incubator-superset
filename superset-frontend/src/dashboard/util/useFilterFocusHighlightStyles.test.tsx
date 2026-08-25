@@ -67,8 +67,8 @@ describe('useFilterFocusHighlightStyles', () => {
       nativeFilters: {
         focusedFilterId: 'test-filter',
         filters: {
-          otherId: {
-            id: 'NATIVE_FILTER-otherId',
+          'test-filter': {
+            id: 'NATIVE_FILTER-test-filter',
             chartsInScope: [],
           },
         },
@@ -88,8 +88,8 @@ describe('useFilterFocusHighlightStyles', () => {
       nativeFilters: {
         hoveredFilterId: 'test-filter',
         filters: {
-          otherId: {
-            id: 'NATIVE_FILTER-otherId',
+          'test-filter': {
+            id: 'NATIVE_FILTER-test-filter',
             chartsInScope: [],
           },
         },
@@ -145,5 +145,25 @@ describe('useFilterFocusHighlightStyles', () => {
 
     const styles = getComputedStyle(container);
     expect(parseFloat(styles.opacity)).toBe(1);
+  });
+
+  test('should return no style and skip getRelatedCharts when the hovered filter is missing from the filters map', async () => {
+    mockGetRelatedCharts.mockClear();
+    mockGetRelatedCharts.mockImplementation((...args) =>
+      jest.requireActual('./getRelatedCharts').getRelatedCharts(...args),
+    );
+    const store = createMockStore({
+      nativeFilters: {
+        hoveredFilterId: 'NATIVE_FILTER-notInMap',
+        filters: {},
+      },
+    });
+    renderWrapper(10, store);
+
+    const container = screen.getByTestId('test-component');
+
+    const styles = getComputedStyle(container);
+    expect(styles.opacity).toBeFalsy();
+    expect(mockGetRelatedCharts).not.toHaveBeenCalled();
   });
 });
