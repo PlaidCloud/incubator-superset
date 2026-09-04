@@ -23,6 +23,9 @@ Databend's SQL is close to ClickHouse, but it also accepts a *leading*
 ``SETTINGS (max_execute_time_in_seconds=300) SELECT ...``, which PlaidCloud
 emits as a query-timeout wrapper. No built-in sqlglot dialect parses that form,
 so it is absorbed here and re-emitted verbatim on generation.
+
+Basing the dialect on ClickHouse also inherits ClickHouse's *generation*, which
+is not always what Databend accepts. Divergences are overridden below.
 """
 
 from __future__ import annotations
@@ -65,6 +68,22 @@ class Databend(ClickHouse):
             return statement
 
     class Generator(ClickHouse.Generator):
+        # ClickHouse renders ``exp.TimeToStr`` as ``formatDateTime(...)``, and its
+        # parser folds both ``DATE_FORMAT`` and ``formatDateTime`` onto that node
+        # -- so any parse/generate round-trip rewrote a chart's ``DATE_FORMAT``
+        # into ``formatDateTime``. Superset regenerates every adhoc column and
+        # metric that way (``sanitize_clause`` in superset/sql/parse.py, called
+        # from ``_process_sql_expression`` in superset/models/helpers.py), so the
+        # rewrite reached Databend on every compile and it rejects the name.
+        # Databend's own error names the replacement: "no function matches the
+        # given name: 'formatdatetime', do you mean 'date_format'?".
+        TRANSFORMS = {
+            **ClickHouse.Generator.TRANSFORMS,
+            exp.TimeToStr: lambda self, e: self.func(
+                "DATE_FORMAT", e.this, self.format_time(e), e.args.get("zone")
+            ),
+        }
+
         def generate(self, expression: exp.Expression, copy: bool = True) -> str:
             # Re-emit the absorbed leading ``SETTINGS (...)`` at the statement
             # root, so it survives regardless of the root's type — a bare

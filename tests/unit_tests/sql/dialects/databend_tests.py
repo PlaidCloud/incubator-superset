@@ -163,3 +163,66 @@ def test_leading_settings_transparent_to_table_extraction() -> None:
 def test_no_regression_on_known_good_statements(sql: str) -> None:
     """Statements that already parse under the generic dialect still parse."""
     assert sqlglot.parse_one(sql, Databend) is not None
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT DATE_FORMAT(\"d\", '%m/%d')",
+        "SELECT DATE_FORMAT(DATE_TRUNC('week', \"d\"), '%m/%d')",
+        (
+            "SELECT CONCAT(DATE_FORMAT(DATE_TRUNC('week', \"d\"), '%m/%d'), ' - ', "
+            "DATE_FORMAT(DATE_TRUNC('week', \"d\") + INTERVAL '6' DAY, '%m/%d'))"
+        ),
+    ],
+)
+def test_date_format_is_not_rewritten_to_format_date_time(sql: str) -> None:
+    """
+    ClickHouse renders ``exp.TimeToStr`` as ``formatDateTime``, which Databend
+    rejects outright: "no function matches the given name: 'formatdatetime', do
+    you mean 'date_format'?". Inheriting that generation silently rewrote every
+    chart's ``DATE_FORMAT`` on the way to the server, breaking each one.
+    """
+    generated = sqlglot.parse_one(sql, Databend).sql(dialect=Databend)
+
+    assert "formatDateTime" not in generated
+    assert "DATE_FORMAT(" in generated
+
+
+def test_format_date_time_is_normalised_to_date_format() -> None:
+    """
+    ClickHouse's parser folds ``formatDateTime`` onto the same node as
+    ``DATE_FORMAT``, so an expression saved with the ClickHouse spelling — from a
+    chart authored while the rewrite was in effect — is healed on generation
+    rather than passed through to a server that no longer accepts it.
+    """
+    parsed = sqlglot.parse_one("SELECT formatDateTime(\"d\", '%m/%d')", Databend)
+    generated = parsed.sql(dialect=Databend)
+
+    assert generated == "SELECT DATE_FORMAT(\"d\", '%m/%d')"
+
+
+def test_date_format_generation_is_idempotent() -> None:
+    """Superset regenerates on every compile; the output must be a fixed point."""
+    once = sqlglot.parse_one(
+        "SELECT DATE_FORMAT(DATE_TRUNC('week', \"d\"), '%m/%d')", Databend
+    ).sql(dialect=Databend)
+
+    assert sqlglot.parse_one(once, Databend).sql(dialect=Databend) == once
+
+
+def test_date_format_survives_adhoc_column_sanitisation() -> None:
+    """
+    User-visible path: ``_process_sql_expression`` in ``superset/models/helpers``
+    puts every adhoc column and metric through ``sanitize_clause``, which parses
+    and *regenerates* the clause in the engine's dialect. That is where a chart's
+    stored ``DATE_FORMAT`` was turned into SQL Databend refuses.
+    """
+    from superset.sql.parse import sanitize_clause
+
+    sanitized = sanitize_clause(
+        "DATE_FORMAT(DATE_TRUNC('week', \"d\"), '%m/%d')", "databend"
+    )
+
+    assert "formatDateTime" not in sanitized
+    assert sanitized.startswith("DATE_FORMAT(")
