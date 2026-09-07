@@ -23,10 +23,14 @@ from unittest.mock import Mock
 import pytest
 from pytest_mock import MockerFixture
 
+from superset import security_manager
 from superset.commands.report.exceptions import (
+    ReportScheduleForbiddenError,
     ReportScheduleInvalidError,
 )
 from superset.commands.report.update import UpdateReportScheduleCommand
+from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
+from superset.exceptions import SupersetSecurityException
 from superset.reports.models import ReportScheduleType
 
 
@@ -57,6 +61,9 @@ def _setup_mocks(mocker: MockerFixture, model: Mock) -> None:
     )
     mocker.patch(
         "superset.commands.report.update.security_manager.raise_for_ownership",
+    )
+    mocker.patch(
+        "superset.commands.report.update.security_manager.raise_for_access",
     )
     mocker.patch(
         "superset.commands.report.update.DatabaseDAO.find_by_id",
@@ -252,3 +259,44 @@ def test_report_to_alert_with_db_accepted(mocker: MockerFixture) -> None:
         data={"type": ReportScheduleType.ALERT, "database": 5},
     )
     cmd.validate()  # should not raise
+
+
+# --- Alert query-access enforcement (sc-24052) ---
+
+
+def test_alert_update_checks_query_access(mocker: MockerFixture) -> None:
+    """An alert update enforces query access against the effective database."""
+    model = _make_model(mocker, model_type=ReportScheduleType.ALERT, database_id=5)
+    model.database = mocker.Mock()
+    _setup_mocks(mocker, model)
+    database = mocker.Mock()
+    mocker.patch(
+        "superset.commands.report.update.DatabaseDAO.find_by_id",
+        return_value=database,
+    )
+    raise_for_access = mocker.patch.object(security_manager, "raise_for_access")
+
+    UpdateReportScheduleCommand(model_id=1, data={"database": 5}).validate()
+
+    raise_for_access.assert_called_once()
+    assert raise_for_access.call_args.kwargs["database"] is database
+
+
+def test_alert_update_denied_access_raises_forbidden(mocker: MockerFixture) -> None:
+    model = _make_model(mocker, model_type=ReportScheduleType.ALERT, database_id=5)
+    model.database = mocker.Mock()
+    _setup_mocks(mocker, model)
+    mocker.patch.object(
+        security_manager,
+        "raise_for_access",
+        side_effect=SupersetSecurityException(
+            SupersetError(
+                message="denied",
+                error_type=SupersetErrorType.DATASOURCE_SECURITY_ACCESS_ERROR,
+                level=ErrorLevel.ERROR,
+            )
+        ),
+    )
+
+    with pytest.raises(ReportScheduleForbiddenError):
+        UpdateReportScheduleCommand(model_id=1, data={"database": 5}).validate()
