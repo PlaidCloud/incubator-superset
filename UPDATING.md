@@ -24,6 +24,15 @@ assists people when migrating to a new version.
 
 ## Next
 
+### Self-registration routes no longer served (sc-24025)
+
+With `PlaidSecurityManager`, `/register/`, `/register/form` and `/register/activation/<hash>` are not
+routed, even with `AUTH_USER_REGISTRATION = True` (still required for OAuth first-login provisioning,
+which is unchanged). The user-registrations REST API no longer returns `registration_hash` and refuses
+filters on `registration_hash` or `password`; the admin User registrations page no longer shows or
+filters by the hash. The unused, unregistered `plaid/blacklist_api.py` token-blacklist endpoint is
+deleted.
+
 ### Unversioned dataset and dashboard imports rejected (sc-24050)
 
 `POST /api/v1/dataset/import/` and `POST /api/v1/dashboard/import/` no longer fall back to the pre-1.0
