@@ -29,7 +29,7 @@ from urllib.parse import urljoin
 import jwt
 from authlib.integrations.flask_client import token_update
 from flask import current_app, g, has_app_context, has_request_context, session
-from flask_appbuilder import Model
+from flask_appbuilder import BaseView, Model
 from flask_appbuilder.security.manager import AUTH_OAUTH
 from flask_login import logout_user
 from plaidcloud.rpc.connection.jsonrpc import SimpleRPC
@@ -39,9 +39,7 @@ from sqlalchemy import func
 from plaid import rls_guard
 from plaid.auth_oidc import PlaidAuthOAuthView
 
-# from plaid.blacklist_api import is_token_blacklisted
 # from plaid.auth_oidc import AuthOIDCView
-# from plaid.blacklist_api import TokenBlacklistApi
 from superset.security import SupersetSecurityManager
 from superset.security.manager import SupersetRoleApi
 
@@ -86,8 +84,28 @@ class _PlaidGuardedRoleApi(rls_guard.PlaidRoleApi, SupersetRoleApi):
     """
 
 
+class _NoSelfRegistrationView(BaseView):
+    """Route-less stand-in for FAB's self-registration views.
+
+    FAB instantiates whichever class sits on `registeruseroauthview` /
+    `registeruserdbview`, so the attribute cannot be None. It must not subclass
+    FAB's views either: BaseView registers every inherited `@expose`, which
+    would bring back `/register/form` and `/register/activation/<hash>`.
+    """
+
+    route_base = "/register"
+
+
 class PlaidSecurityManager(SupersetSecurityManager):
     """Custom security manager class for PlaidCloud integration."""
+
+    # sc-24025 -- no unauthenticated self-registration. Superset's view and
+    # FAB's register view both serve /register/* with no auth, and FAB mounts
+    # its view whenever AUTH_USER_REGISTRATION is on, which tenants need for
+    # OAuth first-login provisioning (`auth_user_oauth` never uses the views).
+    register_superset_registeruser_view = False
+    registeruseroauthview = _NoSelfRegistrationView
+    registeruserdbview = _NoSelfRegistrationView
 
     # The admin SPA routes (UsersListView, RolesListView, GroupsListView,
     # ActionLogView, UserRegistrationsView) all gate on the ("read", "security")
@@ -193,11 +211,6 @@ class PlaidSecurityManager(SupersetSecurityManager):
             # item.save()
             log.info("Updated token for %s - %r", name, token)
             self.appbuilder.sm.set_oauth_session(name, token)
-
-    # def register_views(self) -> None:
-    #     super().register_views()
-    #     from plaid.blacklist_api import TokenBlacklistApi
-    #     self.appbuilder.add_api(TokenBlacklistApi)
 
     def oauth_user_info(
         self, provider: str, response: Optional[dict[str, Any]] = None
@@ -714,8 +727,6 @@ class PlaidSecurityManager(SupersetSecurityManager):
                     if "oauth" in session:
                         # Basic validation of token expiry
                         token, secret = session["oauth"]
-                        # if is_token_blacklisted(token):
-                        #     return False
                         if token_is_valid(token):
                             return True
 

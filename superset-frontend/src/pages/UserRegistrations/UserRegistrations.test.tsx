@@ -30,7 +30,6 @@ const mockUserRegistrations = Array.from({ length: 5 }, (_, i) => ({
   last_name: `Test${i}`,
   email: `user${i}@test.com`,
   registration_date: new Date(2025, 2, 25, 11, 4, 32 + i).toISOString(),
-  registration_hash: `hash${i}`,
 }));
 
 fetchMock.get(userRegistrationsEndpoint, {
@@ -52,5 +51,9 @@ describe('UserRegistrations', () => {
     expect(await screen.findByText('User registrations')).toBeVisible();
     const calls = fetchMock.callHistory.calls(userRegistrationsEndpoint);
     expect(calls.length).toBeGreaterThan(0);
+  });
+  test('does not offer the registration hash as a column or filter', async () => {
+    expect(await screen.findByText('User registrations')).toBeVisible();
+    expect(screen.queryByText('Registration hash')).not.toBeInTheDocument();
   });
 });
