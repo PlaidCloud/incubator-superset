@@ -2576,7 +2576,8 @@ class TestDatasetApi(SupersetTestCase):
 
         self.items_to_delete = [dataset, database]
 
-    def test_import_dataset_v0_export(self):
+    def test_import_dataset_v0_export_is_refused(self):
+        """sc-24050: the unversioned v0 importer is no longer reachable from the API."""
         num_datasets = db.session.query(SqlaTable).count()
 
         self.login(ADMIN_USERNAME)
@@ -2591,16 +2592,9 @@ class TestDatasetApi(SupersetTestCase):
             "sync_metrics": "true",
         }
         rv = self.client.post(uri, data=form_data, content_type="multipart/form-data")
-        response = json.loads(rv.data.decode("utf-8"))
 
-        assert rv.status_code == 200
-        assert response == {"message": "OK"}
-        assert db.session.query(SqlaTable).count() == num_datasets + 1
-
-        dataset = (
-            db.session.query(SqlaTable).filter_by(table_name="birth_names_2").one()
-        )
-        self.items_to_delete = [dataset]
+        assert rv.status_code == 422
+        assert db.session.query(SqlaTable).count() == num_datasets
 
     @patch("superset.commands.database.importers.v1.utils.add_permissions")
     def test_import_dataset_overwrite(self, mock_add_permissions):
