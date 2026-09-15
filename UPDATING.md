@@ -24,6 +24,15 @@ assists people when migrating to a new version.
 
 ## Next
 
+### Unversioned dataset and dashboard imports rejected (sc-24050)
+
+`POST /api/v1/dataset/import/` and `POST /api/v1/dashboard/import/` no longer fall back to the pre-1.0
+unversioned YAML/JSON importer, which overwrote datasets and created database connections with no
+ownership or access check. Such files now fail with "Could not find a valid command to import file".
+Export and import v1 ZIP bundles instead. The same applies to `superset import-dashboards` and
+`superset import-datasources` given a non-ZIP file. `superset legacy-import-dashboards` and
+`superset legacy-import-datasources` still use the v0 importer.
+
 ## 6.1.0
 
 ### ClickHouse minimum driver version bump
