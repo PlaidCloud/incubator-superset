@@ -24,6 +24,13 @@ assists people when migrating to a new version.
 
 ## Next
 
+### Display Controls "Available columns" allowlist (sc-26767)
+
+Dynamic group-by display controls have an optional "Available columns" setting that limits the columns
+offered in the dashboard dropdown. Unset or empty keeps the current list (every filterable column). This
+only trims the dropdown: `GET /api/v1/dataset/<id>` still returns every column, so it is not column-level
+access control.
+
 ## 6.1.0
 
 ### ClickHouse minimum driver version bump
