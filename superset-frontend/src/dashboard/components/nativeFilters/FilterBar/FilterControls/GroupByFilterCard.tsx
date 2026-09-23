@@ -17,6 +17,7 @@
  * under the License.
  */
 import { FC, useCallback, useEffect, useMemo, useState } from 'react';
+import rison from 'rison';
 import { t } from '@apache-superset/core/translation';
 import {
   DataMask,
@@ -25,8 +26,6 @@ import {
   useTruncation,
   ChartCustomization,
   NativeFilterTarget,
-  Filters,
-  NativeFilterType,
 } from '@superset-ui/core';
 import {
   styled,
@@ -50,7 +49,6 @@ import { TooltipWithTruncation } from 'src/dashboard/components/nativeFilters/Fi
 import { addDangerToast } from 'src/components/MessageToasts/actions';
 import { cachedSupersetGet } from 'src/utils/cachedSupersetGet';
 import { dispatchChartCustomizationHoverAction } from './utils';
-import { mergeExtraFormData } from '../../utils';
 
 interface ColumnApiResponse {
   column_name?: string;
@@ -408,28 +406,6 @@ const GroupByFilterCard: FC<GroupByFilterCardProps> = ({
     ],
   );
 
-  const filters = useSelector<RootState, Filters>(
-    state => state.nativeFilters.filters,
-  );
-
-  const dependencies = useMemo(() => {
-    let deps = {};
-
-    Object.entries(filters).forEach(([filterId, filter]) => {
-      if (
-        filter.type === NativeFilterType.Divider ||
-        !effectiveDataMask[filterId]?.filterState?.value
-      ) {
-        return;
-      }
-
-      const filterState = effectiveDataMask[filterId];
-      deps = mergeExtraFormData(deps, filterState?.extraFormData);
-    });
-
-    return deps;
-  }, [effectiveDataMask, filters]);
-
   useEffect(() => {
     const fetchColumnOptions = async () => {
       const datasetSource = dataset;
@@ -455,7 +431,14 @@ const GroupByFilterCard: FC<GroupByFilterCardProps> = ({
 
       setLoading(true);
       try {
-        const endpoint = `/api/v1/dataset/${datasetId}`;
+        const endpoint = `/api/v1/dataset/${datasetId}?q=${rison.encode({
+          columns: [
+            'table_name',
+            'columns.column_name',
+            'columns.verbose_name',
+            'columns.filterable',
+          ],
+        })}`;
         const { json } = await cachedSupersetGet({ endpoint });
 
         if (json?.result) {
@@ -463,13 +446,20 @@ const GroupByFilterCard: FC<GroupByFilterCardProps> = ({
             setDatasetName(json.result.table_name);
           }
           if (json.result.columns) {
+            const allow = customizationItem.controlValues?.availableColumns;
             const options = json.result.columns
               .filter((col: ColumnApiResponse) => col.filterable !== false)
               .map((col: ColumnApiResponse) => ({
                 label: col.verbose_name || col.column_name || col.name || '',
                 value: col.column_name || col.name || '',
               }));
-            setColumnOptions(options);
+            setColumnOptions(
+              allow?.length
+                ? options.filter((option: { value: string }) =>
+                    allow.includes(option.value),
+                  )
+                : options,
+            );
           }
         }
       } catch (error) {
@@ -483,7 +473,7 @@ const GroupByFilterCard: FC<GroupByFilterCardProps> = ({
     };
 
     fetchColumnOptions();
-  }, [dataset, dependencies, dispatch]);
+  }, [dataset, customizationItem.controlValues?.availableColumns, dispatch]);
 
   const displayTitle = columnDisplayName;
 
