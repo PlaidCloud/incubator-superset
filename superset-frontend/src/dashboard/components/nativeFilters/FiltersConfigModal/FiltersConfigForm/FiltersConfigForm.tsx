@@ -1206,6 +1206,61 @@ const FiltersConfigForm = (
                                     </CollapsibleControl>
                                   </FormItem>
                                 )}
+                                {isChartCustomization && hasDataset && (
+                                  <StyledRowFormItem
+                                    expanded={expanded}
+                                    name={[
+                                      'filters',
+                                      filterId,
+                                      'controlValues',
+                                      'availableColumns',
+                                    ]}
+                                    initialValue={
+                                      customizationToEdit?.controlValues
+                                        ?.availableColumns
+                                    }
+                                    label={
+                                      <StyledLabel>
+                                        {t('Available columns')}
+                                      </StyledLabel>
+                                    }
+                                  >
+                                    <Select
+                                      allowClear
+                                      mode="multiple"
+                                      ariaLabel={t('Available columns')}
+                                      options={(datasetDetails?.columns ?? [])
+                                        .filter(
+                                          (column: Column) =>
+                                            column.filterable !== false,
+                                        )
+                                        .map((column: Column) => ({
+                                          value: column.column_name,
+                                          label:
+                                            column.verbose_name ||
+                                            column.column_name,
+                                        }))}
+                                      onChange={(value: string[]) => {
+                                        const previous =
+                                          form.getFieldValue('filters')?.[
+                                            filterId
+                                          ].controlValues || {};
+                                        setNativeFilterFieldValues(
+                                          form,
+                                          filterId,
+                                          {
+                                            controlValues: {
+                                              ...previous,
+                                              availableColumns: value,
+                                            },
+                                          },
+                                        );
+                                        forceUpdate();
+                                        formChanged();
+                                      }}
+                                    />
+                                  </StyledRowFormItem>
+                                )}
                                 {itemTypeField !== 'filter_range' ? (
                                   <FormItem
                                     name={['filters', filterId, 'sortFilter']}
