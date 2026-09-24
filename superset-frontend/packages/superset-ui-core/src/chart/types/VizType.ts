@@ -39,6 +39,7 @@ export enum VizType {
   Dumbbell = 'ext-dumbbell',
   Funnel = 'funnel',
   Gantt = 'gantt_chart',
+  PivotGantt = 'pivot_gantt',
   Gauge = 'gauge_chart',
   Graph = 'graph_chart',
   Handlebars = 'handlebars',
