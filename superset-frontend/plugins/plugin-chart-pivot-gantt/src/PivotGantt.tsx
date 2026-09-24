@@ -473,12 +473,18 @@ const Styles = styled.div<{ height: number; width: number }>`
       border-right: 1px solid ${theme.colorBorderSecondary};
       text-align: center;
       overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
       text-transform: capitalize;
       display: flex;
       align-items: center;
       justify-content: center;
+    }
+    .pgCalCell span {
+      display: block;
+      max-width: 100%;
+      padding: 0 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .pgCalBody {
       position: relative;
@@ -763,7 +769,16 @@ export default function PivotGantt(props: PivotGanttProps) {
   const totalDays = dayDiff(rangeStart, rangeEnd) + 1;
 
   // ---- geometry -----------------------------------------------------------
-  const tableW = rows.length * HIER_COL_W + metricNames.length * METRIC_COL_W;
+  // fixed column widths keep rows aligned with the calendar; in narrow
+  // containers (Matrixify cells, small dashboard slots) shrink them so the
+  // calendar keeps at least ~45% of the width
+  const naturalTableW =
+    rows.length * HIER_COL_W + metricNames.length * METRIC_COL_W;
+  const maxTableW = Math.max(160, (width - 2 * MARGIN) * 0.55);
+  const colScale = Math.min(1, maxTableW / Math.max(1, naturalTableW));
+  const hierColW = Math.round(HIER_COL_W * colScale);
+  const metricColW = Math.round(METRIC_COL_W * colScale);
+  const tableW = rows.length * hierColW + metricNames.length * metricColW;
   const calendarW = Math.max(120, width - 2 * MARGIN - tableW - 4);
   const dayWidth = calendarW / totalDays;
   const x = (ms: number) => dayDiff(rangeStart, ms) * dayWidth;
@@ -1083,10 +1098,10 @@ export default function PivotGantt(props: PivotGanttProps) {
         >
           <colgroup>
             {rows.map(r => (
-              <col key={r} style={{ width: HIER_COL_W }} />
+              <col key={r} style={{ width: hierColW }} />
             ))}
             {metricNames.map(m => (
-              <col key={m} style={{ width: METRIC_COL_W }} />
+              <col key={m} style={{ width: metricColW }} />
             ))}
           </colgroup>
           <thead>
@@ -1209,7 +1224,7 @@ export default function PivotGantt(props: PivotGanttProps) {
                     style={{ width: c.width }}
                     title={c.label}
                   >
-                    <span>{c.label}</span>
+                    <span>{c.width > 28 ? c.label : ''}</span>
                   </div>
                 ))}
               </div>
