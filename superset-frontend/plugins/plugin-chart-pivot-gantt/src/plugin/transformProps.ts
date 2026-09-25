@@ -80,7 +80,7 @@ export default function transformProps(
   const raw = (rawFormData ?? {}) as Record<string, any>;
   const { setDataMask = () => {}, setControlValue } = hooks;
 
-  const q0 = queriesData[0];
+  const [q0] = queriesData;
   const data = (q0?.data ?? []) as DataRecord[];
   const grandTotals = (queriesData[1]?.data?.[0] ?? {}) as DataRecord;
   const totals = queriesData.slice(2).map(q => (q.data ?? []) as DataRecord[]);

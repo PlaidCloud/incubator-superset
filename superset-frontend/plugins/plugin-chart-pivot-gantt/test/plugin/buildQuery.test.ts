@@ -33,7 +33,7 @@ const formData = {
 };
 
 describe('PivotGantt buildQuery', () => {
-  const queries = buildQuery(formData as any).queries;
+  const { queries } = buildQuery(formData as any);
 
   test('emits raw rows + grand total + one query per hierarchy level', () => {
     expect(queries).toHaveLength(4);
