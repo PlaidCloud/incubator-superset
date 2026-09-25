@@ -65,6 +65,7 @@ const {
   yAxisBounds,
   orientation,
   isPolar,
+  polarHideLabels,
 } = DEFAULT_FORM_DATA;
 
 function createAxisTitleControl(axis: 'x' | 'y'): ControlSetRow[] {
@@ -355,6 +356,24 @@ const config: ControlPanelConfig = {
               description: t(
                 'Display bars on polar coordinates (radius and angle axes)',
               ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'polar_hide_labels',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Hide category labels'),
+              default: polarHideLabels,
+              renderTrigger: true,
+              description: t(
+                'Hide the category axis labels on the polar radius axis. ' +
+                  'Useful when there are many categories and some labels ' +
+                  'remain visible after overlap removal.',
+              ),
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                Boolean(controls?.is_polar?.value),
             },
           },
         ],

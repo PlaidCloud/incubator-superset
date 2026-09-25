@@ -273,6 +273,7 @@ export default function transformProps(
     yAxisTitlePosition,
     zoomable,
     isPolar,
+    polarHideLabels,
     stackDimension,
   }: EchartsTimeseriesFormData = { ...DEFAULT_FORM_DATA, ...formData };
 
@@ -583,6 +584,14 @@ export default function transformProps(
           silent: true,
           legendHoverLink: false,
           showSymbol: false,
+          // These legend-only series never render data, but ECharts still
+          // resolves their coordinate system at series-model-init time.
+          // Without this, they default to cartesian xAxisIndex/yAxisIndex,
+          // which don't exist when isPolarActive replaces xAxis/yAxis with
+          // radiusAxis/angleAxis, throwing `xAxis "0" not found`.
+          ...(isPolarActive
+            ? { coordinateSystem: 'polar', polarIndex: 0 }
+            : {}),
         });
       });
     }
@@ -1014,8 +1023,15 @@ export default function transformProps(
   // objects built above (with all their type/formatter/tick logic already
   // applied) are reused verbatim, just renamed into radiusAxis/angleAxis
   // inside an (otherwise default) polar container.
+  // hideOverlap already drops colliding category labels, but on dense
+  // category sets a few can still survive; polarHideLabels lets the user
+  // hide the radiusAxis tick labels outright instead.
+  const radiusAxis =
+    isPolarActive && polarHideLabels
+      ? { ...xAxis, axisLabel: { ...xAxis.axisLabel, show: false } }
+      : xAxis;
   const polarAxes = isPolarActive
-    ? { radiusAxis: xAxis, angleAxis: yAxis, polar: {} }
+    ? { radiusAxis, angleAxis: yAxis, polar: {} }
     : {
         grid: {
           ...defaultGrid,
