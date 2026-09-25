@@ -58,8 +58,14 @@ import {
 } from '../../constants';
 import { StackControlsValue } from '../../../constants';
 
-const { logAxis, minorSplitLine, truncateYAxis, yAxisBounds, orientation } =
-  DEFAULT_FORM_DATA;
+const {
+  logAxis,
+  minorSplitLine,
+  truncateYAxis,
+  yAxisBounds,
+  orientation,
+  isPolar,
+} = DEFAULT_FORM_DATA;
 
 function createAxisTitleControl(axis: 'x' | 'y'): ControlSetRow[] {
   const isXAxis = axis === 'x';
@@ -338,6 +344,20 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'is_polar',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Polar'),
+              default: isPolar,
+              renderTrigger: true,
+              description: t(
+                'Display bars on polar coordinates (radius and angle axes)',
+              ),
+            },
+          },
+        ],
       ],
     },
     {
@@ -394,7 +414,16 @@ const config: ControlPanelConfig = {
           },
         ],
         [minorTicks],
-        ['zoomable'],
+        [
+          {
+            name: 'zoomable',
+            config: {
+              ...sharedControls.zoomable,
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                !controls?.is_polar?.value,
+            },
+          },
+        ],
         ...legendSection,
         [<ControlSubSectionHeader>{t('X Axis')}</ControlSubSectionHeader>],
         ...createAxisControl('x'),

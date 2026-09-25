@@ -229,6 +229,9 @@ export function transformSeries(
     theme?: SupersetTheme;
     hasDimensions?: boolean;
     colorByPrimaryAxis?: boolean;
+    /** Bar-only Polar mode: series binds to the polar container instead of
+     * a cartesian y-axis. */
+    isPolar?: boolean;
   },
 ): SeriesOption | undefined {
   const { name, data } = series;
@@ -260,6 +263,7 @@ export function transformSeries(
     timeShiftColor,
     theme,
     colorByPrimaryAxis = false,
+    isPolar = false,
   } = opts;
   const contexts = seriesContexts[name || ''] || [];
   const hasForecast =
@@ -384,7 +388,8 @@ export function transformSeries(
       : null),
     connectNulls,
     queryIndex,
-    yAxisIndex,
+    ...(isPolar ? { polarIndex: 0 } : { yAxisIndex }),
+    ...(isPolar ? { coordinateSystem: 'polar' as const } : {}),
     name: forecastSeries.name,
     ...(colorByPrimaryAxis ? {} : { itemStyle }),
     // @ts-ignore

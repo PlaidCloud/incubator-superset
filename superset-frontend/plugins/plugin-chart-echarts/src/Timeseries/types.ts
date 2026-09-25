@@ -99,6 +99,9 @@ export type EchartsTimeseriesFormData = QueryFormData & {
   percentageThreshold: number;
   colorByPrimaryAxis?: boolean;
   orientation?: OrientationType;
+  /** Bar-only: render on polar (radius/angle) coordinates instead of a
+   * cartesian grid. Ignored by every other series type in this family. */
+  isPolar?: boolean;
 } & LegendFormData &
   TitleFormData;
 
