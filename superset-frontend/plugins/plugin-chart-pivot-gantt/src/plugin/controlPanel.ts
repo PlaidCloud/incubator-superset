@@ -68,17 +68,19 @@ const fontSize = (name: string, label: string, def = 12): ControlSetItem => ({
   },
 });
 
+// No `def`: an unset picker falls back to a theme token in the component,
+// instead of hardcoding a literal colour that breaks dark themes.
 const fontColor = (
   name: string,
   label: string,
-  def: { r: number; g: number; b: number; a: number },
+  def?: { r: number; g: number; b: number; a: number },
 ): ControlSetItem => ({
   name,
   config: {
     type: 'ColorPickerControl',
     label,
     renderTrigger: true,
-    default: def,
+    ...(def ? { default: def } : {}),
   },
 });
 
@@ -97,9 +99,6 @@ const hAlign = (name: string, label: string, def = 'left'): ControlSetItem => ({
     ],
   },
 });
-
-const WHITE = { r: 255, g: 255, b: 255, a: 1 };
-const BLACK = { r: 0, g: 0, b: 0, a: 1 };
 
 const config: ControlPanelConfig = {
   controlPanelSections: [
@@ -357,7 +356,10 @@ const config: ControlPanelConfig = {
         [
           {
             name: 'valueFormat',
-            config: { ...sharedControls.y_axis_format, label: t('Value format') },
+            config: {
+              ...sharedControls.y_axis_format,
+              label: t('Value format'),
+            },
           },
         ],
         [
@@ -395,7 +397,12 @@ const config: ControlPanelConfig = {
               mapStateToProps(
                 explore: ControlPanelState,
                 _: ControlState,
-                chart?: { queriesResponse?: { colnames?: string[]; coltypes?: number[] }[] },
+                chart?: {
+                  queriesResponse?: {
+                    colnames?: string[];
+                    coltypes?: number[];
+                  }[];
+                },
               ) {
                 const q1 = chart?.queriesResponse?.[1];
                 const wanted = metricLabels(explore?.controls?.metrics?.value);
@@ -431,7 +438,7 @@ const config: ControlPanelConfig = {
           },
         ],
         [fontSize('marker_font_size', t('Font size'))],
-        [fontColor('marker_font_color', t('Font color'), WHITE)],
+        [fontColor('marker_font_color', t('Font color'))],
         [
           {
             name: 'marker_height',
@@ -444,7 +451,13 @@ const config: ControlPanelConfig = {
             },
           },
         ],
-        [hAlign('marker_label_align', t('Marker label horizontal alignment'), 'center')],
+        [
+          hAlign(
+            'marker_label_align',
+            t('Marker label horizontal alignment'),
+            'center',
+          ),
+        ],
       ],
     },
     {
@@ -452,8 +465,14 @@ const config: ControlPanelConfig = {
       expanded: false,
       controlSetRows: [
         [fontSize('marker_description_font_size', t('Font size'))],
-        [fontColor('marker_description_font_color', t('Font color'), WHITE)],
-        [hAlign('marker_description_label_align', t('Horizontal alignment'), 'center')],
+        [fontColor('marker_description_font_color', t('Font color'))],
+        [
+          hAlign(
+            'marker_description_label_align',
+            t('Horizontal alignment'),
+            'center',
+          ),
+        ],
       ],
     },
     {
@@ -461,7 +480,7 @@ const config: ControlPanelConfig = {
       expanded: false,
       controlSetRows: [
         [fontSize('marker_detail_font_size', t('Font size'))],
-        [fontColor('marker_detail_font_color', t('Font color'), BLACK)],
+        [fontColor('marker_detail_font_color', t('Font color'))],
       ],
     },
     {

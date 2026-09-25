@@ -25,9 +25,11 @@ import {
   getMetricLabel,
   getNumberFormatter,
   getTimeFormatter,
+  isAdhocColumn,
   QueryFormColumn,
   QueryFormMetric,
 } from '@superset-ui/core';
+import { GenericDataType } from '@apache-superset/core/common';
 import {
   Granularity,
   GRANULARITY_ORDER,
@@ -36,7 +38,12 @@ import {
   RgbaColor,
 } from '../types';
 
-const toCss = (c: RgbaColor | string | undefined, fallback: string): string => {
+// No `fallback` means: let the component fall back to a theme token, so the
+// picker's absence doesn't hardcode a literal colour that breaks dark themes.
+const toCss = (
+  c: RgbaColor | string | undefined,
+  fallback?: string,
+): string | undefined => {
   if (!c) return fallback;
   if (typeof c === 'string') return c;
   return `rgba(${c.r}, ${c.g}, ${c.b}, ${c.a ?? 1})`;
@@ -55,7 +62,9 @@ const firstLabel = (c: unknown): string | undefined => {
 const align = (v: unknown, def: HAlign): HAlign =>
   v === 'left' || v === 'center' || v === 'right' ? v : def;
 
-export default function transformProps(chartProps: ChartProps): PivotGanttProps {
+export default function transformProps(
+  chartProps: ChartProps,
+): PivotGanttProps {
   const {
     width,
     height,
@@ -71,13 +80,29 @@ export default function transformProps(chartProps: ChartProps): PivotGanttProps 
   const raw = (rawFormData ?? {}) as Record<string, any>;
   const { setDataMask = () => {}, setControlValue } = hooks;
 
-  const data = (queriesData[0]?.data ?? []) as DataRecord[];
+  const q0 = queriesData[0];
+  const data = (q0?.data ?? []) as DataRecord[];
   const grandTotals = (queriesData[1]?.data?.[0] ?? {}) as DataRecord;
   const totals = queriesData.slice(2).map(q => (q.data ?? []) as DataRecord[]);
 
-  const rows = ensureIsArray(fd.groupbyRows).map(c =>
-    getColumnLabel(c as QueryFormColumn),
+  const rowColumns = ensureIsArray(fd.groupbyRows) as QueryFormColumn[];
+  const rows = rowColumns.map(c => getColumnLabel(c));
+  // Cross-filtering on an adhoc column must use its sqlExpression: the query
+  // result (and `rows` above) key on the column's display LABEL, but the
+  // receiving chart's backend needs the real column/expression name.
+  const columnLabelToNameMap: Record<string, string> = {};
+  rowColumns.forEach(col => {
+    if (isAdhocColumn(col) && col.label && col.label !== col.sqlExpression) {
+      columnLabelToNameMap[col.label] = col.sqlExpression;
+    }
+  });
+  const rowColumnNames = rows.map(
+    label => columnLabelToNameMap[label] ?? label,
   );
+  const rowIsTemporal = rows.map(label => {
+    const i = (q0?.colnames ?? []).indexOf(label);
+    return i >= 0 && q0?.coltypes?.[i] === GenericDataType.Temporal;
+  });
   const metricNames = ensureIsArray(fd.metrics).map(m =>
     getMetricLabel(m as QueryFormMetric),
   );
@@ -129,12 +154,15 @@ export default function transformProps(chartProps: ChartProps): PivotGanttProps 
     height,
     data,
     rows,
+    rowIsTemporal,
+    rowColumnNames,
     metricNames,
     totals,
     grandTotals,
     dateStartCol: firstLabel(fd.dateStartCol),
     dateEndCol: firstLabel(fd.dateEndCol),
-    progressMetric: progress && metricNames.includes(progress) ? progress : undefined,
+    progressMetric:
+      progress && metricNames.includes(progress) ? progress : undefined,
     labelCols: {
       left: firstLabel(fd.markerLabelLeftCol),
       right: firstLabel(fd.markerLabelRightCol),
@@ -150,18 +178,18 @@ export default function transformProps(chartProps: ChartProps): PivotGanttProps 
     markerOptions: {
       height: positive(fd.markerHeight, 24),
       fontSize: positive(fd.markerFontSize, 12),
-      fontColor: toCss(fd.markerFontColor, '#fff'),
+      fontColor: toCss(fd.markerFontColor),
       labelAlign: align(fd.markerLabelAlign, 'center'),
       showLabel: fd.showMarkerLabel ?? true,
     },
     descriptionStyle: {
       fontSize: positive(fd.markerDescriptionFontSize, 12),
-      color: toCss(fd.markerDescriptionFontColor, '#fff'),
+      color: toCss(fd.markerDescriptionFontColor),
       align: align(fd.markerDescriptionLabelAlign, 'center'),
     },
     detailsStyle: {
       fontSize: positive(fd.markerDetailFontSize, 12),
-      color: toCss(fd.markerDetailFontColor, '#000'),
+      color: toCss(fd.markerDetailFontColor),
     },
     hintOptions: {
       show: fd.showHint ?? true,

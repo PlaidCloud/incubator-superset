@@ -59,7 +59,13 @@ interface Marker {
 
 interface Node {
   key: string;
+  /** display strings, one per hierarchy level (formatted dates for temporal
+   * levels, 'null' for missing values) — for rendering only. */
   path: string[];
+  /** the same levels as raw values (null | epoch-ms number for temporal
+   * columns | the column's native string/number otherwise) — what a
+   * cross-filter must emit so the backend can match it. */
+  rawPath: (string | number | null)[];
   depth: number;
   isLeaf: boolean;
   children: Node[];
@@ -88,9 +94,15 @@ const toTime = (v: unknown): number | null => {
   return Number.isNaN(ms) ? null : ms;
 };
 
+// The calendar's dates are DATE values, sent by Superset as epoch ms of UTC
+// midnight and formatted in UTC by getTimeFormatter (unless a `local!` format
+// prefix is used). Every calendar-grid computation below therefore has to
+// work in UTC too: mixing local-time Date methods with UTC-midnight
+// timestamps shifts every marker and boundary by the viewer's UTC offset
+// (west of UTC it lands a day early, east of UTC a day late).
 const startOfDay = (ms: number) => {
   const d = new Date(ms);
-  d.setHours(0, 0, 0, 0);
+  d.setUTCHours(0, 0, 0, 0);
   return d.getTime();
 };
 
@@ -117,7 +129,9 @@ const lang = () =>
     : 'en';
 
 const isoWeek = (d: Date) => {
-  const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const tmp = new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()),
+  );
   const day = tmp.getUTCDay() || 7;
   tmp.setUTCDate(tmp.getUTCDate() + 4 - day);
   const yearStart = Date.UTC(tmp.getUTCFullYear(), 0, 1);
@@ -126,31 +140,38 @@ const isoWeek = (d: Date) => {
 
 const unitStart = (ms: number, g: Granularity): number => {
   const d = new Date(ms);
-  d.setHours(0, 0, 0, 0);
-  if (g === 'P1Y') d.setMonth(0, 1);
-  else if (g === 'P3M') d.setMonth(Math.floor(d.getMonth() / 3) * 3, 1);
-  else if (g === 'P1M') d.setDate(1);
-  else if (g === 'P1W') d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  d.setUTCHours(0, 0, 0, 0);
+  if (g === 'P1Y') d.setUTCMonth(0, 1);
+  else if (g === 'P3M') d.setUTCMonth(Math.floor(d.getUTCMonth() / 3) * 3, 1);
+  else if (g === 'P1M') d.setUTCDate(1);
+  else if (g === 'P1W')
+    d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
   return d.getTime();
 };
 
 const unitNext = (ms: number, g: Granularity): number => {
   const d = new Date(ms);
-  if (g === 'P1Y') d.setFullYear(d.getFullYear() + 1);
-  else if (g === 'P3M') d.setMonth(d.getMonth() + 3);
-  else if (g === 'P1M') d.setMonth(d.getMonth() + 1);
-  else if (g === 'P1W') d.setDate(d.getDate() + 7);
-  else d.setDate(d.getDate() + 1);
+  if (g === 'P1Y') d.setUTCFullYear(d.getUTCFullYear() + 1);
+  else if (g === 'P3M') d.setUTCMonth(d.getUTCMonth() + 3);
+  else if (g === 'P1M') d.setUTCMonth(d.getUTCMonth() + 1);
+  else if (g === 'P1W') d.setUTCDate(d.getUTCDate() + 7);
+  else d.setUTCDate(d.getUTCDate() + 1);
   return d.getTime();
 };
 
 const unitLabel = (ms: number, g: Granularity): string => {
   const d = new Date(ms);
-  if (g === 'P1Y') return String(d.getFullYear());
-  if (g === 'P3M') return `${t('Quarter')} ${Math.floor(d.getMonth() / 3) + 1}`;
-  if (g === 'P1M') return d.toLocaleString(lang(), { month: 'long' });
+  if (g === 'P1Y') return String(d.getUTCFullYear());
+  if (g === 'P3M')
+    return `${t('Quarter')} ${Math.floor(d.getUTCMonth() / 3) + 1}`;
+  if (g === 'P1M')
+    return d.toLocaleString(lang(), { month: 'long', timeZone: 'UTC' });
   if (g === 'P1W') return t('Week %s', isoWeek(d));
-  return d.toLocaleDateString(lang(), { day: 'numeric', month: 'short' });
+  return d.toLocaleDateString(lang(), {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  });
 };
 
 function buildCells(
@@ -195,6 +216,7 @@ function buildModel(
     PivotGanttProps,
     | 'data'
     | 'rows'
+    | 'rowIsTemporal'
     | 'totals'
     | 'dateStartCol'
     | 'dateEndCol'
@@ -204,11 +226,12 @@ function buildModel(
     | 'orderByCol'
     | 'orderDesc'
     | 'dateFormatter'
-  >,
+  > & { uncategorizedColor: string },
 ): Model {
   const {
     data,
     rows,
+    rowIsTemporal,
     totals,
     dateStartCol,
     dateEndCol,
@@ -218,16 +241,23 @@ function buildModel(
     orderByCol,
     orderDesc,
     dateFormatter,
+    uncategorizedColor,
   } = props;
+  // Both the totals query (aggregated, one row per hierarchy prefix) and the
+  // raw-rows query build a key per hierarchy level; they have to normalize
+  // missing/empty values the SAME way, or a leaf with an empty-string level
+  // silently loses its subtotal (its key here would be '' while the raw-rows
+  // side below produces 'null').
+  const cellKey = (v: unknown): string => asText(v) ?? 'null';
   const totalsByKey: Record<string, DataRecord> = {};
   totals.forEach((levelRows, i) => {
     const cols = rows.slice(0, i + 1);
     levelRows.forEach(r => {
-      totalsByKey[keyOf(cols.map(c => String(r[c])))] = r;
+      totalsByKey[keyOf(cols.map(c => cellKey(r[c])))] = r;
     });
   });
   const colorOf = (v: string) =>
-    markersColors.find(c => c.value === v)?.color ?? '#999';
+    markersColors.find(c => c.value === v)?.color ?? uncategorizedColor;
   const progressOf = (metrics: DataRecord) => {
     if (!progressMetric) return 100;
     const n = Number(metrics[progressMetric]);
@@ -248,8 +278,28 @@ function buildModel(
   let dataMax: number | undefined;
 
   data.forEach(rec => {
-    const values = rows.map(c => asText(rec[c]) ?? 'null');
-    const color = colorOf(values[0]);
+    // Grouping key: stable, normalized string per level (see cellKey above).
+    const keyParts = rows.map(c => cellKey(rec[c]));
+    // What the table/marker label shows: formatted date for temporal levels,
+    // the same normalized string otherwise.
+    const displayParts = rows.map((c, i) => {
+      if (rowIsTemporal[i]) {
+        const ms = toTime(rec[c]);
+        return ms !== null ? dateFormatter(new Date(ms)) : 'null';
+      }
+      return cellKey(rec[c]);
+    });
+    // What a cross-filter must emit: the column's native value, untouched
+    // (a real null, not the string 'null'; a numeric epoch for temporal
+    // levels, not its stringified form) so the receiving chart's backend can
+    // match it with IS NULL / a numeric IN.
+    const rawParts: (string | number | null)[] = rows.map((c, i) => {
+      const v = rec[c];
+      if (v === null || v === undefined || v === '') return null;
+      if (rowIsTemporal[i]) return toTime(v);
+      return v as string | number;
+    });
+    const color = colorOf(keyParts[0]);
     const start = dateStartCol ? toTime(rec[dateStartCol]) : null;
     const end = dateEndCol ? toTime(rec[dateEndCol]) : null;
     if (start === null) {
@@ -283,13 +333,13 @@ function buildModel(
 
     let parent: Node | undefined;
     for (let level = 1; level <= rows.length; level += 1) {
-      const path = values.slice(0, level);
-      const key = keyOf(path);
+      const key = keyOf(keyParts.slice(0, level));
       let node = byKey.get(key);
       if (!node) {
         node = {
           key,
-          path,
+          path: displayParts.slice(0, level),
+          rawPath: rawParts.slice(0, level),
           depth: level - 1,
           isLeaf: level === rows.length,
           children: [],
@@ -317,7 +367,7 @@ function buildModel(
           node.marker = {
             start,
             end,
-            label: path[level - 1],
+            label: displayParts[level - 1],
             color,
             progress: progressOf(node.metrics),
             left: add([], left),
@@ -488,6 +538,11 @@ const Styles = styled.div<{ height: number; width: number }>`
     }
     .pgCalBody {
       position: relative;
+      /* A marker whose start is before the zoomed range gets a negative
+       * left, and one ending after it overruns calendarW; clip (not
+       * hidden) keeps this from creating a new scroll container, so the
+       * sticky calendar header stays sticky. */
+      overflow-x: clip;
     }
     .pgCalRow {
       position: relative;
@@ -644,6 +699,8 @@ export default function PivotGantt(props: PivotGanttProps) {
     height,
     data,
     rows,
+    rowIsTemporal,
+    rowColumnNames,
     metricNames,
     totals,
     grandTotals,
@@ -684,6 +741,7 @@ export default function PivotGantt(props: PivotGanttProps) {
       buildModel({
         data,
         rows,
+        rowIsTemporal,
         totals,
         dateStartCol,
         dateEndCol,
@@ -693,10 +751,12 @@ export default function PivotGantt(props: PivotGanttProps) {
         orderByCol,
         orderDesc,
         dateFormatter,
+        uncategorizedColor: theme.colorBorder,
       }),
     [
       data,
       rows,
+      rowIsTemporal,
       totals,
       dateStartCol,
       dateEndCol,
@@ -706,6 +766,7 @@ export default function PivotGantt(props: PivotGanttProps) {
       orderByCol,
       orderDesc,
       dateFormatter,
+      theme.colorBorder,
     ],
   );
 
@@ -745,7 +806,13 @@ export default function PivotGantt(props: PivotGanttProps) {
 
   // ---- time range (slider) ------------------------------------------------
   const [range, setRange] = useState<[number, number] | null>(null);
-  const today = startOfDay(Date.now());
+  // "Today" is a calendar day, not an instant: take the viewer's local Y/M/D
+  // and re-anchor it as a UTC midnight, so it lands on the same grid column
+  // as a marker for that date (which is itself UTC-midnight data) — and so
+  // that formatting it in UTC shows the viewer's own day, not the day that
+  // UTC instant happens to fall on east of UTC.
+  const now = new Date();
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
   const persisted = [sliderStart, sliderEnd].filter(
     (v): v is number => v !== undefined && Number.isFinite(v),
   );
@@ -755,7 +822,8 @@ export default function PivotGantt(props: PivotGanttProps) {
   const boundsMaxRaw = startOfDay(
     Math.max(model.dataMax ?? today + 30 * DAY_MS, ...persisted),
   );
-  const boundsMax = boundsMaxRaw > boundsMin ? boundsMaxRaw : boundsMin + DAY_MS;
+  const boundsMax =
+    boundsMaxRaw > boundsMin ? boundsMaxRaw : boundsMin + DAY_MS;
   const clamp = (v: number | undefined, def: number) =>
     v === undefined || !Number.isFinite(v)
       ? def
@@ -824,6 +892,10 @@ export default function PivotGantt(props: PivotGanttProps) {
   };
 
   // ---- cross filters ------------------------------------------------------
+  // Compares against rawPath (the column's native value), not the display
+  // path: display strings collapse NULL and a temporal level's epoch to a
+  // formatted/sentinel form that no longer round-trips into an equality
+  // check against what was actually emitted below.
   const isSelected = useCallback(
     (node: Node) => {
       if (!selectedFilters) return false;
@@ -832,7 +904,7 @@ export default function PivotGantt(props: PivotGanttProps) {
         : [rows[node.depth]];
       return levels.every((col, i) => {
         const idx = emitFullHierarchy ? i : node.depth;
-        return selectedFilters[col]?.includes(node.path[idx]);
+        return selectedFilters[col]?.includes(node.rawPath[idx]);
       });
     },
     [selectedFilters, rows, emitFullHierarchy],
@@ -844,27 +916,39 @@ export default function PivotGantt(props: PivotGanttProps) {
         ? rows.map((_, i) => i).slice(0, node.depth + 1)
         : [node.depth];
       const clear = isSelected(node);
-      const sel: Record<string, string[]> = {};
+      const sel: Record<string, (string | number | null)[]> = {};
       levels.forEach(i => {
-        sel[rows[i]] = [node.path[i]];
+        sel[rows[i]] = [node.rawPath[i]];
       });
       setDataMask({
         extraFormData: {
           filters: clear
             ? []
-            : levels.map(i => ({
-                col: rows[i],
-                op: 'IN' as const,
-                val: [node.path[i]],
-              })),
+            : levels.map(i => {
+                // Resolve an adhoc column's display label back to its
+                // sqlExpression so the receiving chart's backend can use it;
+                // a plain column's label already IS its name.
+                const col = rowColumnNames[i] ?? rows[i];
+                const v = node.rawPath[i];
+                return v === null
+                  ? { col, op: 'IS NULL' as const }
+                  : { col, op: 'IN' as const, val: [v] };
+              }),
         },
         filterState: {
-          value: clear ? null : levels.map(i => node.path[i]),
+          value: clear ? null : levels.map(i => node.rawPath[i]),
           selectedFilters: clear ? null : sel,
         },
       });
     },
-    [emitCrossFilters, emitFullHierarchy, rows, isSelected, setDataMask],
+    [
+      emitCrossFilters,
+      emitFullHierarchy,
+      rows,
+      rowColumnNames,
+      isSelected,
+      setDataMask,
+    ],
   );
 
   // ---- hint ---------------------------------------------------------------
@@ -880,7 +964,9 @@ export default function PivotGantt(props: PivotGanttProps) {
   const click = (e: MouseEvent, node: Node) => {
     e.stopPropagation();
     if (hintOptions.show && hintOptions.trigger === 'click') {
-      setHint(hint?.node === node ? null : { x: e.clientX, y: e.clientY, node });
+      setHint(
+        hint?.node === node ? null : { x: e.clientX, y: e.clientY, node },
+      );
     }
     select(node);
   };
@@ -889,6 +975,9 @@ export default function PivotGantt(props: PivotGanttProps) {
   const renderMarker = (node: Node) => {
     const m = node.marker;
     if (!m) return null;
+    // Nothing to draw once it's entirely outside the zoomed range (also
+    // keeps renderMarker cheap while the slider is narrowed).
+    if (m.end < rangeStart || m.start > rangeEnd) return null;
     const left = x(m.start);
     const w = Math.max(2, (dayDiff(m.start, m.end) + 1) * dayWidth);
     const gradient = (alpha: number) =>
@@ -928,7 +1017,7 @@ export default function PivotGantt(props: PivotGanttProps) {
           top,
           height: markerOptions.height,
           background: gradient(0.5),
-          color: markerOptions.fontColor,
+          color: markerOptions.fontColor ?? theme.colorTextLightSolid,
           fontSize: markerOptions.fontSize,
         }}
         onMouseEnter={e => hover(e, node)}
@@ -939,7 +1028,10 @@ export default function PivotGantt(props: PivotGanttProps) {
         {showSides && m.left.length > 0 && (
           <span
             className="pgSide pgSideLeft"
-            style={{ fontSize: detailsStyle.fontSize, color: detailsStyle.color }}
+            style={{
+              fontSize: detailsStyle.fontSize,
+              color: detailsStyle.color ?? theme.colorText,
+            }}
           >
             {m.left.join(' | ')}
           </span>
@@ -947,7 +1039,10 @@ export default function PivotGantt(props: PivotGanttProps) {
         {showSides && m.right.length > 0 && (
           <span
             className="pgSide pgSideRight"
-            style={{ fontSize: detailsStyle.fontSize, color: detailsStyle.color }}
+            style={{
+              fontSize: detailsStyle.fontSize,
+              color: detailsStyle.color ?? theme.colorText,
+            }}
           >
             {m.right.join(' | ')}
           </span>
@@ -955,7 +1050,10 @@ export default function PivotGantt(props: PivotGanttProps) {
         {showSides && m.top.length > 0 && (
           <span
             className="pgSide pgSideTop"
-            style={{ fontSize: detailsStyle.fontSize, color: detailsStyle.color }}
+            style={{
+              fontSize: detailsStyle.fontSize,
+              color: detailsStyle.color ?? theme.colorText,
+            }}
           >
             {m.top.join(' | ')}
           </span>
@@ -963,7 +1061,10 @@ export default function PivotGantt(props: PivotGanttProps) {
         {showSides && m.bottom.length > 0 && (
           <span
             className="pgSide pgSideBottom"
-            style={{ fontSize: detailsStyle.fontSize, color: detailsStyle.color }}
+            style={{
+              fontSize: detailsStyle.fontSize,
+              color: detailsStyle.color ?? theme.colorText,
+            }}
           >
             {m.bottom.join(' | ')}
           </span>
@@ -984,7 +1085,7 @@ export default function PivotGantt(props: PivotGanttProps) {
               style={{
                 textAlign: descriptionStyle.align,
                 fontSize: descriptionStyle.fontSize,
-                color: descriptionStyle.color,
+                color: descriptionStyle.color ?? theme.colorTextLightSolid,
               }}
               title={desc}
             >
@@ -1215,7 +1316,10 @@ export default function PivotGantt(props: PivotGanttProps) {
               <div
                 className="pgCalHeaderRow"
                 key={hr.g}
-                style={{ height: headerRowH, fontSize: timelineOptions.fontSize }}
+                style={{
+                  height: headerRowH,
+                  fontSize: timelineOptions.fontSize,
+                }}
               >
                 {hr.cells.map(c => (
                   <div
@@ -1265,7 +1369,10 @@ export default function PivotGantt(props: PivotGanttProps) {
       {legendOptions.show && markersColors.length > 0 && (
         <div
           className="pgLegend"
-          style={{ fontSize: legendOptions.fontSize, minHeight: theme.sizeUnit * 6 }}
+          style={{
+            fontSize: legendOptions.fontSize,
+            minHeight: theme.sizeUnit * 6,
+          }}
         >
           {legendOptions.name && <span>{legendOptions.name}:</span>}
           {markersColors.map(c => (

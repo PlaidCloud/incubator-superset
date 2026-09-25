@@ -72,14 +72,16 @@ export interface MarkerLabelColumns {
 export interface MarkerOptions {
   height: number;
   fontSize: number;
-  fontColor: string;
+  /** unset falls back to a theme token (text sits on the colored marker) */
+  fontColor?: string;
   labelAlign: HAlign;
   showLabel: boolean;
 }
 
 export interface TextStyle {
   fontSize: number;
-  color: string;
+  /** unset falls back to a theme token */
+  color?: string;
   align?: HAlign;
 }
 
@@ -113,6 +115,14 @@ export interface PivotGanttProps {
   data: DataRecord[];
   /** hierarchy column labels, outer → inner */
   rows: string[];
+  /** parallel to `rows`: whether that level is a temporal column (its raw
+   * value is an epoch and needs date formatting for display / a numeric
+   * epoch, not a string, for a cross-filter) */
+  rowIsTemporal: boolean[];
+  /** parallel to `rows`: the backend column name/sqlExpression for each
+   * level, resolved from an adhoc column's display label — what a
+   * cross-filter's `col` must be, since `rows` holds the label */
+  rowColumnNames: string[];
   metricNames: string[];
   /** queries 2..N+1: one array per hierarchy prefix (level) */
   totals: DataRecord[][];
@@ -144,7 +154,7 @@ export interface PivotGanttProps {
   sliderEnd?: number;
   emitCrossFilters: boolean;
   emitFullHierarchy: boolean;
-  selectedFilters?: Record<string, string[]> | null;
+  selectedFilters?: Record<string, (string | number | null)[]> | null;
   setDataMask: SetDataMaskHook;
   setControlValue?: (name: string, value: unknown) => void;
   sliceId?: number;
