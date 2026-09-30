@@ -351,6 +351,8 @@ class PlaidSecurityManager(SupersetSecurityManager):
                 role=self._oauth_calculate_user_roles(userinfo),
             )
             log.debug("New user registered: %s", user)
+            if user:
+                self._push_my_rosters_best_effort(email)
 
             # If user registration failed, go away
             if not user:
@@ -365,6 +367,25 @@ class PlaidSecurityManager(SupersetSecurityManager):
         else:
             session[PROJECT_ACCESS] = []
             return None
+
+    def _push_my_rosters_best_effort(self, email: str) -> None:
+        """Ask plaid to add this new user to their groups' roles and reconcile Admin.
+
+        plaid reads the member from the token, enqueues the pushes and returns at once.
+        Never raises: login must not depend on it, and plaid's sweep repairs a miss.
+        """
+        try:
+            rpc = self.get_rpc()
+            # get_rpc's 401 handler logs the user out and clears the session, which
+            # would wreck the login in progress.
+            rpc.call_rpc = rpc._old_call_rpc
+            rpc.identity.me.push_my_superset_rosters()
+        except Exception:
+            log.warning(
+                "First-login roster push failed for %s; the sweep will repair it.",
+                email,
+                exc_info=True,
+            )
 
     # def sync_role_definitions(self):
     #     """PlaidSecurityManager constructor.

@@ -489,3 +489,77 @@ class TestDashboardRoleGrantIsProjectBound:
     def test_datasource_without_database_is_denied(self) -> None:
         sm = PlaidSecurityManager.__new__(PlaidSecurityManager)
         assert not sm.can_access_datasource_via_dashboard(SimpleNamespace())
+
+
+class RosterPushManager(StubSecurityManager):
+    """auth_user_oauth with registration faked, recording RPC calls and their order."""
+
+    auth_user_registration = True
+
+    def __init__(self, existing=None, rpc_error=None):
+        self.events = []
+        self.existing = existing
+        self.rpc_error = rpc_error
+        rpc = SimpleNamespace(
+            identity=SimpleNamespace(
+                me=SimpleNamespace(push_my_superset_rosters=self._push)
+            )
+        )
+        rpc._old_call_rpc = lambda *a, **k: None
+        self.rpc = rpc
+
+    def _push(self, *args, **kwargs):
+        self.events.append(("push", args, kwargs))
+        if self.rpc_error:
+            raise self.rpc_error
+
+    def get_rpc(self):
+        return self.rpc
+
+    def find_user(self, **kwargs):
+        return self.existing
+
+    def add_user(self, **kwargs):
+        self.events.append(("add_user",))
+        return SimpleNamespace(is_active=True)
+
+    def _oauth_calculate_user_roles(self, userinfo):
+        return []
+
+    def store_user_project_access(self):
+        pass
+
+    def update_user_auth_stat(self, user):
+        pass
+
+
+USERINFO = {"email": "new@example.com", "username": "new"}
+
+
+def test_first_login_pushes_rosters_once_after_registration_with_no_arguments():
+    manager = RosterPushManager()
+
+    assert manager.auth_user_oauth(USERINFO) is not None
+    assert manager.events == [("add_user",), ("push", (), {})]
+
+
+def test_login_succeeds_when_roster_push_fails():
+    manager = RosterPushManager(rpc_error=RuntimeError("plaid down"))
+
+    assert manager.auth_user_oauth(USERINFO) is not None
+
+
+def test_returning_user_does_not_push():
+    manager = RosterPushManager(existing=SimpleNamespace(is_active=True, roles=["Gamma"]))
+
+    manager.auth_user_oauth(USERINFO)
+
+    assert manager.events == []
+
+
+def test_failed_registration_does_not_push():
+    manager = RosterPushManager()
+    manager.add_user = lambda **kwargs: None
+
+    assert manager.auth_user_oauth(USERINFO) is None
+    assert manager.events == []
