@@ -1702,6 +1702,19 @@ def test_can_drill_dataset_via_dashboard_role_is_bounded(
     assert not sm.can_drill_dataset_via_dashboard_access(viz.datasource, dashboard)
 
 
+def test_can_drill_dataset_via_dashboard_role_granted(
+    mocker: MockerFixture,
+    app_context: None,
+) -> None:
+    """
+    A dashboard role holder the grant covers may drill the dataset.
+    """
+    sm, viz, dashboard = _dashboard_role_grant(
+        mocker, features={"DASHBOARD_RBAC"}, dashboard_grant=True
+    )
+    assert sm.can_drill_dataset_via_dashboard_access(viz.datasource, dashboard)
+
+
 def test_can_drill_dataset_via_dashboard_embedded_guest_unbounded(
     mocker: MockerFixture,
     app_context: None,
