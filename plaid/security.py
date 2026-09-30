@@ -66,7 +66,30 @@ __email__ = "garrett.bates@plaidcloud.com"
 log = logging.getLogger(__name__)
 USE_REFRESH_TOKENS = False
 PROJECT_ACCESS = "project_access"
-ROSTER_PUSH_TIMEOUT_SECONDS = 5
+
+
+def call_plaid_rpc(method: str, params: dict, token: str, timeout: float = 5) -> Any:
+    """Call a plaid JSON-RPC method with a bounded wait and return its result.
+
+    `method` is the slash-joined path SimpleRPC uses, e.g. "identity/me/scopes".
+    Unlike get_rpc(), a 401 does not log the user out, and a hung plaid cannot stall
+    the caller past `timeout`. Raises on HTTP errors and on `{"ok": false}` replies
+    (plaid answers RPC errors with HTTP 200).
+    """
+    base_url = f"http://{current_app.config.get('PLAID_RPC')}"
+    response = requests.post(
+        urljoin(urljoin(base_url, "json-rpc/"), method),
+        json={"jsonrpc": "2.0", "method": method, "params": params, "id": 0},
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    body = response.json()
+    if not body.get("ok"):
+        raise RuntimeError(f"plaid RPC {method} failed: {body.get('error')}")
+    return body.get("result")
+
+
 # Attribute memoising the RPC answer on ``g`` for contexts with no session.
 _PROJECT_ACCESS_G_ATTR = "plaid_project_access_ids"
 _UNSET = object()
@@ -375,18 +398,13 @@ class PlaidSecurityManager(SupersetSecurityManager):
 
         plaid reads the member from the token, enqueues the pushes and returns at once.
         Never raises: login must not depend on it, and plaid's sweep repairs a miss.
-        A bare request rather than get_rpc(): that wrapper logs the user out on a 401,
-        and SimpleRPC has no timeout, so a hung plaid would stall the login.
+        Uses call_plaid_rpc rather than get_rpc(): that wrapper logs the user out on a
+        401, and SimpleRPC has no timeout, so a hung plaid would stall the login.
         """
         try:
-            base_url = f"http://{self.appbuilder.app.config.get('PLAID_RPC')}"
-            method = "identity.me.push_my_superset_rosters"
-            requests.post(
-                urljoin(urljoin(base_url, "json-rpc/"), method),
-                json={"jsonrpc": "2.0", "method": method, "params": {}, "id": 0},
-                headers={"Authorization": f"Bearer {self._rpc_token()}"},
-                timeout=ROSTER_PUSH_TIMEOUT_SECONDS,
-            ).raise_for_status()
+            call_plaid_rpc(
+                "identity/me/push_my_superset_rosters", {}, self._rpc_token()
+            )
         except Exception:
             log.warning(
                 "First-login roster push failed for %s; the sweep will repair it.",
