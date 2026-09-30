@@ -47,7 +47,9 @@ class CopyDashboardCommand(BaseCommand):
             "json_metadata"
         ):
             raise DashboardInvalidError()
-        if is_feature_enabled("DASHBOARD_RBAC") and not security_manager.is_owner(
-            self._original_dash
+        if (
+            is_feature_enabled("DASHBOARD_RBAC")
+            and self._original_dash.roles
+            and not security_manager.is_owner(self._original_dash)
         ):
             raise DashboardForbiddenError()
