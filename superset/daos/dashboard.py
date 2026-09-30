@@ -361,6 +361,7 @@ class DashboardDAO(BaseDAO[Dashboard]):
 
         dash = Dashboard()
         dash.owners = [g.user] if g.user else []
+        dash.roles = list(original_dash.roles)
         dash.dashboard_title = data["dashboard_title"]
         dash.css = data.get("css")
 

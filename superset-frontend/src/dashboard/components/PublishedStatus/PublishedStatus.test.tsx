@@ -80,3 +80,38 @@ test('renders with published status and write permissions', async () => {
   userEvent.click(screen.getByText('Published'));
   expect(savePublished).toHaveBeenCalledTimes(1);
 });
+
+test('shows Manage in PlaidCloud instead of Publish for a sentinel-only dashboard', () => {
+  render(
+    <PublishedStatus
+      {...defaultProps}
+      dashboardId={7}
+      userCanEdit
+      userCanSave
+      roles={[{ id: 3, name: 'plaid_dashboard_owners_only' }]}
+    />,
+  );
+  expect(screen.queryByText('Draft')).not.toBeInTheDocument();
+  expect(
+    screen.getByRole('link', { name: 'Manage in PlaidCloud' }),
+  ).toHaveAttribute(
+    'href',
+    'http://localhost/#dashboard.audience~%7B%22dashboard_id%22%3A7%7D',
+  );
+});
+
+test('keeps the Draft button when the dashboard has a group role too', () => {
+  render(
+    <PublishedStatus
+      {...defaultProps}
+      userCanEdit
+      userCanSave
+      roles={[
+        { id: 3, name: 'plaid_dashboard_owners_only' },
+        { id: 4, name: 'plaid_rls_a' },
+      ]}
+    />,
+  );
+  expect(screen.getByText('Draft')).toBeInTheDocument();
+  expect(screen.queryByText('Manage in PlaidCloud')).not.toBeInTheDocument();
+});

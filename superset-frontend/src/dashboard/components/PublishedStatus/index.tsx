@@ -19,6 +19,7 @@
 import { Component } from 'react';
 import { t } from '@apache-superset/core/translation';
 import { Tooltip, PublishedLabel } from '@superset-ui/core/components';
+import { plaidcloudAudienceUrl } from 'src/utils/plaidcloudUrl';
 import { HeaderProps, HeaderDropdownProps } from '../Header/types';
 
 export type DashboardPublishedStatusType = {
@@ -27,7 +28,10 @@ export type DashboardPublishedStatusType = {
   userCanSave: HeaderDropdownProps['userCanSave'];
   isPublished: HeaderProps['isPublished'];
   savePublished: HeaderProps['savePublished'];
+  roles?: { id: number; name: string }[];
 };
+
+export const OWNERS_ONLY_ROLE = 'plaid_dashboard_owners_only';
 
 const draftButtonTooltip = t(
   'This dashboard is not published, it will not show up in the list of dashboards. ' +
@@ -54,7 +58,25 @@ export default class PublishedStatus extends Component<DashboardPublishedStatusT
   }
 
   render() {
-    const { isPublished, userCanEdit, userCanSave } = this.props;
+    const { isPublished, userCanEdit, userCanSave, roles, dashboardId } =
+      this.props;
+
+    if (
+      userCanEdit &&
+      userCanSave &&
+      roles?.length === 1 &&
+      roles[0].name === OWNERS_ONLY_ROLE
+    ) {
+      return (
+        <a
+          href={plaidcloudAudienceUrl(dashboardId)}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {t('Manage in PlaidCloud')}
+        </a>
+      );
+    }
 
     // Show everybody the draft badge
     if (!isPublished) {

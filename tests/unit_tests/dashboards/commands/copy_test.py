@@ -90,3 +90,19 @@ def test_copy_dao_rbac(
     else:
         with pytest.raises(DashboardForbiddenError):
             DashboardDAO.copy_dashboard(_dashboard(roles), DATA)
+
+
+def test_copy_dao_inherits_roles(mocker: MockerFixture) -> None:
+    from superset.daos.dashboard import DashboardDAO
+
+    mocker.patch("superset.daos.dashboard.is_feature_enabled", return_value=True)
+    mocker.patch("superset.daos.dashboard.security_manager.is_owner", return_value=True)
+    mocker.patch("superset.daos.dashboard.db")
+    mocker.patch("superset.daos.dashboard.g", user=None)
+    mocker.patch.object(DashboardDAO, "set_dash_metadata")
+    original = _dashboard(["plaid_rls_a", "plaid_rls_b"])
+
+    dash = DashboardDAO.copy_dashboard(original, DATA)
+
+    assert dash.roles == ["plaid_rls_a", "plaid_rls_b"]
+    assert dash.roles is not original.roles
