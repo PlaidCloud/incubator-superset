@@ -81,7 +81,7 @@ test('renders with published status and write permissions', async () => {
   expect(savePublished).toHaveBeenCalledTimes(1);
 });
 
-test('shows Manage in PlaidCloud instead of Publish for a sentinel-only dashboard', () => {
+test('keeps the Draft badge and adds Manage in PlaidCloud for a sentinel-only dashboard', () => {
   render(
     <PublishedStatus
       {...defaultProps}
@@ -91,9 +91,9 @@ test('shows Manage in PlaidCloud instead of Publish for a sentinel-only dashboar
       roles={[{ id: 3, name: 'plaid_dashboard_owners_only' }]}
     />,
   );
-  expect(screen.queryByText('Draft')).not.toBeInTheDocument();
+  expect(screen.getByText('Draft')).toBeInTheDocument();
   expect(
-    screen.getByRole('link', { name: 'Manage in PlaidCloud' }),
+    screen.getByRole('link', { name: /Manage in PlaidCloud/ }),
   ).toHaveAttribute(
     'href',
     'http://localhost/#dashboard.audience~%7B%22dashboard_id%22%3A7%7D',

@@ -19,6 +19,7 @@
 import { Component } from 'react';
 import { t } from '@apache-superset/core/translation';
 import { Tooltip, PublishedLabel } from '@superset-ui/core/components';
+import { Icons } from '@superset-ui/core/components/Icons';
 import { plaidcloudAudienceUrl } from 'src/utils/plaidcloudUrl';
 import { HeaderProps, HeaderDropdownProps } from '../Header/types';
 
@@ -68,13 +69,25 @@ export default class PublishedStatus extends Component<DashboardPublishedStatusT
       roles[0].name === OWNERS_ONLY_ROLE
     ) {
       return (
-        <a
-          href={plaidcloudAudienceUrl(dashboardId)}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          {t('Manage in PlaidCloud')}
-        </a>
+        <>
+          <Tooltip
+            id="unpublished-dashboard-tooltip"
+            placement="bottom"
+            title={draftDivTooltip}
+          >
+            <div>
+              <PublishedLabel isPublished={false} />
+            </div>
+          </Tooltip>
+          <a
+            href={plaidcloudAudienceUrl(dashboardId)}
+            target="_blank"
+            rel="noopener noreferrer"
+            css={{ textDecoration: 'underline', whiteSpace: 'nowrap' }}
+          >
+            {t('Manage in PlaidCloud')} <Icons.ExportOutlined iconSize="s" />
+          </a>
+        </>
       );
     }
 
