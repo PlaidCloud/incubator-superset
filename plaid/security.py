@@ -51,6 +51,7 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Query
 
     from superset.connectors.sqla.models import BaseDatasource
+    from superset.explorables.base import Explorable
     from superset.models.core import Database
 
 __author__ = "Garrett Bates"
@@ -554,6 +555,17 @@ class PlaidSecurityManager(SupersetSecurityManager):
         return self._can_access_project(project_id) or super().can_access_datasource(
             datasource
         )
+
+    def can_access_datasource_via_dashboard(
+        self, datasource: "BaseDatasource | Explorable"
+    ) -> bool:
+        # DASHBOARD_RBAC serves a dashboard's data to every holder of the roles
+        # its owner assigns. Data access is PlaidCloud project membership, which a
+        # dashboard owner cannot grant, so the role grant only reaches datasources
+        # in projects the viewer belongs to. A datasource with no database has no
+        # project to check and fails closed.
+        database = getattr(datasource, "database", None)
+        return database is not None and self._can_access_project(str(database.uuid))
 
     def is_owner(self, resource: Model) -> bool:
         from superset.models.slice import Slice  # a Slice is a chart
