@@ -771,11 +771,13 @@ class TestCopyDashboardCommand(SupersetTestCase):
 
     @pytest.mark.usefixtures("load_world_bank_dashboard_with_slices")
     def test_copy_dashboard_command_no_access(self):
-        """Test that a non-owner user cannot copy a dashboard if DASHBOARD_RBAC is enabled"""  # noqa: E501
+        """Test that a non-owner user cannot copy a role-gated dashboard if DASHBOARD_RBAC is enabled"""  # noqa: E501
         with self.client.application.test_request_context():
             example_dashboard = (
                 db.session.query(Dashboard).filter_by(slug="world_health").one()
             )
+            example_dashboard.roles = [security_manager.find_role("Gamma")]
+            db.session.commit()
             copy_data = {"dashboard_title": "Copied Dashboard", "json_metadata": "{}"}
 
             with override_user(security_manager.find_user("gamma")):
