@@ -508,6 +508,8 @@ class TestDashboardRoleBasedSecurity(BaseTestDashboardSecurity):
     @pytest.mark.usefixtures("load_world_bank_dashboard_with_slices")
     def test_copy_dashboard_via_dao(self):
         source = db.session.query(Dashboard).filter_by(slug="world_health").first()  # noqa: F405
+        source.roles = [security_manager.find_role("Gamma")]  # noqa: F405
+        db.session.commit()  # noqa: F405
 
         data = {
             "dashboard_title": "copied dash",
@@ -530,4 +532,5 @@ class TestDashboardRoleBasedSecurity(BaseTestDashboardSecurity):
             target = DashboardDAO.copy_dashboard(source, data)
             db.session.delete(target)  # noqa: F405
 
+        source.roles = []
         db.session.commit()  # noqa: F405

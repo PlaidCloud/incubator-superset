@@ -789,6 +789,9 @@ class TestCopyDashboardCommand(SupersetTestCase):
                     with self.assertRaises(DashboardForbiddenError):  # noqa: PT027
                         command.run()
 
+            example_dashboard.roles = []
+            db.session.commit()
+
     @pytest.mark.usefixtures("load_world_bank_dashboard_with_slices")
     def test_copy_dashboard_command_invalid_data(self):
         """Test that invalid data raises a DashboardInvalidError"""
