@@ -647,6 +647,7 @@ const Header = (): JSX.Element => {
           savePublished={boundActionCreators.savePublished}
           userCanEdit={userCanEdit}
           userCanSave={userCanSaveAs}
+          roles={dashboardInfo.roles}
         />
       ),
       !editMode && !isEmbedded && metadataBar,
@@ -654,6 +655,7 @@ const Header = (): JSX.Element => {
     [
       boundActionCreators.savePublished,
       dashboardInfo.id,
+      dashboardInfo.roles,
       editMode,
       metadataBar,
       isEmbedded,
