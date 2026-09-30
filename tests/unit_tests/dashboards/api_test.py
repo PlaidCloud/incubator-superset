@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -97,3 +98,94 @@ def test_data_key_mapping_logic() -> None:
     # fields without data_key map to themselves
     assert key_to_name["id"] == "id"
     assert key_to_name["thumbnail_url"] == "thumbnail_url"
+
+
+AUDIENCE_RESULT = {
+    "state": "groups",
+    "groups": [{"id": "a", "name": "Fin", "deleted": False, "member_count": 3}],
+    "foreign_roles": [],
+    "owners": ["Paul"],
+    "admin_count": 2,
+}
+
+
+def test_get_audience_reads_plaid_and_projects_the_payload(
+    mocker: Any, client: Any, full_api_access: None
+) -> None:
+    from superset import security_manager
+
+    mocker.patch(
+        "superset.dashboards.api.DashboardDAO.get_by_id_or_slug",
+        return_value=MagicMock(id=7),
+    )
+    mocker.patch.object(security_manager, "get_rpc", create=True)
+    mocker.patch.object(security_manager, "_rpc_token", create=True, return_value="tok")
+    call = mocker.patch("plaid.security.call_plaid_rpc", return_value=AUDIENCE_RESULT)
+
+    response = client.get("/api/v1/dashboard/7/audience")
+
+    assert response.status_code == 200
+    assert response.json["result"] == {
+        "state": "groups",
+        "groups": [{"id": "a", "name": "Fin", "deleted": False}],
+        "foreign_roles": [],
+    }
+    call.assert_called_once_with(
+        "dashboard/dashboard/audience", {"dashboard_id": 7}, "tok"
+    )
+
+
+def test_get_audience_is_501_without_plaid(client: Any, full_api_access: None) -> None:
+    assert client.get("/api/v1/dashboard/7/audience").status_code == 501
+
+
+@pytest.mark.parametrize(
+    "error_name", ["DashboardNotFoundError", "DashboardAccessDeniedError"]
+)
+def test_get_audience_hidden_dashboard_is_404_without_calling_plaid(
+    mocker: Any, client: Any, full_api_access: None, error_name: str
+) -> None:
+    from superset import security_manager
+    from superset.dashboards import api
+
+    mocker.patch.object(security_manager, "get_rpc", create=True)
+    mocker.patch(
+        "superset.dashboards.api.DashboardDAO.get_by_id_or_slug",
+        side_effect=getattr(api, error_name)(),
+    )
+    call = mocker.patch("plaid.security.call_plaid_rpc")
+
+    assert client.get("/api/v1/dashboard/7/audience").status_code == 404
+    call.assert_not_called()
+
+
+def test_get_audience_rpc_failure_is_502(
+    mocker: Any, client: Any, full_api_access: None
+) -> None:
+    from superset import security_manager
+
+    mocker.patch(
+        "superset.dashboards.api.DashboardDAO.get_by_id_or_slug",
+        return_value=MagicMock(id=7),
+    )
+    mocker.patch.object(security_manager, "get_rpc", create=True)
+    mocker.patch.object(security_manager, "_rpc_token", create=True, return_value="tok")
+    mocker.patch("plaid.security.call_plaid_rpc", side_effect=RuntimeError("down"))
+
+    assert client.get("/api/v1/dashboard/7/audience").status_code == 502
+
+
+def test_get_audience_non_object_reply_is_502(
+    mocker: Any, client: Any, full_api_access: None
+) -> None:
+    from superset import security_manager
+
+    mocker.patch(
+        "superset.dashboards.api.DashboardDAO.get_by_id_or_slug",
+        return_value=MagicMock(id=7),
+    )
+    mocker.patch.object(security_manager, "get_rpc", create=True)
+    mocker.patch.object(security_manager, "_rpc_token", create=True, return_value="tok")
+    mocker.patch("plaid.security.call_plaid_rpc", return_value=["not", "an", "object"])
+
+    assert client.get("/api/v1/dashboard/7/audience").status_code == 502
