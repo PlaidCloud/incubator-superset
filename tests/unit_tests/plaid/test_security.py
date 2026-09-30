@@ -550,7 +550,9 @@ def test_login_succeeds_when_roster_push_fails():
 
 
 def test_returning_user_does_not_push():
-    manager = RosterPushManager(existing=SimpleNamespace(is_active=True, roles=["Gamma"]))
+    manager = RosterPushManager(
+        existing=SimpleNamespace(is_active=True, roles=["Gamma"])
+    )
 
     manager.auth_user_oauth(USERINFO)
 
