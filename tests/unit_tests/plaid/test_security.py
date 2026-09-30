@@ -24,14 +24,9 @@ import pytest
 from flask_appbuilder.security.sqla.models import User
 from sqlalchemy.orm.exc import MultipleResultsFound
 
-# plaid/ imports plaidcloud-rpc, which is in requirements/base.txt but not in the
-# development.txt that CI installs, so this module is only importable where the
-# runtime dependencies are present (the superset image). Skipping loudly beats a
-# collection error that aborts the whole unit-test run.
-pytest.importorskip("plaidcloud.rpc.connection.jsonrpc")
-
-from plaid.security import PlaidSecurityManager, PROJECT_ACCESS  # noqa: E402
-from superset.security import SupersetSecurityManager  # noqa: E402
+from plaid.security import PlaidSecurityManager, PROJECT_ACCESS
+from superset.exceptions import SupersetSecurityException
+from superset.security import SupersetSecurityManager
 
 
 class FakeQuery:
@@ -400,3 +395,97 @@ class TestProjectAccessResolution:
                 PlaidSecurityManager, "_mcp_access_token", return_value="mcp-token"
             ):
                 assert sm._rpc_token() == "mcp-token"
+
+
+PROJECT = "22222222-2222-2222-2222-222222222222"
+
+
+class TestDashboardRoleGrantIsProjectBound:
+    """A dashboard role must not hand out data outside the viewer's projects.
+
+    With DASHBOARD_RBAC on, a dashboard owner who sets roles on a dashboard
+    grants every holder of those roles the data behind its charts. Project
+    membership is what gates data in PlaidCloud, and a dashboard owner cannot
+    grant it, so the role grant is bounded by the viewer's project access.
+    """
+
+    @staticmethod
+    def _request(mocker, features, projects, guest=False):
+        from superset.models.dashboard import Dashboard
+        from superset.models.slice import Slice
+
+        role = SimpleNamespace(id=7)
+        datasource = SimpleNamespace(
+            id=1,
+            perm="[db].[t](id:1)",
+            data={"id": 1, "name": "t"},
+            database=SimpleNamespace(uuid=uuid.UUID(PROJECT)),
+        )
+        slc = SimpleNamespace(id=97, datasource=datasource)
+        dashboard = SimpleNamespace(
+            id=11,
+            roles=[role],
+            published=True,
+            slices=[slc],
+            datasources=[datasource],
+            json_metadata=None,
+        )
+        rows = {Dashboard: [dashboard], Slice: [slc]}
+
+        sm = StubSecurityManager.__new__(StubSecurityManager)
+        sm.session = SimpleNamespace(query=lambda model: FakeQuery(rows[model], []))
+        mocker.patch("superset.is_feature_enabled", side_effect=features.__contains__)
+        for name, value in {
+            "is_guest_user": guest,
+            "has_guest_access": guest,
+            "is_admin": False,
+            "get_user_roles": [role],
+            "can_access_schema": False,
+            "can_access": False,
+            "is_owner": False,
+            "can_access_dashboard": True,
+            "get_datasource_access_link": None,
+        }.items():
+            mocker.patch.object(sm, name, return_value=value)
+        mocker.patch.object(sm, "_project_access_ids", return_value=projects)
+        viz = SimpleNamespace(
+            datasource=datasource,
+            form_data={"dashboardId": 11, "slice_id": 97},
+        )
+        return sm, viz, dashboard
+
+    def test_role_without_project_access_is_denied(self, mocker, app) -> None:
+        sm, viz, _ = self._request(mocker, {"DASHBOARD_RBAC"}, projects=[])
+        with app.app_context():
+            with pytest.raises(SupersetSecurityException):
+                sm.raise_for_access(viz=viz)
+
+    def test_role_with_project_access_is_allowed(self, mocker, app) -> None:
+        sm, viz, _ = self._request(mocker, {"DASHBOARD_RBAC"}, projects=[PROJECT])
+        with app.app_context():
+            sm.raise_for_access(viz=viz)
+
+    def test_embedded_guest_is_not_project_bound(self, mocker, app) -> None:
+        sm, viz, _ = self._request(
+            mocker, {"DASHBOARD_RBAC", "EMBEDDED_SUPERSET"}, projects=[], guest=True
+        )
+        with app.app_context():
+            sm.raise_for_access(viz=viz)
+        sm._project_access_ids.assert_not_called()
+
+    def test_role_grants_nothing_without_dashboard_rbac(self, mocker, app) -> None:
+        sm, viz, _ = self._request(mocker, set(), projects=[PROJECT])
+        with app.app_context():
+            with pytest.raises(SupersetSecurityException):
+                sm.raise_for_access(viz=viz)
+
+    def test_drill_without_project_access_is_denied(self, mocker, app) -> None:
+        sm, viz, dashboard = self._request(mocker, {"DASHBOARD_RBAC"}, projects=[])
+        with app.app_context():
+            assert not sm.can_drill_dataset_via_dashboard_access(
+                viz.datasource, dashboard
+            )
+
+    def test_datasource_without_database_is_denied(self) -> None:
+        sm = PlaidSecurityManager.__new__(PlaidSecurityManager)
+        assert not sm.can_access_datasource_via_dashboard(SimpleNamespace())

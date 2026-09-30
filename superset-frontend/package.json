@@ -141,6 +141,7 @@
     "@superset-ui/plugin-chart-cartodiagram": "file:./plugins/plugin-chart-cartodiagram",
     "@superset-ui/plugin-chart-echarts": "file:./plugins/plugin-chart-echarts",
     "@superset-ui/plugin-chart-gantt": "file:./plugins/plugin-chart-gantt",
+    "@superset-ui/plugin-chart-pivot-gantt": "file:./plugins/plugin-chart-pivot-gantt",
     "@superset-ui/plugin-chart-handlebars": "file:./plugins/plugin-chart-handlebars",
     "@superset-ui/plugin-chart-bar3d": "file:./plugins/plugin-chart-bar3d",
     "@superset-ui/plugin-chart-whale3d": "file:./plugins/plugin-chart-whale3d",

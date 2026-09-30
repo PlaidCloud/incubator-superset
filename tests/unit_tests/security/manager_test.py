@@ -19,6 +19,7 @@
 
 import json  # noqa: TID251
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from flask_appbuilder.security.sqla.models import Role, User
@@ -1547,3 +1548,184 @@ def test_validate_child_in_parent_multilayer_null_params(
     assert not sm._validate_child_in_parent_multilayer(
         child_slice_id=1, parent_slice=parent_slice
     )
+
+
+def _dashboard_role_grant(
+    mocker: MockerFixture,
+    *,
+    features: set[str],
+    guest: bool = False,
+    dashboard_grant: bool | None = None,
+) -> tuple[SupersetSecurityManager, Any, Any]:
+    """
+    Build a security manager and a chart request whose only route to the
+    datasource is the dashboard it is viewed on: the user holds the dashboard's
+    role and no datasource, schema or ownership permission.
+    """
+    from superset.models.dashboard import Dashboard
+
+    role = SimpleNamespace(id=7)
+    datasource = SimpleNamespace(
+        id=1,
+        perm="[db].[t](id:1)",
+        data={"id": 1, "name": "t"},
+        dataset=None,
+    )
+    slc = SimpleNamespace(id=97, datasource=datasource)
+    dashboard = SimpleNamespace(
+        id=11,
+        roles=[role],
+        published=True,
+        slices=[slc],
+        datasources=[datasource],
+        json_metadata=None,
+    )
+    rows: dict[Any, SimpleNamespace] = {Dashboard: dashboard, Slice: slc}
+
+    def query(model: type) -> Any:
+        result = mocker.MagicMock()
+        result.filter.return_value.one_or_none.return_value = rows[model]
+        return result
+
+    sm = SupersetSecurityManager(appbuilder)
+    mocker.patch.object(
+        SupersetSecurityManager,
+        "session",
+        new_callable=mocker.PropertyMock,
+        return_value=SimpleNamespace(query=query),
+    )
+    mocker.patch("superset.is_feature_enabled", side_effect=features.__contains__)
+    mocker.patch.object(sm, "is_guest_user", return_value=guest)
+    mocker.patch.object(sm, "has_guest_access", return_value=guest)
+    mocker.patch.object(sm, "get_user_roles", return_value=[role])
+    mocker.patch.object(sm, "can_access_schema", return_value=False)
+    mocker.patch.object(sm, "can_access", return_value=False)
+    mocker.patch.object(sm, "is_owner", return_value=False)
+    mocker.patch.object(sm, "can_access_dashboard", return_value=True)
+    mocker.patch.object(sm, "get_datasource_access_link", return_value=None)
+    if dashboard_grant is not None:
+        # create=True so these tests also run against a manager without the
+        # hook, which is how the unbounded grant shows up as a failure.
+        mocker.patch.object(
+            sm,
+            "can_access_datasource_via_dashboard",
+            return_value=dashboard_grant,
+            create=True,
+        )
+    viz = SimpleNamespace(
+        datasource=datasource,
+        form_data={"dashboardId": 11, "slice_id": 97},
+    )
+    return sm, viz, dashboard
+
+
+def test_raise_for_access_dashboard_role_grant_is_bounded(
+    mocker: MockerFixture,
+    app_context: None,
+) -> None:
+    """
+    A dashboard role must not reach a datasource the security manager says the
+    dashboard role grant does not cover.
+    """
+    sm, viz, _ = _dashboard_role_grant(
+        mocker, features={"DASHBOARD_RBAC"}, dashboard_grant=False
+    )
+    with pytest.raises(SupersetSecurityException):
+        sm.raise_for_access(viz=viz)
+
+
+def test_raise_for_access_dashboard_role_grant_allowed(
+    mocker: MockerFixture,
+    app_context: None,
+) -> None:
+    """
+    A dashboard role still reaches a datasource the grant covers.
+    """
+    sm, viz, _ = _dashboard_role_grant(
+        mocker, features={"DASHBOARD_RBAC"}, dashboard_grant=True
+    )
+    sm.raise_for_access(viz=viz)
+
+
+def test_raise_for_access_dashboard_role_grant_default_unbounded(
+    mocker: MockerFixture,
+    app_context: None,
+) -> None:
+    """
+    The stock security manager places no bound on the dashboard role grant.
+    """
+    sm, viz, _ = _dashboard_role_grant(mocker, features={"DASHBOARD_RBAC"})
+    sm.raise_for_access(viz=viz)
+
+
+def test_raise_for_access_embedded_guest_ignores_dashboard_role_bound(
+    mocker: MockerFixture,
+    app_context: None,
+) -> None:
+    """
+    Embedded guest-token access does not consult the dashboard role bound.
+    """
+    sm, viz, _ = _dashboard_role_grant(
+        mocker,
+        features={"DASHBOARD_RBAC", "EMBEDDED_SUPERSET"},
+        guest=True,
+    )
+    hook = mocker.patch.object(
+        sm, "can_access_datasource_via_dashboard", return_value=False
+    )
+    sm.raise_for_access(viz=viz)
+    hook.assert_not_called()
+
+
+def test_raise_for_access_dashboard_role_grant_needs_flag(
+    mocker: MockerFixture,
+    app_context: None,
+) -> None:
+    """
+    Without DASHBOARD_RBAC the dashboard role grants no datasource access.
+    """
+    sm, viz, _ = _dashboard_role_grant(mocker, features=set())
+    with pytest.raises(SupersetSecurityException):
+        sm.raise_for_access(viz=viz)
+
+
+def test_can_drill_dataset_via_dashboard_role_is_bounded(
+    mocker: MockerFixture,
+    app_context: None,
+) -> None:
+    """
+    Drill-to-detail metadata through a dashboard role honours the same bound.
+    """
+    sm, viz, dashboard = _dashboard_role_grant(
+        mocker, features={"DASHBOARD_RBAC"}, dashboard_grant=False
+    )
+    assert not sm.can_drill_dataset_via_dashboard_access(viz.datasource, dashboard)
+
+
+def test_can_drill_dataset_via_dashboard_role_granted(
+    mocker: MockerFixture,
+    app_context: None,
+) -> None:
+    """
+    A dashboard role holder the grant covers may drill the dataset.
+    """
+    sm, viz, dashboard = _dashboard_role_grant(
+        mocker, features={"DASHBOARD_RBAC"}, dashboard_grant=True
+    )
+    assert sm.can_drill_dataset_via_dashboard_access(viz.datasource, dashboard)
+
+
+def test_can_drill_dataset_via_dashboard_embedded_guest_unbounded(
+    mocker: MockerFixture,
+    app_context: None,
+) -> None:
+    """
+    Embedded guest drill access does not consult the dashboard role bound.
+    """
+    sm, viz, dashboard = _dashboard_role_grant(
+        mocker,
+        features={"EMBEDDED_SUPERSET"},
+        guest=True,
+        dashboard_grant=False,
+    )
+    assert sm.can_drill_dataset_via_dashboard_access(viz.datasource, dashboard)

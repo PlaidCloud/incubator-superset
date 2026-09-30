@@ -98,6 +98,7 @@ import { BigTextChart } from '@superset-ui/plugin-chart-big-text';
 import { PluginChartMarimekko } from '@superset-ui/plugin-chart-marimekko';
 import { BenchmarkRangeChartPlugin } from '@superset-ui/plugin-chart-benchmark-range';
 import { PluginChartGantt } from '@superset-ui/plugin-chart-gantt';
+import { PluginChartPivotGantt } from '@superset-ui/plugin-chart-pivot-gantt';
 import { PluginChartMekkoWhale } from '@superset-ui/plugin-chart-mekko-whale';
 import { PluginChartBar3D } from '@superset-ui/plugin-chart-bar3d';
 import { PluginChartWhale3D } from '@superset-ui/plugin-chart-whale3d';
@@ -261,6 +262,7 @@ export default class MainPreset extends Preset {
         new PluginChartBarNegative().configure({ key: VizType.BarNegative }),
         new PluginChartDumbbell().configure({ key: VizType.Dumbbell }),
         new PluginChartGantt().configure({ key: VizType.Gantt }),
+        new PluginChartPivotGantt().configure({ key: VizType.PivotGantt }),
       ],
     });
   }
