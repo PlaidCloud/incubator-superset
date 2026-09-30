@@ -77,5 +77,6 @@ export const canUserSaveAsDashboard = (
   isUserWithPermissionsAndRoles(user) &&
   findPermission('can_write', 'Dashboard', user?.roles) &&
   (!isFeatureEnabled(FeatureFlag.DashboardRbac) ||
+    !dashboard.roles?.length ||
     isUserAdmin(user) ||
     isUserDashboardOwner(dashboard, user));

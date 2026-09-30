@@ -230,7 +230,18 @@ describe('canUserSaveAsDashboard with RBAC feature flag enabled', () => {
     expect(canUserSaveAsDashboard(dashboard, adminUser)).toEqual(true);
   });
 
-  test('reject non-owners', () => {
-    expect(canUserSaveAsDashboard(dashboard, outsiderUser)).toEqual(false);
+  test('allows non-owners when the dashboard has no roles', () => {
+    expect(
+      canUserSaveAsDashboard({ ...dashboard, roles: [] }, outsiderUser),
+    ).toEqual(true);
+  });
+
+  test('reject non-owners when the dashboard has roles', () => {
+    expect(
+      canUserSaveAsDashboard(
+        { ...dashboard, roles: [{ id: 1, name: 'Gamma' }] },
+        outsiderUser,
+      ),
+    ).toEqual(false);
   });
 });
