@@ -68,7 +68,9 @@ USE_REFRESH_TOKENS = False
 PROJECT_ACCESS = "project_access"
 
 
-def call_plaid_rpc(method: str, params: dict, token: str, timeout: float = 5) -> Any:
+def call_plaid_rpc(
+    method: str, params: dict[str, Any], token: str, timeout: float = 5
+) -> Any:
     """Call a plaid JSON-RPC method with a bounded wait and return its result.
 
     `method` is the slash-joined path SimpleRPC uses, e.g. "identity/me/scopes".
@@ -401,10 +403,12 @@ class PlaidSecurityManager(SupersetSecurityManager):
         Uses call_plaid_rpc rather than get_rpc(): that wrapper logs the user out on a
         401, and SimpleRPC has no timeout, so a hung plaid would stall the login.
         """
+        token = self._rpc_token()
+        if not token:
+            log.warning("No PlaidCloud token for %s; skipping first-login push.", email)
+            return
         try:
-            call_plaid_rpc(
-                "identity/me/push_my_superset_rosters", {}, self._rpc_token()
-            )
+            call_plaid_rpc("identity/me/push_my_superset_rosters", {}, token)
         except Exception:
             log.warning(
                 "First-login roster push failed for %s; the sweep will repair it.",

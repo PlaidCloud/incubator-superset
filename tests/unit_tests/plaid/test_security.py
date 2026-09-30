@@ -607,6 +607,14 @@ def test_call_plaid_rpc_returns_result():
     assert manager.events[0][2]["timeout"] == 3
 
 
+def test_no_token_skips_the_push():
+    manager = RosterPushManager()
+    manager._rpc_token = lambda: None
+
+    assert login(manager) is not None
+    assert manager.events == ["add_user"]
+
+
 def test_returning_user_does_not_push():
     manager = RosterPushManager(
         existing=SimpleNamespace(is_active=True, roles=["Gamma"])
