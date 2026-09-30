@@ -48,11 +48,14 @@ import {
   getColorNamespace,
   getFreshLabelsColorMapEntries,
 } from 'src/utils/colorScheme';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import {
   setColorScheme,
   setDashboardMetadata,
 } from 'src/dashboard/actions/dashboardState';
+import { isUserAdmin } from 'src/dashboard/util/permissionUtils';
+import { RootState } from 'src/dashboard/types';
+import { useDashboardAudience } from './hooks/useDashboardAudience';
 import { dashboardInfoChanged } from 'src/dashboard/actions/dashboardInfo';
 import { areObjectsEqual } from 'src/reduxUtils';
 import { StandardModal, useModalValidation } from 'src/components/Modal';
@@ -115,6 +118,10 @@ const PropertiesModal = ({
   show = false,
 }: PropertiesModalProps) => {
   const dispatch = useDispatch();
+  const audience = useDashboardAudience(dashboardId);
+  const isAdmin = useSelector<RootState, boolean>(state =>
+    isUserAdmin(state.user),
+  );
   const [form] = Form.useForm();
 
   const [isLoading, setIsLoading] = useState(true);
@@ -386,7 +393,12 @@ const PropertiesModal = ({
       roles?: number[];
       tags?: (string | number | undefined)[];
     } = {};
-    if (isFeatureEnabled(FeatureFlag.DashboardRbac)) {
+    // Otherwise the roles shown here are stale PlaidCloud projections that
+    // would revert an audience change made in PlaidCloud.
+    if (
+      isFeatureEnabled(FeatureFlag.DashboardRbac) &&
+      (isAdmin || audience.status === 'unsupported')
+    ) {
       moreOnSubmitProps.roles = roles;
       morePutProps.roles = (roles || []).map(r => r.id);
     }
@@ -741,6 +753,9 @@ const PropertiesModal = ({
               ),
               children: (
                 <AccessSection
+                  dashboardId={dashboardId}
+                  isAdmin={isAdmin}
+                  audience={audience}
                   isLoading={isLoading}
                   owners={owners}
                   roles={roles}

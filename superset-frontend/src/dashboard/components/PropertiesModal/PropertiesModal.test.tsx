@@ -140,6 +140,9 @@ const dashboardInfo = {
   url: '/superset/dashboard/26/',
 };
 
+// A non-PlaidCloud deployment: the stock roles select stays.
+fetchMock.get('glob:*/api/v1/dashboard/*/audience', 501, { name: 'audience' });
+
 fetchMock.get('glob:*/api/v1/dashboard/26', {
   body: {
     result: { ...dashboardInfo, json_metadata: mockedJsonMetadata },
@@ -386,6 +389,46 @@ describe('PropertiesModal', () => {
       expect(submitCall.id).toBe(26);
       expect(submitCall.title).toBe('COVID Vaccine Dashboard');
       // certifiedBy and certificationDetails come from dashboardInfo, not props
+    });
+  });
+
+  test('a non-admin save on a PlaidCloud deployment does not send roles', async () => {
+    fetchMock.removeRoutes({ names: ['audience'] });
+    fetchMock.get(
+      'glob:*/api/v1/dashboard/*/audience',
+      { result: { state: 'everyone', groups: [], foreign_roles: [] } },
+      { name: 'audience' },
+    );
+    mockedIsFeatureEnabled.mockImplementation(
+      (flag: any) => flag === FeatureFlag.DashboardRbac,
+    );
+    const props = createProps();
+    props.onlyApply = false;
+    const put = jest.spyOn(SupersetCore.SupersetClient, 'put');
+    put.mockResolvedValue({ json: { result: {} } } as any);
+    render(
+      <PropertiesModal
+        {...props}
+        dashboardInfo={{ ...dashboardInfo, json_metadata: mockedJsonMetadata }}
+      />,
+      { useRedux: true },
+    );
+    await screen.findByTestId('dashboard-edit-properties-form');
+    await screen
+      .findByText('Manage in PlaidCloud', undefined, {
+        timeout: 5000,
+      })
+      .catch(() => undefined);
+
+    userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    expect(JSON.parse((put.mock.calls[0][0] as any).body)).not.toHaveProperty(
+      'roles',
+    );
+
+    fetchMock.removeRoutes({ names: ['audience'] });
+    fetchMock.get('glob:*/api/v1/dashboard/*/audience', 501, {
+      name: 'audience',
     });
   });
 

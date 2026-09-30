@@ -114,7 +114,7 @@ from superset.dashboards.schemas import (
     thumbnail_query_schema,
 )
 from superset.exceptions import ScreenshotImageNotAvailableException
-from superset.extensions import event_logger
+from superset.extensions import event_logger, security_manager
 from superset.models.dashboard import Dashboard
 from superset.models.embedded_dashboard import EmbeddedDashboard
 from superset.security.guest_token import GuestUser
@@ -235,6 +235,7 @@ class DashboardRestApi(CustomTagsOptimizationMixin, BaseSupersetModelRestApi):
         "get_charts",
         "get_datasets",
         "get_tabs",
+        "get_audience",
         "get_embedded",
         "set_embedded",
         "delete_embedded",
@@ -569,6 +570,77 @@ class DashboardRestApi(CustomTagsOptimizationMixin, BaseSupersetModelRestApi):
             return self.response(200, result=result)
         except (TypeError, ValueError) as err:
             raise DatasetValidationError(err) from err
+
+    @expose("/<id_or_slug>/audience", methods=("GET",))
+    @protect()
+    @safe
+    @statsd_metrics
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.get_audience",
+        log_to_statsd=False,
+    )
+    def get_audience(self, id_or_slug: str) -> Response:
+        """Get the PlaidCloud audience of a dashboard.
+        ---
+        get:
+          summary: Get the PlaidCloud audience of a dashboard
+          description: >-
+            Returns the PlaidCloud groups that can see the dashboard, read from
+            PlaidCloud. 501 when this deployment is not backed by PlaidCloud.
+          parameters:
+          - in: path
+            schema:
+              type: string
+            name: id_or_slug
+            description: Either the id of the dashboard, or its slug
+          responses:
+            200:
+              description: Dashboard audience
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      result:
+                        type: object
+            401:
+              $ref: '#/components/responses/401'
+            404:
+              $ref: '#/components/responses/404'
+            501:
+              description: Not a PlaidCloud deployment
+            502:
+              description: PlaidCloud could not be reached
+        """
+        if not hasattr(security_manager, "get_rpc"):
+            return self.response(501, message="Not a PlaidCloud deployment")
+        try:
+            dash = DashboardDAO.get_by_id_or_slug(id_or_slug)
+        except (DashboardAccessDeniedError, DashboardNotFoundError):
+            return self.response_404()
+        try:
+            from plaid.security import call_plaid_rpc
+
+            audience = call_plaid_rpc(
+                "dashboard/dashboard/audience",
+                {"dashboard_id": dash.id},
+                security_manager._rpc_token(),  # pylint: disable=protected-access
+            )
+            if audience is not None:
+                audience = {
+                    "state": audience["state"],
+                    "groups": [
+                        {k: g.get(k) for k in ("id", "name", "deleted")}
+                        for g in audience["groups"]
+                    ],
+                    "foreign_roles": audience["foreign_roles"],
+                }
+        except Exception:  # pylint: disable=broad-except
+            logger.exception("PlaidCloud audience lookup failed for %s", dash.id)
+            return self.response(502, message="PlaidCloud audience unavailable")
+        if audience is None:
+            return self.response_404()
+        return self.response(200, result=audience)
 
     @expose("/<id_or_slug>/tabs", methods=("GET",))
     @protect()
