@@ -74,6 +74,8 @@ billiard==4.2.1
     # via
     #   -c requirements/base-constraint.txt
     #   celery
+bleach==6.2.0
+    # via plaidcloud-rpc
 blinker==1.9.0
     # via
     #   -c requirements/base-constraint.txt
@@ -605,6 +607,8 @@ ordered-set==4.1.0
     # via
     #   -c requirements/base-constraint.txt
     #   flask-limiter
+orjson==3.10.15
+    # via plaidcloud-rpc
 outcome==1.3.0.post0
     # via
     #   -c requirements/base-constraint.txt
@@ -662,6 +666,8 @@ pillow==11.3.0
     #   matplotlib
 pip==25.1.1
     # via apache-superset
+plaidcloud-rpc==1.6.3
+    # via -r requirements/development.in
 platformdirs==4.3.8
     # via
     #   -c requirements/base-constraint.txt
@@ -882,6 +888,8 @@ requests-cache==1.2.1
     # via
     #   -c requirements/base-constraint.txt
     #   shillelagh
+requests-futures==1.0.2
+    # via plaidcloud-rpc
 requests-oauthlib==2.0.0
     # via google-auth-oauthlib
 rfc3339-validator==0.1.4
@@ -998,6 +1006,8 @@ tabulate==0.9.0
     #   apache-superset
 tomlkit==0.13.3
     # via pylint
+toolz==1.1.0
+    # via plaidcloud-rpc
 tqdm==4.67.1
     # via
     #   cmdstanpy
@@ -1084,6 +1094,8 @@ wcwidth==0.2.13
     # via
     #   -c requirements/base-constraint.txt
     #   prompt-toolkit
+webencodings==0.6.1
+    # via bleach
 websocket-client==1.8.0
     # via
     #   -c requirements/base-constraint.txt

@@ -742,11 +742,29 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
                 and dashboard.published
                 and {role.id for role in dashboard.roles}
                 & {role.id for role in self.get_user_roles()}
+                and self.can_access_datasource_via_dashboard(dataset)
             )
         ) and dataset.id in {dataset.id for dataset in dashboard.datasources}:
             return True
 
         return False
+
+    def can_access_datasource_via_dashboard(
+        self, datasource: "BaseDatasource | Explorable"
+    ) -> bool:
+        """
+        Return True if a DASHBOARD_RBAC role grant may extend to the datasource.
+
+        A dashboard's roles grant their holders the data behind the dashboard's
+        charts, native filters and drills. By default nothing further bounds that
+        grant; a security manager that ties data access to something a dashboard
+        owner cannot hand out overrides this. Embedded guest-token access does not
+        consult it.
+
+        :param datasource: The datasource reached through the dashboard
+        :returns: Whether the dashboard role grant covers the datasource
+        """
+        return True
 
     def _validate_child_in_parent_multilayer(
         self, child_slice_id: int, parent_slice: "Slice"
@@ -2660,10 +2678,14 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
                         .one_or_none()
                     )
                     and (
-                        (is_feature_enabled("DASHBOARD_RBAC") and dashboard_.roles)
-                        or (
+                        (
                             is_feature_enabled("EMBEDDED_SUPERSET")
                             and self.is_guest_user()
+                        )
+                        or (
+                            is_feature_enabled("DASHBOARD_RBAC")
+                            and dashboard_.roles
+                            and self.can_access_datasource_via_dashboard(datasource)
                         )
                     )
                     and (
