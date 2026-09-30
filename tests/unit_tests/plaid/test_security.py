@@ -22,6 +22,7 @@ from unittest.mock import patch
 import flask
 import pytest
 from flask_appbuilder.security.sqla.models import User
+from requests.exceptions import HTTPError
 from sqlalchemy.orm.exc import MultipleResultsFound
 
 from plaid.security import PlaidSecurityManager, PROJECT_ACCESS
@@ -492,35 +493,25 @@ class TestDashboardRoleGrantIsProjectBound:
 
 
 class RosterPushManager(StubSecurityManager):
-    """auth_user_oauth with registration faked, recording RPC calls and their order."""
+    """auth_user_oauth with registration faked, recording add_user and the push."""
 
     auth_user_registration = True
 
-    def __init__(self, existing=None, rpc_error=None):
+    def __init__(self, existing=None):
         self.events = []
         self.existing = existing
-        self.rpc_error = rpc_error
-        rpc = SimpleNamespace(
-            identity=SimpleNamespace(
-                me=SimpleNamespace(push_my_superset_rosters=self._push)
-            )
+        self.appbuilder = SimpleNamespace(
+            app=SimpleNamespace(config={"PLAID_RPC": "plaid-rpc:8080"})
         )
-        rpc._old_call_rpc = lambda *a, **k: None
-        self.rpc = rpc
 
-    def _push(self, *args, **kwargs):
-        self.events.append(("push", args, kwargs))
-        if self.rpc_error:
-            raise self.rpc_error
-
-    def get_rpc(self):
-        return self.rpc
+    def _rpc_token(self):
+        return "tok"
 
     def find_user(self, **kwargs):
         return self.existing
 
     def add_user(self, **kwargs):
-        self.events.append(("add_user",))
+        self.events.append("add_user")
         return SimpleNamespace(is_active=True)
 
     def _oauth_calculate_user_roles(self, userinfo):
@@ -536,17 +527,57 @@ class RosterPushManager(StubSecurityManager):
 USERINFO = {"email": "new@example.com", "username": "new"}
 
 
+def fake_post(manager, error=None):
+    def post(url, **kwargs):
+        manager.events.append(("post", url, kwargs))
+        if error:
+            raise error
+        return SimpleNamespace(raise_for_status=lambda: None)
+
+    return post
+
+
 def test_first_login_pushes_rosters_once_after_registration_with_no_arguments():
     manager = RosterPushManager()
 
-    assert manager.auth_user_oauth(USERINFO) is not None
-    assert manager.events == [("add_user",), ("push", (), {})]
+    with patch("plaid.security.requests.post", fake_post(manager)):
+        assert manager.auth_user_oauth(USERINFO) is not None
+
+    url = "http://plaid-rpc:8080/json-rpc/identity.me.push_my_superset_rosters"
+    assert manager.events[0] == "add_user"
+    assert len(manager.events) == 2
+    _, posted_url, kwargs = manager.events[1]
+    assert posted_url == url
+    assert kwargs["json"]["params"] == {}
+    assert kwargs["headers"] == {"Authorization": "Bearer tok"}
+    assert kwargs["timeout"] == 5
 
 
 def test_login_succeeds_when_roster_push_fails():
-    manager = RosterPushManager(rpc_error=RuntimeError("plaid down"))
+    manager = RosterPushManager()
 
-    assert manager.auth_user_oauth(USERINFO) is not None
+    with patch(
+        "plaid.security.requests.post", fake_post(manager, RuntimeError("down"))
+    ):
+        assert manager.auth_user_oauth(USERINFO) is not None
+
+
+def test_push_401_does_not_log_out_or_clear_the_session():
+    manager = RosterPushManager()
+    error = HTTPError(response=SimpleNamespace(status_code=401))
+    app = flask.Flask(__name__)
+    app.secret_key = "test"  # noqa: S105
+
+    with (
+        patch("plaid.security.requests.post", fake_post(manager, error)),
+        patch("plaid.security.logout_user") as logout,
+        app.test_request_context(),
+    ):
+        flask.session["oauth"] = ("tok", "")
+        assert manager.auth_user_oauth(USERINFO) is not None
+        assert flask.session["oauth"] == ("tok", "")
+
+    logout.assert_not_called()
 
 
 def test_returning_user_does_not_push():
@@ -554,7 +585,8 @@ def test_returning_user_does_not_push():
         existing=SimpleNamespace(is_active=True, roles=["Gamma"])
     )
 
-    manager.auth_user_oauth(USERINFO)
+    with patch("plaid.security.requests.post", fake_post(manager)):
+        manager.auth_user_oauth(USERINFO)
 
     assert manager.events == []
 
@@ -563,5 +595,7 @@ def test_failed_registration_does_not_push():
     manager = RosterPushManager()
     manager.add_user = lambda **kwargs: None
 
-    assert manager.auth_user_oauth(USERINFO) is None
+    with patch("plaid.security.requests.post", fake_post(manager)):
+        assert manager.auth_user_oauth(USERINFO) is None
+
     assert manager.events == []

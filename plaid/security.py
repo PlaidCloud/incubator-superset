@@ -27,6 +27,7 @@ from typing import Any, Optional, TYPE_CHECKING
 from urllib.parse import urljoin
 
 import jwt
+import requests
 from authlib.integrations.flask_client import token_update
 from flask import current_app, g, has_app_context, has_request_context, session
 from flask_appbuilder import Model
@@ -65,6 +66,7 @@ __email__ = "garrett.bates@plaidcloud.com"
 log = logging.getLogger(__name__)
 USE_REFRESH_TOKENS = False
 PROJECT_ACCESS = "project_access"
+ROSTER_PUSH_TIMEOUT_SECONDS = 5
 # Attribute memoising the RPC answer on ``g`` for contexts with no session.
 _PROJECT_ACCESS_G_ATTR = "plaid_project_access_ids"
 _UNSET = object()
@@ -369,17 +371,22 @@ class PlaidSecurityManager(SupersetSecurityManager):
             return None
 
     def _push_my_rosters_best_effort(self, email: str) -> None:
-        """Ask plaid to add this new user to their groups' roles and reconcile Admin.
+        """Ask plaid to refresh the roles of this new user's groups.
 
         plaid reads the member from the token, enqueues the pushes and returns at once.
         Never raises: login must not depend on it, and plaid's sweep repairs a miss.
+        A bare request rather than get_rpc(): that wrapper logs the user out on a 401,
+        and SimpleRPC has no timeout, so a hung plaid would stall the login.
         """
         try:
-            rpc = self.get_rpc()
-            # get_rpc's 401 handler logs the user out and clears the session, which
-            # would wreck the login in progress.
-            rpc.call_rpc = rpc._old_call_rpc
-            rpc.identity.me.push_my_superset_rosters()
+            base_url = f"http://{self.appbuilder.app.config.get('PLAID_RPC')}"
+            method = "identity.me.push_my_superset_rosters"
+            requests.post(
+                urljoin(urljoin(base_url, "json-rpc/"), method),
+                json={"jsonrpc": "2.0", "method": method, "params": {}, "id": 0},
+                headers={"Authorization": f"Bearer {self._rpc_token()}"},
+                timeout=ROSTER_PUSH_TIMEOUT_SECONDS,
+            ).raise_for_status()
         except Exception:
             log.warning(
                 "First-login roster push failed for %s; the sweep will repair it.",
