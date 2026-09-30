@@ -27,6 +27,7 @@ from typing import Any, Optional, TYPE_CHECKING
 from urllib.parse import urljoin
 
 import jwt
+import requests
 from authlib.integrations.flask_client import token_update
 from flask import current_app, g, has_app_context, has_request_context, session
 from flask_appbuilder import Model
@@ -65,6 +66,32 @@ __email__ = "garrett.bates@plaidcloud.com"
 log = logging.getLogger(__name__)
 USE_REFRESH_TOKENS = False
 PROJECT_ACCESS = "project_access"
+
+
+def call_plaid_rpc(
+    method: str, params: dict[str, Any], token: str, timeout: float = 5
+) -> Any:
+    """Call a plaid JSON-RPC method with a bounded wait and return its result.
+
+    `method` is the slash-joined path SimpleRPC uses, e.g. "identity/me/scopes".
+    Unlike get_rpc(), a 401 does not log the user out, and a hung plaid cannot stall
+    the caller past `timeout`. Raises on HTTP errors and on `{"ok": false}` replies
+    (plaid answers RPC errors with HTTP 200).
+    """
+    base_url = f"http://{current_app.config.get('PLAID_RPC')}"
+    response = requests.post(
+        urljoin(urljoin(base_url, "json-rpc/"), method),
+        json={"jsonrpc": "2.0", "method": method, "params": params, "id": 0},
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    body = response.json()
+    if not body.get("ok"):
+        raise RuntimeError(f"plaid RPC {method} failed: {body.get('error')}")
+    return body.get("result")
+
+
 # Attribute memoising the RPC answer on ``g`` for contexts with no session.
 _PROJECT_ACCESS_G_ATTR = "plaid_project_access_ids"
 _UNSET = object()
@@ -351,6 +378,8 @@ class PlaidSecurityManager(SupersetSecurityManager):
                 role=self._oauth_calculate_user_roles(userinfo),
             )
             log.debug("New user registered: %s", user)
+            if user:
+                self._push_my_rosters_best_effort(email)
 
             # If user registration failed, go away
             if not user:
@@ -365,6 +394,27 @@ class PlaidSecurityManager(SupersetSecurityManager):
         else:
             session[PROJECT_ACCESS] = []
             return None
+
+    def _push_my_rosters_best_effort(self, email: str) -> None:
+        """Ask plaid to refresh the roles of this new user's groups.
+
+        plaid reads the member from the token, enqueues the pushes and returns at once.
+        Never raises: login must not depend on it, and plaid's sweep repairs a miss.
+        Uses call_plaid_rpc rather than get_rpc(): that wrapper logs the user out on a
+        401, and SimpleRPC has no timeout, so a hung plaid would stall the login.
+        """
+        token = self._rpc_token()
+        if not token:
+            log.warning("No PlaidCloud token for %s; skipping first-login push.", email)
+            return
+        try:
+            call_plaid_rpc("identity/me/push_my_superset_rosters", {}, token)
+        except Exception:
+            log.warning(
+                "First-login roster push failed for %s; the sweep will repair it.",
+                email,
+                exc_info=True,
+            )
 
     # def sync_role_definitions(self):
     #     """PlaidSecurityManager constructor.
