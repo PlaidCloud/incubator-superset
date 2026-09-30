@@ -154,6 +154,8 @@ MODEL_API_RW_METHOD_PERMISSION_MAP = {
     "get_datasets": "read",
     "get_tabs": "read",
     "get_audience": "read",
+    "request_access": "read",
+    "access_context": "read",
     "function_names": "read",
     "available": "read",
     "validate_sql": "read",
