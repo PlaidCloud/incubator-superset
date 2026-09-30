@@ -35,7 +35,7 @@ from flask_appbuilder.security.manager import AUTH_OAUTH
 from flask_login import logout_user
 from plaidcloud.rpc.connection.jsonrpc import SimpleRPC
 from requests.exceptions import HTTPError
-from sqlalchemy import func
+from sqlalchemy import func, inspect, text
 
 from plaid import rls_guard
 from plaid.auth_oidc import PlaidAuthOAuthView
@@ -112,6 +112,29 @@ class _PlaidGuardedRoleApi(rls_guard.PlaidRoleApi, SupersetRoleApi):
     `plaid_rls_` prefix) behaves exactly as upstream, including
     `SupersetRoleApi.pre_delete`'s permission-clearing override.
     """
+
+
+def _has_explicit_audience(session: Any, dashboard_uuid: Any) -> bool:
+    """Whether an owner has explicitly chosen this dashboard's audience.
+
+    The record lives in plaid's ``dashboard_audience_explicit`` table; a database
+    without the table has no explicit choices. Rows plaid's own sweep wrote
+    (``set_by`` of ``plaid:default``) record an applied default, not an owner's
+    choice, so a republish re-applies the current default.
+    """
+    connection = session.connection()
+    if not inspect(connection).has_table("dashboard_audience_explicit"):
+        return False
+    return (
+        connection.execute(
+            text(
+                "SELECT 1 FROM dashboard_audience_explicit "
+                "WHERE dashboard_uuid = :dashboard_uuid AND set_by <> 'plaid:default'"
+            ),
+            {"dashboard_uuid": str(dashboard_uuid)},
+        ).first()
+        is not None
+    )
 
 
 class PlaidSecurityManager(SupersetSecurityManager):
@@ -633,6 +656,77 @@ class PlaidSecurityManager(SupersetSecurityManager):
             or self.is_admin()
             or rls_guard.is_automation_principal()
         )
+
+    def apply_default_dashboard_audience(
+        self, properties: dict[str, Any], dashboard: Any
+    ) -> dict[str, Any] | None:
+        # Fail closed: once this decides a default applies, any failure to fetch
+        # it refuses the publish instead of leaving the dashboard wider than its
+        # project allows.
+        from superset import db, is_feature_enabled
+        from superset.commands.dashboard.exceptions import (
+            DashboardDefaultAudienceError,
+        )
+        from superset.commands.utils import populate_roles
+
+        if (
+            not is_feature_enabled("DASHBOARD_RBAC")
+            or rls_guard.is_automation_principal()
+        ):
+            return None
+        if properties.get("roles") or _has_explicit_audience(
+            db.session, dashboard.uuid
+        ):
+            return None
+        database_uuids = sorted(
+            {
+                str(datasource.database.uuid)
+                for datasource in dashboard.datasources
+                if getattr(datasource, "database", None) is not None
+            }
+        )
+        if not database_uuids:
+            return None
+
+        token = self._rpc_token()
+        if not token:
+            raise DashboardDefaultAudienceError()
+        try:
+            audience = call_plaid_rpc(
+                "dashboard/dashboard/default_audience",
+                {"database_uuids": database_uuids},
+                token,
+            )
+            roles = populate_roles([role["id"] for role in audience["roles"]])
+            published = bool(audience["published"])
+            group_names = list(audience["group_names"])
+            state = audience["state"]
+        except Exception as ex:
+            log.warning("Default dashboard audience unavailable.", exc_info=True)
+            raise DashboardDefaultAudienceError() from ex
+
+        properties["roles"] = roles
+        properties["published"] = published
+        return {
+            "state": state,
+            "published": published,
+            "group_names": group_names,
+            "roles": [{"id": role.id, "name": role.name} for role in roles],
+        }
+
+    def restrict_imported_dashboard(
+        self, config: dict[str, Any], existing: Any = None
+    ) -> None:
+        # An import runs from the CLI or a worker with no credential to ask plaid
+        # for the project default, so it never publishes a dashboard that was not
+        # already published.
+        from superset import is_feature_enabled
+
+        if (
+            is_feature_enabled("DASHBOARD_RBAC")
+            and not rls_guard.is_automation_principal()
+        ):
+            config["published"] = bool(existing is not None and existing.published)
 
     def is_owner(self, resource: Model) -> bool:
         from superset.models.slice import Slice  # a Slice is a chart

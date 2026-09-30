@@ -177,6 +177,10 @@ def _access_denied(api: BaseSupersetModelRestApi) -> Response:
     return api.response_403()
 
 
+def _default_audience_response(applied: dict[str, Any] | None) -> dict[str, Any]:
+    return {"default_audience": applied} if applied else {}
+
+
 def with_dashboard(
     f: Callable[[BaseSupersetModelRestApi, Dashboard], Response],
 ) -> Callable[[BaseSupersetModelRestApi, str], Response]:
@@ -1025,7 +1029,8 @@ class DashboardRestApi(CustomTagsOptimizationMixin, BaseSupersetModelRestApi):
         except ValidationError as error:
             return self.response_400(message=error.messages)
         try:
-            changed_model = UpdateDashboardCommand(pk, item).run()
+            command = UpdateDashboardCommand(pk, item)
+            changed_model = command.run()
             last_modified_time = changed_model.changed_on.replace(
                 microsecond=0
             ).timestamp()
@@ -1034,6 +1039,7 @@ class DashboardRestApi(CustomTagsOptimizationMixin, BaseSupersetModelRestApi):
                 id=changed_model.id,
                 result=item,
                 last_modified_time=last_modified_time,
+                **_default_audience_response(command.default_audience),
             )
         except DashboardNotFoundError:
             response = self.response_404()

@@ -55,6 +55,7 @@ class UpdateDashboardCommand(UpdateMixin, BaseCommand):
         self._model_id = model_id
         self._properties = data.copy()
         self._model: Optional[Dashboard] = None
+        self.default_audience: Optional[dict[str, Any]] = None
 
     @transaction(on_error=partial(on_error, reraise=DashboardUpdateFailedError))
     def run(self) -> Model:
@@ -131,6 +132,11 @@ class UpdateDashboardCommand(UpdateMixin, BaseCommand):
             exceptions.append(ex)
         if exceptions:
             raise DashboardInvalidError(exceptions=exceptions)
+
+        if self._properties.get("published") and not self._model.published:
+            self.default_audience = security_manager.apply_default_dashboard_audience(
+                self._properties, self._model
+            )
 
     @staticmethod
     def _send_deactivated_report_email(

@@ -750,6 +750,31 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
 
         return False
 
+    def apply_default_dashboard_audience(
+        self, properties: dict[str, Any], dashboard: "Dashboard"
+    ) -> dict[str, Any] | None:
+        """
+        Hook run when a dashboard is published, on update or by other code paths
+        that set ``published``. Creating a dashboard does not call it: a new
+        dashboard has no charts, so there is no project to ask.
+
+        A security manager that assigns a default audience to new dashboards
+        overrides this, edits ``properties`` (``published``, ``roles``) in place and
+        returns a description of what it applied. By default nothing is applied.
+
+        :param properties: The command's (mutable) properties
+        :param dashboard: The dashboard being published
+        """
+        return None
+
+    def restrict_imported_dashboard(
+        self, config: dict[str, Any], existing: "Dashboard | None"
+    ) -> None:
+        """
+        Hook run on an imported dashboard config before it is stored; a security
+        manager may edit ``config`` in place. By default nothing changes.
+        """
+
     def can_access_datasource_via_dashboard(
         self, datasource: "BaseDatasource | Explorable"
     ) -> bool:
