@@ -27,6 +27,7 @@ from typing import Any, Optional, TYPE_CHECKING
 from urllib.parse import urljoin
 
 import jwt
+import requests
 from authlib.integrations.flask_client import token_update
 from flask import current_app, g, has_app_context, has_request_context, session
 from flask_appbuilder import Model
@@ -34,7 +35,7 @@ from flask_appbuilder.security.manager import AUTH_OAUTH
 from flask_login import logout_user
 from plaidcloud.rpc.connection.jsonrpc import SimpleRPC
 from requests.exceptions import HTTPError
-from sqlalchemy import func
+from sqlalchemy import func, inspect, text
 
 from plaid import rls_guard
 from plaid.auth_oidc import PlaidAuthOAuthView
@@ -65,6 +66,32 @@ __email__ = "garrett.bates@plaidcloud.com"
 log = logging.getLogger(__name__)
 USE_REFRESH_TOKENS = False
 PROJECT_ACCESS = "project_access"
+
+
+def call_plaid_rpc(
+    method: str, params: dict[str, Any], token: str, timeout: float = 5
+) -> Any:
+    """Call a plaid JSON-RPC method with a bounded wait and return its result.
+
+    `method` is the slash-joined path SimpleRPC uses, e.g. "identity/me/scopes".
+    Unlike get_rpc(), a 401 does not log the user out, and a hung plaid cannot stall
+    the caller past `timeout`. Raises on HTTP errors and on `{"ok": false}` replies
+    (plaid answers RPC errors with HTTP 200).
+    """
+    base_url = f"http://{current_app.config.get('PLAID_RPC')}"
+    response = requests.post(
+        urljoin(urljoin(base_url, "json-rpc/"), method),
+        json={"jsonrpc": "2.0", "method": method, "params": params, "id": 0},
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    body = response.json()
+    if not body.get("ok"):
+        raise RuntimeError(f"plaid RPC {method} failed: {body.get('error')}")
+    return body.get("result")
+
+
 # Attribute memoising the RPC answer on ``g`` for contexts with no session.
 _PROJECT_ACCESS_G_ATTR = "plaid_project_access_ids"
 _UNSET = object()
@@ -85,6 +112,29 @@ class _PlaidGuardedRoleApi(rls_guard.PlaidRoleApi, SupersetRoleApi):
     `plaid_rls_` prefix) behaves exactly as upstream, including
     `SupersetRoleApi.pre_delete`'s permission-clearing override.
     """
+
+
+def _has_explicit_audience(session: Any, dashboard_uuid: Any) -> bool:
+    """Whether an owner has explicitly chosen this dashboard's audience.
+
+    The record lives in plaid's ``dashboard_audience_explicit`` table; a database
+    without the table has no explicit choices. Rows plaid's own sweep wrote
+    (``set_by`` of ``plaid:default``) record an applied default, not an owner's
+    choice, so a republish re-applies the current default.
+    """
+    connection = session.connection()
+    if not inspect(connection).has_table("dashboard_audience_explicit"):
+        return False
+    return (
+        connection.execute(
+            text(
+                "SELECT 1 FROM dashboard_audience_explicit "
+                "WHERE dashboard_uuid = :dashboard_uuid AND set_by <> 'plaid:default'"
+            ),
+            {"dashboard_uuid": str(dashboard_uuid)},
+        ).first()
+        is not None
+    )
 
 
 class PlaidSecurityManager(SupersetSecurityManager):
@@ -351,6 +401,8 @@ class PlaidSecurityManager(SupersetSecurityManager):
                 role=self._oauth_calculate_user_roles(userinfo),
             )
             log.debug("New user registered: %s", user)
+            if user:
+                self._push_my_rosters_best_effort(email)
 
             # If user registration failed, go away
             if not user:
@@ -365,6 +417,27 @@ class PlaidSecurityManager(SupersetSecurityManager):
         else:
             session[PROJECT_ACCESS] = []
             return None
+
+    def _push_my_rosters_best_effort(self, email: str) -> None:
+        """Ask plaid to refresh the roles of this new user's groups.
+
+        plaid reads the member from the token, enqueues the pushes and returns at once.
+        Never raises: login must not depend on it, and plaid's sweep repairs a miss.
+        Uses call_plaid_rpc rather than get_rpc(): that wrapper logs the user out on a
+        401, and SimpleRPC has no timeout, so a hung plaid would stall the login.
+        """
+        token = self._rpc_token()
+        if not token:
+            log.warning("No PlaidCloud token for %s; skipping first-login push.", email)
+            return
+        try:
+            call_plaid_rpc("identity/me/push_my_superset_rosters", {}, token)
+        except Exception:
+            log.warning(
+                "First-login roster push failed for %s; the sweep will repair it.",
+                email,
+                exc_info=True,
+            )
 
     # def sync_role_definitions(self):
     #     """PlaidSecurityManager constructor.
@@ -566,6 +639,94 @@ class PlaidSecurityManager(SupersetSecurityManager):
         # project to check and fails closed.
         database = getattr(datasource, "database", None)
         return database is not None and self._can_access_project(str(database.uuid))
+
+    def can_set_dashboard_roles(
+        self, current_role_ids: Iterable[int], requested_role_ids: Iterable[int]
+    ) -> bool:
+        # With DASHBOARD_RBAC the dashboard roles are the audience, which
+        # PlaidCloud owns and writes as the automation principal. An owner who
+        # could set them directly would grant an audience PlaidCloud doesn't
+        # know about. Header saves resend the current roles, so an unchanged
+        # list passes.
+        from superset import is_feature_enabled
+
+        return (
+            not is_feature_enabled("DASHBOARD_RBAC")
+            or set(current_role_ids) == set(requested_role_ids)
+            or self.is_admin()
+            or rls_guard.is_automation_principal()
+        )
+
+    def apply_default_dashboard_audience(
+        self, properties: dict[str, Any], dashboard: Any
+    ) -> dict[str, Any] | None:
+        # Fail closed: once this decides a default applies, any failure to fetch
+        # it refuses the publish instead of leaving the dashboard wider than its
+        # project allows.
+        from superset import db, is_feature_enabled
+        from superset.commands.dashboard.exceptions import (
+            DashboardDefaultAudienceError,
+        )
+        from superset.commands.utils import populate_roles
+
+        if (
+            not is_feature_enabled("DASHBOARD_RBAC")
+            or rls_guard.is_automation_principal()
+        ):
+            return None
+        if properties.get("roles") or _has_explicit_audience(
+            db.session, dashboard.uuid
+        ):
+            return None
+        database_uuids = sorted(
+            {
+                str(datasource.database.uuid)
+                for datasource in dashboard.datasources
+                if getattr(datasource, "database", None) is not None
+            }
+        )
+        if not database_uuids:
+            return None
+
+        token = self._rpc_token()
+        if not token:
+            raise DashboardDefaultAudienceError()
+        try:
+            audience = call_plaid_rpc(
+                "dashboard/dashboard/default_audience",
+                {"database_uuids": database_uuids},
+                token,
+            )
+            roles = populate_roles([role["id"] for role in audience["roles"]])
+            published = bool(audience["published"])
+            group_names = list(audience["group_names"])
+            state = audience["state"]
+        except Exception as ex:
+            log.warning("Default dashboard audience unavailable.", exc_info=True)
+            raise DashboardDefaultAudienceError() from ex
+
+        properties["roles"] = roles
+        properties["published"] = published
+        return {
+            "state": state,
+            "published": published,
+            "group_names": group_names,
+            "roles": [{"id": role.id, "name": role.name} for role in roles],
+        }
+
+    def restrict_imported_dashboard(
+        self, config: dict[str, Any], existing: Any = None
+    ) -> None:
+        # An import runs from the CLI or a worker with no credential to ask plaid
+        # for the project default, so it never publishes a dashboard that was not
+        # already published.
+        from superset import is_feature_enabled
+
+        if (
+            is_feature_enabled("DASHBOARD_RBAC")
+            and not rls_guard.is_automation_principal()
+        ):
+            config["published"] = bool(existing is not None and existing.published)
 
     def is_owner(self, resource: Model) -> bool:
         from superset.models.slice import Slice  # a Slice is a chart

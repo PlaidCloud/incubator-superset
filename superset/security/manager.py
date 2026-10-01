@@ -21,6 +21,7 @@ import logging
 import re
 import time
 from collections import defaultdict
+from collections.abc import Iterable
 from typing import Any, Callable, cast, NamedTuple, Optional, TYPE_CHECKING
 
 from flask import current_app, Flask, g, Request
@@ -749,6 +750,31 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
 
         return False
 
+    def apply_default_dashboard_audience(
+        self, properties: dict[str, Any], dashboard: "Dashboard"
+    ) -> dict[str, Any] | None:
+        """
+        Hook run when a dashboard is published, on update or by other code paths
+        that set ``published``. Creating a dashboard does not call it: a new
+        dashboard has no charts, so there is no project to ask.
+
+        A security manager that assigns a default audience to new dashboards
+        overrides this, edits ``properties`` (``published``, ``roles``) in place and
+        returns a description of what it applied. By default nothing is applied.
+
+        :param properties: The command's (mutable) properties
+        :param dashboard: The dashboard being published
+        """
+        return None
+
+    def restrict_imported_dashboard(
+        self, config: dict[str, Any], existing: "Dashboard | None"
+    ) -> None:
+        """
+        Hook run on an imported dashboard config before it is stored; a security
+        manager may edit ``config`` in place. By default nothing changes.
+        """
+
     def can_access_datasource_via_dashboard(
         self, datasource: "BaseDatasource | Explorable"
     ) -> bool:
@@ -763,6 +789,22 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
 
         :param datasource: The datasource reached through the dashboard
         :returns: Whether the dashboard role grant covers the datasource
+        """
+        return True
+
+    def can_set_dashboard_roles(
+        self, current_role_ids: Iterable[int], requested_role_ids: Iterable[int]
+    ) -> bool:
+        """
+        Return True if the current user may submit the requested dashboard roles.
+
+        Called by the dashboard create and update commands when the payload carries
+        ``roles``. By default any user who may edit the dashboard may set them; a
+        security manager that owns dashboard audience elsewhere overrides this.
+
+        :param current_role_ids: The dashboard's role ids today (empty on create)
+        :param requested_role_ids: The role ids in the request
+        :returns: Whether the request may set the roles
         """
         return True
 

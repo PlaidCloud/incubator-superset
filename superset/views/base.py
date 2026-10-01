@@ -521,6 +521,7 @@ def cached_common_bootstrap_data(  # pylint: disable=unused-argument
         frontend_config["AUTH_PROVIDERS"] = oauth_providers
 
     bootstrap_data = {
+        "plaidcloud": hasattr(security_manager, "get_rpc"),
         "application_root": app.config["APPLICATION_ROOT"],
         "static_assets_prefix": app.config["STATIC_ASSETS_PREFIX"],
         "conf": frontend_config,

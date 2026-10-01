@@ -22,6 +22,7 @@ import { waitFor } from 'spec/helpers/testing-library';
 import {
   SAVE_DASHBOARD_STARTED,
   saveDashboardRequest,
+  savePublished,
   SET_OVERRIDE_CONFIRM,
   fetchCharts,
   onRefresh,
@@ -44,6 +45,7 @@ import {
 import { emptyFilters } from 'spec/fixtures/mockDashboardFilters';
 import mockDashboardData from 'spec/fixtures/mockDashboardData';
 import { navigateTo } from 'src/utils/navigationUtils';
+import dashboardInfoReducer from 'src/dashboard/reducers/dashboardInfo';
 
 jest.mock('@superset-ui/core', () => ({
   ...jest.requireActual('@superset-ui/core'),
@@ -399,5 +401,150 @@ describe('dashboardState actions', () => {
     expect(dispatchedTypes).toContain(ON_REFRESH_SUCCESS);
     expect(dispatchedTypes).not.toContain(ON_REFRESH);
     expect(dispatchedTypes).not.toContain(ON_FILTERS_REFRESH);
+  });
+
+  describe('savePublished', () => {
+    const run = async (response: unknown, reject = false) => {
+      const put = jest.spyOn(SupersetClient, 'put');
+      if (reject) {
+        put.mockRejectedValue(response);
+      } else {
+        put.mockResolvedValue(response as never);
+      }
+      const dispatched: any[] = [];
+      await savePublished(1, true)((action: any) => dispatched.push(action));
+      put.mockRestore();
+      return dispatched;
+    };
+    const texts = (dispatched: any[]) =>
+      dispatched.filter(a => a.payload?.text).map(a => a.payload.text);
+    const published = (dispatched: any[]) =>
+      dispatched.find(a => a.type === 'TOGGLE_PUBLISHED').isPublished;
+
+    test('names the groups the project default applied', async () => {
+      const dispatched = await run({
+        json: {
+          default_audience: {
+            state: 'groups',
+            published: true,
+            group_names: ['Finance Leads', 'Controllers'],
+          },
+        },
+      });
+      expect(texts(dispatched)).toEqual([
+        'This dashboard is now published',
+        'This project restricts new dashboards to Finance Leads, Controllers',
+      ]);
+      expect(published(dispatched)).toBe(true);
+    });
+
+    test('owners default lands as a draft with a notice', async () => {
+      const dispatched = await run({
+        json: {
+          default_audience: {
+            state: 'owners',
+            published: false,
+            group_names: [],
+          },
+        },
+      });
+      expect(texts(dispatched)).toEqual([
+        'Kept as a draft — only owners and admins can see it',
+      ]);
+      expect(dispatched.find(a => a.payload?.text).payload.toastType).toBe(
+        'WARNING_TOAST',
+      );
+      expect(published(dispatched)).toBe(false);
+    });
+
+    test('everyone default and no default show no notice', async () => {
+      const everyone = await run({
+        json: {
+          default_audience: {
+            state: 'everyone',
+            published: true,
+            group_names: [],
+          },
+        },
+      });
+      const none = await run({ json: { result: {} } });
+      expect(texts(everyone)).toEqual(['This dashboard is now published']);
+      expect(texts(none)).toEqual(['This dashboard is now published']);
+    });
+
+    test('does not render an object-valued 422 message as [object Object]', async () => {
+      const response = new Response(
+        JSON.stringify({ message: { published: ['Try again later'] } }),
+        { status: 422 },
+      );
+      const dispatched = await run(response, true);
+      expect(texts(dispatched)).toEqual(['Try again later']);
+    });
+
+    test('publish then header save keeps the applied roles', async () => {
+      const roles = [{ id: 7, name: 'plaid_rls_fin' }];
+      let info: any = { id: 1, roles: [] };
+      const put = jest.spyOn(SupersetClient, 'put').mockResolvedValue({
+        json: {
+          default_audience: {
+            state: 'groups',
+            published: true,
+            group_names: ['Finance Leads'],
+            roles,
+          },
+        },
+      } as never);
+      await savePublished(
+        1,
+        true,
+      )((action: any) => {
+        if (action.type === 'DASHBOARD_INFO_UPDATED') {
+          info = dashboardInfoReducer(info, action);
+        }
+      });
+      put.mockRestore();
+      expect(info.roles).toEqual(roles);
+
+      mockIsFeatureEnabled.mockImplementation(
+        (feature: string) => feature === 'DASHBOARD_RBAC',
+      );
+      const save = jest.spyOn(SupersetClient, 'put').mockResolvedValue({
+        json: { result: {}, last_modified_time: 1 },
+      } as never);
+      const { getState, dispatch } = setup({
+        dashboardState: { hasUnsavedChanges: false },
+      });
+      // the header Save sends dashboardInfo.roles
+      saveDashboardRequest(
+        { ...newDashboardData, roles: info.roles },
+        1,
+        SAVE_TYPE_OVERWRITE,
+      )(dispatch, getState);
+      await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+      const saved = JSON.parse(save.mock.calls[0][0].body as string);
+      save.mockRestore();
+      mockIsFeatureEnabled.mockReset();
+      expect(saved.roles).toEqual([7]);
+    });
+
+    test('shows the refusal message on a 422', async () => {
+      const response = new Response(
+        JSON.stringify({
+          message: "Couldn't apply this project's default audience — try again",
+        }),
+        { status: 422 },
+      );
+      const dispatched = await run(response, true);
+      expect(texts(dispatched)).toEqual([
+        "Couldn't apply this project's default audience — try again",
+      ]);
+    });
+
+    test('keeps the permissions message otherwise', async () => {
+      const dispatched = await run({ status: 403 }, true);
+      expect(texts(dispatched)).toEqual([
+        'You do not have permissions to edit this dashboard.',
+      ]);
+    });
   });
 });

@@ -48,6 +48,7 @@ import {
   isCrossFiltersEnabled,
 } from 'src/dashboard/util/crossFilters';
 import {
+  addInfoToast,
   addSuccessToast,
   addWarningToast,
   addDangerToast,
@@ -223,20 +224,50 @@ export function savePublished(
         published: isPublished,
       }),
     })
-      .then(() => {
-        dispatch(
-          addSuccessToast(
-            isPublished
-              ? t('This dashboard is now published')
-              : t('This dashboard is now hidden'),
-          ),
-        );
-        dispatch(togglePublished(isPublished));
+      .then(({ json }) => {
+        const audience = json?.default_audience;
+        const published = audience ? audience.published : isPublished;
+        if (audience) {
+          dispatch(dashboardInfoChanged({ roles: audience.roles }));
+        }
+        if (audience && !published) {
+          dispatch(
+            addWarningToast(
+              t('Kept as a draft — only owners and admins can see it'),
+            ),
+          );
+        } else {
+          dispatch(
+            addSuccessToast(
+              published
+                ? t('This dashboard is now published')
+                : t('This dashboard is now hidden'),
+            ),
+          );
+          if (audience?.group_names?.length) {
+            dispatch(
+              addInfoToast(
+                t(
+                  'This project restricts new dashboards to %s',
+                  audience.group_names.join(', '),
+                ),
+              ),
+            );
+          }
+        }
+        dispatch(togglePublished(published));
       })
-      .catch(() => {
+      .catch(async response => {
+        const { message } = await getClientErrorObject(response);
+        const text =
+          typeof message === 'object' && message !== null
+            ? Object.values(message).flat().join(' ')
+            : message;
         dispatch(
           addDangerToast(
-            t('You do not have permissions to edit this dashboard.'),
+            response?.status === 422 && text
+              ? String(text)
+              : t('You do not have permissions to edit this dashboard.'),
           ),
         );
       });

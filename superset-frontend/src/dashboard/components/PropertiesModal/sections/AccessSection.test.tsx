@@ -41,6 +41,9 @@ jest.mock('src/components/Tag/utils', () => ({
 const mockedIsFeatureEnabled = isFeatureEnabled as jest.Mock;
 
 const defaultProps = {
+  dashboardId: 7,
+  isAdmin: false,
+  audience: { status: 'unsupported' } as any,
   isLoading: false,
   owners: [{ id: 1, full_name: 'John Doe' }],
   roles: [{ id: 1, name: 'Admin' }],
@@ -130,4 +133,94 @@ test('shows helper text for each field', () => {
   expect(
     screen.getByText(/A list of tags that have been applied/),
   ).toBeInTheDocument();
+});
+
+const rbacOn = () =>
+  mockedIsFeatureEnabled.mockImplementation(
+    (flag: any) => flag === FeatureFlag.DashboardRbac,
+  );
+
+const groupsAudience = {
+  status: 'ready',
+  audience: {
+    state: 'groups',
+    groups: [
+      { id: 'a', name: 'Finance Leads' },
+      { id: 'b', name: null },
+    ],
+    foreignRoles: [],
+  },
+};
+
+test('non-admin sees group names and the PlaidCloud link, not the roles select', () => {
+  rbacOn();
+
+  render(<AccessSection {...defaultProps} audience={groupsAudience as any} />);
+
+  expect(screen.getByTestId('dashboard-audience-summary')).toHaveTextContent(
+    'Finance Leads, Deleted group',
+  );
+  expect(screen.getByText('Manage in PlaidCloud')).toHaveAttribute(
+    'href',
+    `${window.location.origin}/#dashboard.audience~%7B%22dashboard_id%22%3A7%7D`,
+  );
+  expect(screen.queryByTestId('dashboard-roles-field')).not.toBeInTheDocument();
+});
+
+test('audience field has helper text and an underlined block link', () => {
+  rbacOn();
+
+  render(
+    <AccessSection {...defaultProps} audience={{ status: 'error' } as any} />,
+  );
+
+  expect(
+    screen.getByText('Audience is managed in PlaidCloud.'),
+  ).toBeInTheDocument();
+  expect(screen.getByText('Manage in PlaidCloud')).toHaveStyle({
+    display: 'block',
+    textDecoration: 'underline',
+  });
+});
+
+test('admin also gets the Advanced: Superset roles select', () => {
+  rbacOn();
+
+  render(
+    <AccessSection
+      {...defaultProps}
+      audience={groupsAudience as any}
+      isAdmin
+    />,
+  );
+
+  expect(screen.getByText('Manage in PlaidCloud')).toBeInTheDocument();
+  expect(screen.getByTestId('dashboard-roles-field')).toBeInTheDocument();
+  expect(screen.getByText('Advanced: Superset roles')).toBeInTheDocument();
+});
+
+test('audience failure shows the link alone for a non-admin', () => {
+  rbacOn();
+
+  render(
+    <AccessSection {...defaultProps} audience={{ status: 'error' } as any} />,
+  );
+
+  expect(screen.getByTestId('dashboard-audience-error')).toBeInTheDocument();
+  expect(screen.getByText('Manage in PlaidCloud')).toBeInTheDocument();
+  expect(screen.queryByTestId('dashboard-roles-field')).not.toBeInTheDocument();
+});
+
+test('non-PlaidCloud deployments keep the stock roles select', () => {
+  rbacOn();
+
+  render(
+    <AccessSection
+      {...defaultProps}
+      audience={{ status: 'unsupported' } as any}
+    />,
+  );
+
+  expect(screen.getByTestId('dashboard-roles-field')).toBeInTheDocument();
+  expect(screen.queryByText('Manage in PlaidCloud')).not.toBeInTheDocument();
 });

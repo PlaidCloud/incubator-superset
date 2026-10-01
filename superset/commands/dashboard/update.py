@@ -26,6 +26,7 @@ from marshmallow import ValidationError
 from superset import db, security_manager
 from superset.commands.base import BaseCommand, UpdateMixin
 from superset.commands.dashboard.exceptions import (
+    DASHBOARD_ROLES_FORBIDDEN,
     DashboardChartCustomizationsUpdateFailedError,
     DashboardColorsConfigUpdateFailedError,
     DashboardForbiddenError,
@@ -54,6 +55,7 @@ class UpdateDashboardCommand(UpdateMixin, BaseCommand):
         self._model_id = model_id
         self._properties = data.copy()
         self._model: Optional[Dashboard] = None
+        self.default_audience: Optional[dict[str, Any]] = None
 
     @transaction(on_error=partial(on_error, reraise=DashboardUpdateFailedError))
     def run(self) -> Model:
@@ -115,6 +117,11 @@ class UpdateDashboardCommand(UpdateMixin, BaseCommand):
         except ValidationError as ex:
             exceptions.append(ex)
 
+        if roles_ids is not None and not security_manager.can_set_dashboard_roles(
+            [role.id for role in self._model.roles], roles_ids
+        ):
+            raise DashboardForbiddenError(DASHBOARD_ROLES_FORBIDDEN)
+
         # Validate/Populate role
         if roles_ids is None:
             roles_ids = [role.id for role in self._model.roles]
@@ -125,6 +132,14 @@ class UpdateDashboardCommand(UpdateMixin, BaseCommand):
             exceptions.append(ex)
         if exceptions:
             raise DashboardInvalidError(exceptions=exceptions)
+
+        self._apply_default_audience(self._model)
+
+    def _apply_default_audience(self, model: Dashboard) -> None:
+        if self._properties.get("published") and not model.published:
+            self.default_audience = security_manager.apply_default_dashboard_audience(
+                self._properties, model
+            )
 
     @staticmethod
     def _send_deactivated_report_email(

@@ -24,7 +24,9 @@ import { useTheme } from '@apache-superset/core/theme';
 import { useDispatch, useSelector } from 'react-redux';
 import { createSelector } from '@reduxjs/toolkit';
 import { useToasts } from 'src/components/MessageToasts/withToasts';
+import getBootstrapData from 'src/utils/getBootstrapData';
 import { Loading } from '@superset-ui/core/components';
+import AccessDenied from 'src/dashboard/components/AccessDenied';
 import {
   useDashboard,
   useDashboardCharts,
@@ -136,6 +138,9 @@ export const DashboardPage: FC<PageProps> = ({ idOrSlug }: PageProps) => {
   const isDashboardHydrated = useRef(false);
 
   const error = dashboardApiError || chartsApiError;
+  const isDenied =
+    Boolean(getBootstrapData().common.plaidcloud) &&
+    [403, 404].includes((error as { status?: number } | null)?.status ?? 0);
   const readyToRender = Boolean(dashboard && charts);
   const { dashboard_title, id = 0 } = dashboard || {};
 
@@ -260,18 +265,19 @@ export const DashboardPage: FC<PageProps> = ({ idOrSlug }: PageProps) => {
 
   useEffect(() => {
     if (datasetsApiError) {
+      if (!dashboard) return;
       addDangerToast(
         t('Error loading chart datasources. Filters may not work correctly.'),
       );
     } else {
       dispatch(setDatasources(datasets));
     }
-  }, [addDangerToast, datasets, datasetsApiError, dispatch]);
+  }, [addDangerToast, dashboard, datasets, datasetsApiError, dispatch]);
 
   const relevantDataMask = useSelector(selectRelevantDatamask);
   const activeFilters = useSelector(selectActiveFilters);
 
-  if (error) throw error; // caught in error boundary
+  if (error && !isDenied) throw error; // caught in error boundary
 
   const globalStyles = useMemo(
     () => [
@@ -284,9 +290,10 @@ export const DashboardPage: FC<PageProps> = ({ idOrSlug }: PageProps) => {
     [theme],
   );
 
-  if (error) throw error; // caught in error boundary
+  if (error && !isDenied) throw error; // caught in error boundary
 
   const DashboardBuilderComponent = useMemo(() => <DashboardBuilder />, []);
+  if (isDenied) return <AccessDenied idOrSlug={idOrSlug} />;
   return (
     <>
       <Global styles={globalStyles} />

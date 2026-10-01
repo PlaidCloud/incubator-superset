@@ -17,6 +17,7 @@
 # pylint: disable=too-many-lines
 import functools
 import logging
+import re
 from datetime import datetime
 from io import BytesIO
 from typing import Any, Callable, cast
@@ -114,7 +115,7 @@ from superset.dashboards.schemas import (
     thumbnail_query_schema,
 )
 from superset.exceptions import ScreenshotImageNotAvailableException
-from superset.extensions import event_logger
+from superset.extensions import event_logger, security_manager
 from superset.models.dashboard import Dashboard
 from superset.models.embedded_dashboard import EmbeddedDashboard
 from superset.security.guest_token import GuestUser
@@ -152,6 +153,34 @@ from superset.views.filters import (
 logger = logging.getLogger(__name__)
 
 
+_SLUG_RE = re.compile(r"[A-Za-z0-9_-]{1,255}")
+
+
+def _plaid_dashboard_id(body: dict[str, Any]) -> int | str | None:
+    """A dashboard id (int4) or slug exactly as sent, or None when it is neither.
+    Never resolved here: doing so would tell the caller whether it exists."""
+    value = body.get("dashboard_id")
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if 0 < value < 2**31 else None
+    if isinstance(value, str) and _SLUG_RE.fullmatch(value):
+        return value
+    return None
+
+
+def _access_denied(api: BaseSupersetModelRestApi) -> Response:
+    """403, except on PlaidCloud where a dashboard you can't open answers exactly
+    like one that doesn't exist, so sequential ids can't be enumerated."""
+    if hasattr(security_manager, "get_rpc"):
+        return api.response_404()
+    return api.response_403()
+
+
+def _default_audience_response(applied: dict[str, Any] | None) -> dict[str, Any]:
+    return {"default_audience": applied} if applied else {}
+
+
 def with_dashboard(
     f: Callable[[BaseSupersetModelRestApi, Dashboard], Response],
 ) -> Callable[[BaseSupersetModelRestApi, str], Response]:
@@ -166,7 +195,7 @@ def with_dashboard(
             dash = DashboardDAO.get_by_id_or_slug(id_or_slug)
             return f(self, dash)
         except DashboardAccessDeniedError:
-            return self.response_403()
+            return _access_denied(self)
         except DashboardNotFoundError:
             return self.response_404()
 
@@ -235,6 +264,9 @@ class DashboardRestApi(CustomTagsOptimizationMixin, BaseSupersetModelRestApi):
         "get_charts",
         "get_datasets",
         "get_tabs",
+        "get_audience",
+        "request_access",
+        "access_context",
         "get_embedded",
         "set_embedded",
         "delete_embedded",
@@ -569,6 +601,203 @@ class DashboardRestApi(CustomTagsOptimizationMixin, BaseSupersetModelRestApi):
             return self.response(200, result=result)
         except (TypeError, ValueError) as err:
             raise DatasetValidationError(err) from err
+        except (DashboardAccessDeniedError, DashboardNotFoundError):
+            if not hasattr(security_manager, "get_rpc"):
+                raise
+            return self.response_404()
+
+    @expose("/<id_or_slug>/audience", methods=("GET",))
+    @protect()
+    @safe
+    @statsd_metrics
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.get_audience",
+        log_to_statsd=False,
+    )
+    def get_audience(self, id_or_slug: str) -> Response:
+        """Get the PlaidCloud audience of a dashboard.
+        ---
+        get:
+          summary: Get the PlaidCloud audience of a dashboard
+          description: >-
+            Returns the PlaidCloud groups that can see the dashboard, read from
+            PlaidCloud. 501 when this deployment is not backed by PlaidCloud.
+          parameters:
+          - in: path
+            schema:
+              type: string
+            name: id_or_slug
+            description: Either the id of the dashboard, or its slug
+          responses:
+            200:
+              description: Dashboard audience
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      result:
+                        type: object
+            401:
+              $ref: '#/components/responses/401'
+            404:
+              $ref: '#/components/responses/404'
+            501:
+              description: Not a PlaidCloud deployment
+            502:
+              description: PlaidCloud could not be reached
+        """
+        if not hasattr(security_manager, "get_rpc"):
+            return self.response(501, message="Not a PlaidCloud deployment")
+        try:
+            dash = DashboardDAO.get_by_id_or_slug(id_or_slug)
+        except (DashboardAccessDeniedError, DashboardNotFoundError):
+            return self.response_404()
+        try:
+            from plaid.security import call_plaid_rpc
+
+            audience = call_plaid_rpc(
+                "dashboard/dashboard/audience",
+                {"dashboard_id": dash.id},
+                security_manager._rpc_token(),  # pylint: disable=protected-access
+            )
+            if audience is not None:
+                audience = {
+                    "state": audience["state"],
+                    "groups": [
+                        {k: g.get(k) for k in ("id", "name", "deleted")}
+                        for g in audience["groups"]
+                    ],
+                    "foreign_roles": audience["foreign_roles"],
+                }
+        except Exception:  # pylint: disable=broad-except
+            logger.exception("PlaidCloud audience lookup failed for %s", dash.id)
+            return self.response(502, message="PlaidCloud audience unavailable")
+        if audience is None:
+            return self.response_404()
+        return self.response(200, result=audience)
+
+    @expose("/access_request", methods=("POST",))
+    @protect()
+    @safe
+    @statsd_metrics
+    def request_access(self) -> Response:
+        """Ask the owners of a dashboard for access (PlaidCloud).
+        ---
+        post:
+          summary: Request access to a dashboard
+          description: >-
+            Forwards the request to PlaidCloud. The answer is the same whether or
+            not the dashboard exists or the request went anywhere, and the dashboard
+            is never looked up here, so it reveals nothing about it.
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    dashboard_id:
+                      type: integer
+                    note:
+                      type: string
+                      maxLength: 500
+          responses:
+            200:
+              description: Request sent
+            400:
+              $ref: '#/components/responses/400'
+            401:
+              $ref: '#/components/responses/401'
+            501:
+              description: Not a PlaidCloud deployment
+            502:
+              description: PlaidCloud could not be reached
+        """
+        if not hasattr(security_manager, "get_rpc"):
+            return self.response(501, message="Not a PlaidCloud deployment")
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            return self.response_400(message="Invalid request")
+        dashboard_id, note = _plaid_dashboard_id(body), body.get("note") or ""
+        if dashboard_id is None:
+            return self.response_400(message="Invalid dashboard id")
+        if not isinstance(note, str) or len(note) > 500:
+            return self.response_400(message="note must be at most 500 characters")
+        # The note is user text, so only its length is logged.
+        logger.info("PlaidCloud access request, note of %d characters", len(note))
+        try:
+            from plaid.security import call_plaid_rpc
+
+            call_plaid_rpc(
+                "dashboard/dashboard/request_access",
+                {"dashboard_id": dashboard_id, "note": note},
+                security_manager._rpc_token(),  # pylint: disable=protected-access
+            )
+        except Exception:  # pylint: disable=broad-except
+            logger.exception("PlaidCloud access request failed")
+            return self.response(502, message="PlaidCloud unavailable")
+        return self.response(
+            200, status="sent", message=gettext("Your request was sent")
+        )
+
+    @expose("/access_context", methods=("POST",))
+    @protect()
+    @safe
+    @statsd_metrics
+    def access_context(self) -> Response:
+        """What PlaidCloud lets this user know about a dashboard they can't open.
+        ---
+        post:
+          summary: Title and owners of a dashboard the user may ask access to
+          description: >-
+            Empty unless PlaidCloud says the user is eligible to ask for access.
+            Any PlaidCloud failure also answers empty, and the dashboard is never
+            looked up here.
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    dashboard_id:
+                      type: integer
+          responses:
+            200:
+              description: Context, possibly empty
+            400:
+              $ref: '#/components/responses/400'
+            401:
+              $ref: '#/components/responses/401'
+            501:
+              description: Not a PlaidCloud deployment
+        """
+        if not hasattr(security_manager, "get_rpc"):
+            return self.response(501, message="Not a PlaidCloud deployment")
+        body = request.get_json(silent=True)
+        dashboard_id = _plaid_dashboard_id(body) if isinstance(body, dict) else None
+        if dashboard_id is None:
+            return self.response_400(message="Invalid dashboard id")
+        result: dict[str, Any] = {}
+        try:
+            from plaid.security import call_plaid_rpc
+
+            context = call_plaid_rpc(
+                "dashboard/dashboard/request_context",
+                {"dashboard_id": dashboard_id},
+                security_manager._rpc_token(),  # pylint: disable=protected-access
+            )
+            if (
+                isinstance(context, dict)
+                and isinstance(context.get("title"), str)
+                and isinstance(context.get("owners"), list)
+                and all(isinstance(o, str) for o in context["owners"])
+            ):
+                result = {"title": context["title"], "owners": context["owners"]}
+        except Exception:  # pylint: disable=broad-except
+            logger.exception("PlaidCloud access context failed")
+        return self.response(200, result=result)
 
     @expose("/<id_or_slug>/tabs", methods=("GET",))
     @protect()
@@ -628,7 +857,7 @@ class DashboardRestApi(CustomTagsOptimizationMixin, BaseSupersetModelRestApi):
                 )
             )
         except DashboardAccessDeniedError:
-            return self.response_403()
+            return _access_denied(self)
         except DashboardNotFoundError:
             return self.response_404()
 
@@ -676,7 +905,7 @@ class DashboardRestApi(CustomTagsOptimizationMixin, BaseSupersetModelRestApi):
             result = [self.chart_entity_response_schema.dump(chart) for chart in charts]
             return self.response(200, result=result)
         except DashboardAccessDeniedError:
-            return self.response_403()
+            return _access_denied(self)
         except DashboardNotFoundError:
             return self.response_404()
 
@@ -800,7 +1029,8 @@ class DashboardRestApi(CustomTagsOptimizationMixin, BaseSupersetModelRestApi):
         except ValidationError as error:
             return self.response_400(message=error.messages)
         try:
-            changed_model = UpdateDashboardCommand(pk, item).run()
+            command = UpdateDashboardCommand(pk, item)
+            changed_model = command.run()
             last_modified_time = changed_model.changed_on.replace(
                 microsecond=0
             ).timestamp()
@@ -809,6 +1039,7 @@ class DashboardRestApi(CustomTagsOptimizationMixin, BaseSupersetModelRestApi):
                 id=changed_model.id,
                 result=item,
                 last_modified_time=last_modified_time,
+                **_default_audience_response(command.default_audience),
             )
         except DashboardNotFoundError:
             response = self.response_404()
@@ -1777,7 +2008,7 @@ class DashboardRestApi(CustomTagsOptimizationMixin, BaseSupersetModelRestApi):
         except DashboardNotFoundError:
             return self.response_404()
         except DashboardAccessDeniedError:
-            return self.response_403()
+            return _access_denied(self)
 
         return self.response(200, result="OK")
 
@@ -1823,7 +2054,7 @@ class DashboardRestApi(CustomTagsOptimizationMixin, BaseSupersetModelRestApi):
         except DashboardNotFoundError:
             return self.response_404()
         except DashboardAccessDeniedError:
-            return self.response_403()
+            return _access_denied(self)
 
         return self.response(200, result="OK")
 
