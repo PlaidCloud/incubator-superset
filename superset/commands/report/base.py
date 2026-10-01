@@ -22,6 +22,7 @@ from flask import current_app as app
 from flask_babel import gettext as _
 from marshmallow import ValidationError
 
+from superset import security_manager
 from superset.commands.base import BaseCommand
 from superset.commands.report.exceptions import (
     ChartNotFoundValidationError,
@@ -29,11 +30,14 @@ from superset.commands.report.exceptions import (
     DashboardNotFoundValidationError,
     DashboardNotSavedValidationError,
     ReportScheduleEitherChartOrDashboardError,
+    ReportScheduleForbiddenError,
     ReportScheduleFrequencyNotAllowed,
     ReportScheduleOnlyChartOrDashboardError,
 )
 from superset.daos.chart import ChartDAO
 from superset.daos.dashboard import DashboardDAO
+from superset.exceptions import SupersetSecurityException
+from superset.models.core import Database
 from superset.reports.models import ReportCreationMethod, ReportScheduleType
 from superset.reports.types import ReportScheduleExtra
 from superset.utils import json
@@ -82,6 +86,27 @@ class BaseReportScheduleCommand(BaseCommand):
             self._properties["dashboard"] = dashboard
         elif not update:
             exceptions.append(ReportScheduleEitherChartOrDashboardError())
+
+    def raise_for_alert_database_access(
+        self, database: Database, sql: Optional[str]
+    ) -> None:
+        """
+        Ensure the current user may query every table the alert SQL touches.
+
+        Alert authoring only checks that the database is *visible* (any of
+        database/catalog/schema/datasource access), so without this a single
+        dataset grant would authorize arbitrary SQL against the whole database.
+        """
+        catalog = database.get_default_catalog()
+        try:
+            security_manager.raise_for_access(
+                database=database,
+                sql=sql,
+                catalog=catalog,
+                schema=database.get_default_schema(catalog),
+            )
+        except SupersetSecurityException as ex:
+            raise ReportScheduleForbiddenError() from ex
 
     def _validate_report_extra(self, exceptions: list[ValidationError]) -> None:
         extra: Optional[ReportScheduleExtra] = self._properties.get("extra")

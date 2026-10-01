@@ -39,11 +39,13 @@ from superset.commands.report.exceptions import (
     AlertValidatorConfigError,
 )
 from superset.reports.models import ReportSchedule, ReportScheduleValidatorType
+from superset.sql.parse import SQLScript
 from superset.tasks.utils import get_executor
 from superset.utils import json
 from superset.utils.core import override_user
 from superset.utils.decorators import logs_context
 from superset.utils.retries import retry_call
+from superset.utils.rls import apply_rls
 
 logger = logging.getLogger(__name__)
 
@@ -189,30 +191,50 @@ class AlertCommand(BaseCommand):
         :raises AlertQueryError: SQL query is not valid
         :raises AlertQueryTimeout: The SQL query received a celery soft timeout
         """
-        sql_template = jinja_context.get_template_processor(
-            database=self._report_schedule.database
-        )
+        database = self._report_schedule.database
+        sql_template = jinja_context.get_template_processor(database=database)
         rendered_sql = sql_template.process_template(self._report_schedule.sql)
         try:
-            limited_rendered_sql = self._report_schedule.database.apply_limit_to_sql(
-                rendered_sql, ALERT_SQL_LIMIT
-            )
-
-            if app.config["MUTATE_ALERT_QUERY"]:
-                limited_rendered_sql = (
-                    self._report_schedule.database.mutate_sql_based_on_config(
-                        limited_rendered_sql
-                    )
-                )
-
             executor, username = get_executor(  # pylint: disable=unused-variable
                 executors=app.config["ALERT_REPORTS_EXECUTORS"],
                 model=self._report_schedule,
             )
             user = security_manager.find_user(username)
             with override_user(user):
+                catalog = database.get_default_catalog()
+                schema = database.get_default_schema(catalog)
+
+                # Alert authoring only checks database visibility, so enforce here
+                # that the executor may query every table the SQL touches.
+                security_manager.raise_for_access(
+                    database=database,
+                    sql=rendered_sql,
+                    catalog=catalog,
+                    schema=schema,
+                )
+
+                # Inject RLS predicates the way SQL Lab does. Re-serialise only
+                # when a predicate actually applied, so un-governed SQL passes
+                # through byte-identical. A parse failure fails closed via the
+                # generic handler below rather than executing unfiltered.
+                script = SQLScript(rendered_sql, database.db_engine_spec.engine)
+                rls_applied = False
+                for statement in script.statements:
+                    if apply_rls(database, catalog, schema or "", statement):
+                        rls_applied = True
+                if rls_applied:
+                    rendered_sql = script.format()
+
+                limited_rendered_sql = database.apply_limit_to_sql(
+                    rendered_sql, ALERT_SQL_LIMIT
+                )
+                if app.config["MUTATE_ALERT_QUERY"]:
+                    limited_rendered_sql = database.mutate_sql_based_on_config(
+                        limited_rendered_sql
+                    )
+
                 start = default_timer()
-                df = self._report_schedule.database.get_df(sql=limited_rendered_sql)
+                df = database.get_df(sql=limited_rendered_sql)
                 stop = default_timer()
                 logger.info(
                     "Query for %s took %.2f ms",
