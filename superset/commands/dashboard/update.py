@@ -133,12 +133,12 @@ class UpdateDashboardCommand(UpdateMixin, BaseCommand):
         if exceptions:
             raise DashboardInvalidError(exceptions=exceptions)
 
-        self._apply_default_audience()
+        self._apply_default_audience(self._model)
 
-    def _apply_default_audience(self) -> None:
-        if self._properties.get("published") and not self._model.published:
+    def _apply_default_audience(self, model: Dashboard) -> None:
+        if self._properties.get("published") and not model.published:
             self.default_audience = security_manager.apply_default_dashboard_audience(
-                self._properties, self._model
+                self._properties, model
             )
 
     @staticmethod
