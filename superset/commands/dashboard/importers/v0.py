@@ -23,7 +23,7 @@ from typing import Any, Optional
 from flask_babel import lazy_gettext as _
 from sqlalchemy.orm import make_transient
 
-from superset import db
+from superset import db, security_manager
 from superset.commands.base import BaseCommand
 from superset.commands.dataset.importers.v0 import import_dataset
 from superset.connectors.sqla.models import SqlaTable, SqlMetric, TableColumn
@@ -236,6 +236,9 @@ def import_dashboard(  # noqa: C901
     dashboard_to_import = dashboard_to_import.copy()
     dashboard_to_import.id = None
     dashboard_to_import.reset_ownership()
+    config = {"published": dashboard_to_import.published}
+    security_manager.restrict_imported_dashboard(config, existing_dashboard)
+    dashboard_to_import.published = config["published"]
     # position_json can be empty for dashboards
     # with charts added from chart-edit page and without re-arranging
     if dashboard_to_import.position_json:
