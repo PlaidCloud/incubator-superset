@@ -617,6 +617,23 @@ class PlaidSecurityManager(SupersetSecurityManager):
         database = getattr(datasource, "database", None)
         return database is not None and self._can_access_project(str(database.uuid))
 
+    def can_set_dashboard_roles(
+        self, current_role_ids: Iterable[int], requested_role_ids: Iterable[int]
+    ) -> bool:
+        # With DASHBOARD_RBAC the dashboard roles are the audience, which
+        # PlaidCloud owns and writes as the automation principal. An owner who
+        # could set them directly would grant an audience PlaidCloud doesn't
+        # know about. Header saves resend the current roles, so an unchanged
+        # list passes.
+        from superset import is_feature_enabled
+
+        return (
+            not is_feature_enabled("DASHBOARD_RBAC")
+            or set(current_role_ids) == set(requested_role_ids)
+            or self.is_admin()
+            or rls_guard.is_automation_principal()
+        )
+
     def is_owner(self, resource: Model) -> bool:
         from superset.models.slice import Slice  # a Slice is a chart
 

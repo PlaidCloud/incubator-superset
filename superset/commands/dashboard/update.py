@@ -26,6 +26,7 @@ from marshmallow import ValidationError
 from superset import db, security_manager
 from superset.commands.base import BaseCommand, UpdateMixin
 from superset.commands.dashboard.exceptions import (
+    DASHBOARD_ROLES_FORBIDDEN,
     DashboardChartCustomizationsUpdateFailedError,
     DashboardColorsConfigUpdateFailedError,
     DashboardForbiddenError,
@@ -114,6 +115,11 @@ class UpdateDashboardCommand(UpdateMixin, BaseCommand):
             validate_tags(ObjectType.dashboard, self._model.tags, tag_ids)
         except ValidationError as ex:
             exceptions.append(ex)
+
+        if roles_ids is not None and not security_manager.can_set_dashboard_roles(
+            [role.id for role in self._model.roles], roles_ids
+        ):
+            raise DashboardForbiddenError(DASHBOARD_ROLES_FORBIDDEN)
 
         # Validate/Populate role
         if roles_ids is None:

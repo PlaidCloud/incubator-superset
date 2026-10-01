@@ -21,6 +21,7 @@ import logging
 import re
 import time
 from collections import defaultdict
+from collections.abc import Iterable
 from typing import Any, Callable, cast, NamedTuple, Optional, TYPE_CHECKING
 
 from flask import current_app, Flask, g, Request
@@ -763,6 +764,22 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
 
         :param datasource: The datasource reached through the dashboard
         :returns: Whether the dashboard role grant covers the datasource
+        """
+        return True
+
+    def can_set_dashboard_roles(
+        self, current_role_ids: Iterable[int], requested_role_ids: Iterable[int]
+    ) -> bool:
+        """
+        Return True if the current user may submit the requested dashboard roles.
+
+        Called by the dashboard create and update commands when the payload carries
+        ``roles``. By default any user who may edit the dashboard may set them; a
+        security manager that owns dashboard audience elsewhere overrides this.
+
+        :param current_role_ids: The dashboard's role ids today (empty on create)
+        :param requested_role_ids: The role ids in the request
+        :returns: Whether the request may set the roles
         """
         return True
 
