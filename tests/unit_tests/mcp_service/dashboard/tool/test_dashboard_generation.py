@@ -486,6 +486,102 @@ class TestGenerateDashboard:
     @patch("superset.daos.dashboard.DashboardDAO.find_by_id")
     @patch("superset.db.session")
     @pytest.mark.asyncio
+    async def test_generate_dashboard_published_gets_project_default(
+        self, mock_db_session, mock_find_by_id, mock_dashboard_cls, mcp_server
+    ):
+        """A published dashboard takes the project default audience."""
+        charts = [_mock_chart(id=3)]
+        mock_dashboard = _mock_dashboard(id=42, title="Published Dashboard")
+        _setup_generate_dashboard_mocks(
+            mock_db_session, mock_find_by_id, mock_dashboard_cls, charts, mock_dashboard
+        )
+
+        def apply_default(properties, dashboard):
+            properties["published"] = False
+            properties["roles"] = ["owners-only-role"]
+
+        with patch(
+            "superset.security_manager.apply_default_dashboard_audience",
+            side_effect=apply_default,
+        ) as hook:
+            async with Client(mcp_server) as client:
+                result = await client.call_tool(
+                    "generate_dashboard",
+                    {"request": {"chart_ids": [3], "published": True}},
+                )
+
+        assert result.structured_content["error"] is None
+        created = mock_dashboard_cls.return_value
+        hook.assert_called_once_with(
+            {"published": False, "roles": ["owners-only-role"]}, created
+        )
+        assert created.published is False
+        assert created.roles == ["owners-only-role"]
+
+    @patch("superset.models.dashboard.Dashboard")
+    @patch("superset.daos.dashboard.DashboardDAO.find_by_id")
+    @patch("superset.db.session")
+    @pytest.mark.asyncio
+    async def test_generate_dashboard_refused_when_default_unavailable(
+        self, mock_db_session, mock_find_by_id, mock_dashboard_cls, mcp_server
+    ):
+        """If the project default can't be applied, nothing is created."""
+        from superset.commands.dashboard.exceptions import (
+            DashboardDefaultAudienceError,
+        )
+
+        charts = [_mock_chart(id=3)]
+        mock_dashboard = _mock_dashboard(id=43)
+        _setup_generate_dashboard_mocks(
+            mock_db_session, mock_find_by_id, mock_dashboard_cls, charts, mock_dashboard
+        )
+
+        with patch(
+            "superset.security_manager.apply_default_dashboard_audience",
+            side_effect=DashboardDefaultAudienceError(),
+        ):
+            async with Client(mcp_server) as client:
+                result = await client.call_tool(
+                    "generate_dashboard",
+                    {"request": {"chart_ids": [3], "published": True}},
+                )
+
+        assert result.structured_content["dashboard"] is None
+        assert result.structured_content["error"] == (
+            "Couldn't apply this project's default audience — try again"
+        )
+        mock_db_session.add.assert_not_called()
+        mock_db_session.rollback.assert_called_once()
+
+    @patch("superset.models.dashboard.Dashboard")
+    @patch("superset.daos.dashboard.DashboardDAO.find_by_id")
+    @patch("superset.db.session")
+    @pytest.mark.asyncio
+    async def test_generate_dashboard_unpublished_skips_default(
+        self, mock_db_session, mock_find_by_id, mock_dashboard_cls, mcp_server
+    ):
+        charts = [_mock_chart(id=3)]
+        mock_dashboard = _mock_dashboard(id=44)
+        mock_dashboard.published = False
+        _setup_generate_dashboard_mocks(
+            mock_db_session, mock_find_by_id, mock_dashboard_cls, charts, mock_dashboard
+        )
+
+        with patch(
+            "superset.security_manager.apply_default_dashboard_audience"
+        ) as hook:
+            async with Client(mcp_server) as client:
+                await client.call_tool(
+                    "generate_dashboard",
+                    {"request": {"chart_ids": [3], "published": False}},
+                )
+
+        hook.assert_not_called()
+
+    @patch("superset.models.dashboard.Dashboard")
+    @patch("superset.daos.dashboard.DashboardDAO.find_by_id")
+    @patch("superset.db.session")
+    @pytest.mark.asyncio
     async def test_generate_dashboard_auto_title_from_charts(
         self, mock_db_session, mock_find_by_id, mock_dashboard_cls, mcp_server
     ):

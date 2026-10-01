@@ -796,7 +796,7 @@ class Superset(BaseSupersetView):
         if not dashboard:
             if not get_current_user():
                 return redirect_to_login()
-            abort(404)
+            return self._dashboard_not_available()
 
         # Redirect anonymous users to login for unpublished dashboards,
         # in the edge case where a dataset has been shared with public
@@ -808,7 +808,7 @@ class Superset(BaseSupersetView):
         except SupersetSecurityException:
             if not get_current_user():
                 return redirect_to_login()
-            abort(404)
+            return self._dashboard_not_available()
         add_extra_log_payload(
             dashboard_id=dashboard.id,
             dashboard_version="v2",
@@ -830,6 +830,19 @@ class Superset(BaseSupersetView):
             title=dashboard.dashboard_title,  # dashboard title is always visible
             standalone_mode=ReservedUrlParameters.is_standalone_mode(),
         )
+
+    def _dashboard_not_available(self) -> FlaskResponse:
+        """404. On PlaidCloud the app shell loads so its access-denied page shows,
+        with nothing that depends on whether the dashboard exists."""
+        if not hasattr(security_manager, "get_rpc"):
+            abort(404)
+        return self.render_app_template(
+            extra_bootstrap_data={
+                "user": bootstrap_user_data(g.user, include_perms=True),
+                "common": common_bootstrap_payload(),
+            },
+            title=__("Dashboard"),
+        ), 404
 
     @has_access
     @expose("/dashboard/p/<key>/", methods=("GET",))

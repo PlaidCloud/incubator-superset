@@ -61,6 +61,9 @@ from plaid import rls_guard
     ("name", "expected"),
     [
         ("plaid_rls_3fa85f64-5717-4562-b3fc-2c963f66afa6", True),
+        ("plaid_dashboard_owners_only", True),
+        ("plaid_dashboard_", True),
+        ("plaid_dashboardx", False),
         ("plaid_rls_", True),  # degenerate, but still the reserved prefix
         ("plaid_rlsguard_x", False),  # rule-only form, not a role name
         ("CONTRACTS", False),
@@ -298,6 +301,16 @@ def test_role_write_allowed_for_automation_user(app, app_context, method_name, a
         getattr(api, method_name)(*args)
 
     assert len(calls) == 1
+
+
+def test_role_write_allowed_for_automation_user_on_dashboard_role(app, app_context):
+    role = SimpleNamespace(id=1, name="plaid_dashboard_owners_only")
+    api = _api(role)
+    with app.test_request_context(), _patch_upstream() as calls:
+        g.user = SimpleNamespace(username="admin", is_authenticated=True)
+        api.update_role_users(1)
+
+    assert calls == [("update_role_users", 1)]
 
 
 def test_role_write_allowed_for_unprotected_role(app, app_context):
@@ -763,6 +776,34 @@ def test_role_update_role_users_shape_is_blocked_for_non_automation_user(
             role.user = [attacker]
 
         assert role.user == []
+
+
+def test_dashboard_sentinel_role_users_are_blocked_for_non_automation_user(
+    app, app_context, orm_session
+):
+    with app.test_request_context():
+        g.user = SimpleNamespace(username="attacker", is_authenticated=True)
+        role = _role(orm_session, "plaid_dashboard_owners_only")
+        attacker = _user(orm_session, "attacker")
+
+        with pytest.raises(rls_guard.PlaidRlsGuardError):
+            role.user = [attacker]
+
+        assert role.user == []
+
+
+def test_roles_api_update_role_users_blocked_for_dashboard_sentinel(app, app_context):
+    role = SimpleNamespace(id=1, name="plaid_dashboard_owners_only")
+    api = _api(role)
+    with app.test_request_context(), _patch_upstream() as calls:
+        g.user = SimpleNamespace(username="alice@customer.com", is_authenticated=True)
+        result = api.update_role_users(1)
+
+    assert result.status_code == 403
+    assert result.get_json() == {
+        "message": rls_guard.DENIAL_MESSAGE.format(name="plaid_dashboard_owners_only")
+    }
+    assert calls == []
 
 
 def test_role_update_role_groups_shape_is_blocked(app, app_context, orm_session):

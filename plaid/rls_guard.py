@@ -28,6 +28,10 @@ a `plaid_rls_*` role -- permanent, since nothing else reconciles a roster edit
 away -- or delete a Base guard rule, turning off row-level security for that
 dataset until PlaidCloud's next reconcile pass.
 
+Dashboard-audience roles are covered too: any role starting with
+``plaid_dashboard_`` (including the ``plaid_dashboard_owners_only`` sentinel,
+which never has members) gets the same protection as ``plaid_rls_*`` roles.
+
 ## What this protects, and what it deliberately does not
 
 Protected: create / rename / roster-write / delete of any Superset Role or
@@ -195,9 +199,10 @@ F = TypeVar("F", bound=Callable[..., Any])
 # underscore-less stem so both survive one check.
 PLAID_RLS_ROLE_PREFIX = "plaid_rls_"
 PLAID_RLS_NAME_STEM = "plaid_rls"
+PLAID_DASHBOARD_ROLE_PREFIX = "plaid_dashboard_"
 
 DENIAL_MESSAGE = (
-    "{name!r} is a PlaidCloud-generated row-access resource. It can only be "
+    "{name!r} is a PlaidCloud-generated access-control resource. It can only be "
     "written by PlaidCloud's own automation."
 )
 
@@ -207,7 +212,9 @@ def is_protected_role_name(name: str | None) -> bool:
     # (an empty string is falsy either way, and `''.startswith(...)` would
     # correctly return False regardless), but only `is not None` is a form
     # mypy recognizes as narrowing `name` from `str | None` to `str`.
-    return name is not None and name.startswith(PLAID_RLS_ROLE_PREFIX)
+    return name is not None and name.startswith(
+        (PLAID_RLS_ROLE_PREFIX, PLAID_DASHBOARD_ROLE_PREFIX)
+    )
 
 
 def is_protected_rule_name(name: str | None) -> bool:

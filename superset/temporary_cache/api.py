@@ -30,6 +30,7 @@ from superset.commands.temporary_cache.exceptions import (
 )
 from superset.commands.temporary_cache.parameters import CommandParameters
 from superset.constants import MODEL_API_RW_METHOD_PERMISSION_MAP, RouteMethod
+from superset.extensions import security_manager
 from superset.key_value.types import JsonKeyValueCodec
 from superset.temporary_cache.schemas import (
     TemporaryCachePostSchema,
@@ -82,8 +83,12 @@ class TemporaryCacheRestApi(BaseSupersetApi, ABC):
         except ValidationError as ex:
             return self.response(400, message=ex.messages)
         except TemporaryCacheAccessDeniedError as ex:
+            if hasattr(security_manager, "get_rpc"):
+                return self.response_404()
             return self.response(403, message=str(ex))
         except TemporaryCacheResourceNotFoundError as ex:
+            if hasattr(security_manager, "get_rpc"):
+                return self.response_404()
             return self.response(404, message=str(ex))
 
     @requires_json
@@ -103,8 +108,12 @@ class TemporaryCacheRestApi(BaseSupersetApi, ABC):
         except ValidationError as ex:
             return self.response(400, message=ex.messages)
         except TemporaryCacheAccessDeniedError as ex:
+            if hasattr(security_manager, "get_rpc"):
+                return self.response_404()
             return self.response(403, message=str(ex))
         except TemporaryCacheResourceNotFoundError as ex:
+            if hasattr(security_manager, "get_rpc"):
+                return self.response_404()
             return self.response(404, message=str(ex))
 
     def get(self, pk: int, key: str) -> Response:
@@ -115,8 +124,12 @@ class TemporaryCacheRestApi(BaseSupersetApi, ABC):
                 return self.response_404()
             return self.response(200, value=value)
         except TemporaryCacheAccessDeniedError as ex:
+            if hasattr(security_manager, "get_rpc"):
+                return self.response_404()
             return self.response(403, message=str(ex))
         except TemporaryCacheResourceNotFoundError as ex:
+            if hasattr(security_manager, "get_rpc"):
+                return self.response_404()
             return self.response(404, message=str(ex))
 
     def delete(self, pk: int, key: str) -> Response:
@@ -127,8 +140,12 @@ class TemporaryCacheRestApi(BaseSupersetApi, ABC):
                 return self.response_404()
             return self.response(200, message="Deleted successfully")
         except TemporaryCacheAccessDeniedError as ex:
+            if hasattr(security_manager, "get_rpc"):
+                return self.response_404()
             return self.response(403, message=str(ex))
         except TemporaryCacheResourceNotFoundError as ex:
+            if hasattr(security_manager, "get_rpc"):
+                return self.response_404()
             return self.response(404, message=str(ex))
 
     @abstractmethod

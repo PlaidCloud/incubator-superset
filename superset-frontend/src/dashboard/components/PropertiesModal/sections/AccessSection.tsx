@@ -22,6 +22,7 @@ import { isFeatureEnabled, FeatureFlag } from '@superset-ui/core';
 import { AsyncSelect } from '@superset-ui/core/components';
 import { type TagType } from 'src/components';
 import { loadTags } from 'src/components/Tag/utils';
+import { plaidcloudAudienceUrl } from 'src/utils/plaidcloudUrl';
 import getOwnerName from 'src/utils/getOwnerName';
 import Owner from 'src/types/Owner';
 import { ModalFormField } from 'src/components/Modal';
@@ -32,6 +33,31 @@ import {
   OWNER_OPTION_FILTER_PROPS,
 } from 'src/features/owners/OwnerSelectLabel';
 import { useAccessOptions } from '../hooks/useAccessOptions';
+import {
+  type AudienceResult,
+  type DashboardAudience,
+} from '../hooks/useDashboardAudience';
+
+const audienceSummary = ({
+  state,
+  groups,
+  foreignRoles,
+}: DashboardAudience) => {
+  switch (state) {
+    case 'everyone':
+      return t('Everyone in the project');
+    case 'groups':
+      return groups.map(group => group.name ?? t('Deleted group')).join(', ');
+    case 'owners':
+      return t('Only owners (draft)');
+    case 'unlisted':
+      return t('Unlisted: anyone in the project with the link');
+    case 'custom':
+      return t('Custom Superset roles: %s', foreignRoles.join(', '));
+    default:
+      return null;
+  }
+};
 
 type Roles = { id: number; name: string }[];
 type Owners = {
@@ -43,6 +69,9 @@ type Owners = {
 }[];
 
 interface AccessSectionProps {
+  dashboardId: number;
+  isAdmin: boolean;
+  audience: AudienceResult;
   isLoading: boolean;
   owners: Owners;
   roles: Roles;
@@ -57,6 +86,9 @@ interface AccessSectionProps {
 }
 
 const AccessSection = ({
+  dashboardId,
+  isAdmin,
+  audience,
   isLoading,
   owners,
   roles,
@@ -126,29 +158,75 @@ const AccessSection = ({
         />
       </ModalFormField>
       {isFeatureEnabled(FeatureFlag.DashboardRbac) && (
-        <ModalFormField
-          label={t('Roles')}
-          testId="dashboard-roles-field"
-          helperText={t(
-            'Roles is a list which defines access to the dashboard. Granting a role access to a dashboard will bypass dataset level checks. If no roles are defined, regular access permissions apply.',
+        <>
+          {audience.status !== 'unsupported' && (
+            <ModalFormField
+              label={t('Who can see this')}
+              testId="dashboard-audience-field"
+              helperText={t('Audience is managed in PlaidCloud.')}
+              bottomSpacing={
+                !isAdmin && !isFeatureEnabled(FeatureFlag.TaggingSystem)
+              }
+            >
+              {/* One block child: the field's container is a flex row. */}
+              <div>
+                {audience.status === 'loading' && (
+                  <span data-test="dashboard-audience-loading">
+                    {t('Loading...')}
+                  </span>
+                )}
+                {audience.status === 'ready' && (
+                  <div data-test="dashboard-audience-summary">
+                    {audienceSummary(audience.audience)}
+                  </div>
+                )}
+                {audience.status === 'error' && (
+                  <div data-test="dashboard-audience-error">
+                    {t('The audience could not be loaded from PlaidCloud.')}
+                  </div>
+                )}
+                <a
+                  style={{ display: 'block', textDecoration: 'underline' }}
+                  data-test="dashboard-audience-manage-link"
+                  href={plaidcloudAudienceUrl(dashboardId)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {t('Manage in PlaidCloud')}
+                </a>
+              </div>
+            </ModalFormField>
           )}
-          bottomSpacing={!isFeatureEnabled(FeatureFlag.TaggingSystem)}
-        >
-          <AsyncSelect
-            data-test="dashboard-roles-select"
-            allowClear
-            ariaLabel={t('Roles')}
-            disabled={isLoading}
-            mode="multiple"
-            onChange={onChangeRoles}
-            options={(input, page, pageSize) =>
-              loadAccessOptions('roles', input, page, pageSize)
-            }
-            value={rolesSelectValue}
-            showSearch
-            placeholder={t('Search roles')}
-          />
-        </ModalFormField>
+          {(audience.status === 'unsupported' || isAdmin) && (
+            <ModalFormField
+              label={
+                audience.status === 'unsupported'
+                  ? t('Roles')
+                  : t('Advanced: Superset roles')
+              }
+              testId="dashboard-roles-field"
+              helperText={t(
+                'Roles is a list which defines access to the dashboard. Granting a role access to a dashboard will bypass dataset level checks. If no roles are defined, regular access permissions apply.',
+              )}
+              bottomSpacing={!isFeatureEnabled(FeatureFlag.TaggingSystem)}
+            >
+              <AsyncSelect
+                data-test="dashboard-roles-select"
+                allowClear
+                ariaLabel={t('Roles')}
+                disabled={isLoading}
+                mode="multiple"
+                onChange={onChangeRoles}
+                options={(input, page, pageSize) =>
+                  loadAccessOptions('roles', input, page, pageSize)
+                }
+                value={rolesSelectValue}
+                showSearch
+                placeholder={t('Search roles')}
+              />
+            </ModalFormField>
+          )}
+        </>
       )}
       {isFeatureEnabled(FeatureFlag.TaggingSystem) && (
         <ModalFormField

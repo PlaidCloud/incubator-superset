@@ -21,9 +21,12 @@ from typing import Any, Optional
 from flask_appbuilder.models.sqla import Model
 from marshmallow import ValidationError
 
+from superset import security_manager
 from superset.commands.base import BaseCommand, CreateMixin
 from superset.commands.dashboard.exceptions import (
+    DASHBOARD_ROLES_FORBIDDEN,
     DashboardCreateFailedError,
+    DashboardForbiddenError,
     DashboardInvalidError,
     DashboardSlugExistsValidationError,
 )
@@ -48,6 +51,11 @@ class CreateDashboardCommand(CreateMixin, BaseCommand):
         owner_ids: Optional[list[int]] = self._properties.get("owners")
         role_ids: Optional[list[int]] = self._properties.get("roles")
         slug: str = self._properties.get("slug", "")
+
+        if role_ids is not None and not security_manager.can_set_dashboard_roles(
+            [], role_ids
+        ):
+            raise DashboardForbiddenError(DASHBOARD_ROLES_FORBIDDEN)
 
         # Validate slug uniqueness
         if not DashboardDAO.validate_slug_uniqueness(slug):

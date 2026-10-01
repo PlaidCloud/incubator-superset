@@ -32,7 +32,7 @@ from superset.commands.dashboard.permalink.get import GetDashboardPermalinkComma
 from superset.constants import MODEL_API_RW_METHOD_PERMISSION_MAP
 from superset.dashboards.permalink.exceptions import DashboardPermalinkInvalidStateError
 from superset.dashboards.permalink.schemas import DashboardPermalinkStateSchema
-from superset.extensions import event_logger
+from superset.extensions import event_logger, security_manager
 from superset.key_value.exceptions import KeyValueAccessDeniedError
 from superset.utils.screenshots import DashboardScreenshot
 from superset.utils.urls import headless_url
@@ -180,8 +180,12 @@ class DashboardPermalinkRestApi(BaseSupersetApi):
             DashboardAccessDeniedError,
             KeyValueAccessDeniedError,
         ) as ex:
+            if hasattr(security_manager, "get_rpc"):
+                return self.response_404()
             return self.response(403, message=str(ex))
         except DashboardNotFoundError as ex:
+            if hasattr(security_manager, "get_rpc"):
+                return self.response_404()
             return self.response(404, message=str(ex))
 
     @expose("/permalink/<string:key>", methods=("GET",))

@@ -204,6 +204,8 @@ def generate_dashboard(  # noqa: C901
     from pydantic import ValidationError
     from sqlalchemy.exc import SQLAlchemyError
 
+    from superset.commands.dashboard.exceptions import DashboardDefaultAudienceError
+
     try:
         # Get chart objects from IDs (required for SQLAlchemy relationships)
         from superset import db
@@ -324,8 +326,23 @@ def generate_dashboard(  # noqa: C901
                 )
                 dashboard.slices = fresh_charts
 
+                if dashboard.published:
+                    properties: dict[str, Any] = {"published": True, "roles": []}
+                    security_manager.apply_default_dashboard_audience(
+                        properties, dashboard
+                    )
+                    dashboard.published = properties["published"]
+                    dashboard.roles = properties["roles"]
+
                 db.session.add(dashboard)
                 db.session.commit()  # pylint: disable=consider-using-transaction
+            except DashboardDefaultAudienceError as audience_err:
+                db.session.rollback()  # pylint: disable=consider-using-transaction
+                return GenerateDashboardResponse(
+                    dashboard=None,
+                    dashboard_url=None,
+                    error=str(audience_err),
+                )
             except SQLAlchemyError as db_err:
                 try:
                     db.session.rollback()  # pylint: disable=consider-using-transaction

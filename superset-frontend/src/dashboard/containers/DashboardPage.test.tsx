@@ -26,6 +26,7 @@ import {
 } from 'src/hooks/apiResources';
 import { SupersetClient } from '@superset-ui/core';
 import CrudThemeProvider from 'src/components/CrudThemeProvider';
+import getBootstrapData from 'src/utils/getBootstrapData';
 import DashboardPage from './DashboardPage';
 
 const mockTheme = {
@@ -52,6 +53,17 @@ const mockDashboard = {
   roles: [],
   theme: mockTheme,
 };
+
+const mockAddDangerToast = jest.fn();
+jest.mock('src/components/MessageToasts/withToasts', () => ({
+  ...jest.requireActual('src/components/MessageToasts/withToasts'),
+  useToasts: () => ({ addDangerToast: mockAddDangerToast }),
+}));
+
+jest.mock('src/utils/getBootstrapData', () => {
+  const actual = jest.requireActual('src/utils/getBootstrapData');
+  return { __esModule: true, ...actual, default: jest.fn(actual.default) };
+});
 
 jest.mock('src/hooks/apiResources', () => ({
   useDashboard: jest.fn(),
@@ -253,4 +265,78 @@ test('passes null theme when Redux dashboardInfo.theme is explicitly null (theme
     expect.objectContaining({ theme: null }),
     expect.anything(),
   );
+});
+
+const deniedError = (status: number) =>
+  Object.assign(new Error('nope'), { status });
+
+const renderDenied = (plaidcloud: boolean) => {
+  jest
+    .spyOn(SupersetClient, 'post')
+    .mockResolvedValue({ json: { result: {} } } as never);
+  const actual = jest.requireActual('src/utils/getBootstrapData').default;
+  (getBootstrapData as jest.Mock).mockImplementation(() => {
+    const data = actual();
+    return { ...data, common: { ...data.common, plaidcloud } };
+  });
+  return render(<DashboardPage idOrSlug="1" />, {
+    useRedux: true,
+    useRouter: true,
+    initialState: {
+      dashboardInfo: {},
+      dashboardState: { sliceIds: [] },
+      nativeFilters: { filters: {} },
+      dataMask: {},
+    },
+  });
+};
+
+test.each([403, 404])(
+  'shows the access-denied page on a %s on PlaidCloud, without the datasources toast',
+  async status => {
+    mockUseDashboard.mockReturnValue({
+      result: null,
+      error: deniedError(status),
+    });
+    mockUseDashboardDatasets.mockReturnValue({
+      result: null,
+      error: deniedError(404),
+      status: 'error',
+    });
+
+    renderDenied(true);
+
+    expect(
+      await screen.findByText(
+        "This dashboard doesn't exist or you don't have access.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Request access' }),
+    ).toBeVisible();
+    expect(mockAddDangerToast).not.toHaveBeenCalled();
+  },
+);
+
+test('throws to the error boundary on a 403 when not PlaidCloud', () => {
+  jest.spyOn(console, 'error').mockImplementation(() => {});
+  mockUseDashboard.mockReturnValue({
+    result: null,
+    error: deniedError(403),
+  });
+
+  expect(() => renderDenied(false)).toThrow('nope');
+});
+
+test('does not toast a datasources error that arrives before the dashboard loads', () => {
+  mockUseDashboard.mockReturnValue({ result: null, error: null });
+  mockUseDashboardDatasets.mockReturnValue({
+    result: null,
+    error: deniedError(404),
+    status: 'error',
+  });
+
+  renderDenied(true);
+
+  expect(mockAddDangerToast).not.toHaveBeenCalled();
 });

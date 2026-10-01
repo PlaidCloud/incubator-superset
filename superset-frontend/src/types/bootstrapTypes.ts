@@ -156,6 +156,7 @@ export interface BootstrapThemeDataConfig {
 }
 
 export interface CommonBootstrapData {
+  plaidcloud?: boolean;
   application_root: string;
   static_assets_prefix: string;
   conf: JsonObject;

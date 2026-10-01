@@ -22,9 +22,10 @@ from unittest.mock import patch
 import flask
 import pytest
 from flask_appbuilder.security.sqla.models import User
+from requests.exceptions import HTTPError
 from sqlalchemy.orm.exc import MultipleResultsFound
 
-from plaid.security import PlaidSecurityManager, PROJECT_ACCESS
+from plaid.security import call_plaid_rpc, PlaidSecurityManager, PROJECT_ACCESS
 from superset.exceptions import SupersetSecurityException
 from superset.security import SupersetSecurityManager
 
@@ -489,3 +490,144 @@ class TestDashboardRoleGrantIsProjectBound:
     def test_datasource_without_database_is_denied(self) -> None:
         sm = PlaidSecurityManager.__new__(PlaidSecurityManager)
         assert not sm.can_access_datasource_via_dashboard(SimpleNamespace())
+
+
+APP = flask.Flask(__name__)
+APP.secret_key = "test"  # noqa: S105
+APP.config["PLAID_RPC"] = "plaid-rpc:8080"
+
+
+class RosterPushManager(StubSecurityManager):
+    """auth_user_oauth with registration faked, recording add_user and the push."""
+
+    auth_user_registration = True
+
+    def __init__(self, existing=None):
+        self.events = []
+        self.existing = existing
+
+    def _rpc_token(self):
+        return "tok"
+
+    def find_user(self, **kwargs):
+        return self.existing
+
+    def add_user(self, **kwargs):
+        self.events.append("add_user")
+        return SimpleNamespace(is_active=True)
+
+    def _oauth_calculate_user_roles(self, userinfo):
+        return []
+
+    def store_user_project_access(self):
+        pass
+
+    def update_user_auth_stat(self, user):
+        pass
+
+
+USERINFO = {"email": "new@example.com", "username": "new"}
+
+
+def fake_post(manager, body=None, error=None):
+    def post(url, **kwargs):
+        manager.events.append(("post", url, kwargs))
+        if error:
+            raise error
+        return SimpleNamespace(
+            raise_for_status=lambda: None,
+            json=lambda: body if body is not None else {"ok": True, "result": None},
+        )
+
+    return post
+
+
+def login(manager, **post_kwargs):
+    with (
+        APP.test_request_context(),
+        patch("plaid.security.requests.post", fake_post(manager, **post_kwargs)),
+    ):
+        flask.session["oauth"] = ("tok", "")
+        return manager.auth_user_oauth(USERINFO)
+
+
+def test_first_login_pushes_rosters_once_after_registration_with_no_arguments():
+    manager = RosterPushManager()
+
+    assert login(manager) is not None
+
+    assert manager.events[0] == "add_user"
+    assert len(manager.events) == 2
+    _, url, kwargs = manager.events[1]
+    assert url == "http://plaid-rpc:8080/json-rpc/identity/me/push_my_superset_rosters"
+    assert kwargs["json"]["method"] == "identity/me/push_my_superset_rosters"
+    assert kwargs["json"]["params"] == {}
+    assert kwargs["headers"] == {"Authorization": "Bearer tok"}
+    assert kwargs["timeout"] == 5
+
+
+def test_login_succeeds_when_roster_push_fails():
+    assert login(RosterPushManager(), error=RuntimeError("down")) is not None
+
+
+def test_ok_false_reply_is_logged_and_login_succeeds(caplog):
+    body = {"ok": False, "error": {"message": "no scope"}}
+
+    with caplog.at_level("WARNING", logger="plaid.security"):
+        assert login(RosterPushManager(), body=body) is not None
+
+    assert "First-login roster push failed" in caplog.text
+    assert "no scope" in caplog.text
+
+
+def test_push_401_does_not_log_out_or_clear_the_session():
+    manager = RosterPushManager()
+    error = HTTPError(response=SimpleNamespace(status_code=401))
+
+    with patch("plaid.security.logout_user") as logout:
+        assert login(manager, error=error) is not None
+
+    logout.assert_not_called()
+
+
+def test_call_plaid_rpc_returns_result():
+    manager = RosterPushManager()
+
+    with (
+        APP.app_context(),
+        patch(
+            "plaid.security.requests.post",
+            fake_post(manager, body={"ok": True, "result": {"a": 1}}),
+        ),
+    ):
+        assert call_plaid_rpc("identity/me/scopes", {"x": 2}, "t", timeout=3) == {
+            "a": 1
+        }
+
+    assert manager.events[0][2]["timeout"] == 3
+
+
+def test_no_token_skips_the_push():
+    manager = RosterPushManager()
+    manager._rpc_token = lambda: None
+
+    assert login(manager) is not None
+    assert manager.events == ["add_user"]
+
+
+def test_returning_user_does_not_push():
+    manager = RosterPushManager(
+        existing=SimpleNamespace(is_active=True, roles=["Gamma"])
+    )
+
+    login(manager)
+
+    assert manager.events == []
+
+
+def test_failed_registration_does_not_push():
+    manager = RosterPushManager()
+    manager.add_user = lambda **kwargs: None
+
+    assert login(manager) is None
+    assert manager.events == []

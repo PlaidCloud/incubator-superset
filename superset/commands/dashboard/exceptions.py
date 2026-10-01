@@ -82,6 +82,15 @@ class DashboardDeleteFailedReportsExistError(DashboardDeleteFailedError):
     message = _("There are associated alerts or reports")
 
 
+DASHBOARD_ROLES_FORBIDDEN = _("Dashboard audience is managed in PlaidCloud")
+
+
+class DashboardDefaultAudienceError(
+    DashboardCreateFailedError, DashboardUpdateFailedError
+):
+    message = _("Couldn't apply this project's default audience — try again")
+
+
 class DashboardForbiddenError(ForbiddenError):
     message = _("Changing this Dashboard is forbidden")
 
