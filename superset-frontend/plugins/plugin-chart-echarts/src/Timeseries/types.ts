@@ -99,6 +99,12 @@ export type EchartsTimeseriesFormData = QueryFormData & {
   percentageThreshold: number;
   colorByPrimaryAxis?: boolean;
   orientation?: OrientationType;
+  /** Bar-only: render on polar (radius/angle) coordinates instead of a
+   * cartesian grid. Ignored by every other series type in this family. */
+  isPolar?: boolean;
+  /** Polar-only: hide the category (radiusAxis) tick labels outright,
+   * for when hideOverlap still leaves some visible on dense category sets. */
+  polarHideLabels?: boolean;
 } & LegendFormData &
   TitleFormData;
 
