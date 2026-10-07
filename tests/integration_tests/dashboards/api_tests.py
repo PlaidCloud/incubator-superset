@@ -2886,7 +2886,8 @@ class TestDashboardApi(ApiOwnersTestCaseMixin, InsertChartMixin, SupersetTestCas
             ]
         }
 
-    def test_import_dashboard_v0_export(self):
+    def test_import_dashboard_v0_export_is_refused(self):
+        """sc-24050: the unversioned v0 importer is no longer reachable from the API."""
         num_dashboards = db.session.query(Dashboard).count()
 
         self.login(ADMIN_USERNAME)
@@ -2899,22 +2900,9 @@ class TestDashboardApi(ApiOwnersTestCaseMixin, InsertChartMixin, SupersetTestCas
             "formData": (buf, "20201119_181105.json"),
         }
         rv = self.client.post(uri, data=form_data, content_type="multipart/form-data")
-        response = json.loads(rv.data.decode("utf-8"))
 
-        assert rv.status_code == 200
-        assert response == {"message": "OK"}
-        assert db.session.query(Dashboard).count() == num_dashboards + 1
-
-        dashboard = (
-            db.session.query(Dashboard).filter_by(dashboard_title="Births 2").one()
-        )
-        chart = dashboard.slices[0]
-        dataset = chart.table
-
-        db.session.delete(dashboard)
-        db.session.delete(chart)
-        db.session.delete(dataset)
-        db.session.commit()
+        assert rv.status_code == 422
+        assert db.session.query(Dashboard).count() == num_dashboards
 
     @patch("superset.commands.database.importers.v1.utils.add_permissions")
     def test_import_dashboard_overwrite(self, mock_add_permissions):
