@@ -68,6 +68,7 @@ def test_execute_query_as_report_executor(
 ) -> None:
     from superset.commands.report.alert import AlertCommand
     from superset.reports.models import ReportSchedule
+    from superset.utils.core import override_user
 
     original_config = app.config["ALERT_REPORTS_EXECUTORS"]
     app.config["ALERT_REPORTS_EXECUTORS"] = config
@@ -86,7 +87,10 @@ def test_execute_query_as_report_executor(
         validator_config_json='{"op": "==", "threshold": 1}',
     )
     command = AlertCommand(report_schedule=report_schedule, execution_id=uuid.uuid4())
-    override_user_mock = mocker.patch("superset.commands.report.alert.override_user")
+    # wraps= keeps the real context manager so g.user is set for the access check
+    override_user_mock = mocker.patch(
+        "superset.commands.report.alert.override_user", wraps=override_user
+    )
     cm = (
         pytest.raises(type(expected_result))
         if isinstance(expected_result, Exception)
@@ -110,7 +114,6 @@ def test_execute_query_mutate_query_enabled(
     default_alert_mutate_ff = app.config["MUTATE_ALERT_QUERY"]
 
     app.config["MUTATE_ALERT_QUERY"] = True
-    mocker.patch("superset.commands.report.alert.override_user")
     mock_df = mocker.MagicMock(spec=pd.DataFrame)
     mock_df.empty = True
     mock_database = get_example_database()
@@ -152,8 +155,12 @@ def test_execute_query_mutate_query_disabled(
     default_alert_mutate_ff = app.config["MUTATE_ALERT_QUERY"]
 
     app.config["MUTATE_ALERT_QUERY"] = False
-    mocker.patch("superset.commands.report.alert.override_user")
-    mock_database = mocker.MagicMock()
+    mock_df = mocker.MagicMock(spec=pd.DataFrame)
+    mock_df.empty = True
+    mock_database = get_example_database()
+    mock_get_df = mocker.patch.object(mock_database, "get_df", return_value=mock_df)
+    mock_limited_sql = mocker.patch.object(mock_database, "apply_limit_to_sql")
+    mock_mutate_call = mocker.patch.object(mock_database, "mutate_sql_based_on_config")
 
     report_schedule = ReportSchedule(
         created_by=get_user("admin"),
@@ -172,10 +179,8 @@ def test_execute_query_mutate_query_disabled(
         report_schedule=report_schedule, execution_id=uuid.uuid4()
     ).run()
 
-    mock_database.mutate_sql_based_on_config.assert_not_called()
-    mock_database.get_df.assert_called_once_with(
-        sql=mock_database.apply_limit_to_sql.return_value
-    )
+    mock_mutate_call.assert_not_called()
+    mock_get_df.assert_called_once_with(sql=mock_limited_sql.return_value)
 
     app.config["MUTATE_ALERT_QUERY"] = default_alert_mutate_ff
 

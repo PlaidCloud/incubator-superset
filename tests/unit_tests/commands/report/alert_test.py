@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from unittest.mock import Mock
 from uuid import uuid4
 
 import numpy as np
@@ -22,9 +23,16 @@ import pandas as pd
 import pytest
 from pytest_mock import MockerFixture
 
+from superset import security_manager
 from superset.commands.report.alert import AlertCommand
-from superset.commands.report.exceptions import AlertValidatorConfigError
+from superset.commands.report.exceptions import (
+    AlertQueryError,
+    AlertValidatorConfigError,
+)
+from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
+from superset.exceptions import SupersetSecurityException
 from superset.reports.models import ReportScheduleValidatorType, ReportState
+from superset.sql.parse import SQLScript
 
 
 def test_empty_query_result_with_operator_validator_returns_false_with_message(
@@ -494,3 +502,115 @@ def test_not_null_validator_with_empty_result_does_not_trigger(
 
     assert triggered is False, "NOT_NULL with empty result should not trigger"
     assert command._result is None
+
+
+# --- _execute_query: access check + RLS on the raw alert SQL channel (sc-24052) ---
+
+
+def _alert_command_with_db(
+    mocker: MockerFixture,
+    *,
+    rendered_sql: str = "SELECT value FROM metrics",
+) -> tuple[AlertCommand, Mock]:
+    """Wire a real ``AlertCommand._execute_query`` with a mocked database."""
+    database = mocker.Mock()
+    database.db_engine_spec.engine = "postgresql"
+    database.get_default_catalog.return_value = None
+    database.get_default_schema.return_value = "public"
+    database.apply_limit_to_sql.side_effect = lambda sql, limit: sql
+    database.get_df.return_value = pd.DataFrame({"value": [1]})
+
+    report_schedule = mocker.Mock()
+    report_schedule.database = database
+    report_schedule.sql = rendered_sql
+    report_schedule.id = 1
+
+    template = mocker.Mock()
+    template.process_template.side_effect = lambda sql: sql
+    mocker.patch(
+        "superset.commands.report.alert.jinja_context.get_template_processor",
+        return_value=template,
+    )
+    mocker.patch(
+        "superset.commands.report.alert.get_executor",
+        return_value=("owner", "alert_user"),
+    )
+    mocker.patch(
+        "superset.commands.report.alert.security_manager.find_user",
+        return_value=mocker.Mock(),
+    )
+    mocker.patch("superset.commands.report.alert.override_user")
+
+    command = AlertCommand(report_schedule=report_schedule, execution_id=uuid4())
+    return command, database
+
+
+def test_execute_query_denied_access_raises_and_skips_query(
+    mocker: MockerFixture,
+) -> None:
+    """A user who cannot query the target tables never reaches the warehouse."""
+    command, database = _alert_command_with_db(mocker)
+    mocker.patch.object(
+        security_manager,
+        "raise_for_access",
+        side_effect=SupersetSecurityException(
+            SupersetError(
+                message="denied",
+                error_type=SupersetErrorType.DATASOURCE_SECURITY_ACCESS_ERROR,
+                level=ErrorLevel.ERROR,
+            )
+        ),
+    )
+    mocker.patch("superset.commands.report.alert.apply_rls", return_value=False)
+
+    with pytest.raises(AlertQueryError):
+        command._execute_query()
+    database.get_df.assert_not_called()
+
+
+def test_execute_query_reserializes_sql_when_rls_applied(
+    mocker: MockerFixture,
+) -> None:
+    """When a predicate applies, the re-serialized SQL is what executes."""
+    rendered = "SELECT value FROM metrics"
+    command, database = _alert_command_with_db(mocker, rendered_sql=rendered)
+    mocker.patch.object(security_manager, "raise_for_access")
+    mocker.patch("superset.commands.report.alert.apply_rls", return_value=True)
+
+    command._execute_query()
+
+    executed_sql = database.get_df.call_args.kwargs["sql"]
+    assert executed_sql == SQLScript(rendered, "postgresql").format()
+    assert executed_sql != rendered
+
+
+def test_execute_query_passthrough_when_no_rls(mocker: MockerFixture) -> None:
+    """Un-governed SQL is passed through byte-identical (no reformat)."""
+    rendered = "SELECT value FROM metrics"
+    command, database = _alert_command_with_db(mocker, rendered_sql=rendered)
+    raise_for_access = mocker.patch.object(security_manager, "raise_for_access")
+    mocker.patch("superset.commands.report.alert.apply_rls", return_value=False)
+
+    command._execute_query()
+
+    assert database.get_df.call_args.kwargs["sql"] == rendered
+    raise_for_access.assert_called_once()
+    assert raise_for_access.call_args.kwargs["sql"] == rendered
+    assert raise_for_access.call_args.kwargs["database"] is database
+
+
+def test_execute_query_applies_rls_to_every_statement(
+    mocker: MockerFixture,
+) -> None:
+    """RLS is applied to all statements — no short-circuit on the first hit."""
+    command, _ = _alert_command_with_db(
+        mocker, rendered_sql="SELECT a FROM t1; SELECT b FROM t2"
+    )
+    mocker.patch.object(security_manager, "raise_for_access")
+    apply_rls_mock = mocker.patch(
+        "superset.commands.report.alert.apply_rls", return_value=True
+    )
+
+    command._execute_query()
+
+    assert apply_rls_mock.call_count == 2

@@ -21,17 +21,17 @@ from typing import Any
 from marshmallow.exceptions import ValidationError
 
 from superset.commands.base import BaseCommand
-from superset.commands.dashboard.importers import v0, v1
+from superset.commands.dashboard.importers import v1
 from superset.commands.exceptions import CommandInvalidError
 from superset.commands.importers.exceptions import IncorrectVersionError
 
 logger = logging.getLogger(__name__)
 
-# list of different import formats supported; v0 should be last because
-# the files are not versioned
+# list of different import formats supported. The unversioned v0 importer is
+# deliberately absent (sc-24050): it overwrites datasets with no ownership or
+# access check. It stays CLI-only.
 command_versions = [
     v1.ImportDashboardsCommand,
-    v0.ImportDashboardsCommand,
 ]
 
 
@@ -57,7 +57,7 @@ class ImportDashboardsCommand(BaseCommand):
                 command.run()
                 return
             except IncorrectVersionError:
-                logger.exception("File not handled by command, skipping") # give a full traceback for debugging
+                logger.warning("File not handled by command, skipping")
             except (CommandInvalidError, ValidationError):
                 # found right version, but file is invalid
                 logger.info("Command failed validation")

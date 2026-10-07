@@ -366,5 +366,12 @@ class UserRegistrationsRestAPI(BaseSupersetModelRestApi):
         "first_name",
         "last_name",
         "registration_date",
-        "registration_hash",
+    ]
+    # Filtering is a read: a prefix filter on the hash or password reveals it.
+    search_columns = [
+        "username",
+        "email",
+        "first_name",
+        "last_name",
+        "registration_date",
     ]

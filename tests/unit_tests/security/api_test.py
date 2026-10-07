@@ -14,6 +14,9 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from typing import Any
+
+import prison
 import pytest
 
 from superset.extensions import csrf
@@ -46,3 +49,32 @@ def test_csrf_not_exempt(app_context: None) -> None:
         "PermissionApi",
         "ViewMenuApi",
     }
+
+
+def test_user_registrations_list_omits_registration_hash(
+    client: Any, full_api_access: None
+) -> None:
+    response = client.get("/api/v1/security/user_registrations/")
+
+    assert response.status_code == 200
+    assert "registration_hash" not in response.json["list_columns"]
+
+
+@pytest.mark.parametrize("column", ["registration_hash", "password"])
+def test_user_registrations_refuse_filter_on_secret_columns(
+    client: Any, full_api_access: None, column: str
+) -> None:
+    """sc-24025: a prefix filter would read the hash one character at a time."""
+    q = prison.dumps({"filters": [{"col": column, "opr": "sw", "value": "a"}]})
+    response = client.get(f"/api/v1/security/user_registrations/?q={q}")
+
+    assert response.status_code == 400
+
+
+def test_user_registrations_still_filter_on_username(
+    client: Any, full_api_access: None
+) -> None:
+    q = prison.dumps({"filters": [{"col": "username", "opr": "sw", "value": "a"}]})
+    response = client.get(f"/api/v1/security/user_registrations/?q={q}")
+
+    assert response.status_code == 200
