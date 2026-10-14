@@ -56,6 +56,7 @@ from flask_login import AnonymousUserMixin, LoginManager
 from jwt.api_jwt import _jwt_global_obj
 from sqlalchemy import and_, inspect, or_
 from sqlalchemy.engine.base import Connection
+from sqlalchemy.exc import NoResultFound, SQLAlchemyError
 from sqlalchemy.orm import eagerload
 from sqlalchemy.orm.mapper import Mapper
 from sqlalchemy.orm.query import Query as SqlaQuery
@@ -827,6 +828,29 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         datasets PlaidCloud published, unchanged since, overrides this.
         """
         return False
+
+    def _datasource_database(
+        self, datasource: "BaseDatasource | Explorable"
+    ) -> Optional["Database"]:
+        """
+        The datasource's database, reloaded by id when the instance is detached
+        from its session (a cached or test-built object). None only when it truly
+        has none.
+
+        :raises SQLAlchemyError: If it names a database that can't be loaded
+        """
+        # pylint: disable=import-outside-toplevel
+        from superset.models.core import Database
+
+        try:
+            return getattr(datasource, "database", None)
+        except SQLAlchemyError:
+            database_id = datasource.database_id  # type: ignore[union-attr]
+        if database_id is None:
+            return None
+        if (database := self.session.get(Database, database_id)) is None:
+            raise NoResultFound(f"database {database_id} not found")
+        return database
 
     @staticmethod
     def _stays_in_lakehouse_project(datasource: "BaseDatasource | Explorable") -> bool:
@@ -2824,16 +2848,27 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
             # Charts on an external lakehouse may only read datasets PlaidCloud
             # published; a SQL Lab query or a user-built dataset would run its own
             # SQL through the shared principal.
-            datasource_db = getattr(datasource, "database", None)
-            if (
-                datasource_db is not None
-                and self.refuses_external_lakehouse(datasource_db)
-                and not (
-                    self.is_published_lakehouse_dataset(datasource)
-                    and self._stays_in_lakehouse_project(datasource)
+            try:
+                datasource_db = self._datasource_database(datasource)
+                refused = (
+                    datasource_db is not None
+                    and self.refuses_external_lakehouse(datasource_db)
+                    and not (
+                        self.is_published_lakehouse_dataset(datasource)
+                        and self._stays_in_lakehouse_project(datasource)
+                    )
                 )
-            ):
-                self.raise_for_external_lakehouse(datasource_db)
+            except SQLAlchemyError as ex:
+                # Unresolvable is not the same as unmarked: fail closed.
+                raise SupersetSecurityException(
+                    SupersetError(
+                        error_type=SupersetErrorType.DATASOURCE_SECURITY_ACCESS_ERROR,
+                        message=_("This dataset's warehouse could not be checked."),
+                        level=ErrorLevel.ERROR,
+                    )
+                ) from ex
+            if refused:
+                self.raise_for_external_lakehouse(cast("Database", datasource_db))
 
             if not (
                 self.can_access_schema(datasource)

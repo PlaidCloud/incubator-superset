@@ -25,6 +25,7 @@ dataset's own row.
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -64,6 +65,7 @@ from superset.models.sql_lab import Query
 from superset.sql.execution.executor import SQLExecutor
 from superset.sql.parse import Table
 from superset.sqllab.exceptions import QueryIsForbiddenToAccessException
+from superset.superset_typing import QueryObjectDict
 
 MARKER = '{"plaid_external_lakehouse": true}'
 REFUSED = "SQL Lab and dataset editing are not available on this warehouse"
@@ -321,7 +323,10 @@ def chart_query(mocker: MockerFixture, app: Flask):
         dataset = published_dataset(lakehouse_db(id=1))
         with app.test_request_context():
             return dataset.get_query_str_extended(
-                {"is_timeseries": False, "metrics": [], "columns": [], **query_obj},
+                cast(
+                    QueryObjectDict,
+                    {"is_timeseries": False, "metrics": [], "columns": [], **query_obj},
+                ),
                 mutate=False,
             ).sql
 
@@ -582,7 +587,7 @@ def test_user_built_dataset_refused_at_query_time(human, mocker: MockerFixture):
 
     with pytest.raises(SupersetSecurityException, match=REFUSED):
         security_manager.raise_for_access(
-            query_context=SimpleNamespace(datasource=virtual, form_data={})
+            query_context=SimpleNamespace(datasource=virtual, form_data={})  # type: ignore[arg-type]
         )
 
 
@@ -612,7 +617,7 @@ def published(human, mocker: MockerFixture):
 
     def chart(datasource: SqlaTable) -> None:
         security_manager.raise_for_access(
-            query_context=SimpleNamespace(datasource=datasource, form_data={})
+            query_context=SimpleNamespace(datasource=datasource, form_data={})  # type: ignore[arg-type]
         )
 
     return chart
@@ -866,3 +871,65 @@ def test_guest_token_never_automation(app: Flask):
         assert rls_guard.is_automation_principal() is False
         g.user.is_guest_user = False
         assert rls_guard.is_automation_principal() is True
+
+
+@pytest.fixture
+def detached(session: Session, mocker: MockerFixture):
+    """A dataset detached from its session, like the explore API tests' fixture."""
+    SqlaTable.metadata.create_all(session.get_bind())
+    mocker.patch.object(security_manager, "can_access_schema", return_value=True)
+    from superset.security import SupersetSecurityManager
+
+    # the `session` fixture replaces the manager's session with a mock
+    mocker.patch.object(SupersetSecurityManager.session, "get", session.get)
+    mocker.patch.object(
+        security_manager, "can_manage_external_lakehouse", return_value=True
+    )
+
+    def build(database: Database, *, loaded: bool = True) -> SqlaTable:
+        dataset = published_dataset(database)
+        session.add(dataset)
+        session.commit()
+        if loaded:
+            assert dataset.database_id  # reload the row before detaching
+        session.expunge(dataset)
+        security_manager.can_manage_external_lakehouse.return_value = False  # type: ignore[attr-defined]
+        return dataset
+
+    return build
+
+
+def chart_data(datasource: SqlaTable) -> None:
+    security_manager.raise_for_access(
+        query_context=SimpleNamespace(datasource=datasource, form_data={})  # type: ignore[arg-type]
+    )
+
+
+def test_detached_dataset_on_unmarked_database_serves_charts(detached):
+    chart_data(detached(Database(database_name="internal", sqlalchemy_uri="sqlite://")))
+
+
+def test_detached_dataset_on_marked_database_refused(detached):
+    with pytest.raises(SupersetSecurityException, match=REFUSED):
+        chart_data(detached(lakehouse_db()))
+
+
+def test_unresolvable_database_fails_closed(detached):
+    with pytest.raises(SupersetSecurityException) as excinfo:
+        chart_data(detached(lakehouse_db(), loaded=False))
+    assert excinfo.value.error.error_type == (
+        SupersetErrorType.DATASOURCE_SECURITY_ACCESS_ERROR
+    )
+    assert excinfo.value.status == 403
+
+
+def test_missing_database_fails_closed(detached, session: Session):
+    dataset = detached(lakehouse_db())
+    session.query(Database).delete()
+    session.commit()
+
+    with pytest.raises(SupersetSecurityException) as excinfo:
+        chart_data(dataset)
+    assert excinfo.value.error.error_type == (
+        SupersetErrorType.DATASOURCE_SECURITY_ACCESS_ERROR
+    )

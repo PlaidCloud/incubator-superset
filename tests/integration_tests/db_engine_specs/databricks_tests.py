@@ -40,8 +40,8 @@ class TestDatabricksDbEngineSpec(SupersetTestCase):
         assert extras == {
             "engine_params": {
                 "connect_args": {
-                    "_user_agent_entry": "Apache Superset",
-                    "http_headers": [("User-Agent", "Apache Superset")],
+                    "user_agent_entry": "PlaidCloud",
+                    "http_headers": [("User-Agent", "PlaidCloud")],
                 },
             },
             "metadata_cache_timeout": {},

@@ -17,7 +17,7 @@
 # pylint: disable=unused-argument, import-outside-toplevel, protected-access
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 import pytest
 from pytest_mock import MockerFixture
@@ -289,7 +289,9 @@ def test_get_prequeries(mocker: MockerFixture) -> None:
     ]
 
 
-def m2m_database(mocker: MockerFixture, encrypted_extra: Optional[dict] = None):
+def m2m_database(
+    mocker: MockerFixture, encrypted_extra: Optional[dict[str, Any]] = None
+):
     database = mocker.MagicMock()
     database.url_object.host = "dbc-1.cloud.databricks.com"
     database.encrypted_extra = encrypted_extra and json.dumps(encrypted_extra)
@@ -317,7 +319,7 @@ def test_oauth_m2m_credentials_refresh_on_expiry(mocker: MockerFixture) -> None:
         {"access_token": "t1", "expires_in": 3600},
         {"access_token": "t2", "expires_in": 3600},
     ]
-    params: dict = {"connect_args": {"http_path": "/sql/1"}}
+    params: dict[str, Any] = {"connect_args": {"http_path": "/sql/1"}}
 
     DatabricksNativeEngineSpec.update_params_from_encrypted_extra(
         m2m_database(mocker, M2M), params
@@ -340,7 +342,7 @@ def test_oauth_m2m_credentials_refresh_on_expiry(mocker: MockerFixture) -> None:
     assert post.call_count == 2
 
     # A new engine for the next query reuses the same provider and token.
-    again: dict = {}
+    again: dict[str, Any] = {}
     DatabricksNativeEngineSpec.update_params_from_encrypted_extra(
         m2m_database(mocker, M2M), again
     )
@@ -350,7 +352,7 @@ def test_oauth_m2m_credentials_refresh_on_expiry(mocker: MockerFixture) -> None:
 def test_pat_and_other_encrypted_extra_unchanged(mocker: MockerFixture) -> None:
     from superset.db_engine_specs.databricks import DatabricksNativeEngineSpec
 
-    params: dict = {}
+    params: dict[str, Any] = {}
     DatabricksNativeEngineSpec.update_params_from_encrypted_extra(
         m2m_database(mocker), params
     )
@@ -368,6 +370,7 @@ def test_oauth_m2m_secret_masked(mocker: MockerFixture) -> None:
 
     masked = DatabricksNativeEngineSpec.mask_encrypted_extra(json.dumps(M2M))
 
+    assert masked is not None
     assert "sp-secret" not in masked
     assert json.loads(masked)["auth_params"] == PASSWORD_MASK
     assert DatabricksNativeEngineSpec.unmask_encrypted_extra(
@@ -376,7 +379,7 @@ def test_oauth_m2m_secret_masked(mocker: MockerFixture) -> None:
     rotated = {**M2M, "auth_params": {"client_id": "sp-id", "client_secret": "new"}}
     assert (
         json.loads(
-            DatabricksNativeEngineSpec.unmask_encrypted_extra(
+            DatabricksNativeEngineSpec.unmask_encrypted_extra(  # type: ignore[arg-type]
                 json.dumps(M2M), json.dumps(rotated)
             )
         )
@@ -390,7 +393,7 @@ def test_oauth_m2m_credentials_fit_connector(mocker: MockerFixture) -> None:
 
     post = mocker.patch("superset.db_engine_specs.databricks.requests.post")
     post.return_value.json.return_value = {"access_token": "t1", "expires_in": 60}
-    headers: dict = {}
+    headers: dict[str, Any] = {}
 
     authenticators.ExternalAuthProvider(
         OAuthM2MCredentials("dbc-1.cloud.databricks.com", "sp-id", "sp-secret")
@@ -436,7 +439,7 @@ def test_oauth_m2m_workspace_hosts_accepted(mocker: MockerFixture, host: str) ->
 
     database = m2m_database(mocker, M2M)
     database.url_object.host = host
-    params: dict = {}
+    params: dict[str, Any] = {}
 
     DatabricksNativeEngineSpec.update_params_from_encrypted_extra(database, params)
 
