@@ -289,10 +289,18 @@ class DatabricksDynamicBaseEngineSpec(BasicParametersMixin, DatabricksBaseEngine
         engine_params: dict[str, Any] = extra.setdefault("engine_params", {})
         connect_args: dict[str, Any] = engine_params.setdefault("connect_args", {})
 
-        connect_args.setdefault("http_headers", [("User-Agent", PARTNER_ATTRIBUTION)])
+        connect_args["http_headers"] = [
+            *(
+                (name, value)
+                for name, value in connect_args.get("http_headers", [])
+                if name.lower() != "user-agent"
+            ),
+            ("User-Agent", PARTNER_ATTRIBUTION),
+        ]
         # databricks-sql-connector 4.x reads `user_agent_entry`; `_user_agent_entry`
         # is deprecated.
-        connect_args.setdefault("user_agent_entry", PARTNER_ATTRIBUTION)
+        connect_args.pop("_user_agent_entry", None)
+        connect_args["user_agent_entry"] = PARTNER_ATTRIBUTION
 
         # trim whitespace from http_path to avoid databricks errors on connecting
         if http_path := connect_args.get("http_path"):

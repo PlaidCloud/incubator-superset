@@ -133,8 +133,11 @@ def test_get_extra_params(mocker: MockerFixture) -> None:
         {
             "engine_params": {
                 "connect_args": {
-                    "http_headers": [("User-Agent", "Custom user agent")],
-                    "user_agent_entry": "Custom user agent",
+                    "http_headers": [
+                        ("User-Agent", "Custom user agent"),
+                        ("X-Trace", "1"),
+                    ],
+                    "_user_agent_entry": "Custom user agent",
                     "foo": "bar",
                 }
             }
@@ -143,8 +146,8 @@ def test_get_extra_params(mocker: MockerFixture) -> None:
     assert DatabricksNativeEngineSpec.get_extra_params(database) == {
         "engine_params": {
             "connect_args": {
-                "http_headers": [["User-Agent", "Custom user agent"]],
-                "user_agent_entry": "Custom user agent",
+                "http_headers": [("X-Trace", "1"), ("User-Agent", "PlaidCloud")],
+                "user_agent_entry": "PlaidCloud",
                 "foo": "bar",
             }
         }
@@ -165,8 +168,8 @@ def test_get_extra_params(mocker: MockerFixture) -> None:
     assert DatabricksNativeEngineSpec.get_extra_params(database) == {
         "engine_params": {
             "connect_args": {
-                "http_headers": [["User-Agent", "Custom user agent"]],
-                "user_agent_entry": "Custom user agent",
+                "http_headers": [("User-Agent", "PlaidCloud")],
+                "user_agent_entry": "PlaidCloud",
                 "http_path": "/some_path_here_with_whitespace",
             }
         }

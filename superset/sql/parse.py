@@ -560,6 +560,31 @@ OUTSIDE_ROW_NODES = (
     exp.ReadCSV,
     exp.ReadParquet,
     exp.ToFile,
+    exp.SessionUser,
+    # unbounded generators
+    exp.Generator,
+    exp.GenerateSeries,
+    exp.ExplodingGenerateSeries,
+    exp.GenerateDateArray,
+    exp.GenerateTimestampArray,
+    exp.GenerateEmbedding,
+    exp.Explode,
+    exp.ExplodeOuter,
+    exp.Posexplode,
+    exp.Inline,
+    exp.Unnest,
+    exp.Repeat,
+)
+
+# Every other CURRENT_* function reveals the shared principal's session: user,
+# role, account, warehouse, catalog, schema.
+ROW_SAFE_CURRENT_FUNCTIONS = (
+    exp.CurrentDate,
+    exp.CurrentDatetime,
+    exp.CurrentTime,
+    exp.CurrentTimestamp,
+    exp.CurrentTimestampLTZ,
+    exp.CurrentTimezone,
 )
 
 
@@ -911,8 +936,9 @@ class SQLStatement(BaseSQLStatement[exp.Expression]):
         anything other than the columns of the row it is evaluated on.
 
         Refused: another query or table, a qualified name, a bind parameter, a
-        function that reads files, and any function sqlglot does not recognise
-        (``IDENTIFIER()``, ``read_files``, ``SYSTEM$...``, UDFs).
+        function that reads files, session context (``CURRENT_USER()``,
+        ``CURRENT_ROLE()``, ...), an unbounded generator, and any function sqlglot
+        does not recognise (``IDENTIFIER()``, ``read_files``, ``SYSTEM$...``, UDFs).
 
         :return: True if the expression reaches beyond the row.
         """
@@ -922,6 +948,10 @@ class SQLStatement(BaseSQLStatement[exp.Expression]):
             or any(
                 (isinstance(node, exp.Query) and node is not self._parsed)
                 or (isinstance(node, exp.Column) and bool(node.table))
+                or (
+                    type(node).__name__.startswith("Current")
+                    and not isinstance(node, ROW_SAFE_CURRENT_FUNCTIONS)
+                )
                 for node in self._parsed.walk()
             )
         )

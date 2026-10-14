@@ -25,10 +25,15 @@ dataset's own row.
 from __future__ import annotations
 
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
-from flask import Flask
+from flask import Flask, g
+from flask_appbuilder import Model
+from flask_appbuilder.security.sqla.models import Role, User
 from pytest_mock import MockerFixture
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm.session import Session
 
 from superset import security_manager
@@ -44,6 +49,7 @@ from superset.commands.dataset.exceptions import (
     DatasetInvalidError,
 )
 from superset.commands.dataset.update import UpdateDatasetCommand
+from superset.commands.sql_lab.execute import ExecuteSqlCommand
 from superset.connectors.sqla.models import SqlaTable, SqlMetric, TableColumn
 from superset.databases.utils import is_external_lakehouse
 from superset.errors import SupersetErrorType
@@ -57,6 +63,7 @@ from superset.models.helpers import validate_adhoc_subquery
 from superset.models.sql_lab import Query
 from superset.sql.execution.executor import SQLExecutor
 from superset.sql.parse import Table
+from superset.sqllab.exceptions import QueryIsForbiddenToAccessException
 
 MARKER = '{"plaid_external_lakehouse": true}'
 REFUSED = "SQL Lab and dataset editing are not available on this warehouse"
@@ -219,6 +226,16 @@ NEGATIVE_ADHOC = [
     "read_csv('s3://bucket/path')",
     "secret('scope', 'key')",
     ":bind",
+    "CURRENT_USER()",
+    "CURRENT_ROLE()",
+    "CURRENT_ACCOUNT()",
+    "CURRENT_AVAILABLE_ROLES()",
+    "CURRENT_WAREHOUSE()",
+    "CURRENT_CATALOG()",
+    "session_user()",
+    "explode(sequence(1, 100000000))",
+    "repeat('a', 100000000)",
+    "posexplode(array(1, 2))",
 ]
 
 
@@ -252,6 +269,8 @@ ROW_ADHOC = [
     "region = 'US' AND amount > 5",
     "DATE_TRUNC('month', ts)",
     "COALESCE(amount, 0)",
+    "DATEDIFF(day, ts, CURRENT_DATE)",
+    "CURRENT_TIMESTAMP()",
 ]
 
 
@@ -514,3 +533,237 @@ def test_plaid_exempts_only_automation(
         assert sm.can_manage_external_lakehouse() is expected
     # Celery (alerts, async imports) has no request to identify.
     assert sm.can_manage_external_lakehouse() is False
+
+
+# A stored SQL Lab Query is itself a chart datasource: its SQL is wrapped as a
+# subquery, so `columns: ["salary"]` reads whatever the Query selected.
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        pytest.param(
+            lambda ds: {"query_context": SimpleNamespace(datasource=ds, form_data={})},
+            id="chart-data",
+        ),
+        pytest.param(
+            lambda ds: {"viz": SimpleNamespace(datasource=ds, form_data={})},
+            id="legacy-explore-json",
+        ),
+        pytest.param(lambda ds: {"datasource": ds}, id="samples"),
+    ],
+)
+def test_query_datasource_refused(human, mocker: MockerFixture, kwargs):
+    mocker.patch.object(security_manager, "can_access_all_datasources", True)
+    mocker.patch.object(security_manager, "can_access_schema", return_value=True)
+    stored = Query(
+        id=7,
+        database=lakehouse_db(id=1),
+        sql="SELECT salary FROM other_project.payroll",
+        client_id="x",
+        schema="s",
+    )
+
+    with pytest.raises(SupersetSecurityException, match=REFUSED):
+        security_manager.raise_for_access(**kwargs(stored))
+
+
+def test_user_built_dataset_refused_at_query_time(human, mocker: MockerFixture):
+    mocker.patch.object(security_manager, "can_access_schema", return_value=True)
+    virtual = SqlaTable(
+        table_name="mine",
+        database=lakehouse_db(id=1),
+        sql="SELECT * FROM other_project.payroll WHERE '{{ url_param(\"x\") }}'",
+    )
+
+    with pytest.raises(SupersetSecurityException, match=REFUSED):
+        security_manager.raise_for_access(
+            query_context=SimpleNamespace(datasource=virtual, form_data={})
+        )
+
+
+def test_published_dataset_serves_charts(human, mocker: MockerFixture):
+    mocker.patch.object(security_manager, "can_access_schema", return_value=True)
+    mocker.patch.object(
+        security_manager, "is_published_lakehouse_dataset", return_value=True
+    )
+
+    security_manager.raise_for_access(
+        query_context=SimpleNamespace(
+            datasource=published_dataset(lakehouse_db(id=1)), form_data={}
+        )
+    )
+
+
+def plaid_manager(mocker: MockerFixture):
+    pytest.importorskip("plaidcloud.rpc")
+    from plaid.security import PlaidSecurityManager
+
+    sm = PlaidSecurityManager.__new__(PlaidSecurityManager)
+    mocker.patch.object(sm, "find_user", return_value=SimpleNamespace(id=1))
+    return sm
+
+
+def automation_dataset(**changes) -> SqlaTable:
+    dataset = published_dataset(lakehouse_db(id=1))
+    dataset.created_by_fk = dataset.changed_by_fk = 1
+    for item in [*dataset.columns, *dataset.metrics]:
+        item.changed_by_fk = 1
+    for key, value in changes.items():
+        setattr(dataset, key, value)
+    return dataset
+
+
+def test_plaid_publishes_only_untouched_automation_datasets(mocker: MockerFixture):
+    sm = plaid_manager(mocker)
+    edited_metric = automation_dataset()
+    edited_metric.metrics[0].changed_by_fk = 2
+
+    assert sm.is_published_lakehouse_dataset(automation_dataset()) is True
+    # Celery permission sync writes without a user.
+    assert sm.is_published_lakehouse_dataset(automation_dataset(changed_by_fk=None))
+    assert not sm.is_published_lakehouse_dataset(automation_dataset(created_by_fk=2))
+    assert not sm.is_published_lakehouse_dataset(automation_dataset(changed_by_fk=2))
+    assert not sm.is_published_lakehouse_dataset(automation_dataset(sql="SELECT 1"))
+    assert not sm.is_published_lakehouse_dataset(
+        automation_dataset(fetch_values_predicate="1 = 1")
+    )
+    assert not sm.is_published_lakehouse_dataset(edited_metric)
+    assert not sm.is_published_lakehouse_dataset(
+        Query(database=lakehouse_db(), sql="SELECT 1")
+    )
+
+
+def test_sql_lab_refuses_before_saving_the_query(human):
+    query_dao = MagicMock()
+    context = MagicMock(database_id=1)
+    command = ExecuteSqlCommand(
+        context,
+        query_dao,
+        MagicMock(find_by_id=MagicMock(return_value=lakehouse_db(id=1))),
+        MagicMock(),
+        MagicMock(),
+        MagicMock(),
+        MagicMock(),
+        False,
+    )
+
+    with pytest.raises(QueryIsForbiddenToAccessException):
+        command._run_sql_json_exec_from_scratch()
+    query_dao.create.assert_not_called()
+
+
+def test_function_names_empty(
+    session: Session, client, full_api_access, mocker: MockerFixture
+):
+    from superset.databases.api import DatabaseRestApi
+
+    DatabaseRestApi.datamodel._session = session
+    Database.metadata.create_all(session.get_bind())
+    session.add(lakehouse_db(id=1))
+    session.commit()
+    mocker.patch.object(
+        security_manager, "can_manage_external_lakehouse", return_value=False
+    )
+    listed = mocker.patch.object(Database, "function_names", ["udf_payroll"])
+
+    response = client.get("/api/v1/database/1/function_names/")
+
+    assert response.json == {"function_names": []}
+    assert listed == ["udf_payroll"]
+
+
+def test_permission_sync_without_request_keeps_working(
+    session: Session, mocker: MockerFixture
+):
+    SqlaTable.metadata.create_all(session.get_bind())
+    manage = mocker.patch.object(
+        security_manager, "can_manage_external_lakehouse", return_value=True
+    )
+    dataset = published_dataset(lakehouse_db())
+    session.add(dataset)
+    session.flush()
+    manage.return_value = False
+
+    dataset.schema_perm = "[Renamed (abcd)].[s]"
+    dataset.perm = "[Renamed (abcd)].[orders](id:1)"
+    session.flush()
+
+    dataset.table_name = "payroll"
+    with pytest.raises(SupersetSecurityException, match=REFUSED):
+        session.flush()
+
+
+@pytest.fixture
+def users(app: Flask):
+    pytest.importorskip("plaidcloud.rpc")
+    from plaid import rls_guard
+
+    rls_guard.install_orm_listeners()
+    engine = create_engine("sqlite:///:memory:")
+    Model.metadata.create_all(engine)
+    session = sessionmaker(bind=engine)()
+    automation_name = app.config["PLAID_RLS_AUTOMATION_USERNAME"]
+    for name in (automation_name, "attacker"):
+        session.add(
+            User(first_name="A", last_name="B", username=name, email=f"{name}@x.io")
+        )
+    session.add_all([Role(name="Admin"), Role(name="Alpha")])
+    session.commit()
+    by_name = {u.username: u for u in session.query(User)}
+    roles = {r.name: r for r in session.query(Role)}
+    by_name[automation_name].roles = [roles["Alpha"]]  # no request: operator
+    session.commit()
+    return SimpleNamespace(
+        automation=by_name[automation_name],
+        attacker=by_name["attacker"],
+        admin_role=roles["Admin"],
+        name=automation_name,
+        session=session,
+    )
+
+
+@pytest.mark.parametrize(
+    "write",
+    [
+        pytest.param(lambda u: setattr(u.automation, "password", "x"), id="password"),
+        pytest.param(lambda u: setattr(u.automation, "active", False), id="active"),
+        pytest.param(lambda u: setattr(u.automation, "email", "a@b.c"), id="email"),
+        pytest.param(lambda u: setattr(u.automation, "username", "x"), id="rename"),
+        pytest.param(lambda u: setattr(u.attacker, "username", u.name), id="take"),
+        pytest.param(lambda u: u.automation.roles.append(u.admin_role), id="roles"),
+        pytest.param(lambda u: u.admin_role.user.append(u.automation), id="backref"),
+        pytest.param(lambda u: u.automation.roles.clear(), id="roles-remove"),
+    ],
+)
+def test_admin_cannot_take_over_automation_user(app: Flask, users, write):
+    from plaid import rls_guard
+
+    with app.test_request_context():
+        g.user = SimpleNamespace(username="attacker", is_authenticated=True)
+        with pytest.raises(rls_guard.PlaidRlsGuardError):
+            write(users)
+
+
+def test_automation_and_operators_may_change_automation_user(
+    app: Flask, users, mocker: MockerFixture
+):
+    users.automation.password = "hash-from-cli"  # noqa: S105 - no request: operator
+
+    mocker.patch("plaid.rls_guard.is_automation_principal", return_value=True)
+    with app.test_request_context():
+        users.automation.password = "hash-from-plaid"  # noqa: S105
+    users.attacker.password = "hash-for-someone-else"  # noqa: S105
+
+
+def test_guest_token_never_automation(app: Flask):
+    pytest.importorskip("plaidcloud.rpc")
+    from plaid import rls_guard
+
+    with app.test_request_context():
+        g.user = SimpleNamespace(
+            username=app.config["PLAID_RLS_AUTOMATION_USERNAME"],
+            is_authenticated=True,
+            is_guest_user=True,
+        )
+        assert rls_guard.is_automation_principal() is False
+        g.user.is_guest_user = False
+        assert rls_guard.is_automation_principal() is True

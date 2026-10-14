@@ -816,6 +816,18 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
             is_external_lakehouse(database) and not self.can_manage_external_lakehouse()
         )
 
+    def is_published_lakehouse_dataset(
+        self, datasource: "BaseDatasource | Explorable"
+    ) -> bool:
+        """
+        Return True if charts may read the datasource although its database is an
+        external lakehouse the current user is refused.
+
+        By default no datasource qualifies; a security manager that can tell which
+        datasets PlaidCloud published, unchanged since, overrides this.
+        """
+        return False
+
     def raise_for_external_lakehouse(self, database: "Database") -> None:
         """
         Raise if the current user may only reach the database through PlaidCloud's
@@ -2758,6 +2770,17 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
                 form_data = viz.form_data
 
             assert datasource
+
+            # Charts on an external lakehouse may only read datasets PlaidCloud
+            # published; a SQL Lab query or a user-built dataset would run its own
+            # SQL through the shared principal.
+            datasource_db = getattr(datasource, "database", None)
+            if (
+                datasource_db is not None
+                and self.refuses_external_lakehouse(datasource_db)
+                and not self.is_published_lakehouse_dataset(datasource)
+            ):
+                self.raise_for_external_lakehouse(datasource_db)
 
             if not (
                 self.can_access_schema(datasource)

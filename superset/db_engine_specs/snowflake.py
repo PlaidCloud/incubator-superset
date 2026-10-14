@@ -201,7 +201,7 @@ class SnowflakeEngineSpec(PostgresBaseEngineSpec):
         extra: dict[str, Any] = BaseEngineSpec.get_extra_params(database, source)
         engine_params: dict[str, Any] = extra.setdefault("engine_params", {})
         connect_args: dict[str, Any] = engine_params.setdefault("connect_args", {})
-        connect_args.setdefault("application", PARTNER_ATTRIBUTION)
+        connect_args["application"] = PARTNER_ATTRIBUTION
 
         return extra
 
