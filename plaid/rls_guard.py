@@ -181,7 +181,7 @@ import functools
 import logging
 from typing import Any, Callable, TYPE_CHECKING, TypeVar
 
-from flask import current_app, g, Response
+from flask import current_app, g, has_request_context, Response
 from flask_appbuilder.security.sqla.apis import RoleApi
 
 if TYPE_CHECKING:
@@ -287,7 +287,11 @@ def is_automation_principal() -> bool:
         return False
     if _session_is_oauth():
         return False
-    username = getattr(_request_identity(), "username", None)
+    identity = _request_identity()
+    # An embedded guest token carries whatever username its minter chose.
+    if getattr(identity, "is_guest_user", False):
+        return False
+    username = getattr(identity, "username", None)
     return username is not None and username == automation_username
 
 
@@ -658,6 +662,57 @@ def _guard_group_user_append(group: "Group", user: "User", initiator: "Event") -
         )
 
 
+def _is_automation_username(username: str | None) -> bool:
+    # Case-insensitive: the metadata DB's uniqueness may be, and a lookalike
+    # name must not be creatable either.
+    automation_username = current_app.config.get("PLAID_RLS_AUTOMATION_USERNAME")
+    if not automation_username or username is None:
+        return False
+    return username.lower() == automation_username.lower()
+
+
+def _veto_automation_user_write(user: "User", attribute: str) -> None:
+    """The automation user is the one identity the external-lakehouse and RLS
+    guards exempt, so only it may change its own login, status or roles -- an
+    Admin who could reset its password could sign in as it. Writes outside a
+    request (``superset fab`` CLI, init jobs) are operator access and pass.
+    """
+    if has_request_context() and not is_automation_principal():
+        logger.warning(
+            "Blocked %s change on the automation user by %r.",
+            attribute,
+            getattr(getattr(g, "user", None), "username", None),
+        )
+        raise PlaidRlsGuardError(
+            f"{getattr(user, 'username', None)!r} is PlaidCloud's automation user. "
+            "It can only be changed by PlaidCloud's own automation."
+        )
+
+
+def _guard_automation_username(
+    user: "User", value: Any, oldvalue: Any, initiator: "Event"
+) -> None:
+    del initiator  # unused -- SQLAlchemy's event signature is fixed
+    # Renaming the automation user, or taking its name, are both refused.
+    if _is_automation_username(oldvalue if isinstance(oldvalue, str) else None) or (
+        _is_automation_username(value)
+    ):
+        _veto_automation_user_write(user, "username")
+
+
+def _guard_automation_user_change(user: "User", *args: Any) -> None:
+    """A set (value, oldvalue, initiator) or append/remove (value, initiator) on
+    one of the automation user's guarded attributes."""
+    if _is_automation_username(getattr(user, "username", None)):
+        _veto_automation_user_write(user, args[-1].key)
+
+
+def _guard_automation_user_delete(mapper: Any, connection: Any, user: "User") -> None:
+    del mapper, connection  # unused -- SQLAlchemy's event signature is fixed
+    if _is_automation_username(getattr(user, "username", None)):
+        _veto_automation_user_write(user, "delete")
+
+
 def install_orm_listeners() -> None:
     """Attach the three association-table veto listeners. Idempotent.
 
@@ -668,7 +723,7 @@ def install_orm_listeners() -> None:
     which it always is, but there is no reason to make that a requirement
     of the model.
     """
-    from flask_appbuilder.security.sqla.models import Group, Role
+    from flask_appbuilder.security.sqla.models import Group, Role, User
 
     if getattr(Role, "_plaid_rls_orm_guard_installed", False):
         return
@@ -678,5 +733,33 @@ def install_orm_listeners() -> None:
     event.listen(Role.user, "append", _guard_role_user_append)
     event.listen(Group.roles, "append", _guard_group_role_append)
     event.listen(Group.users, "append", _guard_group_user_append)
+    event.listen(
+        User.username,
+        "set",
+        _guard_automation_username,
+        active_history=True,
+        propagate=True,
+    )
+    for attribute in ("password", "active", "email"):
+        event.listen(
+            getattr(User, attribute),
+            "set",
+            _guard_automation_user_change,
+            propagate=True,
+        )
+    event.listen(
+        User,
+        "before_delete",
+        _guard_automation_user_delete,
+        propagate=True,
+    )
+    for collection in ("roles", "groups"):
+        for operation in ("append", "remove"):
+            event.listen(
+                getattr(User, collection),
+                operation,
+                _guard_automation_user_change,
+                propagate=True,
+            )
     Role._plaid_rls_orm_guard_installed = True
     logger.info("plaid_rls ORM-level role/group guard installed.")

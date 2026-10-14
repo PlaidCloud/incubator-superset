@@ -653,6 +653,43 @@ class PlaidSecurityManager(SupersetSecurityManager):
         database = getattr(datasource, "database", None)
         return database is not None and self._can_access_project(str(database.uuid))
 
+    def can_manage_external_lakehouse(self) -> bool:
+        # PlaidCloud registers external-lakehouse entries and publishes their
+        # datasets as the automation principal; no human role may. Celery work
+        # (alerts, async imports) has no request to identify and is refused.
+        return has_request_context() and rls_guard.is_automation_principal()
+
+    def is_published_lakehouse_dataset(
+        self, datasource: "BaseDatasource | Explorable"
+    ) -> bool:
+        # A physical dataset PlaidCloud's automation created, whose row and every
+        # expression it still last wrote. Anything a human authored or edited --
+        # a virtual dataset, a calculated column, a repointed table -- would run
+        # their SQL through the shared warehouse principal.
+        from superset.connectors.sqla.models import SqlaTable
+
+        username = current_app.config.get("PLAID_RLS_AUTOMATION_USERNAME")
+        automation = self.find_user(username=username) if username else None
+        if (
+            automation is None
+            or not isinstance(datasource, SqlaTable)
+            or datasource.sql
+            or datasource.fetch_values_predicate
+        ):
+            return False
+        # `changed_by_fk` is None only for writes outside a request (Celery
+        # permission sync), never a human's.
+        writers = {automation.id, None}
+        return (
+            datasource.created_by_fk == automation.id
+            and datasource.changed_by_fk in writers
+            and all(
+                item.changed_by_fk in writers
+                for item in [*datasource.columns, *datasource.metrics]
+                if item.expression
+            )
+        )
+
     def can_set_dashboard_roles(
         self, current_role_ids: Iterable[int], requested_role_ids: Iterable[int]
     ) -> bool:

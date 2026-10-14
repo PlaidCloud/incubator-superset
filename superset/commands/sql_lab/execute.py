@@ -23,7 +23,7 @@ from typing import Any, Optional, TYPE_CHECKING
 from flask_babel import gettext as __
 from sqlalchemy.exc import SQLAlchemyError
 
-from superset import db
+from superset import db, security_manager
 from superset.commands.base import BaseCommand
 from superset.common.db_query_status import QueryStatus
 from superset.errors import SupersetErrorType
@@ -31,6 +31,7 @@ from superset.exceptions import (
     SupersetErrorException,
     SupersetErrorsException,
     SupersetGenericErrorException,
+    SupersetSecurityException,
 )
 from superset.models.core import Database
 from superset.models.sql_lab import Query
@@ -165,6 +166,11 @@ class ExecuteSqlCommand(BaseCommand):
     def _get_the_query_db(self) -> Database:
         mydb: Any = self._database_dao.find_by_id(self._execution_context.database_id)
         self._validate_query_db(mydb)
+        # Before the Query row is saved: a stored Query is itself a chart datasource.
+        try:
+            security_manager.raise_for_external_lakehouse(mydb)
+        except SupersetSecurityException as ex:
+            raise QueryIsForbiddenToAccessException(self._execution_context, ex) from ex
         return mydb
 
     @classmethod

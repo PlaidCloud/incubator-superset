@@ -72,6 +72,7 @@ from superset.common.utils.time_range_utils import (
     get_since_until_from_time_range,
 )
 from superset.constants import CacheRegion, EMPTY_STRING, NULL_STRING, TimeGrain
+from superset.databases.utils import is_external_lakehouse
 from superset.db_engine_specs.base import TimestampExpression
 from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
 from superset.exceptions import (
@@ -202,6 +203,18 @@ def validate_adhoc_subquery(
     nested sub-queries with table
     """
     parsed_statement = SQLStatement(sql, engine)
+    if is_external_lakehouse(database) and parsed_statement.reaches_beyond_row():
+        raise SupersetSecurityException(
+            SupersetError(
+                error_type=SupersetErrorType.ADHOC_SUBQUERY_NOT_ALLOWED_ERROR,
+                message=_(
+                    "Custom SQL on this warehouse can only use the dataset's own "
+                    "columns and built-in functions."
+                ),
+                level=ErrorLevel.ERROR,
+            )
+        )
+
     rls_applied = False
     if parsed_statement.has_subquery():
         if not is_feature_enabled("ALLOW_ADHOC_SUBQUERY"):
