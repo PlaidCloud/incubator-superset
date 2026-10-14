@@ -20,7 +20,7 @@ from typing import Any, Optional
 from flask_babel import gettext as _
 from sqlalchemy.exc import DBAPIError, NoSuchModuleError
 
-from superset import is_feature_enabled
+from superset import is_feature_enabled, security_manager
 from superset.commands.base import BaseCommand
 from superset.commands.database.exceptions import (
     DatabaseSecurityUnsafeError,
@@ -70,6 +70,10 @@ class TestConnectionDatabaseCommand(BaseCommand):
 
         if (database_name := self._properties.get("database_name")) is not None:
             self._model = DatabaseDAO.get_database_by_name(database_name)
+            # An external lakehouse's stored credentials never reach a host the
+            # caller supplies.
+            if self._model and security_manager.refuses_external_lakehouse(self._model):
+                self._model = None
 
         uri = self._properties.get("sqlalchemy_uri", "")
         if self._model and uri == self._model.safe_sqlalchemy_uri():

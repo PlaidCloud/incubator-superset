@@ -123,8 +123,8 @@ def test_get_extra_params(mocker: MockerFixture) -> None:
     assert DatabricksNativeEngineSpec.get_extra_params(database) == {
         "engine_params": {
             "connect_args": {
-                "http_headers": [("User-Agent", "Apache Superset")],
-                "_user_agent_entry": "Apache Superset",
+                "http_headers": [("User-Agent", "PlaidCloud")],
+                "user_agent_entry": "PlaidCloud",
             }
         }
     }
@@ -134,7 +134,7 @@ def test_get_extra_params(mocker: MockerFixture) -> None:
             "engine_params": {
                 "connect_args": {
                     "http_headers": [("User-Agent", "Custom user agent")],
-                    "_user_agent_entry": "Custom user agent",
+                    "user_agent_entry": "Custom user agent",
                     "foo": "bar",
                 }
             }
@@ -144,7 +144,7 @@ def test_get_extra_params(mocker: MockerFixture) -> None:
         "engine_params": {
             "connect_args": {
                 "http_headers": [["User-Agent", "Custom user agent"]],
-                "_user_agent_entry": "Custom user agent",
+                "user_agent_entry": "Custom user agent",
                 "foo": "bar",
             }
         }
@@ -156,7 +156,7 @@ def test_get_extra_params(mocker: MockerFixture) -> None:
             "engine_params": {
                 "connect_args": {
                     "http_headers": [("User-Agent", "Custom user agent")],
-                    "_user_agent_entry": "Custom user agent",
+                    "user_agent_entry": "Custom user agent",
                     "http_path": "/some_path_here_with_whitespace ",
                 }
             }
@@ -166,7 +166,7 @@ def test_get_extra_params(mocker: MockerFixture) -> None:
         "engine_params": {
             "connect_args": {
                 "http_headers": [["User-Agent", "Custom user agent"]],
-                "_user_agent_entry": "Custom user agent",
+                "user_agent_entry": "Custom user agent",
                 "http_path": "/some_path_here_with_whitespace",
             }
         }

@@ -29,7 +29,7 @@ from sqlalchemy.engine.default import DefaultDialect
 from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.engine.url import URL
 
-from superset.constants import TimeGrain
+from superset.constants import PARTNER_ATTRIBUTION, TimeGrain
 from superset.databases.utils import make_url_safe
 from superset.db_engine_specs.base import (
     BaseEngineSpec,
@@ -39,7 +39,7 @@ from superset.db_engine_specs.base import (
 from superset.db_engine_specs.hive import HiveEngineSpec
 from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
 from superset.utils import json
-from superset.utils.core import get_user_agent, QuerySource
+from superset.utils.core import QuerySource
 from superset.utils.network import is_hostname_valid, is_port_open
 
 if TYPE_CHECKING:
@@ -282,16 +282,17 @@ class DatabricksDynamicBaseEngineSpec(BasicParametersMixin, DatabricksBaseEngine
         database: Database, source: QuerySource | None = None
     ) -> dict[str, Any]:
         """
-        Add a user agent to be used in the requests.
+        Identify PlaidCloud as the partner in the user agent of every connection.
         Trim whitespace from connect_args to avoid databricks driver errors
         """
         extra: dict[str, Any] = BaseEngineSpec.get_extra_params(database, source)
         engine_params: dict[str, Any] = extra.setdefault("engine_params", {})
         connect_args: dict[str, Any] = engine_params.setdefault("connect_args", {})
 
-        user_agent = get_user_agent(database, source)
-        connect_args.setdefault("http_headers", [("User-Agent", user_agent)])
-        connect_args.setdefault("_user_agent_entry", user_agent)
+        connect_args.setdefault("http_headers", [("User-Agent", PARTNER_ATTRIBUTION)])
+        # databricks-sql-connector 4.x reads `user_agent_entry`; `_user_agent_entry`
+        # is deprecated.
+        connect_args.setdefault("user_agent_entry", PARTNER_ATTRIBUTION)
 
         # trim whitespace from http_path to avoid databricks errors on connecting
         if http_path := connect_args.get("http_path"):

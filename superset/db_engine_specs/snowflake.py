@@ -34,7 +34,7 @@ from sqlalchemy import types
 from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.engine.url import URL
 
-from superset.constants import TimeGrain
+from superset.constants import PARTNER_ATTRIBUTION, TimeGrain
 from superset.databases.utils import make_url_safe
 from superset.db_engine_specs.base import (
     BaseEngineSpec,
@@ -45,7 +45,7 @@ from superset.db_engine_specs.postgres import PostgresBaseEngineSpec
 from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
 from superset.models.sql_lab import Query
 from superset.utils import json
-from superset.utils.core import get_user_agent, QuerySource
+from superset.utils.core import QuerySource
 
 if TYPE_CHECKING:
     from superset.models.core import Database
@@ -196,14 +196,12 @@ class SnowflakeEngineSpec(PostgresBaseEngineSpec):
         database: Database, source: QuerySource | None = None
     ) -> dict[str, Any]:
         """
-        Add a user agent to be used in the requests.
+        Identify PlaidCloud as the partner application on every connection.
         """
-        extra: dict[str, Any] = BaseEngineSpec.get_extra_params(database)
+        extra: dict[str, Any] = BaseEngineSpec.get_extra_params(database, source)
         engine_params: dict[str, Any] = extra.setdefault("engine_params", {})
         connect_args: dict[str, Any] = engine_params.setdefault("connect_args", {})
-        user_agent = get_user_agent(database, source)
-
-        connect_args.setdefault("application", user_agent)
+        connect_args.setdefault("application", PARTNER_ATTRIBUTION)
 
         return extra
 

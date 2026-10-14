@@ -68,6 +68,11 @@ class CreateDatasetCommand(CreateMixin, BaseCommand):
 
         # Validate uniqueness
         if database:
+            try:
+                security_manager.raise_for_external_lakehouse(database)
+            except SupersetSecurityException as ex:
+                exceptions.append(DatasetDataAccessIsNotAllowed(ex.error.message))
+
             if not catalog:
                 catalog = self._properties["catalog"] = database.get_default_catalog()
 

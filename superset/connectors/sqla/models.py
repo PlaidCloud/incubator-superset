@@ -2115,6 +2115,27 @@ sa.event.listen(SqlaTable, "before_update", SqlaTable.before_update)
 sa.event.listen(SqlaTable, "after_insert", SqlaTable.after_insert)
 sa.event.listen(SqlaTable, "after_delete", SqlaTable.after_delete)
 
+
+def refuse_external_lakehouse_write(
+    _mapper: Mapper,
+    _connection: Connection,
+    target: SqlaTable | TableColumn | SqlMetric,
+) -> None:
+    # The dataset commands refuse these writes with a clean error; this catches
+    # every other path (import, duplicate, the legacy datasource editor).
+    dataset = target if isinstance(target, SqlaTable) else target.table
+    if dataset is None or not inspect(target).session.is_modified(
+        target, include_collections=False
+    ):
+        return
+    dataset.load_database()
+    security_manager.raise_for_external_lakehouse(dataset.database)
+
+
+for _model in (SqlaTable, TableColumn, SqlMetric):
+    sa.event.listen(_model, "before_insert", refuse_external_lakehouse_write)
+    sa.event.listen(_model, "before_update", refuse_external_lakehouse_write)
+
 RLSFilterRoles = DBTable(
     "rls_filter_roles",
     metadata,

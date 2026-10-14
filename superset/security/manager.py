@@ -792,6 +792,49 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         """
         return True
 
+    def can_manage_external_lakehouse(self) -> bool:
+        """
+        Return True if the current user may run SQL, browse tables or write datasets
+        on a database marked as an external lakehouse.
+
+        Every project entry on an external lakehouse authenticates as one shared
+        warehouse principal, so no Superset role may use it beyond the datasets
+        PlaidCloud publishes. A security manager that can recognise PlaidCloud's own
+        automation overrides this.
+        """
+        return False
+
+    def refuses_external_lakehouse(self, database: "Database") -> bool:
+        """
+        Return True if the database is an external lakehouse the current user may
+        only reach through PlaidCloud's published datasets.
+        """
+        # pylint: disable=import-outside-toplevel
+        from superset.databases.utils import is_external_lakehouse
+
+        return (
+            is_external_lakehouse(database) and not self.can_manage_external_lakehouse()
+        )
+
+    def raise_for_external_lakehouse(self, database: "Database") -> None:
+        """
+        Raise if the current user may only reach the database through PlaidCloud's
+        published datasets.
+
+        :raises SupersetSecurityException: If the database is refused
+        """
+        if self.refuses_external_lakehouse(database):
+            raise SupersetSecurityException(
+                SupersetError(
+                    error_type=SupersetErrorType.DATABASE_SECURITY_ACCESS_ERROR,
+                    message=_(
+                        "SQL Lab and dataset editing are not available on this "
+                        "warehouse. Use the datasets PlaidCloud publishes for it."
+                    ),
+                    level=ErrorLevel.ERROR,
+                )
+            )
+
     def can_set_dashboard_roles(
         self, current_role_ids: Iterable[int], requested_role_ids: Iterable[int]
     ) -> bool:
@@ -1151,6 +1194,9 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         # pylint: disable=import-outside-toplevel
         from superset.connectors.sqla.models import SqlaTable
 
+        if self.refuses_external_lakehouse(database):
+            return set()
+
         default_catalog = database.get_default_catalog()
         catalog = catalog or default_catalog
 
@@ -1217,6 +1263,9 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         # pylint: disable=import-outside-toplevel
         from superset.connectors.sqla.models import SqlaTable
 
+        if self.refuses_external_lakehouse(database):
+            return set()
+
         if hierarchical and self.can_access_database(database):
             return catalogs
 
@@ -1281,6 +1330,9 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         """
         # pylint: disable=import-outside-toplevel
         from superset.connectors.sqla.models import SqlaTable
+
+        if self.refuses_external_lakehouse(database):
+            return []
 
         if self.can_access_database(database):
             return datasource_names
@@ -2596,6 +2648,10 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
                 user_id=get_user_id(),
             )
             self.session.expunge(query)
+
+        # Only SQL Lab Query objects carry a database; other explorables don't.
+        if lakehouse_db := database or getattr(query, "database", None):
+            self.raise_for_external_lakehouse(lakehouse_db)
 
         if database and table or query:
             if query:

@@ -653,6 +653,12 @@ class PlaidSecurityManager(SupersetSecurityManager):
         database = getattr(datasource, "database", None)
         return database is not None and self._can_access_project(str(database.uuid))
 
+    def can_manage_external_lakehouse(self) -> bool:
+        # PlaidCloud registers external-lakehouse entries and publishes their
+        # datasets as the automation principal; no human role may. Celery work
+        # (alerts, async imports) has no request to identify and is refused.
+        return has_request_context() and rls_guard.is_automation_principal()
+
     def can_set_dashboard_roles(
         self, current_role_ids: Iterable[int], requested_role_ids: Iterable[int]
     ) -> bool:

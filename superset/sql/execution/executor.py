@@ -456,6 +456,10 @@ class SQLExecutor:
         :param script: Prepared SQLScript
         :raises SupersetSecurityException: If security checks fail
         """
+        from superset import security_manager
+
+        security_manager.raise_for_external_lakehouse(self.database)
+
         # Check disallowed functions
         if disallowed_functions := self._check_disallowed_functions(script):
             raise SupersetSecurityException(

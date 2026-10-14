@@ -65,7 +65,7 @@ from superset_core.common.models import Database as CoreDatabase
 from superset import db, db_engine_specs, is_feature_enabled
 from superset.commands.database.exceptions import DatabaseInvalidError
 from superset.constants import LRU_CACHE_MAX_SIZE, PASSWORD_MASK
-from superset.databases.utils import make_url_safe
+from superset.databases.utils import is_external_lakehouse, make_url_safe
 from superset.db_engine_specs.base import MetricType, TimeGrain
 from superset.extensions import (
     cache_manager,
@@ -1326,6 +1326,17 @@ class Database(CoreDatabase, AuditMixinNullable, ImportExportMixin):  # pylint: 
         return SQLExecutor(self).execute_async(sql, options)
 
 
+def lock_external_lakehouse(_mapper: Any, _connection: Any, target: Database) -> None:
+    if is_external_lakehouse(target):
+        target.expose_in_sqllab = False
+        target.allow_dml = False
+        target.allow_file_upload = False
+        target.allow_ctas = False
+        target.allow_cvas = False
+
+
+sqla.event.listen(Database, "before_insert", lock_external_lakehouse)
+sqla.event.listen(Database, "before_update", lock_external_lakehouse)
 sqla.event.listen(Database, "after_insert", security_manager.database_after_insert)
 sqla.event.listen(Database, "after_update", security_manager.database_after_update)
 sqla.event.listen(Database, "after_delete", security_manager.database_after_delete)

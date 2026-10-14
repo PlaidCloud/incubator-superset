@@ -159,7 +159,7 @@ def test_get_extra_params(mocker: MockerFixture) -> None:
 
     database.extra = {}
     assert SnowflakeEngineSpec.get_extra_params(database) == {
-        "engine_params": {"connect_args": {"application": "Apache Superset"}}
+        "engine_params": {"connect_args": {"application": "PlaidCloud"}}
     }
 
     database.extra = json.dumps(

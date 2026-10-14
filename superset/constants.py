@@ -24,6 +24,10 @@ from superset.utils.backports import StrEnum
 
 DEFAULT_USER_AGENT = "Apache Superset"
 
+# Identifies our traffic in Snowflake's and Databricks' partner telemetry. A fixed
+# string: never a tenant, org or user identifier.
+PARTNER_ATTRIBUTION = "PlaidCloud"
+
 NULL_STRING = "<NULL>"
 EMPTY_STRING = "<empty string>"
 

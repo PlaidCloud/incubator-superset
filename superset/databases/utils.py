@@ -30,6 +30,17 @@ if TYPE_CHECKING:
         TableMetadataForeignKeysIndexesResponse,
         TableMetadataResponse,
     )
+    from superset.models.core import Database
+
+# PlaidCloud sets `"plaid_external_lakehouse": true` in `extra` on every project
+# entry it registers on a customer's own Snowflake or Databricks warehouse.
+EXTERNAL_LAKEHOUSE_EXTRA_KEY = "plaid_external_lakehouse"
+
+
+def is_external_lakehouse(database: Database) -> bool:
+    # Every project entry on an external lakehouse authenticates as the same
+    # warehouse principal, so only the datasets PlaidCloud publishes may use it.
+    return database.get_extra().get(EXTERNAL_LAKEHOUSE_EXTRA_KEY) is True
 
 
 def get_foreign_keys_metadata(
