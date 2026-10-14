@@ -16,6 +16,7 @@
 # under the License.
 from __future__ import annotations
 
+import re
 import threading
 import time
 from datetime import datetime
@@ -311,6 +312,13 @@ class OAuthM2MCredentials:
             return {"Authorization": f"Bearer {self._token}"}
 
 
+# The client secret is only ever sent to a Databricks workspace's token endpoint.
+DATABRICKS_WORKSPACE_HOST = re.compile(
+    r"(?:[a-z0-9-]+\.)+(?:cloud\.databricks\.com|azuredatabricks\.net"
+    r"|gcp\.databricks\.com)"
+)
+
+
 # Superset builds an engine per query; share one provider (and its token) per
 # service principal instead of minting a token for every query.
 @lru_cache(maxsize=128)
@@ -353,9 +361,15 @@ class DatabricksDynamicBaseEngineSpec(BasicParametersMixin, DatabricksBaseEngine
             BaseEngineSpec.update_params_from_encrypted_extra(database, params)
             return
         auth_params = encrypted_extra["auth_params"]
+        host = (database.url_object.host or "").lower()
+        if not DATABRICKS_WORKSPACE_HOST.fullmatch(host):
+            raise ValueError(
+                f"OAuth M2M credentials are only sent to a Databricks workspace "
+                f"host, not {host!r}"
+            )
         params.setdefault("connect_args", {})["credentials_provider"] = (
             oauth_m2m_credentials(
-                database.url_object.host,
+                host,
                 auth_params["client_id"],
                 auth_params["client_secret"],
             )

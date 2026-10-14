@@ -663,8 +663,12 @@ def _guard_group_user_append(group: "Group", user: "User", initiator: "Event") -
 
 
 def _is_automation_username(username: str | None) -> bool:
+    # Case-insensitive: the metadata DB's uniqueness may be, and a lookalike
+    # name must not be creatable either.
     automation_username = current_app.config.get("PLAID_RLS_AUTOMATION_USERNAME")
-    return bool(automation_username) and username == automation_username
+    if not automation_username or username is None:
+        return False
+    return username.lower() == automation_username.lower()
 
 
 def _veto_automation_user_write(user: "User", attribute: str) -> None:
@@ -691,17 +695,22 @@ def _guard_automation_username(
     del initiator  # unused -- SQLAlchemy's event signature is fixed
     # Renaming the automation user, or taking its name, are both refused.
     if _is_automation_username(oldvalue if isinstance(oldvalue, str) else None) or (
-        _is_automation_username(value) and value != oldvalue
+        _is_automation_username(value)
     ):
         _veto_automation_user_write(user, "username")
 
 
-def _guard_automation_user_field(attribute: str) -> Callable[..., None]:
-    def guard(user: "User", *args: Any) -> None:
-        if _is_automation_username(getattr(user, "username", None)):
-            _veto_automation_user_write(user, attribute)
+def _guard_automation_user_change(user: "User", *args: Any) -> None:
+    """A set (value, oldvalue, initiator) or append/remove (value, initiator) on
+    one of the automation user's guarded attributes."""
+    if _is_automation_username(getattr(user, "username", None)):
+        _veto_automation_user_write(user, args[-1].key)
 
-    return guard
+
+def _guard_automation_user_delete(mapper: Any, connection: Any, user: "User") -> None:
+    del mapper, connection  # unused -- SQLAlchemy's event signature is fixed
+    if _is_automation_username(getattr(user, "username", None)):
+        _veto_automation_user_write(user, "delete")
 
 
 def install_orm_listeners() -> None:
@@ -735,15 +744,21 @@ def install_orm_listeners() -> None:
         event.listen(
             getattr(User, attribute),
             "set",
-            _guard_automation_user_field(attribute),
+            _guard_automation_user_change,
             propagate=True,
         )
+    event.listen(
+        User,
+        "before_delete",
+        _guard_automation_user_delete,
+        propagate=True,
+    )
     for collection in ("roles", "groups"):
         for operation in ("append", "remove"):
             event.listen(
                 getattr(User, collection),
                 operation,
-                _guard_automation_user_field(collection),
+                _guard_automation_user_change,
                 propagate=True,
             )
     Role._plaid_rls_orm_guard_installed = True

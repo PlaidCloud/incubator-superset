@@ -573,8 +573,14 @@ OUTSIDE_ROW_NODES = (
     exp.Posexplode,
     exp.Inline,
     exp.Unnest,
+    # caller-sized strings
     exp.Repeat,
+    exp.Space,
+    exp.Randstr,
 )
+
+# LPAD/RPAD stay usable for zero-padding codes, up to this literal length.
+MAX_ROW_PAD_LENGTH = 1000
 
 # Every other CURRENT_* function reveals the shared principal's session: user,
 # role, account, warehouse, catalog, schema.
@@ -937,7 +943,8 @@ class SQLStatement(BaseSQLStatement[exp.Expression]):
 
         Refused: another query or table, a qualified name, a bind parameter, a
         function that reads files, session context (``CURRENT_USER()``,
-        ``CURRENT_ROLE()``, ...), an unbounded generator, and any function sqlglot
+        ``CURRENT_ROLE()``, ...), an unbounded generator or caller-sized string,
+        and any function sqlglot
         does not recognise (``IDENTIFIER()``, ``read_files``, ``SYSTEM$...``, UDFs).
 
         :return: True if the expression reaches beyond the row.
@@ -951,6 +958,14 @@ class SQLStatement(BaseSQLStatement[exp.Expression]):
                 or (
                     type(node).__name__.startswith("Current")
                     and not isinstance(node, ROW_SAFE_CURRENT_FUNCTIONS)
+                )
+                or (
+                    isinstance(node, exp.Pad)
+                    and not (
+                        isinstance(length := node.expression, exp.Literal)
+                        and length.is_int
+                        and int(length.this) <= MAX_ROW_PAD_LENGTH
+                    )
                 )
                 for node in self._parsed.walk()
             )

@@ -25,7 +25,7 @@ dataset's own row.
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from flask import Flask, g
@@ -235,6 +235,10 @@ NEGATIVE_ADHOC = [
     "session_user()",
     "explode(sequence(1, 100000000))",
     "repeat('a', 100000000)",
+    "space(100000000)",
+    "randstr(100000000)",
+    "RPAD(code, 100000000, 'x')",
+    "LPAD(code, amount, '0')",
     "posexplode(array(1, 2))",
 ]
 
@@ -271,6 +275,7 @@ ROW_ADHOC = [
     "COALESCE(amount, 0)",
     "DATEDIFF(day, ts, CURRENT_DATE)",
     "CURRENT_TIMESTAMP()",
+    "LPAD(code, 5, '0')",
 ]
 
 
@@ -532,6 +537,7 @@ def test_plaid_exempts_only_automation(
     with app.test_request_context():
         assert sm.can_manage_external_lakehouse() is expected
     # Celery (alerts, async imports) has no request to identify.
+    mocker.patch("plaid.security.has_request_context", return_value=False)
     assert sm.can_manage_external_lakehouse() is False
 
 
@@ -580,17 +586,80 @@ def test_user_built_dataset_refused_at_query_time(human, mocker: MockerFixture):
         )
 
 
-def test_published_dataset_serves_charts(human, mocker: MockerFixture):
+# Plaid registers each project's entry pinned to its report schema.
+PROJECT_URIS = {
+    "snowflake": "snowflake://svc@acct/SALES/REPORT_P1",
+    "databricks": "databricks://token@dbc-1.cloud.databricks.com:443"
+    "?http_path=/sql/1&catalog=main&schema=REPORT_P1",
+}
+
+
+def project_dataset(engine: str, **changes) -> SqlaTable:
+    dataset = published_dataset(lakehouse_db(id=1, sqlalchemy_uri=PROJECT_URIS[engine]))
+    dataset.schema = "REPORT_P1"
+    dataset.catalog = {"snowflake": "SALES", "databricks": "main"}[engine]
+    for key, value in changes.items():
+        setattr(dataset, key, value)
+    return dataset
+
+
+@pytest.fixture
+def published(human, mocker: MockerFixture):
     mocker.patch.object(security_manager, "can_access_schema", return_value=True)
     mocker.patch.object(
         security_manager, "is_published_lakehouse_dataset", return_value=True
     )
 
-    security_manager.raise_for_access(
-        query_context=SimpleNamespace(
-            datasource=published_dataset(lakehouse_db(id=1)), form_data={}
+    def chart(datasource: SqlaTable) -> None:
+        security_manager.raise_for_access(
+            query_context=SimpleNamespace(datasource=datasource, form_data={})
         )
+
+    return chart
+
+
+@pytest.mark.parametrize("engine", ["snowflake", "databricks"])
+def test_published_dataset_serves_charts(published, engine):
+    published(project_dataset(engine))
+    published(project_dataset(engine, catalog=None))  # entry's default catalog
+
+
+@pytest.mark.parametrize("engine", ["snowflake", "databricks"])
+@pytest.mark.parametrize(
+    "changes",
+    [
+        pytest.param({"schema": "REPORT_P2"}, id="repointed-schema"),
+        pytest.param({"catalog": "OTHER"}, id="repointed-catalog"),
+        pytest.param({"schema": None}, id="unqualified"),
+    ],
+)
+def test_restamped_repointed_dataset_refused(published, engine, changes):
+    with pytest.raises(SupersetSecurityException, match=REFUSED):
+        published(project_dataset(engine, **changes))
+
+
+@pytest.mark.parametrize("engine", ["snowflake", "databricks"])
+def test_restamped_subquery_expressions_refused(published, engine):
+    metric = project_dataset(engine)
+    metric.metrics.append(
+        SqlMetric(metric_name="leak", expression="(SELECT MAX(salary) FROM other.t)")
     )
+    column = project_dataset(engine)
+    column.columns.append(TableColumn(column_name="who", expression="CURRENT_USER()"))
+
+    for dataset in (metric, column):
+        with pytest.raises(SupersetSecurityException, match=REFUSED):
+            published(dataset)
+
+
+def test_entry_without_project_pin_refused(published):
+    unpinned = published_dataset(
+        lakehouse_db(id=1, sqlalchemy_uri="snowflake://svc@acct/SALES")
+    )
+    unpinned.schema = "REPORT_P1"
+
+    with pytest.raises(SupersetSecurityException, match=REFUSED):
+        published(unpinned)
 
 
 def plaid_manager(mocker: MockerFixture):
@@ -697,7 +766,6 @@ def users(app: Flask):
     pytest.importorskip("plaidcloud.rpc")
     from plaid import rls_guard
 
-    rls_guard.install_orm_listeners()
     engine = create_engine("sqlite:///:memory:")
     Model.metadata.create_all(engine)
     session = sessionmaker(bind=engine)()
@@ -710,8 +778,9 @@ def users(app: Flask):
     session.commit()
     by_name = {u.username: u for u in session.query(User)}
     roles = {r.name: r for r in session.query(Role)}
-    by_name[automation_name].roles = [roles["Alpha"]]  # no request: operator
+    by_name[automation_name].roles = [roles["Alpha"]]
     session.commit()
+    rls_guard.install_orm_listeners()
     return SimpleNamespace(
         automation=by_name[automation_name],
         attacker=by_name["attacker"],
@@ -732,6 +801,12 @@ def users(app: Flask):
         pytest.param(lambda u: u.automation.roles.append(u.admin_role), id="roles"),
         pytest.param(lambda u: u.admin_role.user.append(u.automation), id="backref"),
         pytest.param(lambda u: u.automation.roles.clear(), id="roles-remove"),
+        pytest.param(
+            lambda u: setattr(u.attacker, "username", u.name.upper()), id="take-case"
+        ),
+        pytest.param(
+            lambda u: (u.session.delete(u.automation), u.session.flush()), id="delete"
+        ),
     ],
 )
 def test_admin_cannot_take_over_automation_user(app: Flask, users, write):
@@ -746,7 +821,8 @@ def test_admin_cannot_take_over_automation_user(app: Flask, users, write):
 def test_automation_and_operators_may_change_automation_user(
     app: Flask, users, mocker: MockerFixture
 ):
-    users.automation.password = "hash-from-cli"  # noqa: S105 - no request: operator
+    with patch("plaid.rls_guard.has_request_context", return_value=False):
+        users.automation.password = "hash-from-cli"  # noqa: S105 - operator CLI
 
     mocker.patch("plaid.rls_guard.is_automation_principal", return_value=True)
     with app.test_request_context():

@@ -828,6 +828,41 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         """
         return False
 
+    @staticmethod
+    def _stays_in_lakehouse_project(datasource: "BaseDatasource | Explorable") -> bool:
+        """
+        Whatever wrote it, a dataset on an external lakehouse may only read its own
+        project's schema, and its stored expressions only their own row: a table
+        repointed elsewhere or a calculated column with a subquery would otherwise
+        pass once an automation write re-stamped it.
+        """
+        # pylint: disable=import-outside-toplevel
+        from superset.connectors.sqla.models import SqlaTable
+        from superset.databases.utils import external_lakehouse_project
+        from superset.exceptions import SupersetParseError
+        from superset.sql.parse import SQLStatement
+
+        if not isinstance(datasource, SqlaTable):
+            return False
+        database = datasource.database
+        catalog, schema = external_lakehouse_project(database)
+        if (
+            schema is None
+            or datasource.schema != schema
+            or (datasource.catalog or catalog) != catalog
+        ):
+            return False
+        try:
+            return not any(
+                SQLStatement(
+                    f"SELECT {item.expression}", database.backend
+                ).reaches_beyond_row()
+                for item in [*datasource.columns, *datasource.metrics]
+                if item.expression
+            )
+        except SupersetParseError:
+            return False
+
     def raise_for_external_lakehouse(self, database: "Database") -> None:
         """
         Raise if the current user may only reach the database through PlaidCloud's
@@ -2778,7 +2813,10 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
             if (
                 datasource_db is not None
                 and self.refuses_external_lakehouse(datasource_db)
-                and not self.is_published_lakehouse_dataset(datasource)
+                and not (
+                    self.is_published_lakehouse_dataset(datasource)
+                    and self._stays_in_lakehouse_project(datasource)
+                )
             ):
                 self.raise_for_external_lakehouse(datasource_db)
 

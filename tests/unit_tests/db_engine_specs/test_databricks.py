@@ -397,3 +397,47 @@ def test_oauth_m2m_credentials_fit_connector(mocker: MockerFixture) -> None:
     ).add_headers(headers)
 
     assert headers == {"Authorization": "Bearer t1"}
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "evil.example.com",
+        "dbc-1.cloud.databricks.com.evil.io",
+        "cloud.databricks.com",
+        "dbc-1.cloud-databricks.com",
+        "",
+    ],
+)
+def test_oauth_m2m_secret_only_to_databricks_hosts(
+    mocker: MockerFixture, host: str
+) -> None:
+    from superset.db_engine_specs.databricks import DatabricksNativeEngineSpec
+
+    database = m2m_database(mocker, M2M)
+    database.url_object.host = host
+    post = mocker.patch("superset.db_engine_specs.databricks.requests.post")
+
+    with pytest.raises(ValueError, match="Databricks workspace host"):
+        DatabricksNativeEngineSpec.update_params_from_encrypted_extra(database, {})
+    post.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "DBC-1.Cloud.Databricks.com",
+        "adb-123.4.azuredatabricks.net",
+        "1234.5.gcp.databricks.com",
+    ],
+)
+def test_oauth_m2m_workspace_hosts_accepted(mocker: MockerFixture, host: str) -> None:
+    from superset.db_engine_specs.databricks import DatabricksNativeEngineSpec
+
+    database = m2m_database(mocker, M2M)
+    database.url_object.host = host
+    params: dict = {}
+
+    DatabricksNativeEngineSpec.update_params_from_encrypted_extra(database, params)
+
+    assert "credentials_provider" in params["connect_args"]
