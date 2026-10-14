@@ -287,3 +287,113 @@ def test_get_prequeries(mocker: MockerFixture) -> None:
         "USE CATALOG `escaped-hyphen`",
         "USE SCHEMA `hyphen-escaped`",
     ]
+
+
+def m2m_database(mocker: MockerFixture, encrypted_extra: Optional[dict] = None):
+    database = mocker.MagicMock()
+    database.url_object.host = "dbc-1.cloud.databricks.com"
+    database.encrypted_extra = encrypted_extra and json.dumps(encrypted_extra)
+    return database
+
+
+M2M = {
+    "auth_method": "oauth-m2m",
+    "auth_params": {"client_id": "sp-id", "client_secret": "sp-secret"},
+}
+
+
+def test_oauth_m2m_credentials_refresh_on_expiry(mocker: MockerFixture) -> None:
+    from superset.db_engine_specs.databricks import (
+        DatabricksNativeEngineSpec,
+        oauth_m2m_credentials,
+    )
+
+    oauth_m2m_credentials.cache_clear()
+    clock = mocker.patch(
+        "superset.db_engine_specs.databricks.time.monotonic", return_value=0.0
+    )
+    post = mocker.patch("superset.db_engine_specs.databricks.requests.post")
+    post.return_value.json.side_effect = [
+        {"access_token": "t1", "expires_in": 3600},
+        {"access_token": "t2", "expires_in": 3600},
+    ]
+    params: dict = {"connect_args": {"http_path": "/sql/1"}}
+
+    DatabricksNativeEngineSpec.update_params_from_encrypted_extra(
+        m2m_database(mocker, M2M), params
+    )
+    provider = params["connect_args"]["credentials_provider"]
+    headers = provider()
+
+    assert params["connect_args"]["http_path"] == "/sql/1"
+    assert headers() == {"Authorization": "Bearer t1"}
+    clock.return_value = 3000.0
+    assert headers() == {"Authorization": "Bearer t1"}
+    clock.return_value = 3541.0  # within a minute of expiry
+    assert headers() == {"Authorization": "Bearer t2"}
+    post.assert_called_with(
+        "https://dbc-1.cloud.databricks.com/oidc/v1/token",
+        data={"grant_type": "client_credentials", "scope": "all-apis"},
+        auth=("sp-id", "sp-secret"),
+        timeout=30,
+    )
+    assert post.call_count == 2
+
+    # A new engine for the next query reuses the same provider and token.
+    again: dict = {}
+    DatabricksNativeEngineSpec.update_params_from_encrypted_extra(
+        m2m_database(mocker, M2M), again
+    )
+    assert again["connect_args"]["credentials_provider"] is provider
+
+
+def test_pat_and_other_encrypted_extra_unchanged(mocker: MockerFixture) -> None:
+    from superset.db_engine_specs.databricks import DatabricksNativeEngineSpec
+
+    params: dict = {}
+    DatabricksNativeEngineSpec.update_params_from_encrypted_extra(
+        m2m_database(mocker), params
+    )
+    assert params == {}
+
+    DatabricksNativeEngineSpec.update_params_from_encrypted_extra(
+        m2m_database(mocker, {"pool_size": 5}), params
+    )
+    assert params == {"pool_size": 5}
+
+
+def test_oauth_m2m_secret_masked(mocker: MockerFixture) -> None:
+    from superset.constants import PASSWORD_MASK
+    from superset.db_engine_specs.databricks import DatabricksNativeEngineSpec
+
+    masked = DatabricksNativeEngineSpec.mask_encrypted_extra(json.dumps(M2M))
+
+    assert "sp-secret" not in masked
+    assert json.loads(masked)["auth_params"] == PASSWORD_MASK
+    assert DatabricksNativeEngineSpec.unmask_encrypted_extra(
+        json.dumps(M2M), masked
+    ) == json.dumps(M2M)
+    rotated = {**M2M, "auth_params": {"client_id": "sp-id", "client_secret": "new"}}
+    assert (
+        json.loads(
+            DatabricksNativeEngineSpec.unmask_encrypted_extra(
+                json.dumps(M2M), json.dumps(rotated)
+            )
+        )
+        == rotated
+    )
+
+
+def test_oauth_m2m_credentials_fit_connector(mocker: MockerFixture) -> None:
+    authenticators = pytest.importorskip("databricks.sql.auth.authenticators")
+    from superset.db_engine_specs.databricks import OAuthM2MCredentials
+
+    post = mocker.patch("superset.db_engine_specs.databricks.requests.post")
+    post.return_value.json.return_value = {"access_token": "t1", "expires_in": 60}
+    headers: dict = {}
+
+    authenticators.ExternalAuthProvider(
+        OAuthM2MCredentials("dbc-1.cloud.databricks.com", "sp-id", "sp-secret")
+    ).add_headers(headers)
+
+    assert headers == {"Authorization": "Bearer t1"}

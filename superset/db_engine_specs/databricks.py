@@ -16,9 +16,13 @@
 # under the License.
 from __future__ import annotations
 
+import threading
+import time
 from datetime import datetime
+from functools import lru_cache
 from typing import Any, Callable, TYPE_CHECKING, TypedDict, Union
 
+import requests
 from apispec import APISpec
 from apispec.ext.marshmallow import MarshmallowPlugin
 from flask_babel import gettext as __
@@ -267,15 +271,95 @@ class DatabricksODBCEngineSpec(DatabricksBaseEngineSpec):
     # backwards compatibility with ODBC connections to SQL Endpoints.
 
 
+class OAuthM2MCredentials:
+    """
+    A databricks-sql-connector ``credentials_provider`` for a service principal's
+    OAuth client-credentials (M2M) secret. The access token is fetched from the
+    workspace and refreshed a minute before it expires, so a dashboard keeps
+    working across token rotation.
+    """
+
+    def __init__(self, host: str, client_id: str, client_secret: str) -> None:
+        self._host = host
+        self._client_id = client_id
+        self._client_secret = client_secret
+        self._lock = threading.Lock()
+        self._token = ""
+        self._expires_at = 0.0
+
+    def auth_type(self) -> str:
+        return "oauth-m2m"
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Callable[[], dict[str, str]]:
+        return self._headers
+
+    def _headers(self) -> dict[str, str]:
+        with self._lock:
+            if time.monotonic() >= self._expires_at:
+                response = requests.post(
+                    f"https://{self._host}/oidc/v1/token",
+                    data={"grant_type": "client_credentials", "scope": "all-apis"},
+                    auth=(self._client_id, self._client_secret),
+                    timeout=30,
+                )
+                response.raise_for_status()
+                payload = response.json()
+                self._token = payload["access_token"]
+                self._expires_at = (
+                    time.monotonic() + int(payload.get("expires_in", 3600)) - 60
+                )
+            return {"Authorization": f"Bearer {self._token}"}
+
+
+# Superset builds an engine per query; share one provider (and its token) per
+# service principal instead of minting a token for every query.
+@lru_cache(maxsize=128)
+def oauth_m2m_credentials(
+    host: str, client_id: str, client_secret: str
+) -> OAuthM2MCredentials:
+    return OAuthM2MCredentials(host, client_id, client_secret)
+
+
 class DatabricksDynamicBaseEngineSpec(BasicParametersMixin, DatabricksBaseEngineSpec):
     default_driver = ""
     encryption_parameters = {"ssl": "1"}
+    # "$.*" keeps masking anything else stored here; the M2M secret is named so
+    # imports ask for it by label.
+    encrypted_extra_sensitive_fields = {
+        "$.*": "Encrypted Extra",
+        "$.auth_params.client_secret": "Client Secret",
+    }
     required_parameters = {"access_token", "host", "port"}
     context_key_mapping = {
         "access_token": "password",
         "host": "hostname",
         "port": "port",
     }
+
+    @staticmethod
+    def update_params_from_encrypted_extra(
+        database: Database, params: dict[str, Any]
+    ) -> None:
+        """
+        ``{"auth_method": "oauth-m2m", "auth_params": {"client_id", "client_secret"}}``
+        authenticates as a service principal with a refreshing OAuth token; any
+        other encrypted extra keeps the stock behaviour (merged into the engine
+        parameters).
+        """
+        if not database.encrypted_extra:
+            return
+        encrypted_extra = json.loads(database.encrypted_extra)
+        if encrypted_extra.get("auth_method") != "oauth-m2m":
+            BaseEngineSpec.update_params_from_encrypted_extra(database, params)
+            return
+        auth_params = encrypted_extra["auth_params"]
+        params.setdefault("connect_args", {})["credentials_provider"] = (
+            oauth_m2m_credentials(
+                database.url_object.host,
+                auth_params["client_id"],
+                auth_params["client_secret"],
+            )
+        )
 
     @staticmethod
     def get_extra_params(
