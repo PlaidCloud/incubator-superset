@@ -652,6 +652,29 @@ def test_restamped_subquery_expressions_refused(published, engine):
             published(dataset)
 
 
+@pytest.mark.parametrize("engine", ["snowflake", "databricks"])
+@pytest.mark.parametrize(
+    "template",
+    [
+        "amount /* {{ url_param('x') }} */",
+        "amount {% if true %}{% endif %}",
+        "amount {# note #}",
+    ],
+)
+@pytest.mark.parametrize("where", ["metric", "column", "fetch_values_predicate"])
+def test_restamped_jinja_refused(published, engine, template, where):
+    dataset = project_dataset(engine)
+    if where == "metric":
+        dataset.metrics.append(SqlMetric(metric_name="m", expression=template))
+    elif where == "column":
+        dataset.columns.append(TableColumn(column_name="c", expression=template))
+    else:
+        dataset.fetch_values_predicate = template
+
+    with pytest.raises(SupersetSecurityException, match=REFUSED):
+        published(dataset)
+
+
 def test_entry_without_project_pin_refused(published):
     unpinned = published_dataset(
         lakehouse_db(id=1, sqlalchemy_uri="snowflake://svc@acct/SALES")

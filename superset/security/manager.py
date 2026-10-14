@@ -852,6 +852,21 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
             or (datasource.catalog or catalog) != catalog
         ):
             return False
+        # Jinja renders after this check, so a template could still emit SQL the
+        # parser never saw (`amount /* {{ url_param('x') }} */`).
+        stored_text = [
+            datasource.sql,
+            datasource.fetch_values_predicate,
+            datasource.extra,
+            *(item.expression for item in [*datasource.columns, *datasource.metrics]),
+        ]
+        if any(
+            marker in text
+            for text in stored_text
+            if text
+            for marker in ("{{", "{%", "{#")
+        ):
+            return False
         try:
             return not any(
                 SQLStatement(
