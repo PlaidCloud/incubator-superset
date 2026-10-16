@@ -35,7 +35,7 @@ from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.engine.url import URL
 
 from superset.constants import PARTNER_ATTRIBUTION, TimeGrain
-from superset.databases.utils import make_url_safe
+from superset.databases.utils import is_signed_in_lakehouse, make_url_safe
 from superset.db_engine_specs.base import (
     BaseEngineSpec,
     BasicParametersMixin,
@@ -374,6 +374,32 @@ class DatabricksDynamicBaseEngineSpec(BasicParametersMixin, DatabricksBaseEngine
                 auth_params["client_secret"],
             )
         )
+
+    @classmethod
+    def impersonate_user(
+        cls,
+        database: Database,
+        username: str | None,
+        user_token: str | None,
+        url: URL,
+        engine_kwargs: dict[str, Any],
+    ) -> tuple[URL, dict[str, Any]]:
+        """
+        On a warehouse attached by sign-in, connect as the viewer with their own
+        OAuth access token.
+        """
+        if not is_signed_in_lakehouse(database):
+            return super().impersonate_user(
+                database, username, user_token, url, engine_kwargs
+            )
+        # pylint: disable=import-outside-toplevel
+        from superset import security_manager
+
+        token = security_manager.warehouse_viewer_token(database)
+        connect_args = engine_kwargs.setdefault("connect_args", {})
+        connect_args.pop("credentials_provider", None)
+        connect_args["access_token"] = token["access_token"]
+        return url.set(username="token", password=None), engine_kwargs
 
     @staticmethod
     def get_extra_params(

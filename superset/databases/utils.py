@@ -43,6 +43,18 @@ def is_external_lakehouse(database: Database) -> bool:
     return database.get_extra().get(EXTERNAL_LAKEHOUSE_EXTRA_KEY) is True
 
 
+# ...and `"plaid_sign_in": true` when that warehouse was attached by sign-in:
+# every viewer connects with their own sign-in, never a shared principal.
+SIGN_IN_EXTRA_KEY = "plaid_sign_in"
+
+
+def is_signed_in_lakehouse(database: Database) -> bool:
+    return (
+        is_external_lakehouse(database)
+        and database.get_extra().get(SIGN_IN_EXTRA_KEY) is True
+    )
+
+
 def external_lakehouse_project(database: Database) -> tuple[str | None, str | None]:
     """
     The (catalog, schema) an external-lakehouse entry's URI pins it to -- the one
