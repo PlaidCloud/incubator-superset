@@ -31,9 +31,8 @@ def build_oauth2_redirect_message(ex: OAuth2RedirectError) -> str:
     """
     # A warehouse sign-in refusal carries its own sentence and no Superset dance
     # to start.
-    if not (ex.error.extra or {}).get("url"):
+    if not (oauth_url := (ex.error.extra or {}).get("url")):
         return ex.error.message
-    oauth_url = ex.error.extra["url"]
     return (
         "This database uses OAuth for authentication. "
         "Please open the following URL in your browser to "
