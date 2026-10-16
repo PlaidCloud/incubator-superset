@@ -35,6 +35,8 @@ from plaid.security import PlaidSecurityManager
 from superset.db_engine_specs.databricks import DatabricksNativeEngineSpec
 from superset.db_engine_specs.snowflake import SnowflakeEngineSpec
 from superset.exceptions import OAuth2RedirectError, WarehouseSignInRequiredError
+from superset.security import SupersetSecurityManager
+from superset.utils import json
 
 DATABASE = SimpleNamespace(uuid=uuid.UUID("3f1c2b4a-0000-4000-8000-000000000001"))
 TOKEN = {"access_token": "ann-access", "expires_in": 600, "username": "ANN"}
@@ -235,3 +237,59 @@ def test_a_refusal_reaches_the_query_not_a_shared_identity():
         pytest.raises(WarehouseSignInRequiredError),
     ):
         SnowflakeEngineSpec.impersonate_user(_database(SIGNED_IN), "ann", None, url, {})
+
+
+class _Datasource:
+    is_rls_supported = False
+
+    def __init__(self, extra):
+        self.database = _database(extra)
+
+
+def _as(username):
+    flask.g.user = SimpleNamespace(username=username)
+
+
+def test_a_viewers_cached_chart_is_theirs_alone():
+    manager = _Manager.__new__(_Manager)
+    with (
+        flask.current_app.test_request_context(),
+        patch.object(SupersetSecurityManager, "get_rls_cache_key", return_value=[]),
+    ):
+        _as("ann")
+        ann = manager.get_rls_cache_key(_Datasource(SIGNED_IN))
+        _as("bob")
+        bob = manager.get_rls_cache_key(_Datasource(SIGNED_IN))
+        shared = manager.get_rls_cache_key(
+            _Datasource({"plaid_external_lakehouse": True})
+        )
+    assert ann == ["viewer:ann"]
+    assert bob == ["viewer:bob"]
+    assert shared == []
+
+
+def test_a_viewers_schema_and_table_lists_are_theirs_alone():
+    from superset.models.core import Database
+
+    uri = "snowflake://PLAIDCLOUD_SVC@acct/PLAID"
+    signed_in = Database(id=7, sqlalchemy_uri=uri, extra=json.dumps(SIGNED_IN))
+    shared = Database(
+        id=8, sqlalchemy_uri=uri, extra=json.dumps({"plaid_external_lakehouse": True})
+    )
+    with flask.current_app.test_request_context():
+        _as("ann")
+        ann = signed_in.cache_viewer
+        _as("bob")
+        bob = signed_in.cache_viewer
+        assert shared.cache_viewer == ""
+    assert (ann, bob) == (":viewer:ann", ":viewer:bob")
+
+
+def test_an_mcp_client_reads_the_sign_in_sentence():
+    from superset.mcp_service.utils.oauth2_utils import build_oauth2_redirect_message
+
+    sentence = "Sign in with Snowflake to view this dashboard."
+    assert (
+        build_oauth2_redirect_message(WarehouseSignInRequiredError(sentence))
+        == sentence
+    )

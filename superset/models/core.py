@@ -859,6 +859,17 @@ class Database(CoreDatabase, AuditMixinNullable, ImportExportMixin):  # pylint: 
 
         return script.format()
 
+    @property
+    def cache_viewer(self) -> str:
+        """Who a cached listing belongs to. On a warehouse attached by sign-in each
+        viewer connects as themselves and may see different schemas and tables."""
+        from superset.databases.utils import is_signed_in_lakehouse
+
+        if not is_signed_in_lakehouse(self):
+            return ""
+        user = getattr(g, "user", None) if has_app_context() else None
+        return f":viewer:{getattr(user, 'username', '')}"
+
     def get_column_description_limit_size(self) -> int:
         return self.db_engine_spec.get_column_description_limit_size()
 
@@ -866,7 +877,7 @@ class Database(CoreDatabase, AuditMixinNullable, ImportExportMixin):  # pylint: 
         return self.sqlalchemy_uri
 
     @cache_util.memoized_func(
-        key="db:{self.id}:catalog:{catalog}:schema:{schema}:table_list",
+        key="db:{self.id}{self.cache_viewer}:catalog:{catalog}:schema:{schema}:table_list",
         cache=cache_manager.cache,
     )
     def get_all_table_names_in_schema(
@@ -901,7 +912,7 @@ class Database(CoreDatabase, AuditMixinNullable, ImportExportMixin):  # pylint: 
             raise self.db_engine_spec.get_dbapi_mapped_exception(ex) from ex
 
     @cache_util.memoized_func(
-        key="db:{self.id}:catalog:{catalog}:schema:{schema}:view_list",
+        key="db:{self.id}{self.cache_viewer}:catalog:{catalog}:schema:{schema}:view_list",
         cache=cache_manager.cache,
     )
     def get_all_view_names_in_schema(
@@ -936,7 +947,7 @@ class Database(CoreDatabase, AuditMixinNullable, ImportExportMixin):  # pylint: 
             raise self.db_engine_spec.get_dbapi_mapped_exception(ex) from ex
 
     @cache_util.memoized_func(
-        key="db:{self.id}:catalog:{catalog}:schema:{schema}:materialized_view_list",
+        key="db:{self.id}{self.cache_viewer}:catalog:{catalog}:schema:{schema}:materialized_view_list",
         cache=cache_manager.cache,
     )
     def get_all_materialized_view_names_in_schema(
@@ -984,7 +995,7 @@ class Database(CoreDatabase, AuditMixinNullable, ImportExportMixin):  # pylint: 
             yield sqla.inspect(engine)
 
     @cache_util.memoized_func(
-        key="db:{self.id}:catalog:{catalog}:schema_list",
+        key="db:{self.id}{self.cache_viewer}:catalog:{catalog}:schema_list",
         cache=cache_manager.cache,
     )
     def get_all_schema_names(self, *, catalog: str | None = None) -> set[str]:
@@ -1002,7 +1013,7 @@ class Database(CoreDatabase, AuditMixinNullable, ImportExportMixin):  # pylint: 
             raise self.db_engine_spec.get_dbapi_mapped_exception(ex) from ex
 
     @cache_util.memoized_func(
-        key="db:{self.id}:catalog_list",
+        key="db:{self.id}{self.cache_viewer}:catalog_list",
         cache=cache_manager.cache,
     )
     def get_all_catalog_names(self) -> set[str]:

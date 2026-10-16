@@ -668,6 +668,19 @@ class PlaidSecurityManager(SupersetSecurityManager):
         # (alerts, async imports) has no request to identify and is refused.
         return has_request_context() and rls_guard.is_automation_principal()
 
+    def get_rls_cache_key(self, datasource: "Explorable | BaseDatasource") -> list[str]:
+        # On a warehouse attached by sign-in every viewer queries as themselves, so a
+        # cached result is theirs alone -- the legacy viz cache key carries no user
+        # otherwise.
+        from superset.databases.utils import is_signed_in_lakehouse
+
+        key = super().get_rls_cache_key(datasource)
+        database = getattr(datasource, "database", None)
+        if database is not None and is_signed_in_lakehouse(database):
+            user = g.user if has_app_context() and hasattr(g, "user") else None
+            key = [*key, f"viewer:{getattr(user, 'username', '')}"]
+        return key
+
     def warehouse_viewer_token(self, database: "Database") -> dict[str, Any]:
         # A warehouse attached by sign-in (sc-32678): the viewer's OWN token, asked of
         # plaid with the viewer's own PlaidCloud credential, so plaid decides who
@@ -696,7 +709,12 @@ class PlaidSecurityManager(SupersetSecurityManager):
             timeout=15,
         )
         if response.status_code in (403, 404):
-            raise WarehouseSignInRequiredError(response.json().get("detail") or "")
+            # plaid's envelope puts the sentence in `detail`; a bare FastAPI refusal
+            # nests it.
+            detail = response.json().get("detail")
+            raise WarehouseSignInRequiredError(
+                (detail.get("message") if isinstance(detail, dict) else detail) or ""
+            )
         response.raise_for_status()
         body = response.json()
         with _VIEWER_TOKENS_LOCK:
