@@ -368,6 +368,31 @@ class OAuth2RedirectError(SupersetErrorException):
         )
 
 
+class WarehouseSignInRequiredError(OAuth2RedirectError):
+    """
+    A viewer of a database marked ``plaid_sign_in`` who has no sign-in of their own to
+    its warehouse. They are told how to sign in; nobody else's identity is used for
+    them.
+
+    An ``OAuth2RedirectError`` so a database can still be saved by a caller with no
+    sign-in (PlaidCloud registers it), as Superset saves an OAuth2 database before
+    anyone authorizes; it carries its own message rather than starting Superset's
+    OAuth2 dance.
+    """
+
+    status = 403
+
+    def __init__(self, message: str):  # pylint: disable=super-init-not-called
+        SupersetErrorException.__init__(
+            self,
+            SupersetError(
+                message=message,
+                error_type=SupersetErrorType.CONNECTION_ACCESS_DENIED_ERROR,
+                level=ErrorLevel.WARNING,
+            ),
+        )
+
+
 class OAuth2Error(SupersetErrorException):
     """
     Exception for when OAuth2 goes wrong.

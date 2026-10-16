@@ -805,6 +805,22 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         """
         return False
 
+    def warehouse_viewer_token(self, database: "Database") -> dict[str, Any]:
+        """
+        The current viewer's own access token for the warehouse of a database marked
+        ``plaid_sign_in``: ``{access_token, expires_in, username}``.
+
+        Only a security manager that knows the viewer's PlaidCloud identity can ask for
+        one; this one refuses.
+        """
+        # pylint: disable=import-outside-toplevel
+        from superset.exceptions import WarehouseSignInRequiredError
+
+        raise WarehouseSignInRequiredError(
+            "This dashboard runs as each viewer, and this Superset cannot sign "
+            "viewers in."
+        )
+
     def refuses_external_lakehouse(self, database: "Database") -> bool:
         """
         Return True if the database is an external lakehouse the current user may
