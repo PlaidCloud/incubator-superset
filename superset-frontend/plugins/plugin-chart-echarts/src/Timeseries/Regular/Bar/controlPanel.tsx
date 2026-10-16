@@ -58,8 +58,15 @@ import {
 } from '../../constants';
 import { StackControlsValue } from '../../../constants';
 
-const { logAxis, minorSplitLine, truncateYAxis, yAxisBounds, orientation } =
-  DEFAULT_FORM_DATA;
+const {
+  logAxis,
+  minorSplitLine,
+  truncateYAxis,
+  yAxisBounds,
+  orientation,
+  isPolar,
+  polarHideLabels,
+} = DEFAULT_FORM_DATA;
 
 function createAxisTitleControl(axis: 'x' | 'y'): ControlSetRow[] {
   const isXAxis = axis === 'x';
@@ -338,6 +345,38 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'is_polar',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Polar'),
+              default: isPolar,
+              renderTrigger: true,
+              description: t(
+                'Display bars on polar coordinates (radius and angle axes)',
+              ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'polar_hide_labels',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Hide category labels'),
+              default: polarHideLabels,
+              renderTrigger: true,
+              description: t(
+                'Hide the category axis labels on the polar radius axis. ' +
+                  'Useful when there are many categories and some labels ' +
+                  'remain visible after overlap removal.',
+              ),
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                Boolean(controls?.is_polar?.value),
+            },
+          },
+        ],
       ],
     },
     {
@@ -394,7 +433,16 @@ const config: ControlPanelConfig = {
           },
         ],
         [minorTicks],
-        ['zoomable'],
+        [
+          {
+            name: 'zoomable',
+            config: {
+              ...sharedControls.zoomable,
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                !controls?.is_polar?.value,
+            },
+          },
+        ],
         ...legendSection,
         [<ControlSubSectionHeader>{t('X Axis')}</ControlSubSectionHeader>],
         ...createAxisControl('x'),
