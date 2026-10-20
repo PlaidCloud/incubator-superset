@@ -48,7 +48,11 @@ def import_database(  # noqa: C901
     )
     existing = db.session.query(Database).filter_by(uuid=config["uuid"]).first()
     if existing:
-        if not overwrite or not can_write:
+        if (
+            not overwrite
+            or not can_write
+            or security_manager.refuses_external_lakehouse(existing)
+        ):
             return existing
         config["id"] = existing.id
     elif not can_write:

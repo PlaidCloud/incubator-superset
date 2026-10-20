@@ -420,7 +420,7 @@ class TestDashboardRoleGrantIsProjectBound:
             id=1,
             perm="[db].[t](id:1)",
             data={"id": 1, "name": "t"},
-            database=SimpleNamespace(uuid=uuid.UUID(PROJECT)),
+            database=SimpleNamespace(uuid=uuid.UUID(PROJECT), get_extra=dict),
         )
         slc = SimpleNamespace(id=97, datasource=datasource)
         dashboard = SimpleNamespace(

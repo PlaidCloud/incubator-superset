@@ -16,9 +16,14 @@
 # under the License.
 from __future__ import annotations
 
+import re
+import threading
+import time
 from datetime import datetime
+from functools import lru_cache
 from typing import Any, Callable, TYPE_CHECKING, TypedDict, Union
 
+import requests
 from apispec import APISpec
 from apispec.ext.marshmallow import MarshmallowPlugin
 from flask_babel import gettext as __
@@ -29,8 +34,8 @@ from sqlalchemy.engine.default import DefaultDialect
 from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.engine.url import URL
 
-from superset.constants import TimeGrain
-from superset.databases.utils import make_url_safe
+from superset.constants import PARTNER_ATTRIBUTION, TimeGrain
+from superset.databases.utils import is_signed_in_lakehouse, make_url_safe
 from superset.db_engine_specs.base import (
     BaseEngineSpec,
     BasicParametersMixin,
@@ -39,7 +44,7 @@ from superset.db_engine_specs.base import (
 from superset.db_engine_specs.hive import HiveEngineSpec
 from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
 from superset.utils import json
-from superset.utils.core import get_user_agent, QuerySource
+from superset.utils.core import QuerySource
 from superset.utils.network import is_hostname_valid, is_port_open
 
 if TYPE_CHECKING:
@@ -267,9 +272,71 @@ class DatabricksODBCEngineSpec(DatabricksBaseEngineSpec):
     # backwards compatibility with ODBC connections to SQL Endpoints.
 
 
+class OAuthM2MCredentials:
+    """
+    A databricks-sql-connector ``credentials_provider`` for a service principal's
+    OAuth client-credentials (M2M) secret. The access token is fetched from the
+    workspace and refreshed a minute before it expires, so a dashboard keeps
+    working across token rotation.
+    """
+
+    def __init__(self, host: str, client_id: str, client_secret: str) -> None:
+        self._host = host
+        self._client_id = client_id
+        self._client_secret = client_secret
+        self._lock = threading.Lock()
+        self._token = ""
+        self._expires_at = 0.0
+
+    def auth_type(self) -> str:
+        return "oauth-m2m"
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Callable[[], dict[str, str]]:
+        return self._headers
+
+    def _headers(self) -> dict[str, str]:
+        with self._lock:
+            if time.monotonic() >= self._expires_at:
+                response = requests.post(
+                    f"https://{self._host}/oidc/v1/token",
+                    data={"grant_type": "client_credentials", "scope": "all-apis"},
+                    auth=(self._client_id, self._client_secret),
+                    timeout=30,
+                )
+                response.raise_for_status()
+                payload = response.json()
+                self._token = payload["access_token"]
+                self._expires_at = (
+                    time.monotonic() + int(payload.get("expires_in", 3600)) - 60
+                )
+            return {"Authorization": f"Bearer {self._token}"}
+
+
+# The client secret is only ever sent to a Databricks workspace's token endpoint.
+DATABRICKS_WORKSPACE_HOST = re.compile(
+    r"(?:[a-z0-9-]+\.)+(?:cloud\.databricks\.com|azuredatabricks\.net"
+    r"|gcp\.databricks\.com)"
+)
+
+
+# Superset builds an engine per query; share one provider (and its token) per
+# service principal instead of minting a token for every query.
+@lru_cache(maxsize=128)
+def oauth_m2m_credentials(
+    host: str, client_id: str, client_secret: str
+) -> OAuthM2MCredentials:
+    return OAuthM2MCredentials(host, client_id, client_secret)
+
+
 class DatabricksDynamicBaseEngineSpec(BasicParametersMixin, DatabricksBaseEngineSpec):
     default_driver = ""
     encryption_parameters = {"ssl": "1"}
+    # "$.*" keeps masking anything else stored here; the M2M secret is named so
+    # imports ask for it by label.
+    encrypted_extra_sensitive_fields = {
+        "$.*": "Encrypted Extra",
+        "$.auth_params.client_secret": "Client Secret",
+    }
     required_parameters = {"access_token", "host", "port"}
     context_key_mapping = {
         "access_token": "password",
@@ -278,20 +345,86 @@ class DatabricksDynamicBaseEngineSpec(BasicParametersMixin, DatabricksBaseEngine
     }
 
     @staticmethod
+    def update_params_from_encrypted_extra(
+        database: Database, params: dict[str, Any]
+    ) -> None:
+        """
+        ``{"auth_method": "oauth-m2m", "auth_params": {"client_id", "client_secret"}}``
+        authenticates as a service principal with a refreshing OAuth token; any
+        other encrypted extra keeps the stock behaviour (merged into the engine
+        parameters).
+        """
+        if not database.encrypted_extra:
+            return
+        encrypted_extra = json.loads(database.encrypted_extra)
+        if encrypted_extra.get("auth_method") != "oauth-m2m":
+            BaseEngineSpec.update_params_from_encrypted_extra(database, params)
+            return
+        auth_params = encrypted_extra["auth_params"]
+        host = (database.url_object.host or "").lower()
+        if not DATABRICKS_WORKSPACE_HOST.fullmatch(host):
+            raise ValueError(
+                f"OAuth M2M credentials are only sent to a Databricks workspace "
+                f"host, not {host!r}"
+            )
+        params.setdefault("connect_args", {})["credentials_provider"] = (
+            oauth_m2m_credentials(
+                host,
+                auth_params["client_id"],
+                auth_params["client_secret"],
+            )
+        )
+
+    @classmethod
+    def impersonate_user(
+        cls,
+        database: Database,
+        username: str | None,
+        user_token: str | None,
+        url: URL,
+        engine_kwargs: dict[str, Any],
+    ) -> tuple[URL, dict[str, Any]]:
+        """
+        On a warehouse attached by sign-in, connect as the viewer with their own
+        OAuth access token.
+        """
+        if not is_signed_in_lakehouse(database):
+            return super().impersonate_user(
+                database, username, user_token, url, engine_kwargs
+            )
+        # pylint: disable=import-outside-toplevel
+        from superset import security_manager
+
+        token = security_manager.warehouse_viewer_token(database)
+        connect_args = engine_kwargs.setdefault("connect_args", {})
+        connect_args.pop("credentials_provider", None)
+        connect_args["access_token"] = token["access_token"]
+        return url.set(username="token", password=None), engine_kwargs
+
+    @staticmethod
     def get_extra_params(
         database: Database, source: QuerySource | None = None
     ) -> dict[str, Any]:
         """
-        Add a user agent to be used in the requests.
+        Identify PlaidCloud as the partner in the user agent of every connection.
         Trim whitespace from connect_args to avoid databricks driver errors
         """
         extra: dict[str, Any] = BaseEngineSpec.get_extra_params(database, source)
         engine_params: dict[str, Any] = extra.setdefault("engine_params", {})
         connect_args: dict[str, Any] = engine_params.setdefault("connect_args", {})
 
-        user_agent = get_user_agent(database, source)
-        connect_args.setdefault("http_headers", [("User-Agent", user_agent)])
-        connect_args.setdefault("_user_agent_entry", user_agent)
+        connect_args["http_headers"] = [
+            *(
+                (name, value)
+                for name, value in connect_args.get("http_headers", [])
+                if name.lower() != "user-agent"
+            ),
+            ("User-Agent", PARTNER_ATTRIBUTION),
+        ]
+        # databricks-sql-connector 4.x reads `user_agent_entry`; `_user_agent_entry`
+        # is deprecated.
+        connect_args.pop("_user_agent_entry", None)
+        connect_args["user_agent_entry"] = PARTNER_ATTRIBUTION
 
         # trim whitespace from http_path to avoid databricks errors on connecting
         if http_path := connect_args.get("http_path"):

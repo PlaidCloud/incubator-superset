@@ -19,6 +19,7 @@ from typing import Any, Optional
 
 from flask_babel import gettext as __
 
+from superset import security_manager
 from superset.commands.base import BaseCommand
 from superset.commands.database.exceptions import (
     DatabaseOfflineError,
@@ -141,3 +142,7 @@ class ValidateDatabaseParametersCommand(BaseCommand):
     def validate(self) -> None:
         if (database_id := self._properties.get("id")) is not None:
             self._model = DatabaseDAO.find_by_id(database_id)
+            # An external lakehouse's stored credentials never reach a host the
+            # caller supplies.
+            if self._model and security_manager.refuses_external_lakehouse(self._model):
+                self._model = None

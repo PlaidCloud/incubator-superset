@@ -103,6 +103,7 @@ class UpdateDatasetCommand(UpdateMixin, BaseCommand):
         # Check permission to update the dataset
         try:
             security_manager.raise_for_ownership(self._model)
+            security_manager.raise_for_external_lakehouse(self._model.database)
         except SupersetSecurityException as ex:
             raise DatasetForbiddenError() from ex
 
@@ -132,6 +133,10 @@ class UpdateDatasetCommand(UpdateMixin, BaseCommand):
         if database_id and database_id != self._model.database.id:
             if new_db_connection := DatasetDAO.get_database_by_id(database_id):
                 self._properties["database"] = new_db_connection
+                try:
+                    security_manager.raise_for_external_lakehouse(new_db_connection)
+                except SupersetSecurityException as ex:
+                    exceptions.append(DatasetDataAccessIsNotAllowed(ex.error.message))
             else:
                 exceptions.append(DatabaseNotFoundValidationError())
         db = new_db_connection or self._model.database
