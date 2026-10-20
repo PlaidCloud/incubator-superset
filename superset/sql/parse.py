@@ -547,6 +547,53 @@ class BaseSQLStatement(Generic[InternalRepresentation]):
         return self.format()
 
 
+OUTSIDE_ROW_NODES = (
+    exp.Subquery,
+    exp.Table,
+    exp.Join,
+    exp.Lateral,
+    exp.Dot,
+    exp.Anonymous,
+    exp.AnonymousAggFunc,
+    exp.Parameter,
+    exp.Placeholder,
+    exp.ReadCSV,
+    exp.ReadParquet,
+    exp.ToFile,
+    exp.SessionUser,
+    # unbounded generators
+    exp.Generator,
+    exp.GenerateSeries,
+    exp.ExplodingGenerateSeries,
+    exp.GenerateDateArray,
+    exp.GenerateTimestampArray,
+    exp.GenerateEmbedding,
+    exp.Explode,
+    exp.ExplodeOuter,
+    exp.Posexplode,
+    exp.Inline,
+    exp.Unnest,
+    # caller-sized strings
+    exp.Repeat,
+    exp.Space,
+    exp.Randstr,
+)
+
+# LPAD/RPAD stay usable for zero-padding codes, up to this literal length.
+MAX_ROW_PAD_LENGTH = 1000
+
+# Every other CURRENT_* function reveals the shared principal's session: user,
+# role, account, warehouse, catalog, schema.
+ROW_SAFE_CURRENT_FUNCTIONS = (
+    exp.CurrentDate,
+    exp.CurrentDatetime,
+    exp.CurrentTime,
+    exp.CurrentTimestamp,
+    exp.CurrentTimestampLTZ,
+    exp.CurrentTimezone,
+)
+
+
 class SQLStatement(BaseSQLStatement[exp.Expression]):
     """
     A SQL statement.
@@ -886,6 +933,41 @@ class SQLStatement(BaseSQLStatement[exp.Expression]):
                 isinstance(expression, exp.Select)
                 for expression in self._parsed.walk()
                 if expression != self._parsed
+            )
+        )
+
+    def reaches_beyond_row(self) -> bool:
+        """
+        Check if an ad-hoc expression, parsed as ``SELECT <expression>``, can read
+        anything other than the columns of the row it is evaluated on.
+
+        Refused: another query or table, a qualified name, a bind parameter, a
+        function that reads files, session context (``CURRENT_USER()``,
+        ``CURRENT_ROLE()``, ...), an unbounded generator or caller-sized string,
+        and any function sqlglot
+        does not recognise (``IDENTIFIER()``, ``read_files``, ``SYSTEM$...``, UDFs).
+
+        :return: True if the expression reaches beyond the row.
+        """
+        return (
+            not isinstance(self._parsed, exp.Select)
+            or self._parsed.find(*OUTSIDE_ROW_NODES) is not None
+            or any(
+                (isinstance(node, exp.Query) and node is not self._parsed)
+                or (isinstance(node, exp.Column) and bool(node.table))
+                or (
+                    type(node).__name__.startswith("Current")
+                    and not isinstance(node, ROW_SAFE_CURRENT_FUNCTIONS)
+                )
+                or (
+                    isinstance(node, exp.Pad)
+                    and not (
+                        isinstance(length := node.expression, exp.Literal)
+                        and length.is_int
+                        and int(length.this) <= MAX_ROW_PAD_LENGTH
+                    )
+                )
+                for node in self._parsed.walk()
             )
         )
 

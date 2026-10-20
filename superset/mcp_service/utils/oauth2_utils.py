@@ -29,9 +29,10 @@ def build_oauth2_redirect_message(ex: OAuth2RedirectError) -> str:
     Extracts the authorization URL from the exception and includes it
     so the MCP client can present it to the user for authentication.
     """
-    # extra is always set by OAuth2RedirectError.__init__
-    assert ex.error.extra is not None  # noqa: S101
-    oauth_url = ex.error.extra["url"]
+    # A warehouse sign-in refusal carries its own sentence and no Superset dance
+    # to start.
+    if not (oauth_url := (ex.error.extra or {}).get("url")):
+        return ex.error.message
     return (
         "This database uses OAuth for authentication. "
         "Please open the following URL in your browser to "

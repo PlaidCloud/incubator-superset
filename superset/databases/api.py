@@ -1831,6 +1831,10 @@ class DatabaseRestApi(BaseSupersetModelRestApi):
         database = DatabaseDAO.find_by_id(pk)
         if not database:
             return self.response_404()
+        # SHOW FUNCTIONS would list every project's UDFs through the shared
+        # warehouse principal.
+        if security_manager.refuses_external_lakehouse(database):
+            return self.response(200, function_names=[])
         return self.response(
             200,
             function_names=database.function_names,

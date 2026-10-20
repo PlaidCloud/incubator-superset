@@ -30,6 +30,47 @@ if TYPE_CHECKING:
         TableMetadataForeignKeysIndexesResponse,
         TableMetadataResponse,
     )
+    from superset.models.core import Database
+
+# PlaidCloud sets `"plaid_external_lakehouse": true` in `extra` on every project
+# entry it registers on a customer's own Snowflake or Databricks warehouse.
+EXTERNAL_LAKEHOUSE_EXTRA_KEY = "plaid_external_lakehouse"
+
+
+def is_external_lakehouse(database: Database) -> bool:
+    # Every project entry on an external lakehouse authenticates as the same
+    # warehouse principal, so only the datasets PlaidCloud publishes may use it.
+    return database.get_extra().get(EXTERNAL_LAKEHOUSE_EXTRA_KEY) is True
+
+
+# ...and `"plaid_sign_in": true` when that warehouse was attached by sign-in:
+# every viewer connects with their own sign-in, never a shared principal.
+SIGN_IN_EXTRA_KEY = "plaid_sign_in"
+
+
+def is_signed_in_lakehouse(database: Database) -> bool:
+    return (
+        is_external_lakehouse(database)
+        and database.get_extra().get(SIGN_IN_EXTRA_KEY) is True
+    )
+
+
+def external_lakehouse_project(database: Database) -> tuple[str | None, str | None]:
+    """
+    The (catalog, schema) an external-lakehouse entry's URI pins it to -- the one
+    project it was registered for -- read without connecting: Snowflake's
+    ``database/schema`` path, Databricks' ``catalog``/``schema`` connect args or
+    query parameters.
+    """
+    url = database.url_object
+    if database.backend == "snowflake":
+        catalog, _, schema = (url.database or "").partition("/")
+        return catalog or None, schema or None
+    connect_args = database.get_extra().get("engine_params", {}).get("connect_args", {})
+    return (
+        connect_args.get("catalog") or url.query.get("catalog"),
+        connect_args.get("schema") or url.query.get("schema"),
+    )
 
 
 def get_foreign_keys_metadata(

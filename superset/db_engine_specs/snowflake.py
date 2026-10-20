@@ -34,8 +34,8 @@ from sqlalchemy import types
 from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.engine.url import URL
 
-from superset.constants import TimeGrain
-from superset.databases.utils import make_url_safe
+from superset.constants import PARTNER_ATTRIBUTION, TimeGrain
+from superset.databases.utils import is_signed_in_lakehouse, make_url_safe
 from superset.db_engine_specs.base import (
     BaseEngineSpec,
     BasicPropertiesType,
@@ -45,7 +45,7 @@ from superset.db_engine_specs.postgres import PostgresBaseEngineSpec
 from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
 from superset.models.sql_lab import Query
 from superset.utils import json
-from superset.utils.core import get_user_agent, QuerySource
+from superset.utils.core import QuerySource
 
 if TYPE_CHECKING:
     from superset.models.core import Database
@@ -196,16 +196,41 @@ class SnowflakeEngineSpec(PostgresBaseEngineSpec):
         database: Database, source: QuerySource | None = None
     ) -> dict[str, Any]:
         """
-        Add a user agent to be used in the requests.
+        Identify PlaidCloud as the partner application on every connection.
         """
-        extra: dict[str, Any] = BaseEngineSpec.get_extra_params(database)
+        extra: dict[str, Any] = BaseEngineSpec.get_extra_params(database, source)
         engine_params: dict[str, Any] = extra.setdefault("engine_params", {})
         connect_args: dict[str, Any] = engine_params.setdefault("connect_args", {})
-        user_agent = get_user_agent(database, source)
-
-        connect_args.setdefault("application", user_agent)
+        connect_args["application"] = PARTNER_ATTRIBUTION
 
         return extra
+
+    @classmethod
+    def impersonate_user(
+        cls,
+        database: Database,
+        username: str | None,
+        user_token: str | None,
+        url: URL,
+        engine_kwargs: dict[str, Any],
+    ) -> tuple[URL, dict[str, Any]]:
+        """
+        On a warehouse attached by sign-in, connect as the viewer: their own OAuth
+        access token, Snowflake login and default role.
+        """
+        if not is_signed_in_lakehouse(database):
+            return super().impersonate_user(
+                database, username, user_token, url, engine_kwargs
+            )
+        # pylint: disable=import-outside-toplevel
+        from superset import security_manager
+
+        token = security_manager.warehouse_viewer_token(database)
+        engine_kwargs.setdefault("connect_args", {}).update(
+            authenticator="oauth", token=token["access_token"]
+        )
+        url = url.set(username=token["username"], password=None)
+        return url.difference_update_query(["role"]), engine_kwargs
 
     @classmethod
     def adjust_engine_params(

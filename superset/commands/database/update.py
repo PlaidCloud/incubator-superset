@@ -22,8 +22,9 @@ from functools import partial
 from typing import Any
 
 from flask_appbuilder.models.sqla import Model
+from marshmallow import ValidationError
 
-from superset import db
+from superset import db, security_manager
 from superset.commands.base import BaseCommand
 from superset.commands.database.exceptions import (
     DatabaseExistsValidationError,
@@ -34,7 +35,7 @@ from superset.commands.database.exceptions import (
 )
 from superset.commands.database.sync_permissions import SyncPermissionsCommand
 from superset.daos.database import DatabaseDAO
-from superset.exceptions import OAuth2RedirectError
+from superset.exceptions import OAuth2RedirectError, SupersetSecurityException
 from superset.models.core import Database
 from superset.utils import json
 from superset.utils.core import get_username
@@ -57,6 +58,15 @@ class UpdateDatabaseCommand(BaseCommand):
 
         if not self._model:
             raise DatabaseNotFoundError()
+
+        # Only PlaidCloud may repoint or reconfigure an external lakehouse entry:
+        # an edited host would receive the stored warehouse credentials.
+        try:
+            security_manager.raise_for_external_lakehouse(self._model)
+        except SupersetSecurityException as ex:
+            raise DatabaseInvalidError(
+                exceptions=[ValidationError(ex.error.message)]
+            ) from ex
 
         self.validate()
 

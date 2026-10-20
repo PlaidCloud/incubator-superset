@@ -56,6 +56,7 @@ from flask_login import AnonymousUserMixin, LoginManager
 from jwt.api_jwt import _jwt_global_obj
 from sqlalchemy import and_, inspect, or_
 from sqlalchemy.engine.base import Connection
+from sqlalchemy.exc import NoResultFound, SQLAlchemyError
 from sqlalchemy.orm import eagerload
 from sqlalchemy.orm.mapper import Mapper
 from sqlalchemy.orm.query import Query as SqlaQuery
@@ -792,6 +793,150 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         """
         return True
 
+    def can_manage_external_lakehouse(self) -> bool:
+        """
+        Return True if the current user may run SQL, browse tables or write datasets
+        on a database marked as an external lakehouse.
+
+        Every project entry on an external lakehouse authenticates as one shared
+        warehouse principal, so no Superset role may use it beyond the datasets
+        PlaidCloud publishes. A security manager that can recognise PlaidCloud's own
+        automation overrides this.
+        """
+        return False
+
+    def warehouse_viewer_token(self, database: "Database") -> dict[str, Any]:
+        """
+        The current viewer's own access token for the warehouse of a database marked
+        ``plaid_sign_in``: ``{access_token, expires_in, username}``.
+
+        Only a security manager that knows the viewer's PlaidCloud identity can ask for
+        one; this one refuses.
+        """
+        # pylint: disable=import-outside-toplevel
+        from superset.exceptions import WarehouseSignInRequiredError
+
+        raise WarehouseSignInRequiredError(
+            "This dashboard runs as each viewer, and this Superset cannot sign "
+            "viewers in."
+        )
+
+    def refuses_external_lakehouse(self, database: "Database") -> bool:
+        """
+        Return True if the database is an external lakehouse the current user may
+        only reach through PlaidCloud's published datasets.
+        """
+        # pylint: disable=import-outside-toplevel
+        from superset.databases.utils import is_external_lakehouse
+
+        return (
+            is_external_lakehouse(database) and not self.can_manage_external_lakehouse()
+        )
+
+    def is_published_lakehouse_dataset(
+        self, datasource: "BaseDatasource | Explorable"
+    ) -> bool:
+        """
+        Return True if charts may read the datasource although its database is an
+        external lakehouse the current user is refused.
+
+        By default no datasource qualifies; a security manager that can tell which
+        datasets PlaidCloud published, unchanged since, overrides this.
+        """
+        return False
+
+    def _datasource_database(
+        self, datasource: "BaseDatasource | Explorable"
+    ) -> Optional["Database"]:
+        """
+        The datasource's database, reloaded by id when the instance is detached
+        from its session (a cached or test-built object). None only when it truly
+        has none.
+
+        :raises SQLAlchemyError: If it names a database that can't be loaded
+        """
+        # pylint: disable=import-outside-toplevel
+        from superset.models.core import Database
+
+        try:
+            return getattr(datasource, "database", None)
+        except SQLAlchemyError:
+            database_id = datasource.database_id  # type: ignore[union-attr]
+        if database_id is None:
+            return None
+        if (database := self.session.get(Database, database_id)) is None:
+            raise NoResultFound(f"database {database_id} not found")
+        return database
+
+    @staticmethod
+    def _stays_in_lakehouse_project(datasource: "BaseDatasource | Explorable") -> bool:
+        """
+        Whatever wrote it, a dataset on an external lakehouse may only read its own
+        project's schema, and its stored expressions only their own row: a table
+        repointed elsewhere or a calculated column with a subquery would otherwise
+        pass once an automation write re-stamped it.
+        """
+        # pylint: disable=import-outside-toplevel
+        from superset.connectors.sqla.models import SqlaTable
+        from superset.databases.utils import external_lakehouse_project
+        from superset.exceptions import SupersetParseError
+        from superset.sql.parse import SQLStatement
+
+        if not isinstance(datasource, SqlaTable):
+            return False
+        database = datasource.database
+        catalog, schema = external_lakehouse_project(database)
+        if (
+            schema is None
+            or datasource.schema != schema
+            or (datasource.catalog or catalog) != catalog
+        ):
+            return False
+        # Jinja renders after this check, so a template could still emit SQL the
+        # parser never saw (`amount /* {{ url_param('x') }} */`).
+        stored_text = [
+            datasource.sql,
+            datasource.fetch_values_predicate,
+            datasource.extra,
+            *(item.expression for item in [*datasource.columns, *datasource.metrics]),
+        ]
+        if any(
+            marker in text
+            for text in stored_text
+            if text
+            for marker in ("{{", "{%", "{#")
+        ):
+            return False
+        try:
+            return not any(
+                SQLStatement(
+                    f"SELECT {item.expression}", database.backend
+                ).reaches_beyond_row()
+                for item in [*datasource.columns, *datasource.metrics]
+                if item.expression
+            )
+        except SupersetParseError:
+            return False
+
+    def raise_for_external_lakehouse(self, database: "Database") -> None:
+        """
+        Raise if the current user may only reach the database through PlaidCloud's
+        published datasets.
+
+        :raises SupersetSecurityException: If the database is refused
+        """
+        if self.refuses_external_lakehouse(database):
+            raise SupersetSecurityException(
+                SupersetError(
+                    error_type=SupersetErrorType.DATABASE_SECURITY_ACCESS_ERROR,
+                    message=_(
+                        "SQL Lab and dataset editing are not available on this "
+                        "warehouse. Use the datasets PlaidCloud publishes for it."
+                    ),
+                    level=ErrorLevel.ERROR,
+                )
+            )
+
     def can_set_dashboard_roles(
         self, current_role_ids: Iterable[int], requested_role_ids: Iterable[int]
     ) -> bool:
@@ -1151,6 +1296,9 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         # pylint: disable=import-outside-toplevel
         from superset.connectors.sqla.models import SqlaTable
 
+        if self.refuses_external_lakehouse(database):
+            return set()
+
         default_catalog = database.get_default_catalog()
         catalog = catalog or default_catalog
 
@@ -1217,6 +1365,9 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         # pylint: disable=import-outside-toplevel
         from superset.connectors.sqla.models import SqlaTable
 
+        if self.refuses_external_lakehouse(database):
+            return set()
+
         if hierarchical and self.can_access_database(database):
             return catalogs
 
@@ -1281,6 +1432,9 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         """
         # pylint: disable=import-outside-toplevel
         from superset.connectors.sqla.models import SqlaTable
+
+        if self.refuses_external_lakehouse(database):
+            return []
 
         if self.can_access_database(database):
             return datasource_names
@@ -2597,6 +2751,10 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
             )
             self.session.expunge(query)
 
+        # Only SQL Lab Query objects carry a database; other explorables don't.
+        if lakehouse_db := database or getattr(query, "database", None):
+            self.raise_for_external_lakehouse(lakehouse_db)
+
         if database and table or query:
             if query:
                 # Type narrow: only SQL Lab Query objects have .database attribute
@@ -2702,6 +2860,31 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
                 form_data = viz.form_data
 
             assert datasource
+
+            # Charts on an external lakehouse may only read datasets PlaidCloud
+            # published; a SQL Lab query or a user-built dataset would run its own
+            # SQL through the shared principal.
+            try:
+                datasource_db = self._datasource_database(datasource)
+                refused = (
+                    datasource_db is not None
+                    and self.refuses_external_lakehouse(datasource_db)
+                    and not (
+                        self.is_published_lakehouse_dataset(datasource)
+                        and self._stays_in_lakehouse_project(datasource)
+                    )
+                )
+            except SQLAlchemyError as ex:
+                # Unresolvable is not the same as unmarked: fail closed.
+                raise SupersetSecurityException(
+                    SupersetError(
+                        error_type=SupersetErrorType.DATASOURCE_SECURITY_ACCESS_ERROR,
+                        message=_("This dataset's warehouse could not be checked."),
+                        level=ErrorLevel.ERROR,
+                    )
+                ) from ex
+            if refused:
+                self.raise_for_external_lakehouse(cast("Database", datasource_db))
 
             if not (
                 self.can_access_schema(datasource)

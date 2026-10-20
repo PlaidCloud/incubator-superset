@@ -19,7 +19,9 @@
 Plaid Security Class for Superset
 """
 
+import hashlib
 import logging
+import threading
 import time
 import uuid
 from collections.abc import Iterable
@@ -93,6 +95,13 @@ def call_plaid_rpc(
 # Attribute memoising the RPC answer on ``g`` for contexts with no session.
 _PROJECT_ACCESS_G_ATTR = "plaid_project_access_ids"
 _UNSET = object()
+
+
+# A viewer's warehouse access token, per (their session token, database), until a minute
+# before it lapses -- never longer. See `PlaidSecurityManager.warehouse_viewer_token`.
+_VIEWER_TOKENS: dict[tuple[str, str], tuple[float, dict[str, Any]]] = {}
+_VIEWER_TOKENS_LOCK = threading.Lock()
+_VIEWER_TOKENS_MAX = 1024
 
 
 class PlaidCredentialUnavailableError(Exception):
@@ -652,6 +661,101 @@ class PlaidSecurityManager(SupersetSecurityManager):
         # project to check and fails closed.
         database = getattr(datasource, "database", None)
         return database is not None and self._can_access_project(str(database.uuid))
+
+    def can_manage_external_lakehouse(self) -> bool:
+        # PlaidCloud registers external-lakehouse entries and publishes their
+        # datasets as the automation principal; no human role may. Celery work
+        # (alerts, async imports) has no request to identify and is refused.
+        return has_request_context() and rls_guard.is_automation_principal()
+
+    def get_rls_cache_key(self, datasource: "Explorable | BaseDatasource") -> list[str]:
+        # On a warehouse attached by sign-in every viewer queries as themselves, so a
+        # cached result is theirs alone -- the legacy viz cache key carries no user
+        # otherwise.
+        from superset.databases.utils import is_signed_in_lakehouse
+
+        key = super().get_rls_cache_key(datasource)
+        database = getattr(datasource, "database", None)
+        if database is not None and is_signed_in_lakehouse(database):
+            user = g.user if has_app_context() and hasattr(g, "user") else None
+            key = [*key, f"viewer:{getattr(user, 'username', '')}"]
+        return key
+
+    def warehouse_viewer_token(self, database: "Database") -> dict[str, Any]:
+        # A warehouse attached by sign-in (sc-32678): the viewer's OWN token, asked of
+        # plaid with the viewer's own PlaidCloud credential, so plaid decides who
+        # they are.
+        # Nobody else's identity is ever used for them -- the automation principal and
+        # background work (no session) have no sign-in and are refused.
+        from superset.exceptions import WarehouseSignInRequiredError
+
+        automation = has_request_context() and rls_guard.is_automation_principal()
+        token = None if automation else self._rpc_token()
+        if not token:
+            raise WarehouseSignInRequiredError(
+                "This dashboard runs as each viewer. Open it in PlaidCloud to see it."
+            )
+        key = (hashlib.sha256(token.encode()).hexdigest(), str(database.uuid))
+        now = time.monotonic()
+        with _VIEWER_TOKENS_LOCK:
+            cached = _VIEWER_TOKENS.get(key)
+            if cached and cached[0] > now:
+                return cached[1]
+        response = requests.post(
+            f"http://{current_app.config.get('PLAID_RPC')}"
+            "/rest/v1/analyze/warehouse-sign-in/viewer-token",
+            json={"database_uuid": str(database.uuid)},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=15,
+        )
+        if response.status_code in (403, 404):
+            # plaid's envelope puts the sentence in `detail`; a bare FastAPI refusal
+            # nests it.
+            detail = response.json().get("detail")
+            raise WarehouseSignInRequiredError(
+                (detail.get("message") if isinstance(detail, dict) else detail) or ""
+            )
+        response.raise_for_status()
+        body = response.json()
+        with _VIEWER_TOKENS_LOCK:
+            for stale in [
+                k for k, (until, _) in _VIEWER_TOKENS.items() if until <= now
+            ]:
+                del _VIEWER_TOKENS[stale]
+            if len(_VIEWER_TOKENS) < _VIEWER_TOKENS_MAX:
+                _VIEWER_TOKENS[key] = (now + int(body["expires_in"]) - 60, body)
+        return body
+
+    def is_published_lakehouse_dataset(
+        self, datasource: "BaseDatasource | Explorable"
+    ) -> bool:
+        # A physical dataset PlaidCloud's automation created, whose row and every
+        # expression it still last wrote. Anything a human authored or edited --
+        # a virtual dataset, a calculated column, a repointed table -- would run
+        # their SQL through the shared warehouse principal.
+        from superset.connectors.sqla.models import SqlaTable
+
+        username = current_app.config.get("PLAID_RLS_AUTOMATION_USERNAME")
+        automation = self.find_user(username=username) if username else None
+        if (
+            automation is None
+            or not isinstance(datasource, SqlaTable)
+            or datasource.sql
+            or datasource.fetch_values_predicate
+        ):
+            return False
+        # `changed_by_fk` is None only for writes outside a request (Celery
+        # permission sync), never a human's.
+        writers = {automation.id, None}
+        return (
+            datasource.created_by_fk == automation.id
+            and datasource.changed_by_fk in writers
+            and all(
+                item.changed_by_fk in writers
+                for item in [*datasource.columns, *datasource.metrics]
+                if item.expression
+            )
+        )
 
     def can_set_dashboard_roles(
         self, current_role_ids: Iterable[int], requested_role_ids: Iterable[int]
