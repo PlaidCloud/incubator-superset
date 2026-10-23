@@ -45,6 +45,7 @@ from superset.commands.database.test_connection import (
 )
 from superset.commands.database.update import UpdateDatabaseCommand
 from superset.commands.dataset.create import CreateDatasetCommand
+from superset.commands.dataset.duplicate import DuplicateDatasetCommand
 from superset.commands.dataset.exceptions import (
     DatasetForbiddenError,
     DatasetInvalidError,
@@ -430,6 +431,22 @@ def test_dataset_create_refused(human, mocker: MockerFixture):
 
     with pytest.raises(DatasetInvalidError) as excinfo:
         CreateDatasetCommand({"database": 1, "table_name": "payroll"}).validate()
+    assert REFUSED in str(excinfo.value.normalized_messages())
+
+
+def test_dataset_duplicate_refused(human, mocker: MockerFixture):
+    mocker.patch(
+        "superset.commands.dataset.duplicate.DatasetDAO.find_by_id",
+        return_value=SimpleNamespace(database=lakehouse_db(), kind="virtual"),
+    )
+    mocker.patch(
+        "superset.commands.dataset.duplicate.DatasetDAO.find_one_or_none",
+        return_value=None,
+    )
+    mocker.patch.object(DuplicateDatasetCommand, "populate_owners", return_value=[])
+
+    with pytest.raises(DatasetInvalidError) as excinfo:
+        DuplicateDatasetCommand({"base_model_id": 1, "table_name": "dupe"}).validate()
     assert REFUSED in str(excinfo.value.normalized_messages())
 
 
