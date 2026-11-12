@@ -4287,6 +4287,7 @@
       "Which relatives to highlight on hover": [""],
       "Whisker/outlier options": [""],
       "White": [""],
+      "Why this number": ["Prečo toto číslo"],
       "Width": [""],
       "Width of the confidence interval. Should be between 0 and 1": [""],
       "Width of the sparkline": [""],

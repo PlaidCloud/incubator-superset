@@ -5467,6 +5467,7 @@
       "Which relatives to highlight on hover": ["Подсвечивается при наведении"],
       "Whisker/outlier options": ["Настройки усов/выбросов"],
       "White": ["Белый"],
+      "Why this number": ["Почему это число"],
       "Width": ["Ширина"],
       "Width of the confidence interval. Should be between 0 and 1": [
         "Ширина доверительного интервала. Должна быть между 0 и 1"

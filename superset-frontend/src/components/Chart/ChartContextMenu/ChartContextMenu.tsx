@@ -55,16 +55,19 @@ import { DrillByMenuItems } from '../DrillBy/DrillByMenuItems';
 export const whyThisNumberUrl = (
   dashboardId: number,
   chartId: number,
-  filters: { col: unknown; op: string; val?: unknown }[],
+  filters: { col: unknown; op: string; val?: unknown; grain?: string }[],
   timeRange?: string,
 ) => {
-  const named = filters.map(({ col, op, val }) => ({
+  // A time-axis point keeps its grain: PlaidCloud then knows it is a bucket,
+  // not one value of the column.
+  const named = filters.map(({ col, op, val, grain }) => ({
     col:
       typeof col === 'string'
         ? col
         : String((col as { label?: string })?.label || 'computed column'),
     op,
     val,
+    ...(grain ? { grain } : {}),
   }));
   if (timeRange && timeRange !== 'No filter') {
     named.push({ col: '__time_range', op: 'TEMPORAL_RANGE', val: timeRange });

@@ -4185,6 +4185,7 @@
       "Which relatives to highlight on hover": ["在悬停时突出显示哪些关系"],
       "Whisker/outlier options": ["箱须/离群值选项"],
       "White": ["白色"],
+      "Why this number": ["为什么是这个数字"],
       "Width": ["宽度"],
       "Width of the confidence interval. Should be between 0 and 1": [
         "置信区间必须介于0和1（不包含1）之间"

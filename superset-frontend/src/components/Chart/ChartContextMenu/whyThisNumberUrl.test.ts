@@ -57,3 +57,14 @@ test('a time range and a computed column are carried so PlaidCloud can say the p
     { col: '__time_range', op: 'TEMPORAL_RANGE', val: 'Last quarter' },
   ]);
 });
+
+test('a time-axis point keeps its grain', () => {
+  const { filters } = decoded(
+    whyThisNumberUrl(7, 9, [
+      { col: 'order_date', op: '==', val: 1730419200000, grain: 'P1M' },
+    ]),
+  ).context.selection;
+  expect(filters).toEqual([
+    { col: 'order_date', op: '==', val: 1730419200000, grain: 'P1M' },
+  ]);
+});
