@@ -19,9 +19,7 @@
 import { whyThisNumberUrl } from './ChartContextMenu';
 
 const decoded = (url: string) =>
-  JSON.parse(
-    decodeURIComponent(url.split('#')[1]).replace(/^weave~/, ''),
-  );
+  JSON.parse(decodeURIComponent(url.split('#')[1]).replace(/^weave~/, ''));
 
 test('the link names the clicked point on the PlaidCloud host beside dashboards', () => {
   const url = whyThisNumberUrl(7, 9, [
