@@ -3724,6 +3724,7 @@
       "Which country to plot the map for?": [""],
       "Which relatives to highlight on hover": [""],
       "Whisker/outlier options": [""],
+      "Why this number": ["この数値の理由"],
       "Width": ["幅"],
       "Width of the confidence interval. Should be between 0 and 1": [""],
       "Width of the sparkline": [""],

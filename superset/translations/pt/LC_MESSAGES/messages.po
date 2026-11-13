@@ -18420,6 +18420,10 @@ msgstr ""
 msgid "White"
 msgstr "Título"
 
+#: superset-frontend/src/components/Chart/ChartContextMenu/ChartContextMenu.tsx:315
+msgid "Why this number"
+msgstr "Porquê este número"
+
 #: superset-frontend/src/explore/components/controls/TimeSeriesColumnControl/index.jsx:228
 #: superset-frontend/src/explore/components/controls/TimeSeriesColumnControl/index.jsx:234
 msgid "Width"

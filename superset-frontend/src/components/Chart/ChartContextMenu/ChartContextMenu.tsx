@@ -47,6 +47,46 @@ import { getMenuAdjustedY } from '../utils';
 import { MenuItemTooltip } from '../DisabledMenuItemTooltip';
 import { DrillByMenuItems } from '../DrillBy/DrillByMenuItems';
 
+/**
+ * PlaidCloud's address for "Why this number" on the clicked point: its Weave
+ * deep link (`weave~<json>`), with the point's filters and the dashboard's
+ * own. Dashboards are served from `dashboards.` beside the app.
+ */
+export const whyThisNumberUrl = (
+  dashboardId: number,
+  chartId: number,
+  filters: { col: unknown; op: string; val?: unknown; grain?: string }[],
+  timeRange?: string,
+) => {
+  // A time-axis point keeps its grain: PlaidCloud then knows it is a bucket,
+  // not one value of the column.
+  const named = filters.map(({ col, op, val, grain }) => ({
+    col:
+      typeof col === 'string'
+        ? col
+        : String((col as { label?: string })?.label || 'computed column'),
+    op,
+    val,
+    ...(grain ? { grain } : {}),
+  }));
+  if (timeRange && timeRange !== 'No filter') {
+    named.push({ col: '__time_range', op: 'TEMPORAL_RANGE', val: timeRange });
+  }
+  const context = {
+    surface: 'link',
+    dashboard_id: String(dashboardId),
+    selection: {
+      kind: 'chart_point',
+      dashboard_id: String(dashboardId),
+      chart_id: String(chartId),
+      filters: named,
+    },
+  };
+  const state = `weave~${JSON.stringify({ context, action: 'why_number' })}`;
+  const origin = window.location.origin.replace('://dashboards.', '://');
+  return `${origin}/#${encodeURIComponent(state)}`;
+};
+
 export enum ContextMenuItem {
   CrossFilter,
   DrillToDetail,
@@ -93,6 +133,9 @@ const ChartContextMenu = (
   const crossFiltersEnabled = useSelector<RootState, boolean>(
     ({ dashboardInfo }) => dashboardInfo.crossFiltersEnabled,
   );
+  const dashboardId = useSelector<RootState, number | undefined>(
+    ({ dashboardInfo }) => dashboardInfo?.id,
+  );
 
   const isDisplayed = (item: ContextMenuItem) =>
     displayedItems === ContextMenuItem.All ||
@@ -132,6 +175,10 @@ const ChartContextMenu = (
     itemsCount += 2; // Drill to detail always has 2 top-level menu items
   }
   if (showDrillBy) {
+    itemsCount += 1;
+  }
+  const showWhyThisNumber = !!dashboardId && !!filters?.drillToDetail;
+  if (showWhyThisNumber) {
     itemsCount += 1;
   }
   if (itemsCount === 0) {
@@ -241,6 +288,32 @@ const ChartContextMenu = (
         submenuIndex={submenuIndex}
         {...(additionalConfig?.drillBy || {})}
       />,
+    );
+  }
+
+  if (showWhyThisNumber) {
+    menuItems.push(
+      <Menu.Item
+        key="why-this-number-menu-item"
+        onClick={() => {
+          window.open(
+            whyThisNumberUrl(
+              dashboardId as number,
+              id,
+              [
+                ...(filters?.drillToDetail || []),
+                ...(formData.extra_form_data?.filters || []),
+              ],
+              formData.extra_form_data?.time_range,
+            ),
+            '_blank',
+            'noopener',
+          );
+          onSelection();
+        }}
+      >
+        {t('Why this number')}
+      </Menu.Item>,
     );
   }
 

@@ -4275,6 +4275,7 @@
       "Which country to plot the map for?": [""],
       "Which relatives to highlight on hover": [""],
       "Whisker/outlier options": [""],
+      "Why this number": ["Pourquoi ce nombre"],
       "Width": ["Largeur"],
       "Width of the sparkline": [""],
       "Window must be > 0": ["La fenêtre doit être > 0"],

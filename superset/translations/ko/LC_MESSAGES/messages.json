@@ -3733,6 +3733,7 @@
       "Which country to plot the map for?": [""],
       "Which relatives to highlight on hover": [""],
       "Whisker/outlier options": [""],
+      "Why this number": ["이 숫자인 이유"],
       "Width": [""],
       "Width of the confidence interval. Should be between 0 and 1": [""],
       "Width of the sparkline": [""],

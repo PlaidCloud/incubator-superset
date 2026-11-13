@@ -5746,6 +5746,7 @@
       ],
       "Whisker/outlier options": ["Opções de Whisker/outlier"],
       "White": ["Branco"],
+      "Why this number": ["Por que este número"],
       "Width": ["Largura"],
       "Width of the confidence interval. Should be between 0 and 1": [
         "Largura do intervalo de confiança. Deve estar entre 0 e 1"

@@ -11,7 +11,7 @@ on:
 
 jobs:
   cypress-matrix:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     permissions:
       contents: read
       pull-requests: read
@@ -119,8 +119,8 @@ jobs:
         with:
           run: cypress-run-all
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: screenshots
+          name: screenshots-${{ matrix.containers }}
           path: ${{ github.workspace }}/superset-frontend/cypress-base/cypress/screenshots
