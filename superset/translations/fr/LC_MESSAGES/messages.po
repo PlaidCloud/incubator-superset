@@ -16961,6 +16961,9 @@ msgstr "Options de moustaches et de valeurs aberrantes"
 msgid "Why do I need to create a database?"
 msgstr "Ajouter un nouvelle base de données?"
 
+msgid "Why this number"
+msgstr "Pourquoi ce nombre"
+
 msgid "Width"
 msgstr "Largeur"
 

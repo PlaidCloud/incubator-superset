@@ -16008,6 +16008,9 @@ msgstr "Whisker/Ausreißer-Optionen"
 msgid "Why do I need to create a database?"
 msgstr "Möchten Sie eine neue Datenbank hinzufügen?"
 
+msgid "Why this number"
+msgstr "Warum diese Zahl"
+
 msgid "Width"
 msgstr "Breite"
 

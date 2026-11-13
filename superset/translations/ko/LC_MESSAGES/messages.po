@@ -15178,6 +15178,9 @@ msgstr ""
 msgid "Why do I need to create a database?"
 msgstr "데이터베이스 선택"
 
+msgid "Why this number"
+msgstr "이 숫자인 이유"
+
 msgid "Width"
 msgstr ""
 

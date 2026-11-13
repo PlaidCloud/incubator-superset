@@ -15293,6 +15293,9 @@ msgstr "Настройки усов/выбросов"
 msgid "Why do I need to create a database?"
 msgstr "Хотите добавить новую базу данных?"
 
+msgid "Why this number"
+msgstr "Почему это число"
+
 msgid "Width"
 msgstr "Ширина"
 
