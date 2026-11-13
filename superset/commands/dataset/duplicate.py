@@ -24,6 +24,7 @@ from marshmallow import ValidationError
 
 from superset.commands.base import BaseCommand, CreateMixin
 from superset.commands.dataset.exceptions import (
+    DatasetDataAccessIsNotAllowed,
     DatasetDuplicateFailedError,
     DatasetExistsValidationError,
     DatasetInvalidError,
@@ -33,8 +34,8 @@ from superset.commands.exceptions import DatasourceTypeInvalidError
 from superset.connectors.sqla.models import SqlaTable, SqlMetric, TableColumn
 from superset.daos.dataset import DatasetDAO
 from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
-from superset.exceptions import SupersetErrorException
-from superset.extensions import db
+from superset.exceptions import SupersetErrorException, SupersetSecurityException
+from superset.extensions import db, security_manager
 from superset.models.core import Database
 from superset.sql.parse import Table
 from superset.utils.decorators import on_error, transaction
@@ -111,6 +112,10 @@ class DuplicateDatasetCommand(CreateMixin, BaseCommand):
             exceptions.append(DatasetNotFoundError())
         else:
             self._base_model = base_model
+            try:
+                security_manager.raise_for_external_lakehouse(base_model.database)
+            except SupersetSecurityException as ex:
+                exceptions.append(DatasetDataAccessIsNotAllowed(ex.error.message))
 
         if self._base_model and self._base_model.kind != "virtual":
             exceptions.append(DatasourceTypeInvalidError())
