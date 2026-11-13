@@ -55,6 +55,7 @@ import { getMenuAdjustedY } from '../utils';
 import { DrillBySubmenu } from '../DrillBy/DrillBySubmenu';
 import DrillDetailModal from '../DrillDetail/DrillDetailModal';
 import { MenuItemTooltip } from '../DisabledMenuItemTooltip';
+import { whyThisNumberUrl } from './whyThisNumberUrl';
 
 export enum ContextMenuItem {
   CrossFilter,
@@ -261,6 +262,10 @@ const ChartContextMenu = (
   if (showDrillBy) {
     itemsCount += 1;
   }
+  const showWhyThisNumber = !!dashboardId && !!filters?.drillToDetail;
+  if (showWhyThisNumber) {
+    itemsCount += 1;
+  }
   if (itemsCount === 0) {
     itemsCount = 1; // "No actions" appears if no actions in menu
   }
@@ -378,6 +383,29 @@ const ChartContextMenu = (
           {...(additionalConfig?.drillBy || {})}
         />
       ),
+    });
+  }
+
+  if (showWhyThisNumber) {
+    menuItems.push({
+      key: 'why-this-number-menu-item',
+      label: t('Why this number'),
+      onClick: () => {
+        window.open(
+          whyThisNumberUrl(
+            dashboardId,
+            id,
+            [
+              ...(filters?.drillToDetail || []),
+              ...(formData.extra_form_data?.filters || []),
+            ],
+            formData.extra_form_data?.time_range,
+          ),
+          '_blank',
+          'noopener',
+        );
+        onSelection();
+      },
     });
   }
 

@@ -15545,6 +15545,9 @@ msgstr ""
 msgid "Why do I need to create a database?"
 msgstr "Selecione uma base de dados"
 
+msgid "Why this number"
+msgstr "Porquê este número"
+
 msgid "Width"
 msgstr "Largura"
 

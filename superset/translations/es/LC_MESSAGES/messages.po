@@ -15873,6 +15873,9 @@ msgstr "Opciones de bigotes/valores atípicos"
 msgid "Why do I need to create a database?"
 msgstr "¿Quieres añadir una nueva base de datos?"
 
+msgid "Why this number"
+msgstr "Por qué este número"
+
 msgid "Width"
 msgstr "Anchura"
 

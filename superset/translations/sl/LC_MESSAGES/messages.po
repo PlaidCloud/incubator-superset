@@ -15607,6 +15607,9 @@ msgstr "Možnosti grafikona kvantilov"
 msgid "Why do I need to create a database?"
 msgstr "Želite dodati novo podatkovno bazo?"
 
+msgid "Why this number"
+msgstr "Zakaj ta številka"
+
 msgid "Width"
 msgstr "Širina"
 

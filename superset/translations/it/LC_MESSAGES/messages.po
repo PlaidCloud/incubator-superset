@@ -15328,6 +15328,9 @@ msgstr ""
 msgid "Why do I need to create a database?"
 msgstr "Database"
 
+msgid "Why this number"
+msgstr "Perché questo numero"
+
 msgid "Width"
 msgstr "Larghezza"
 
