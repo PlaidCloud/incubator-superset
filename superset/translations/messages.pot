@@ -14067,6 +14067,9 @@ msgstr ""
 msgid "Why do I need to create a database?"
 msgstr ""
 
+msgid "Why this number"
+msgstr ""
+
 msgid "Width"
 msgstr ""
 
