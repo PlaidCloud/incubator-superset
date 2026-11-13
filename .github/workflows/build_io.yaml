@@ -4,6 +4,11 @@ on:
     branches:
       - develop-*
       - build-*
+
+concurrency:
+  group: build-io-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-io:
     name: IO Deployment
