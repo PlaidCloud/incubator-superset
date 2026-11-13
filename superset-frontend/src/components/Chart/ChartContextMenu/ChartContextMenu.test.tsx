@@ -39,7 +39,7 @@ const defaultFormData = {
   viz_type: VizType.Pie,
 };
 
-const TestWrapper = () => {
+const TestWrapper = ({ filters = {} }: { filters?: any }) => {
   const contextMenuRef = useRef<ChartContextMenuRef>(null);
   const [isTooltipVisible, setIsTooltipVisible] = useState(true);
 
@@ -51,7 +51,7 @@ const TestWrapper = () => {
     <>
       <button
         type="button"
-        onClick={() => contextMenuRef.current?.open(100, 100, {})}
+        onClick={() => contextMenuRef.current?.open(100, 100, filters)}
         data-test="open-context-menu"
       >
         Open Context Menu
@@ -71,8 +71,8 @@ const TestWrapper = () => {
   );
 };
 
-const setup = () =>
-  render(<TestWrapper />, {
+const setup = (filters: any = {}) =>
+  render(<TestWrapper filters={filters} />, {
     useRedux: true,
     initialState: {
       ...mockState,
@@ -149,4 +149,26 @@ test('tooltip is restored when user selects a menu item', async () => {
   await waitFor(() => {
     expect(screen.getByTestId('tooltip-visible')).toBeInTheDocument();
   });
+});
+
+test('Why this number opens PlaidCloud with the clicked point, and only for a point', async () => {
+  const open = jest.spyOn(window, 'open').mockImplementation(() => null);
+  setup({
+    drillToDetail: [{ col: 'city', op: '==', val: 'Atlanta' }],
+  });
+  userEvent.click(screen.getByTestId('open-context-menu'));
+  userEvent.click(await screen.findByText('Why this number'));
+  expect(open).toHaveBeenCalledTimes(1);
+  const [url, target] = open.mock.calls[0];
+  expect(target).toBe('_blank');
+  expect(decodeURIComponent(String(url))).toContain('"action":"why_number"');
+  expect(decodeURIComponent(String(url))).toContain('"val":"Atlanta"');
+  open.mockRestore();
+});
+
+test('Why this number is absent when the click is not on a point', async () => {
+  setup();
+  userEvent.click(screen.getByTestId('open-context-menu'));
+  await screen.findByTestId('chart-context-menu');
+  expect(screen.queryByText('Why this number')).not.toBeInTheDocument();
 });

@@ -14793,6 +14793,9 @@ msgstr "ウィスカー/外れ値オプション"
 msgid "Why do I need to create a database?"
 msgstr "新しいデータベースを追加しますか？"
 
+msgid "Why this number"
+msgstr "この数値の理由"
+
 msgid "Width"
 msgstr "幅"
 

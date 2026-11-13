@@ -15837,6 +15837,9 @@ msgstr "Opties whisker/outlier"
 msgid "Why do I need to create a database?"
 msgstr "Wilt u een nieuwe database toevoegen?"
 
+msgid "Why this number"
+msgstr "Waarom dit getal"
+
 msgid "Width"
 msgstr "Breedte"
 
