@@ -789,6 +789,9 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         owner cannot hand out overrides this. Embedded guest-token access does not
         consult it.
 
+        Override :meth:`get_dashboard_rbac_database_filter` with it, so the
+        dashboard list is bounded the same way.
+
         :param datasource: The datasource reached through the dashboard
         :returns: Whether the dashboard role grant covers the datasource
         """
@@ -800,6 +803,10 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
 
         Used to bound which role-granted dashboards are listed. By default nothing
         further bounds the grant, so it matches every database.
+
+        Must be overridden together with :meth:`can_access_datasource_via_dashboard`:
+        the list is bounded only by this filter, while opening a dashboard and
+        reading its datasets and charts consult the per-datasource hook.
         """
         return true()
 
