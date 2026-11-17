@@ -25,8 +25,9 @@ from superset.daos.dashboard import DashboardDAO
 from superset.models.dashboard import Dashboard
 
 
-class _Slice(SimpleNamespace):
-    __hash__ = object.__hash__
+class _Slice:
+    def __init__(self, **kwargs: Any) -> None:
+        self.__dict__.update(kwargs)
 
 
 def _dashboard() -> Any:
