@@ -659,8 +659,10 @@ def serialize_chart_summary(chart: Any) -> DashboardChartSummary | None:
 
 
 def dashboard_serializer(dashboard: "Dashboard") -> DashboardInfo:
+    from superset.daos.dashboard import DashboardDAO
     from superset.mcp_service.utils.url_utils import get_superset_base_url
 
+    slices = DashboardDAO.charts_visible_to_user(dashboard)
     base_url = get_superset_base_url()
     relative_url = dashboard.url  # e.g. "/superset/dashboard/{slug_or_id}/"
     absolute_url = f"{base_url}{relative_url}" if relative_url else None
@@ -688,7 +690,7 @@ def dashboard_serializer(dashboard: "Dashboard") -> DashboardInfo:
         url=absolute_url,
         created_on_humanized=dashboard.created_on_humanized,
         changed_on_humanized=dashboard.changed_on_humanized,
-        chart_count=len(dashboard.slices) if dashboard.slices else 0,
+        chart_count=len(slices),
         native_filters=_extract_native_filters(
             getattr(dashboard, "json_metadata", None)
         ),
@@ -719,10 +721,10 @@ def dashboard_serializer(dashboard: "Dashboard") -> DashboardInfo:
         else [],
         charts=[
             summary
-            for chart in dashboard.slices
+            for chart in slices
             if (summary := serialize_chart_summary(chart)) is not None
         ]
-        if dashboard.slices
+        if slices
         else [],
     )
 
@@ -736,7 +738,14 @@ def _humanize_timestamp(dt: datetime | None) -> str | None:
 
 def serialize_dashboard_object(dashboard: Any) -> DashboardInfo:
     """Simple dashboard serializer that safely handles object attributes."""
+    from superset.daos.dashboard import DashboardDAO
     from superset.mcp_service.utils.url_utils import get_superset_base_url
+
+    slices = (
+        DashboardDAO.charts_visible_to_user(dashboard)
+        if getattr(dashboard, "slices", None)
+        else []
+    )
 
     # Construct URL from id/slug (the model's @property isn't available on
     # column-only query tuples returned by DAO.list with select_columns)
@@ -779,7 +788,7 @@ def serialize_dashboard_object(dashboard: Any) -> DashboardInfo:
         uuid=str(getattr(dashboard, "uuid", ""))
         if getattr(dashboard, "uuid", None)
         else None,
-        chart_count=len(getattr(dashboard, "slices", [])),
+        chart_count=len(slices),
         owners=[
             info
             for owner in getattr(dashboard, "owners", [])
@@ -801,9 +810,9 @@ def serialize_dashboard_object(dashboard: Any) -> DashboardInfo:
         else [],
         charts=[
             summary
-            for chart in getattr(dashboard, "slices", [])
+            for chart in slices
             if (summary := serialize_chart_summary(chart)) is not None
         ]
-        if getattr(dashboard, "slices", None)
+        if slices
         else [],
     )

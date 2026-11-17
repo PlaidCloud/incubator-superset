@@ -2734,6 +2734,16 @@ class TestDashboardApi(ApiOwnersTestCaseMixin, InsertChartMixin, SupersetTestCas
         db.session.commit()
 
     @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
+    def test_export_as_example_non_admin_forbidden(self):
+        """
+        Dashboard API: export_as_example reads raw table rows, so it is admin-only
+        """
+        self.login(GAMMA_USERNAME)
+        dashboard_id = get_dashboards_ids(["births"])[0]
+        rv = self.client.get(f"api/v1/dashboard/{dashboard_id}/export_as_example/")
+        assert rv.status_code == 403
+
+    @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
     def test_export_as_example(self):
         """
         Dashboard API: Test export_as_example returns a valid ZIP

@@ -1634,6 +1634,33 @@ def test_raise_for_access_dashboard_role_grant_is_bounded(
         sm.raise_for_access(viz=viz)
 
 
+def test_raise_for_access_dashboard_rbac_open_is_bounded(
+    mocker: MockerFixture,
+    app_context: None,
+) -> None:
+    """
+    A dashboard role does not open a dashboard whose every datasource the
+    security manager says is out of reach.
+    """
+    sm, _, dashboard = _dashboard_role_grant(
+        mocker, features={"DASHBOARD_RBAC"}, dashboard_grant=False
+    )
+    mocker.patch.object(sm, "is_admin", return_value=False)
+    with pytest.raises(SupersetSecurityException):
+        sm.raise_for_access(dashboard=dashboard)
+
+
+def test_raise_for_access_dashboard_rbac_open_allowed_when_reachable(
+    mocker: MockerFixture,
+    app_context: None,
+) -> None:
+    sm, _, dashboard = _dashboard_role_grant(
+        mocker, features={"DASHBOARD_RBAC"}, dashboard_grant=True
+    )
+    mocker.patch.object(sm, "is_admin", return_value=False)
+    sm.raise_for_access(dashboard=dashboard)
+
+
 def test_raise_for_access_dashboard_role_grant_allowed(
     mocker: MockerFixture,
     app_context: None,

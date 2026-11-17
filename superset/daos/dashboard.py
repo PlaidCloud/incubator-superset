@@ -156,7 +156,25 @@ class DashboardDAO(BaseDAO[Dashboard]):
 
     @staticmethod
     def get_charts_for_dashboard(id_or_slug: str) -> list[Slice]:
-        return DashboardDAO.get_by_id_or_slug(id_or_slug).slices
+        return DashboardDAO.charts_visible_to_user(
+            DashboardDAO.get_by_id_or_slug(id_or_slug)
+        )
+
+    @staticmethod
+    def charts_visible_to_user(dashboard: Dashboard) -> list[Slice]:
+        if security_manager.is_admin():
+            return dashboard.slices
+        return [
+            chart
+            for chart in dashboard.slices
+            if chart.datasource
+            and (
+                security_manager.can_access_datasource(chart.datasource)
+                or security_manager.can_drill_dataset_via_dashboard_access(
+                    chart.datasource, dashboard
+                )
+            )
+        ]
 
     @staticmethod
     def get_dashboard_changed_on(id_or_slug_or_dashboard: str | Dashboard) -> datetime:
