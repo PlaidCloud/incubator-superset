@@ -15,9 +15,13 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from collections.abc import Callable
+from types import SimpleNamespace
+
 from pytest_mock import MockerFixture
 from sqlalchemy import false, true
 from sqlalchemy.orm.session import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from superset.connectors.sqla.models import SqlaTable
 from superset.dashboards.filters import DashboardAccessFilter
@@ -27,7 +31,9 @@ from superset.models.slice import Slice
 
 
 def _listed(
-    session: Session, mocker: MockerFixture, database_filter: object
+    session: Session,
+    mocker: MockerFixture,
+    database_filter: Callable[[dict[str, Database]], ColumnElement[bool]],
 ) -> set[str]:
     Dashboard.metadata.create_all(session.get_bind())
     dbs = {
@@ -60,19 +66,29 @@ def _listed(
         dashboard.roles = [role]
     session.flush()
 
-    manager = mocker.patch("superset.dashboards.filters.security_manager")
+    manager = mocker.patch(
+        "superset.dashboards.filters.security_manager", new=mocker.MagicMock()
+    )
     manager.is_admin.return_value = False
     manager.get_user_roles.return_value = [role]
     manager.can_access_all_datasources.return_value = False
     manager.get_dashboard_rbac_database_filter.return_value = database_filter(dbs)
-    mocker.patch("superset.dashboards.filters.is_feature_enabled", return_value=True)
+    mocker.patch(
+        "superset.dashboards.filters.is_feature_enabled",
+        side_effect=lambda flag: flag == "DASHBOARD_RBAC",
+    )
     mocker.patch("superset.dashboards.filters.get_user_id", return_value=0)
     mocker.patch(
         "superset.dashboards.filters.get_dataset_access_filters",
         return_value=false(),
     )
     query = session.query(Dashboard)
-    return {d.slug for d in DashboardAccessFilter("id", None).apply(query, None)}
+    return {
+        d.slug
+        for d in DashboardAccessFilter("id", SimpleNamespace(obj=Dashboard)).apply(
+            query, None
+        )
+    }
 
 
 def _role(session: Session):

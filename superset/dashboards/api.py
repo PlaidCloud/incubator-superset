@@ -1540,6 +1540,11 @@ class DashboardRestApi(CustomTagsOptimizationMixin, BaseSupersetModelRestApi):
             500:
               $ref: '#/components/responses/500'
         """
+        # The bundle carries every chart's dataset SQL and full table rows, read
+        # straight from the database, so no per-dataset access check can bound it.
+        if not security_manager.is_admin():
+            return self.response_403()
+
         # Get optional query params
         export_data = request.args.get("export_data", "true").lower() == "true"
         sample_rows = request.args.get("sample_rows", type=int)

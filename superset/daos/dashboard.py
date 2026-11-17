@@ -156,7 +156,12 @@ class DashboardDAO(BaseDAO[Dashboard]):
 
     @staticmethod
     def get_charts_for_dashboard(id_or_slug: str) -> list[Slice]:
-        dashboard = DashboardDAO.get_by_id_or_slug(id_or_slug)
+        return DashboardDAO.charts_visible_to_user(
+            DashboardDAO.get_by_id_or_slug(id_or_slug)
+        )
+
+    @staticmethod
+    def charts_visible_to_user(dashboard: Dashboard) -> list[Slice]:
         if security_manager.is_admin():
             return dashboard.slices
         return [
