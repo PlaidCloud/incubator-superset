@@ -351,3 +351,17 @@ def test_model_get_schema_core_all_model_types():
 
         result = tool.run_tool()
         assert result.model_type == model_type
+
+
+def test_dashboard_slug_miss_does_not_bypass_base_filter(mocker):
+    """A slug the access-filtered DAO cannot see must not be re-queried unfiltered."""
+    db = mocker.patch("superset.extensions.db")
+    tool = ModelGetInfoCore(
+        dao_class=DummyDAO,
+        output_schema=DummyOutputSchema,
+        error_schema=DummyErrorSchema,
+        serializer=lambda obj: DummyOutputSchema(id=obj.id, name=obj.name),
+        supports_slug=True,
+    )
+    assert tool._find_object("hidden-slug") is None
+    db.session.query.assert_not_called()
