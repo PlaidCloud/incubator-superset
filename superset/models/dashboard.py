@@ -276,7 +276,13 @@ class Dashboard(CoreDashboard, AuditMixinNullable, ImportExportMixin):
             # Use the eagerly-loaded datasource from any slice in the group
             datasource = next(iter(slices)).datasource
 
-            if datasource:
+            if datasource and (
+                security_manager.is_admin()
+                or security_manager.can_access_datasource(datasource)
+                or security_manager.can_drill_dataset_via_dashboard_access(
+                    datasource, self
+                )
+            ):
                 # Filter out unneeded fields from the datasource payload
                 result.append(datasource.data_for_slices(list(slices)))
 

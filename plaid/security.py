@@ -37,7 +37,8 @@ from flask_appbuilder.security.manager import AUTH_OAUTH
 from flask_login import logout_user
 from plaidcloud.rpc.connection.jsonrpc import SimpleRPC
 from requests.exceptions import HTTPError
-from sqlalchemy import func, inspect, text
+from sqlalchemy import false, func, inspect, text
+from sqlalchemy.sql.elements import ColumnElement
 
 from plaid import rls_guard
 from plaid.auth_oidc import PlaidAuthOAuthView
@@ -661,6 +662,14 @@ class PlaidSecurityManager(SupersetSecurityManager):
         # project to check and fails closed.
         database = getattr(datasource, "database", None)
         return database is not None and self._can_access_project(str(database.uuid))
+
+    def get_dashboard_rbac_database_filter(self) -> ColumnElement[bool]:
+        from superset.models.core import Database
+
+        project_ids = self._project_access_ids()
+        if project_ids is None:
+            return false()
+        return Database.uuid.in_(set(project_ids))
 
     def can_manage_external_lakehouse(self) -> bool:
         # PlaidCloud registers external-lakehouse entries and publishes their

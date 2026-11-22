@@ -34,7 +34,7 @@ from sqlalchemy.engine.default import DefaultDialect
 from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.engine.url import URL
 
-from superset.constants import PARTNER_ATTRIBUTION, TimeGrain
+from superset.constants import DATABRICKS_PARTNER_ATTRIBUTION, TimeGrain
 from superset.databases.utils import is_signed_in_lakehouse, make_url_safe
 from superset.db_engine_specs.base import (
     BaseEngineSpec,
@@ -419,12 +419,12 @@ class DatabricksDynamicBaseEngineSpec(BasicParametersMixin, DatabricksBaseEngine
                 for name, value in connect_args.get("http_headers", [])
                 if name.lower() != "user-agent"
             ),
-            ("User-Agent", PARTNER_ATTRIBUTION),
+            ("User-Agent", DATABRICKS_PARTNER_ATTRIBUTION),
         ]
         # databricks-sql-connector 4.x reads `user_agent_entry`; `_user_agent_entry`
         # is deprecated.
         connect_args.pop("_user_agent_entry", None)
-        connect_args["user_agent_entry"] = PARTNER_ATTRIBUTION
+        connect_args["user_agent_entry"] = DATABRICKS_PARTNER_ATTRIBUTION
 
         # trim whitespace from http_path to avoid databricks errors on connecting
         if http_path := connect_args.get("http_path"):

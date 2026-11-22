@@ -301,16 +301,6 @@ class ModelGetInfoCore(BaseCore):
             if result:
                 return result
 
-            # Fallback to the existing id_or_slug_filter for complex cases
-            from superset.extensions import db
-            from superset.models.dashboard import id_or_slug_filter
-
-            model_class = self.dao_class.model_cls
-            query = db.session.query(model_class).filter(id_or_slug_filter(identifier))
-            if opts:
-                query = query.options(*opts)
-            return query.one_or_none()
-
         # If we get here, it's an invalid identifier
         return None
 
