@@ -112,6 +112,66 @@ def monkeypatch_dialect() -> None:
         pass
 
 
+def monkeypatch_dialect_identifier_quoting() -> None:
+    """
+    databricks-sqlalchemy 1.x builds DESCRIBE/SHOW statements with unquoted
+    identifiers, which fails for names like PlaidCloud's hyphenated schemas.
+    """
+    try:
+        # Only the 1.x layout has this module; 2.x moved it to .base and quotes itself.
+        from databricks.sqlalchemy.dialect import DatabricksDialect
+        from sqlalchemy.exc import DatabaseError
+
+        def quote(*parts: str | None) -> str:
+            return ".".join("`" + str(part).replace("`", "``") + "`" for part in parts)
+
+        def has_table(
+            self: Any,
+            connection: Any,
+            table_name: str,
+            schema: str | None = None,
+            catalog: str | None = None,
+            **kwargs: Any,
+        ) -> bool:
+            target = quote(catalog or self.catalog, schema or self.schema, table_name)
+            try:
+                connection.execute(f"DESCRIBE TABLE {target}")
+                return True
+            except DatabaseError as ex:
+                if "TABLE_OR_VIEW_NOT_FOUND" in str(ex) or (
+                    "Table or view not found" in str(ex)
+                ):
+                    return False
+                raise
+
+        def get_table_names(
+            self: Any, connection: Any, schema: str | None = None, **kwargs: Any
+        ) -> list[str]:
+            with self.get_connection_cursor(connection) as cur:
+                target = quote(self.catalog, schema or self.schema)
+                return [
+                    row[1]
+                    for row in cur.execute(f"SHOW TABLES FROM {target}").fetchall()
+                ]
+
+        def get_view_names(
+            self: Any, connection: Any, schema: str | None = None, **kwargs: Any
+        ) -> list[str]:
+            with self.get_connection_cursor(connection) as cur:
+                target = quote(self.catalog, schema or self.schema)
+                return [
+                    row[1]
+                    for row in cur.execute(f"SHOW VIEWS FROM {target}").fetchall()
+                ]
+
+        DatabricksDialect.has_table = has_table
+        DatabricksDialect.get_table_names = get_table_names
+        DatabricksDialect.get_view_names = get_view_names
+
+    except ImportError:
+        pass
+
+
 class DatabricksBaseSchema(Schema):
     """
     Fields that are required for both Databricks drivers that uses a
@@ -900,3 +960,4 @@ class DatabricksPythonConnectorEngineSpec(DatabricksDynamicBaseEngineSpec):
 
 # TODO: remove once we've upgraded to SQLAlchemy>=2.0 and databricks-sql-python>=3.x
 monkeypatch_dialect()
+monkeypatch_dialect_identifier_quoting()
