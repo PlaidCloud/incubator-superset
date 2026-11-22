@@ -447,3 +447,96 @@ def test_oauth_m2m_workspace_hosts_accepted(mocker: MockerFixture, host: str) ->
     DatabricksNativeEngineSpec.update_params_from_encrypted_extra(database, params)
 
     assert "credentials_provider" in params["connect_args"]
+
+
+PLAID_SCHEMA = "report2cb4d1ff-62fc-4aa7-981a-e4db56ab2ff9"
+
+
+@pytest.fixture
+def databricks_dialect() -> Any:
+    """Databricks dialect with the Superset monkeypatch applied (1.x dialect only)."""
+    pytest.importorskip("databricks.sqlalchemy.dialect")
+    from databricks.sqlalchemy.dialect import DatabricksDialect
+
+    from superset.db_engine_specs.databricks import (
+        monkeypatch_dialect_identifier_quoting,
+    )
+
+    monkeypatch_dialect_identifier_quoting()
+    dialect = DatabricksDialect()
+    dialect.catalog = "plaid_test"
+    dialect.schema = "default"
+    return dialect
+
+
+def test_has_table_quotes_identifiers(databricks_dialect: Any, mocker: MockerFixture):
+    connection = mocker.MagicMock()
+
+    assert databricks_dialect.has_table(connection, "t", schema=PLAID_SCHEMA) is True
+
+    connection.execute.assert_called_once_with(
+        f"DESCRIBE TABLE `plaid_test`.`{PLAID_SCHEMA}`.`t`"
+    )
+
+
+def test_has_table_escapes_backticks(databricks_dialect: Any, mocker: MockerFixture):
+    connection = mocker.MagicMock()
+
+    databricks_dialect.has_table(connection, "a`b", schema="s`1", catalog="c`")
+
+    connection.execute.assert_called_once_with("DESCRIBE TABLE `c```.`s``1`.`a``b`")
+
+
+@pytest.mark.parametrize(
+    "message", ["Table or view not found", "[TABLE_OR_VIEW_NOT_FOUND] nope"]
+)
+def test_has_table_not_found(
+    databricks_dialect: Any, mocker: MockerFixture, message: str
+):
+    from sqlalchemy.exc import DatabaseError
+
+    connection = mocker.MagicMock()
+    connection.execute.side_effect = DatabaseError("stmt", {}, Exception(message))
+
+    assert databricks_dialect.has_table(connection, "t") is False
+
+
+def test_has_table_reraises_other_errors(
+    databricks_dialect: Any, mocker: MockerFixture
+):
+    from sqlalchemy.exc import DatabaseError
+
+    connection = mocker.MagicMock()
+    connection.execute.side_effect = DatabaseError("stmt", {}, Exception("boom"))
+
+    with pytest.raises(DatabaseError):
+        databricks_dialect.has_table(connection, "t")
+
+
+def test_get_table_and_view_names_quote_identifiers(
+    databricks_dialect: Any, mocker: MockerFixture
+):
+    cursor = mocker.MagicMock()
+    cursor.execute.return_value.fetchall.return_value = [("s", "t1", False)]
+    databricks_dialect.get_connection_cursor = mocker.MagicMock()
+    databricks_dialect.get_connection_cursor.return_value.__enter__.return_value = (
+        cursor
+    )
+
+    assert databricks_dialect.get_table_names(None, schema=PLAID_SCHEMA) == ["t1"]
+    assert databricks_dialect.get_view_names(None, schema=PLAID_SCHEMA) == ["t1"]
+
+    assert [call.args[0] for call in cursor.execute.call_args_list] == [
+        f"SHOW TABLES FROM `plaid_test`.`{PLAID_SCHEMA}`",
+        f"SHOW VIEWS FROM `plaid_test`.`{PLAID_SCHEMA}`",
+    ]
+
+
+def test_identifier_quoting_is_applied_on_import() -> None:
+    pytest.importorskip("databricks.sqlalchemy.dialect")
+    from databricks.sqlalchemy.dialect import DatabricksDialect
+
+    import superset.db_engine_specs.databricks  # noqa: F401
+
+    module = DatabricksDialect.has_table.__module__
+    assert module == "superset.db_engine_specs.databricks"
