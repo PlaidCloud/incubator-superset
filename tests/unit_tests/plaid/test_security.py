@@ -419,6 +419,7 @@ class TestDashboardRoleGrantIsProjectBound:
         datasource = SimpleNamespace(
             id=1,
             perm="[db].[t](id:1)",
+            schema="s",
             data={"id": 1, "name": "t"},
             database=SimpleNamespace(uuid=uuid.UUID(PROJECT), get_extra=dict),
         )
@@ -486,6 +487,58 @@ class TestDashboardRoleGrantIsProjectBound:
             assert not sm.can_drill_dataset_via_dashboard_access(
                 viz.datasource, dashboard
             )
+
+    def test_dashboard_role_without_project_access_cannot_open(
+        self, mocker, app
+    ) -> None:
+        sm, _, dashboard = self._request(mocker, {"DASHBOARD_RBAC"}, projects=[])
+        with app.app_context():
+            with pytest.raises(SupersetSecurityException):
+                sm.raise_for_access(dashboard=dashboard)
+
+    def test_dashboard_role_with_project_access_can_open(self, mocker, app) -> None:
+        sm, _, dashboard = self._request(mocker, {"DASHBOARD_RBAC"}, projects=[PROJECT])
+        with app.app_context():
+            sm.raise_for_access(dashboard=dashboard)
+
+    def test_dashboard_rbac_database_filter_matches_project_databases(
+        self, mocker, session
+    ) -> None:
+        from superset.models.core import Database
+
+        Database.metadata.create_all(session.get_bind())
+        mine = Database(
+            database_name="mine", sqlalchemy_uri="sqlite://", uuid=uuid.UUID(PROJECT)
+        )
+        other = Database(database_name="other", sqlalchemy_uri="sqlite://")
+        session.add_all([mine, other])
+        session.flush()
+        sm = PlaidSecurityManager.__new__(PlaidSecurityManager)
+        mocker.patch.object(sm, "_project_access_ids", return_value=[PROJECT])
+        names = {
+            d.database_name
+            for d in session.query(Database).filter(
+                sm.get_dashboard_rbac_database_filter()
+            )
+        }
+        assert names == {"mine"}
+
+    def test_dashboard_rbac_database_filter_fails_closed_without_answer(
+        self, mocker, session
+    ) -> None:
+        from superset.models.core import Database
+
+        Database.metadata.create_all(session.get_bind())
+        session.add(Database(database_name="x", sqlalchemy_uri="sqlite://"))
+        session.flush()
+        sm = PlaidSecurityManager.__new__(PlaidSecurityManager)
+        mocker.patch.object(sm, "_project_access_ids", return_value=None)
+        assert (
+            session.query(Database)
+            .filter(sm.get_dashboard_rbac_database_filter())
+            .count()
+            == 0
+        )
 
     def test_datasource_without_database_is_denied(self) -> None:
         sm = PlaidSecurityManager.__new__(PlaidSecurityManager)

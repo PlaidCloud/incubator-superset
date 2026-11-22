@@ -23,6 +23,14 @@ RBAC logic is tested directly in test_auth_rbac.py.
 """
 
 import pytest
+from pytest_mock import MockerFixture
+
+
+@pytest.fixture(autouse=True)
+def admin_chart_visibility(mocker: MockerFixture) -> None:
+    """Dashboard serializers show every chart to an admin; tests that need a
+    restricted viewer patch the security manager themselves."""
+    mocker.patch("superset.daos.dashboard.security_manager.is_admin", return_value=True)
 
 
 @pytest.fixture(autouse=True)

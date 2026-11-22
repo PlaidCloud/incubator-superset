@@ -21,12 +21,14 @@ Unit tests for dashboard schema serialization.
 Tests that serialize_dashboard_object correctly handles slug and other fields.
 """
 
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 from superset.mcp_service.dashboard.schemas import (
     _extract_cross_filters_enabled,
     _extract_native_filters,
+    dashboard_serializer,
     serialize_dashboard_object,
 )
 from superset.utils.json import dumps as json_dumps
@@ -339,3 +341,33 @@ class TestOmittedFieldsBuilder:
 
         assert "json_metadata" in result.omitted_fields
         assert "position_json" in result.omitted_fields
+
+
+@patch("superset.mcp_service.utils.url_utils.get_superset_base_url")
+def test_dashboard_serializer_hides_inaccessible_chart_from_non_admin(mock_base_url):
+    """get_dashboard_info must not list a chart on a dataset the viewer cannot reach."""
+    mock_base_url.return_value = "http://localhost:8088"
+
+    def chart(id: int, datasource_id: int) -> MagicMock:
+        c = MagicMock()
+        c.id = id
+        c.slice_name = f"chart{id}"
+        c.viz_type = "table"
+        c.datasource_name = "t"
+        c.description = None
+        c.datasource = SimpleNamespace(id=datasource_id)
+        return c
+
+    dashboard = _mock_dashboard(id=1, slices=[chart(10, 1), chart(20, 2)])
+    dashboard.created_by = None
+    dashboard.changed_by = None
+    viewer = SimpleNamespace(
+        is_admin=lambda: False,
+        can_access_datasource=lambda ds: ds.id == 1,
+        can_drill_dataset_via_dashboard_access=lambda ds, dash: False,
+    )
+    with patch("superset.daos.dashboard.security_manager", viewer):
+        result = dashboard_serializer(dashboard)
+
+    assert [c.id for c in result.charts] == [10]
+    assert result.chart_count == 1

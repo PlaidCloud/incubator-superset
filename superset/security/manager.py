@@ -54,13 +54,14 @@ from flask_appbuilder.security.views import (
 from flask_babel import lazy_gettext as _
 from flask_login import AnonymousUserMixin, LoginManager
 from jwt.api_jwt import _jwt_global_obj
-from sqlalchemy import and_, inspect, or_
+from sqlalchemy import and_, inspect, or_, true
 from sqlalchemy.engine.base import Connection
 from sqlalchemy.exc import NoResultFound, SQLAlchemyError
 from sqlalchemy.orm import eagerload
 from sqlalchemy.orm.mapper import Mapper
 from sqlalchemy.orm.query import Query as SqlaQuery
 from sqlalchemy.sql import exists
+from sqlalchemy.sql.elements import ColumnElement
 
 from superset.constants import RouteMethod
 from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
@@ -788,10 +789,26 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         owner cannot hand out overrides this. Embedded guest-token access does not
         consult it.
 
+        Override :meth:`get_dashboard_rbac_database_filter` with it, so the
+        dashboard list is bounded the same way.
+
         :param datasource: The datasource reached through the dashboard
         :returns: Whether the dashboard role grant covers the datasource
         """
         return True
+
+    def get_dashboard_rbac_database_filter(self) -> ColumnElement[bool]:
+        """
+        SQL form of :meth:`can_access_datasource_via_dashboard`, over ``Database``.
+
+        Used to bound which role-granted dashboards are listed. By default nothing
+        further bounds the grant, so it matches every database.
+
+        Must be overridden together with :meth:`can_access_datasource_via_dashboard`:
+        the list is bounded only by this filter, while opening a dashboard and
+        reading its datasets and charts consult the per-datasource hook.
+        """
+        return true()
 
     def can_manage_external_lakehouse(self) -> bool:
         """
@@ -3004,9 +3021,19 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
             # DASHBOARD_RBAC logic - Manage dashboard access through roles.
             # Only applicable in case the dashboard has roles set.
             if is_feature_enabled("DASHBOARD_RBAC") and dashboard.roles:
-                if dashboard.published and {role.id for role in dashboard.roles} & {
-                    role.id for role in self.get_user_roles()
-                }:
+                if (
+                    dashboard.published
+                    and {role.id for role in dashboard.roles}
+                    & {role.id for role in self.get_user_roles()}
+                    and (
+                        not dashboard.datasources
+                        or any(
+                            self.can_access_datasource(datasource)
+                            or self.can_access_datasource_via_dashboard(datasource)
+                            for datasource in dashboard.datasources
+                        )
+                    )
+                ):
                     return
 
             # REGULAR RBAC logic

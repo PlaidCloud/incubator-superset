@@ -147,6 +147,12 @@ class DashboardAccessFilter(BaseFilter):  # pylint: disable=too-few-public-metho
 
         feature_flagged_filters = []
         if is_feature_enabled("DASHBOARD_RBAC"):
+            datasourced = (
+                db.session.query(Dashboard.id)
+                .join(Dashboard.slices)
+                .join(SqlaTable, Slice.datasource_id == SqlaTable.id)
+                .join(Database, SqlaTable.database_id == Database.id)
+            )
             roles_based_query = (
                 db.session.query(Dashboard.id)
                 .join(Dashboard.roles)
@@ -155,6 +161,20 @@ class DashboardAccessFilter(BaseFilter):  # pylint: disable=too-few-public-metho
                         Dashboard.published.is_(True),
                         dashboard_has_roles,
                         Role.id.in_([x.id for x in security_manager.get_user_roles()]),
+                        or_(
+                            ~Dashboard.id.in_(datasourced),
+                            Dashboard.id.in_(
+                                datasourced.filter(
+                                    or_(
+                                        get_dataset_access_filters(
+                                            Slice,
+                                            security_manager.can_access_all_datasources(),
+                                        ),
+                                        security_manager.get_dashboard_rbac_database_filter(),
+                                    )
+                                )
+                            ),
+                        ),
                     ),
                 )
             )

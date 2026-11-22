@@ -27,6 +27,7 @@ DEFAULT_USER_AGENT = "Apache Superset"
 # Identifies our traffic in Snowflake's and Databricks' partner telemetry. A fixed
 # string: never a tenant, org or user identifier.
 PARTNER_ATTRIBUTION = "PlaidCloud"
+DATABRICKS_PARTNER_ATTRIBUTION = "PlaidCloud_Lakehouse"
 
 NULL_STRING = "<NULL>"
 EMPTY_STRING = "<empty string>"
