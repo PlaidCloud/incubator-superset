@@ -26,6 +26,7 @@ from typing import Any, Callable, TYPE_CHECKING, TypedDict, Union
 import requests
 from apispec import APISpec
 from apispec.ext.marshmallow import MarshmallowPlugin
+from flask import current_app as app
 from flask_babel import gettext as __
 from marshmallow import fields, Schema
 from marshmallow.validate import Range
@@ -473,18 +474,19 @@ class DatabricksDynamicBaseEngineSpec(BasicParametersMixin, DatabricksBaseEngine
         engine_params: dict[str, Any] = extra.setdefault("engine_params", {})
         connect_args: dict[str, Any] = engine_params.setdefault("connect_args", {})
 
+        user_agent = f"{DATABRICKS_PARTNER_ATTRIBUTION}/{app.config['VERSION_STRING']}"
         connect_args["http_headers"] = [
             *(
                 (name, value)
                 for name, value in connect_args.get("http_headers", [])
                 if name.lower() != "user-agent"
             ),
-            ("User-Agent", DATABRICKS_PARTNER_ATTRIBUTION),
+            ("User-Agent", user_agent),
         ]
         # databricks-sql-connector 4.x reads `user_agent_entry`; `_user_agent_entry`
         # is deprecated.
         connect_args.pop("_user_agent_entry", None)
-        connect_args["user_agent_entry"] = DATABRICKS_PARTNER_ATTRIBUTION
+        connect_args["user_agent_entry"] = user_agent
 
         # trim whitespace from http_path to avoid databricks errors on connecting
         if http_path := connect_args.get("http_path"):
