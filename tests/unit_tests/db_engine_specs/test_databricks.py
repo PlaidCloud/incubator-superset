@@ -18,8 +18,10 @@
 
 from datetime import datetime
 from typing import Any, Optional
+from unittest.mock import Mock
 
 import pytest
+from flask import current_app
 from pytest_mock import MockerFixture
 
 from superset.db_engine_specs.databricks import DatabricksNativeEngineSpec
@@ -27,6 +29,27 @@ from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
 from superset.utils import json
 from tests.unit_tests.db_engine_specs.utils import assert_convert_dttm
 from tests.unit_tests.fixtures.common import dttm  # noqa: F401
+
+
+def _user_agent() -> str:
+    return f"PlaidCloud_Lakehouse/{current_app.config['VERSION_STRING']}"
+
+
+def test_partner_user_agent_is_product_slash_version() -> None:
+    """
+    Databricks' partner format is ``<isv_product>/<version>``.
+    """
+    database = Mock()
+    database.extra = {}
+    connect_args = DatabricksNativeEngineSpec.get_extra_params(database)[
+        "engine_params"
+    ]["connect_args"]
+    product, _, version = connect_args["user_agent_entry"].partition("/")
+    assert product == "PlaidCloud_Lakehouse"
+    assert version
+    assert connect_args["http_headers"] == [
+        ("User-Agent", connect_args["user_agent_entry"])
+    ]
 
 
 def test_get_parameters_from_uri() -> None:
@@ -123,8 +146,8 @@ def test_get_extra_params(mocker: MockerFixture) -> None:
     assert DatabricksNativeEngineSpec.get_extra_params(database) == {
         "engine_params": {
             "connect_args": {
-                "http_headers": [("User-Agent", "PlaidCloud_Lakehouse")],
-                "user_agent_entry": "PlaidCloud_Lakehouse",
+                "http_headers": [("User-Agent", _user_agent())],
+                "user_agent_entry": _user_agent(),
             }
         }
     }
@@ -148,9 +171,9 @@ def test_get_extra_params(mocker: MockerFixture) -> None:
             "connect_args": {
                 "http_headers": [
                     ("X-Trace", "1"),
-                    ("User-Agent", "PlaidCloud_Lakehouse"),
+                    ("User-Agent", _user_agent()),
                 ],
-                "user_agent_entry": "PlaidCloud_Lakehouse",
+                "user_agent_entry": _user_agent(),
                 "foo": "bar",
             }
         }
@@ -171,8 +194,8 @@ def test_get_extra_params(mocker: MockerFixture) -> None:
     assert DatabricksNativeEngineSpec.get_extra_params(database) == {
         "engine_params": {
             "connect_args": {
-                "http_headers": [("User-Agent", "PlaidCloud_Lakehouse")],
-                "user_agent_entry": "PlaidCloud_Lakehouse",
+                "http_headers": [("User-Agent", _user_agent())],
+                "user_agent_entry": _user_agent(),
                 "http_path": "/some_path_here_with_whitespace",
             }
         }
