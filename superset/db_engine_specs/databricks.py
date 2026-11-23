@@ -474,7 +474,8 @@ class DatabricksDynamicBaseEngineSpec(BasicParametersMixin, DatabricksBaseEngine
         engine_params: dict[str, Any] = extra.setdefault("engine_params", {})
         connect_args: dict[str, Any] = engine_params.setdefault("connect_args", {})
 
-        user_agent = f"{DATABRICKS_PARTNER_ATTRIBUTION}/{app.config['VERSION_STRING']}"
+        version = app.config.get("VERSION_STRING") or "dev"
+        user_agent = f"{DATABRICKS_PARTNER_ATTRIBUTION}/{version}"
         connect_args["http_headers"] = [
             *(
                 (name, value)
