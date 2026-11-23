@@ -52,6 +52,18 @@ def test_partner_user_agent_is_product_slash_version() -> None:
     ]
 
 
+def test_partner_user_agent_falls_back_to_dev_without_version(
+    mocker: MockerFixture,
+) -> None:
+    mocker.patch.dict(current_app.config, {"VERSION_STRING": None})
+    database = Mock()
+    database.extra = {}
+    connect_args = DatabricksNativeEngineSpec.get_extra_params(database)[
+        "engine_params"
+    ]["connect_args"]
+    assert connect_args["user_agent_entry"] == "PlaidCloud_Lakehouse/dev"
+
+
 def test_get_parameters_from_uri() -> None:
     """
     Test that the result from ``get_parameters_from_uri`` is JSON serializable.
