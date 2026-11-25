@@ -272,6 +272,8 @@ export default function transformProps(
     yAxisTitleMargin,
     yAxisTitlePosition,
     zoomable,
+    isPolar,
+    polarHideLabels,
     stackDimension,
   }: EchartsTimeseriesFormData = { ...DEFAULT_FORM_DATA, ...formData };
 
@@ -299,6 +301,13 @@ export default function transformProps(
     xAxisLabel = verboseMap[xAxisLabel];
   }
   const isHorizontal = orientation === OrientationType.Horizontal;
+  // Polar is a Bar-only presentation: Line/Area/Scatter/SmoothLine/Step share
+  // this same transformProps and must never see it turned on.
+  const isPolarActive =
+    seriesType === EchartsTimeseriesSeriesType.Bar && !!isPolar;
+  // The dataZoom slider has no polar-coordinate equivalent; force it off
+  // regardless of what the (now-hidden) zoomable control still holds.
+  const effectiveZoomable = zoomable && !isPolarActive;
   const { totalStackedValues, thresholdValues } = extractDataTotalValues(
     rebasedData,
     {
@@ -509,6 +518,7 @@ export default function transformProps(
         theme,
         hasDimensions: (groupBy?.length ?? 0) > 0,
         colorByPrimaryAxis,
+        isPolar: isPolarActive,
       },
     );
     if (transformedSeries) {
@@ -574,6 +584,14 @@ export default function transformProps(
           silent: true,
           legendHoverLink: false,
           showSymbol: false,
+          // These legend-only series never render data, but ECharts still
+          // resolves their coordinate system at series-model-init time.
+          // Without this, they default to cartesian xAxisIndex/yAxisIndex,
+          // which don't exist when isPolarActive replaces xAxis/yAxis with
+          // radiusAxis/angleAxis, throwing `xAxis "0" not found`.
+          ...(isPolarActive
+            ? { coordinateSystem: 'polar', polarIndex: 0 }
+            : {}),
         });
       });
     }
@@ -1001,14 +1019,31 @@ export default function transformProps(
     }
   }
 
+  // Polar coordinates replace the cartesian grid outright: the same axis
+  // objects built above (with all their type/formatter/tick logic already
+  // applied) are reused verbatim, just renamed into radiusAxis/angleAxis
+  // inside an (otherwise default) polar container.
+  // hideOverlap already drops colliding category labels, but on dense
+  // category sets a few can still survive; polarHideLabels lets the user
+  // hide the radiusAxis tick labels outright instead.
+  const radiusAxis =
+    isPolarActive && polarHideLabels
+      ? { ...xAxis, axisLabel: { ...xAxis.axisLabel, show: false } }
+      : xAxis;
+  const polarAxes = isPolarActive
+    ? { radiusAxis, angleAxis: yAxis, polar: {} }
+    : {
+        grid: {
+          ...defaultGrid,
+          ...padding,
+        },
+        xAxis,
+        yAxis,
+      };
+
   const echartOptions: EChartsCoreOption = {
     useUTC: true,
-    grid: {
-      ...defaultGrid,
-      ...padding,
-    },
-    xAxis,
-    yAxis,
+    ...polarAxes,
     tooltip: {
       ...getDefaultTooltip(refs),
       show: !inContextMenu,
@@ -1123,7 +1158,7 @@ export default function transformProps(
         // Hide legend on compact charts — not enough vertical space
         isSmallChart ? false : showLegend,
         theme,
-        zoomable,
+        effectiveZoomable,
         legendState,
         padding,
       ),
@@ -1142,7 +1177,7 @@ export default function transformProps(
     },
     series: dedupSeries(reorderForecastSeries(series) as SeriesOption[]),
     toolbox: {
-      show: zoomable,
+      show: effectiveZoomable,
       top: TIMESERIES_CONSTANTS.toolboxTop,
       right: TIMESERIES_CONSTANTS.toolboxRight,
       feature: {
@@ -1155,7 +1190,7 @@ export default function transformProps(
         },
       },
     },
-    dataZoom: zoomable
+    dataZoom: effectiveZoomable
       ? [
           {
             type: 'slider',
