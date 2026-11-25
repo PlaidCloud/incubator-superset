@@ -375,6 +375,7 @@ def test_oauth_m2m_credentials_refresh_on_expiry(mocker: MockerFixture) -> None:
         "https://dbc-1.cloud.databricks.com/oidc/v1/token",
         data={"grant_type": "client_credentials", "scope": "all-apis"},
         auth=("sp-id", "sp-secret"),
+        headers={"User-Agent": _user_agent()},
         timeout=30,
     )
     assert post.call_count == 2
@@ -434,7 +435,9 @@ def test_oauth_m2m_credentials_fit_connector(mocker: MockerFixture) -> None:
     headers: dict[str, Any] = {}
 
     authenticators.ExternalAuthProvider(
-        OAuthM2MCredentials("dbc-1.cloud.databricks.com", "sp-id", "sp-secret")
+        OAuthM2MCredentials(
+            "dbc-1.cloud.databricks.com", "sp-id", "sp-secret", _user_agent()
+        )
     ).add_headers(headers)
 
     assert headers == {"Authorization": "Bearer t1"}

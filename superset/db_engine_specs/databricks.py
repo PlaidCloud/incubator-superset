@@ -341,10 +341,13 @@ class OAuthM2MCredentials:
     working across token rotation.
     """
 
-    def __init__(self, host: str, client_id: str, client_secret: str) -> None:
+    def __init__(
+        self, host: str, client_id: str, client_secret: str, user_agent: str
+    ) -> None:
         self._host = host
         self._client_id = client_id
         self._client_secret = client_secret
+        self._user_agent = user_agent
         self._lock = threading.Lock()
         self._token = ""
         self._expires_at = 0.0
@@ -362,6 +365,7 @@ class OAuthM2MCredentials:
                     f"https://{self._host}/oidc/v1/token",
                     data={"grant_type": "client_credentials", "scope": "all-apis"},
                     auth=(self._client_id, self._client_secret),
+                    headers={"User-Agent": self._user_agent},
                     timeout=30,
                 )
                 response.raise_for_status()
@@ -384,9 +388,17 @@ DATABRICKS_WORKSPACE_HOST = re.compile(
 # service principal instead of minting a token for every query.
 @lru_cache(maxsize=128)
 def oauth_m2m_credentials(
-    host: str, client_id: str, client_secret: str
+    host: str, client_id: str, client_secret: str, user_agent: str
 ) -> OAuthM2MCredentials:
-    return OAuthM2MCredentials(host, client_id, client_secret)
+    return OAuthM2MCredentials(host, client_id, client_secret, user_agent)
+
+
+def partner_user_agent() -> str:
+    """
+    The partner User-Agent Databricks attributes PlaidCloud's calls by.
+    """
+    version = app.config.get("VERSION_STRING") or "dev"
+    return f"{DATABRICKS_PARTNER_ATTRIBUTION}/{version}"
 
 
 class DatabricksDynamicBaseEngineSpec(BasicParametersMixin, DatabricksBaseEngineSpec):
@@ -433,6 +445,7 @@ class DatabricksDynamicBaseEngineSpec(BasicParametersMixin, DatabricksBaseEngine
                 host,
                 auth_params["client_id"],
                 auth_params["client_secret"],
+                partner_user_agent(),
             )
         )
 
@@ -474,8 +487,7 @@ class DatabricksDynamicBaseEngineSpec(BasicParametersMixin, DatabricksBaseEngine
         engine_params: dict[str, Any] = extra.setdefault("engine_params", {})
         connect_args: dict[str, Any] = engine_params.setdefault("connect_args", {})
 
-        version = app.config.get("VERSION_STRING") or "dev"
-        user_agent = f"{DATABRICKS_PARTNER_ATTRIBUTION}/{version}"
+        user_agent = partner_user_agent()
         connect_args["http_headers"] = [
             *(
                 (name, value)
