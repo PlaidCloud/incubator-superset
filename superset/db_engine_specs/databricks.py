@@ -26,6 +26,7 @@ from typing import Any, Callable, TYPE_CHECKING, TypedDict, Union
 import requests
 from apispec import APISpec
 from apispec.ext.marshmallow import MarshmallowPlugin
+from flask import current_app as app
 from flask_babel import gettext as __
 from marshmallow import fields, Schema
 from marshmallow.validate import Range
@@ -107,6 +108,66 @@ def monkeypatch_dialect() -> None:
                 return super().literal_processor(dialect)
 
         HiveDialect.colspecs[types.String] = ContextAwareStringType
+
+    except ImportError:
+        pass
+
+
+def monkeypatch_dialect_identifier_quoting() -> None:
+    """
+    databricks-sqlalchemy 1.x builds DESCRIBE/SHOW statements with unquoted
+    identifiers, which fails for names like PlaidCloud's hyphenated schemas.
+    """
+    try:
+        # Only the 1.x layout has this module; 2.x moved it to .base and quotes itself.
+        from databricks.sqlalchemy.dialect import DatabricksDialect
+        from sqlalchemy.exc import DatabaseError
+
+        def quote(*parts: str | None) -> str:
+            return ".".join("`" + str(part).replace("`", "``") + "`" for part in parts)
+
+        def has_table(
+            self: Any,
+            connection: Any,
+            table_name: str,
+            schema: str | None = None,
+            catalog: str | None = None,
+            **kwargs: Any,
+        ) -> bool:
+            target = quote(catalog or self.catalog, schema or self.schema, table_name)
+            try:
+                connection.execute(f"DESCRIBE TABLE {target}")
+                return True
+            except DatabaseError as ex:
+                if "TABLE_OR_VIEW_NOT_FOUND" in str(ex) or (
+                    "Table or view not found" in str(ex)
+                ):
+                    return False
+                raise
+
+        def get_table_names(
+            self: Any, connection: Any, schema: str | None = None, **kwargs: Any
+        ) -> list[str]:
+            with self.get_connection_cursor(connection) as cur:
+                target = quote(self.catalog, schema or self.schema)
+                return [
+                    row[1]
+                    for row in cur.execute(f"SHOW TABLES FROM {target}").fetchall()
+                ]
+
+        def get_view_names(
+            self: Any, connection: Any, schema: str | None = None, **kwargs: Any
+        ) -> list[str]:
+            with self.get_connection_cursor(connection) as cur:
+                target = quote(self.catalog, schema or self.schema)
+                return [
+                    row[1]
+                    for row in cur.execute(f"SHOW VIEWS FROM {target}").fetchall()
+                ]
+
+        DatabricksDialect.has_table = has_table
+        DatabricksDialect.get_table_names = get_table_names
+        DatabricksDialect.get_view_names = get_view_names
 
     except ImportError:
         pass
@@ -280,10 +341,13 @@ class OAuthM2MCredentials:
     working across token rotation.
     """
 
-    def __init__(self, host: str, client_id: str, client_secret: str) -> None:
+    def __init__(
+        self, host: str, client_id: str, client_secret: str, user_agent: str
+    ) -> None:
         self._host = host
         self._client_id = client_id
         self._client_secret = client_secret
+        self._user_agent = user_agent
         self._lock = threading.Lock()
         self._token = ""
         self._expires_at = 0.0
@@ -301,6 +365,7 @@ class OAuthM2MCredentials:
                     f"https://{self._host}/oidc/v1/token",
                     data={"grant_type": "client_credentials", "scope": "all-apis"},
                     auth=(self._client_id, self._client_secret),
+                    headers={"User-Agent": self._user_agent},
                     timeout=30,
                 )
                 response.raise_for_status()
@@ -323,9 +388,17 @@ DATABRICKS_WORKSPACE_HOST = re.compile(
 # service principal instead of minting a token for every query.
 @lru_cache(maxsize=128)
 def oauth_m2m_credentials(
-    host: str, client_id: str, client_secret: str
+    host: str, client_id: str, client_secret: str, user_agent: str
 ) -> OAuthM2MCredentials:
-    return OAuthM2MCredentials(host, client_id, client_secret)
+    return OAuthM2MCredentials(host, client_id, client_secret, user_agent)
+
+
+def partner_user_agent() -> str:
+    """
+    The partner User-Agent Databricks attributes PlaidCloud's calls by.
+    """
+    version = app.config.get("VERSION_STRING") or "dev"
+    return f"{DATABRICKS_PARTNER_ATTRIBUTION}/{version}"
 
 
 class DatabricksDynamicBaseEngineSpec(BasicParametersMixin, DatabricksBaseEngineSpec):
@@ -372,6 +445,7 @@ class DatabricksDynamicBaseEngineSpec(BasicParametersMixin, DatabricksBaseEngine
                 host,
                 auth_params["client_id"],
                 auth_params["client_secret"],
+                partner_user_agent(),
             )
         )
 
@@ -413,18 +487,19 @@ class DatabricksDynamicBaseEngineSpec(BasicParametersMixin, DatabricksBaseEngine
         engine_params: dict[str, Any] = extra.setdefault("engine_params", {})
         connect_args: dict[str, Any] = engine_params.setdefault("connect_args", {})
 
+        user_agent = partner_user_agent()
         connect_args["http_headers"] = [
             *(
                 (name, value)
                 for name, value in connect_args.get("http_headers", [])
                 if name.lower() != "user-agent"
             ),
-            ("User-Agent", DATABRICKS_PARTNER_ATTRIBUTION),
+            ("User-Agent", user_agent),
         ]
         # databricks-sql-connector 4.x reads `user_agent_entry`; `_user_agent_entry`
         # is deprecated.
         connect_args.pop("_user_agent_entry", None)
-        connect_args["user_agent_entry"] = DATABRICKS_PARTNER_ATTRIBUTION
+        connect_args["user_agent_entry"] = user_agent
 
         # trim whitespace from http_path to avoid databricks errors on connecting
         if http_path := connect_args.get("http_path"):
@@ -900,3 +975,4 @@ class DatabricksPythonConnectorEngineSpec(DatabricksDynamicBaseEngineSpec):
 
 # TODO: remove once we've upgraded to SQLAlchemy>=2.0 and databricks-sql-python>=3.x
 monkeypatch_dialect()
+monkeypatch_dialect_identifier_quoting()
