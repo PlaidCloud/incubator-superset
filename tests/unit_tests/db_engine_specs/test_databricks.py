@@ -18,8 +18,10 @@
 
 from datetime import datetime
 from typing import Any, Optional
+from unittest.mock import Mock
 
 import pytest
+from flask import current_app
 from pytest_mock import MockerFixture
 
 from superset.db_engine_specs.databricks import DatabricksNativeEngineSpec
@@ -27,6 +29,39 @@ from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
 from superset.utils import json
 from tests.unit_tests.db_engine_specs.utils import assert_convert_dttm
 from tests.unit_tests.fixtures.common import dttm  # noqa: F401
+
+
+def _user_agent() -> str:
+    return f"PlaidCloud_Lakehouse/{current_app.config['VERSION_STRING']}"
+
+
+def test_partner_user_agent_is_product_slash_version() -> None:
+    """
+    Databricks' partner format is ``<isv_product>/<version>``.
+    """
+    database = Mock()
+    database.extra = {}
+    connect_args = DatabricksNativeEngineSpec.get_extra_params(database)[
+        "engine_params"
+    ]["connect_args"]
+    product, _, version = connect_args["user_agent_entry"].partition("/")
+    assert product == "PlaidCloud_Lakehouse"
+    assert version
+    assert connect_args["http_headers"] == [
+        ("User-Agent", connect_args["user_agent_entry"])
+    ]
+
+
+def test_partner_user_agent_falls_back_to_dev_without_version(
+    mocker: MockerFixture,
+) -> None:
+    mocker.patch.dict(current_app.config, {"VERSION_STRING": None})
+    database = Mock()
+    database.extra = {}
+    connect_args = DatabricksNativeEngineSpec.get_extra_params(database)[
+        "engine_params"
+    ]["connect_args"]
+    assert connect_args["user_agent_entry"] == "PlaidCloud_Lakehouse/dev"
 
 
 def test_get_parameters_from_uri() -> None:
@@ -123,8 +158,8 @@ def test_get_extra_params(mocker: MockerFixture) -> None:
     assert DatabricksNativeEngineSpec.get_extra_params(database) == {
         "engine_params": {
             "connect_args": {
-                "http_headers": [("User-Agent", "PlaidCloud_Lakehouse")],
-                "user_agent_entry": "PlaidCloud_Lakehouse",
+                "http_headers": [("User-Agent", _user_agent())],
+                "user_agent_entry": _user_agent(),
             }
         }
     }
@@ -148,9 +183,9 @@ def test_get_extra_params(mocker: MockerFixture) -> None:
             "connect_args": {
                 "http_headers": [
                     ("X-Trace", "1"),
-                    ("User-Agent", "PlaidCloud_Lakehouse"),
+                    ("User-Agent", _user_agent()),
                 ],
-                "user_agent_entry": "PlaidCloud_Lakehouse",
+                "user_agent_entry": _user_agent(),
                 "foo": "bar",
             }
         }
@@ -171,8 +206,8 @@ def test_get_extra_params(mocker: MockerFixture) -> None:
     assert DatabricksNativeEngineSpec.get_extra_params(database) == {
         "engine_params": {
             "connect_args": {
-                "http_headers": [("User-Agent", "PlaidCloud_Lakehouse")],
-                "user_agent_entry": "PlaidCloud_Lakehouse",
+                "http_headers": [("User-Agent", _user_agent())],
+                "user_agent_entry": _user_agent(),
                 "http_path": "/some_path_here_with_whitespace",
             }
         }
@@ -340,6 +375,7 @@ def test_oauth_m2m_credentials_refresh_on_expiry(mocker: MockerFixture) -> None:
         "https://dbc-1.cloud.databricks.com/oidc/v1/token",
         data={"grant_type": "client_credentials", "scope": "all-apis"},
         auth=("sp-id", "sp-secret"),
+        headers={"User-Agent": _user_agent()},
         timeout=30,
     )
     assert post.call_count == 2
@@ -399,7 +435,9 @@ def test_oauth_m2m_credentials_fit_connector(mocker: MockerFixture) -> None:
     headers: dict[str, Any] = {}
 
     authenticators.ExternalAuthProvider(
-        OAuthM2MCredentials("dbc-1.cloud.databricks.com", "sp-id", "sp-secret")
+        OAuthM2MCredentials(
+            "dbc-1.cloud.databricks.com", "sp-id", "sp-secret", _user_agent()
+        )
     ).add_headers(headers)
 
     assert headers == {"Authorization": "Bearer t1"}
@@ -447,3 +485,96 @@ def test_oauth_m2m_workspace_hosts_accepted(mocker: MockerFixture, host: str) ->
     DatabricksNativeEngineSpec.update_params_from_encrypted_extra(database, params)
 
     assert "credentials_provider" in params["connect_args"]
+
+
+PLAID_SCHEMA = "report2cb4d1ff-62fc-4aa7-981a-e4db56ab2ff9"
+
+
+@pytest.fixture
+def databricks_dialect() -> Any:
+    """Databricks dialect with the Superset monkeypatch applied (1.x dialect only)."""
+    pytest.importorskip("databricks.sqlalchemy.dialect")
+    from databricks.sqlalchemy.dialect import DatabricksDialect
+
+    from superset.db_engine_specs.databricks import (
+        monkeypatch_dialect_identifier_quoting,
+    )
+
+    monkeypatch_dialect_identifier_quoting()
+    dialect = DatabricksDialect()
+    dialect.catalog = "plaid_test"
+    dialect.schema = "default"
+    return dialect
+
+
+def test_has_table_quotes_identifiers(databricks_dialect: Any, mocker: MockerFixture):
+    connection = mocker.MagicMock()
+
+    assert databricks_dialect.has_table(connection, "t", schema=PLAID_SCHEMA) is True
+
+    connection.execute.assert_called_once_with(
+        f"DESCRIBE TABLE `plaid_test`.`{PLAID_SCHEMA}`.`t`"
+    )
+
+
+def test_has_table_escapes_backticks(databricks_dialect: Any, mocker: MockerFixture):
+    connection = mocker.MagicMock()
+
+    databricks_dialect.has_table(connection, "a`b", schema="s`1", catalog="c`")
+
+    connection.execute.assert_called_once_with("DESCRIBE TABLE `c```.`s``1`.`a``b`")
+
+
+@pytest.mark.parametrize(
+    "message", ["Table or view not found", "[TABLE_OR_VIEW_NOT_FOUND] nope"]
+)
+def test_has_table_not_found(
+    databricks_dialect: Any, mocker: MockerFixture, message: str
+):
+    from sqlalchemy.exc import DatabaseError
+
+    connection = mocker.MagicMock()
+    connection.execute.side_effect = DatabaseError("stmt", {}, Exception(message))
+
+    assert databricks_dialect.has_table(connection, "t") is False
+
+
+def test_has_table_reraises_other_errors(
+    databricks_dialect: Any, mocker: MockerFixture
+):
+    from sqlalchemy.exc import DatabaseError
+
+    connection = mocker.MagicMock()
+    connection.execute.side_effect = DatabaseError("stmt", {}, Exception("boom"))
+
+    with pytest.raises(DatabaseError):
+        databricks_dialect.has_table(connection, "t")
+
+
+def test_get_table_and_view_names_quote_identifiers(
+    databricks_dialect: Any, mocker: MockerFixture
+):
+    cursor = mocker.MagicMock()
+    cursor.execute.return_value.fetchall.return_value = [("s", "t1", False)]
+    databricks_dialect.get_connection_cursor = mocker.MagicMock()
+    databricks_dialect.get_connection_cursor.return_value.__enter__.return_value = (
+        cursor
+    )
+
+    assert databricks_dialect.get_table_names(None, schema=PLAID_SCHEMA) == ["t1"]
+    assert databricks_dialect.get_view_names(None, schema=PLAID_SCHEMA) == ["t1"]
+
+    assert [call.args[0] for call in cursor.execute.call_args_list] == [
+        f"SHOW TABLES FROM `plaid_test`.`{PLAID_SCHEMA}`",
+        f"SHOW VIEWS FROM `plaid_test`.`{PLAID_SCHEMA}`",
+    ]
+
+
+def test_identifier_quoting_is_applied_on_import() -> None:
+    pytest.importorskip("databricks.sqlalchemy.dialect")
+    from databricks.sqlalchemy.dialect import DatabricksDialect
+
+    import superset.db_engine_specs.databricks  # noqa: F401
+
+    module = DatabricksDialect.has_table.__module__
+    assert module == "superset.db_engine_specs.databricks"

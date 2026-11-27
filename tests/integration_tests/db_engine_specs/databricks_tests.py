@@ -16,6 +16,8 @@
 # under the License.
 from unittest import mock
 
+from flask import current_app as app
+
 from superset.db_engine_specs import get_engine_spec
 from superset.db_engine_specs.databricks import DatabricksNativeEngineSpec
 from tests.integration_tests.base_tests import SupersetTestCase
@@ -37,11 +39,12 @@ class TestDatabricksDbEngineSpec(SupersetTestCase):
         database.extra = default_db_extra
         database.server_cert = None
         extras = DatabricksNativeEngineSpec.get_extra_params(database)
+        user_agent = f"PlaidCloud_Lakehouse/{app.config['VERSION_STRING']}"
         assert extras == {
             "engine_params": {
                 "connect_args": {
-                    "user_agent_entry": "PlaidCloud_Lakehouse",
-                    "http_headers": [("User-Agent", "PlaidCloud_Lakehouse")],
+                    "user_agent_entry": user_agent,
+                    "http_headers": [("User-Agent", user_agent)],
                 },
             },
             "metadata_cache_timeout": {},
